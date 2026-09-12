@@ -1,0 +1,14 @@
+# macOS
+.DS_Store
+
+# Dependencies / build output
+node_modules/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# OS/editor
+.idea/
+.vscode/*.local

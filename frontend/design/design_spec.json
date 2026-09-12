@@ -1,0 +1,198 @@
+{
+  "app_name": "LifeOS",
+  "personality": "1 iOS-Native Clean",
+  "personality_one_liner": "A calm, minimal, and highly structured personal command center that prioritizes clarity and progressive disclosure.",
+  "color": {
+    "surface": "#FFFFFF",
+    "onSurface": "#111111",
+    "surfaceSecondary": "#F7F7F7",
+    "onSurfaceSecondary": "#111111",
+    "surfaceTertiary": "#EAEAEA",
+    "onSurfaceTertiary": "#444444",
+    "surfaceInverse": "#111111",
+    "onSurfaceInverse": "#FFFFFF",
+    "brand": "#111111",
+    "brandPrimary": "#111111",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#444444",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#EAEAEA",
+    "onBrandTertiary": "#111111",
+    "success": "#10B981",
+    "onSuccess": "#FFFFFF",
+    "warning": "#F59E0B",
+    "onWarning": "#FFFFFF",
+    "error": "#EF4444",
+    "onError": "#FFFFFF",
+    "info": "#6B7280",
+    "onInfo": "#FFFFFF",
+    "border": "#E5E5E5",
+    "borderStrong": "#CCCCCC"
+  },
+  "dark_color": {
+    "surface": "#0A0A0A",
+    "onSurface": "#FFFFFF",
+    "surfaceSecondary": "#1A1A1A",
+    "onSurfaceSecondary": "#FFFFFF",
+    "surfaceTertiary": "#262626",
+    "onSurfaceTertiary": "#A3A3A3",
+    "surfaceInverse": "#FFFFFF",
+    "onSurfaceInverse": "#111111",
+    "brand": "#FFFFFF",
+    "brandPrimary": "#FFFFFF",
+    "onBrandPrimary": "#111111",
+    "brandSecondary": "#A3A3A3",
+    "onBrandSecondary": "#111111",
+    "brandTertiary": "#262626",
+    "onBrandTertiary": "#FFFFFF",
+    "success": "#059669",
+    "onSuccess": "#FFFFFF",
+    "warning": "#D97706",
+    "onWarning": "#FFFFFF",
+    "error": "#DC2626",
+    "onError": "#FFFFFF",
+    "info": "#9CA3AF",
+    "onInfo": "#111111",
+    "border": "#262626",
+    "borderStrong": "#404040"
+  },
+  "typography": {
+    "displayFontFamily": "Geist",
+    "textFontFamily": "Geist",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Apply generous, purposeful padding around content. Empty space is intentional, providing a calm reading flow. Avoid cramped margins.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 6,
+    "md": 12,
+    "lg": 20,
+    "pill": 999
+  },
+  "shadow_tier": 1,
+  "navigation": "bottom_tabs",
+  "icon_set": "Phosphor",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Bottom tab bar",
+      "Floating Universal Quick Add FAB",
+      "Sticky headers over scrolling content",
+      "Bottom-sheet drag handles/headers"
+    ],
+    "dont's": [
+      "Generic list rows",
+      "Form fields",
+      "Cards in dense data feeds",
+      "Body content"
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Auth",
+      "purpose": "Minimal entry point to the user's life OS.",
+      "states": {
+        "loading": "Centered minimal spinner over the background.",
+        "empty": "N/A",
+        "error": "Standard error toast or inline message above inputs."
+      },
+      "layout": "Full-bleed calm architectural background image with a gradient scrim (top to bottom fade to 'surface' color). The bottom 40% contains a clean, single-column form (email/password), floating labels or simple top labels, and a sticky primary CTA at the bottom inside KeyboardAvoidingView."
+    },
+    {
+      "name": "Home",
+      "purpose": "Daily command center showcasing what matters right now.",
+      "states": {
+        "loading": "Skeleton loaders for tasks and upcoming modules.",
+        "empty": "A clean illustration (minimal geometric shape) indicating no immediate tasks or events today. 'Your day is clear.'",
+        "error": "Minimal inline error text with a 'Tap to retry' link."
+      },
+      "layout": "Generous top padding, bold typography for the greeting. Content is vertically stacked using 'progressive disclosure'—tasks appear as minimal text lists with circular checkboxes. Separate sections for 'Today', 'Upcoming', 'Overdue', and 'Payments' using soft dividers, not heavy cards. A sticky glass FAB ('Magic Plus') sits in the bottom right or center above the tab bar."
+    },
+    {
+      "name": "Spaces",
+      "purpose": "Browse and manage custom life areas.",
+      "states": {
+        "loading": "Skeleton grid of space cards.",
+        "empty": "Illustration + 'Create your first Space' button.",
+        "error": "Error message with retry button."
+      },
+      "layout": "A 2-column grid or spacious vertical list of Space cards. Each card uses 'surfaceSecondary' with a 'brandTertiary' tinted icon container. Generous 'md' gap between items. Inside a Space, a segmented control (glass sticky header) filters content by Tasks, Notes, and Expenses."
+    },
+    {
+      "name": "Calendar",
+      "purpose": "Global view of tasks, events, reminders, and recurring items.",
+      "states": {
+        "loading": "Skeleton of the month grid.",
+        "empty": "No events today—shows an airy, empty timeline.",
+        "error": "Inline retry button inside the calendar view."
+      },
+      "layout": "Month grid at the top with tiny dots indicating activity. The bottom half is an agenda list of the selected day. Clean typographic hierarchy. Date headers stick to the top as the user scrolls through the agenda."
+    },
+    {
+      "name": "Search",
+      "purpose": "Global search across all objects and Spaces.",
+      "states": {
+        "loading": "Spinner below the search bar.",
+        "empty": "Recent searches or 'Type to search across tasks, notes, and expenses'.",
+        "error": "No results found message."
+      },
+      "layout": "Full-screen modal or dedicated tab. A prominent, auto-focusing large text input at the top. Results appear below in a single-column list with icons indicating object type (Task, Note, Expense). Uses 'surfaceSecondary' rows for results."
+    },
+    {
+      "name": "Universal Quick Add",
+      "purpose": "AI-powered natural language entry sheet.",
+      "states": {
+        "loading": "Subtle pulsing state on the input while AI parses the text.",
+        "empty": "Input ready state with prompt 'E.g., Remind me to pay rent on Friday 500'.",
+        "error": "Failed to parse. 'Please try rephrasing or add manually.'"
+      },
+      "layout": "Triggered via the FAB. Opens a @gorhom/bottom-sheet. A large, borderless text area takes focus immediately. After submission, the sheet shows a parsed structured 'Confirmation Card' (e.g., 'Expense', '$500', 'Rent', 'Next Friday') with a 'Save' button."
+    }
+  ],
+  "images": {
+    "auth_hero_bg": {
+      "url": "https://images.unsplash.com/photo-1483366774565-c783b9f70e2c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjh8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwYWJzdHJhY3QlMjBhcmNoaXRlY3R1cmUlMjBjYWxtJTIwbGlnaHR8ZW58MHx8fHwxNzg2MzU0NzkxfDA&ixlib=rb-4.1.0&q=85",
+      "dark": "https://images.unsplash.com/photo-1526289034009-0240ddb68ce3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTN8MHwxfHNlYXJjaHwxfHxjYWxtJTIwbWluaW1hbCUyMGFic3RyYWN0JTIwYXJjaGl0ZWN0dXJlJTIwZGFya3xlbnwwfHx8fDE3ODYzNTQ4MDZ8MA&ixlib=rb-4.1.0&q=85",
+      "alt": "Calm minimal abstract architecture"
+    },
+    "empty_state": {
+      "url": "https://images.unsplash.com/photo-1581087659125-322b6be59e99?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzV8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwZ2VvbWV0cmljJTIwc2hhcGUlMjAzZCUyMGlzb2xhdGVkfGVufDB8fHx3aGl0ZXwxNzg2MzU0ODA1fDA&ixlib=rb-4.1.0&q=85",
+      "alt": "Minimalist geometric shape representing clarity and emptiness"
+    }
+  },
+  "instructions_to_main_agent": [
+    "Strictly follow the '1 iOS-Native Clean' personality: rely on whitespace and clean typography instead of heavy borders, backgrounds, or drop shadows.",
+    "Do NOT use any blue, indigo, or purple tokens anywhere in the app. Use the near-black/greyscale tokens defined in the color block.",
+    "Implement 'progressive disclosure' in task lists: tasks should look like simple text rows, hiding extra complexity (tags, notes) until tapped or expanded.",
+    "Ensure the Universal Quick Add FAB is persistently visible above the bottom tab bar. Use a blur/glass effect for its background to keep it premium.",
+    "For the Universal Quick Add, use @gorhom/bottom-sheet. The AI parsing flow should feel instantaneous, ending in a clean 'Confirmation Card' before final commit.",
+    "Use Phosphor icons consistently (weight: regular or light) to maintain a minimal, sophisticated editorial-productivity feel.",
+    "On the Home Screen, ensure generous 'lg' or 'xl' top padding and use bold display typography for section headers, mirroring the quiet confidence of Things 3 or Notion."
+  ]
+}
