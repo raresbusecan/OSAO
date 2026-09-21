@@ -66,3 +66,11 @@ could be an issue" — the actual input/state that breaks it), and
 `PLAUSIBLE` for something that looks wrong but you couldn't fully
 exercise. If everything genuinely checks out, report an empty findings
 list — don't invent a nitpick to justify having done work.
+
+**`ReportFindings` is only for the diff you were asked to verify.** If
+you notice something unrelated while you're in there — a pre-existing
+bug, a leftover test artifact, anything outside the actual change
+under review — that doesn't belong in the findings list (it'd wrongly
+block a clean diff). Log it yourself in `BACKLOG.md`'s "Found along
+the way" section instead, tagged `[from: <this verification>]`, so it
+isn't lost the moment your report scrolls out of view.

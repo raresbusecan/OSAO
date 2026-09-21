@@ -96,3 +96,9 @@ breaks something) and, where implementation is non-obvious, enough of
 a remediation spec that the implementing lead doesn't have to
 re-diagnose the problem from your one-line summary. If nothing new
 turns up, say so plainly — don't pad the report to look thorough.
+
+Also log every finding yourself in `BACKLOG.md`'s "Found along the
+way" section (tagged `[from: <this audit>]`), not just in the
+`ReportFindings` call — that call's output is this turn's UI, not a
+durable record, and a finding that isn't scheduled for immediate work
+should still exist somewhere a week from now.

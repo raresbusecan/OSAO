@@ -4,6 +4,26 @@ Small, non-urgent tasks to pick up later. Not ordered by priority unless
 noted — just a running list so ideas don't get lost mid-session. Add new
 ones under "Open", move finished ones to "Done" with the date.
 
+## Found along the way (not yet fixed)
+
+Things noticed while working on something else — not the task at hand,
+not worth derailing it for, but real enough to not just forget. Add an
+entry the moment something like this turns up (even mid-task); pick
+one up like any other "Open" item once nothing more pressing is ahead
+of it. Mark it `[from: <task>]` so there's a trail back to how it was
+found.
+
+### `GET /api/user` returns 500 instead of a clean 401 when unauthenticated
+
+**Where:** Sanctum/Auth middleware config — the `web` guard's
+`redirectTo` references a `login` named route that doesn't exist in
+this API-only app, so an unauthenticated request throws
+`RouteNotFoundException` instead of a normal 401 JSON response.
+
+**Found:** `[from: Task #1 security hardening — qa-lead's independent
+verification, 2026-09]`. Confirmed pre-existing, unrelated to that
+task's actual diff.
+
 ## Open
 
 ### 1. Draggable period counter in Car → Expenses

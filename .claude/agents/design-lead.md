@@ -77,4 +77,6 @@ that visual passes must not touch functionality.
 When you're done, report back: the concrete finding(s) or proposal,
 what principle/convention grounds each one, and — if code should
 change — a spec precise enough that `frontend-lead` can implement it
-without having to guess your intent.
+without having to guess your intent. Also log each finding not being
+acted on immediately in `BACKLOG.md`'s "Found along the way" section
+(tagged `[from: <this review>]`), so it survives past this turn.

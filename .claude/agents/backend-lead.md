@@ -45,5 +45,9 @@ without being asked. Standard read-review-edit workflow otherwise.
 When you're done, report back: what changed (file:line), what you
 verified it against (a route list, a tinker query, a test request),
 and anything you found that looks like a NEW bug/inconsistency beyond
-the ones already tracked in `backend/CLAUDE.md` — don't fix those
-silently, flag them.
+the ones already tracked in `backend/CLAUDE.md`. Log it in
+`BACKLOG.md`'s "Found along the way" section yourself (tag it
+`[from: <this task>]`) rather than fixing it silently or only
+mentioning it in your report where it can get lost — the one exception
+is a one-line, obviously-safe fix directly in a file you're already
+touching for the actual task.

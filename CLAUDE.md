@@ -74,6 +74,15 @@ merges to `main` without `qa-lead` having verified it first, gated by
 app-store releases, that's a deliberate future upgrade, not the
 default — don't assume it exists.
 
+## Found something unrelated to your task?
+
+Log it in `BACKLOG.md`'s "Found along the way" section instead of
+silently fixing it (scope creep) or silently ignoring it (lost work).
+Tag it `[from: <task/context>]` so there's a trail. Only fix it inline
+if it's a one-line, obviously-safe change directly touching a file
+you're already editing for the actual task — anything bigger goes in
+the backlog for its own pass.
+
 ## Conventions worth knowing before you touch code
 
 - **IDs are always strings on the frontend.** Every `entry.id` in

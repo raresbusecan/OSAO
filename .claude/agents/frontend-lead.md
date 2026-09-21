@@ -51,5 +51,9 @@ push, never run `npm install`/`uninstall` without being asked.
 
 When you're done, report back: what changed (file:line), the bundle
 rebuild result, and anything you found that looks like a NEW bug/
-inconsistency beyond what's already tracked in `frontend/CLAUDE.md` —
-flag it, don't fix it silently unless the task asked for exactly that.
+inconsistency beyond what's already tracked in `frontend/CLAUDE.md`.
+Log it in `BACKLOG.md`'s "Found along the way" section yourself (tag
+it `[from: <this task>]`) rather than fixing it silently or only
+mentioning it in your report where it can get lost — the one exception
+is a one-line, obviously-safe fix directly in a file you're already
+touching for the actual task.
