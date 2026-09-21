@@ -37,15 +37,13 @@ export const MOCK_EXPENSE_ENTRIES: HomeExpenseEntry[] = [
   {
     id: "exp-1",
     date: "2026-09-05",
-    category: "Utilities",
-    title: "Electricity Bill",
+    title: "Roof Repair",
     amount: 125.75,
-    notes: "Monthly bill",
+    notes: "One-off repair, not a recurring bill",
   },
   {
     id: "exp-2",
     date: "2026-09-02",
-    category: "Groceries",
     title: "Weekly Shopping",
     amount: 89.40,
     notes: "Organic produce and pantry items",

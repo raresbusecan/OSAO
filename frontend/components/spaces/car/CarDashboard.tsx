@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useRouter } from "expo-router";
 import { buildCarRecentItems } from "./utils/carEntries";
 import type { CarRecentItem } from "./utils/carEntries.types";
 import { isRecentToday } from "@/lib/spaces/car/utils/recency";
 import { isDocumentLocked } from "@/lib/spaces/car/utils/documentLock";
 import { notifyAction } from "@/lib/confirm";
+import { severityColor } from "@/lib/statusColors";
 
 import {
     View,
@@ -21,6 +22,7 @@ import CarMaintenanceForm from "./forms/CarMaintenanceForm";
 import CarDocumentForm from "./forms/CarDocumentForm";
 import CarExpenseForm from "./forms/CarExpenseForm";
 import { CarExpensesPage } from "./CarExpensesPage";
+import { CarDocsPage } from "./CarDocsPage";
 import { CarArchivePage } from "./CarArchivePage";
 import { CarHistoryPage } from "./CarHistoryPage";
 
@@ -49,6 +51,7 @@ import {
 } from "@/lib/spaces/car/calculations/dashboard.calculations";
 import { filterRecordsByPeriod } from "@/lib/spaces/car/calculations/expenses.calculations";
 import type { CarProfile } from "@/lib/spaces/spaceProfile";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 
 export type CarDashboardProps = {
     space: any;
@@ -64,6 +67,12 @@ export type CarDashboardProps = {
     onMaintenanceDelete?: (id: string) => void;
     onDocumentDelete?: (id: string) => void;
     onExpenseDelete?: (id: string) => void;
+    /** Deep-link from TodoCarouselSheet's "Deschide" -- a document-type
+     * to-do jumps straight into CarDocumentForm for that record instead
+     * of landing on the dashboard and making the user find it themselves.
+     * Only "document" ever reaches here (fuel/maintenance/expense aren't
+     * actionable to-dos, see Item::ACTIONABLE_TYPES on the backend). */
+    initialOpenEntry?: { type: "document"; id: string } | null;
 };
 
 type CarStat = {
@@ -89,6 +98,7 @@ export default function CarDashboard({
     onMaintenanceDelete,
     onDocumentDelete,
     onExpenseDelete,
+    initialOpenEntry,
 }: CarDashboardProps) {
     const { colors, spacing, radius } = useTheme();
     const router = useRouter();
@@ -180,13 +190,20 @@ export default function CarDashboard({
     // lib/spaces/car/calculations/expenses.calculations.ts.
     const [expensesPageVisible, setExpensesPageVisible] = useState(false);
 
-    // Opened from the Archive/History split pill below the name.
+    // Opened from the Docs/Archive/History split pill below the name.
+    const [docsPageVisible, setDocsPageVisible] = useState(false);
     const [archivePageVisible, setArchivePageVisible] = useState(false);
     const [historyPageVisible, setHistoryPageVisible] = useState(false);
     // Which tab History opens on -- "all" from the pill, or a specific
-    // category when "Show more" on RECENT/ALL sends you there instead of
-    // expanding inline.
+    // category when the empty state's "See History" link sends you there.
     const [historyInitialTab, setHistoryInitialTab] = useState<CarRecentItem["type"] | "all">("all");
+    // "Show more"/"Show less" on RECENT/ALL expands that section in
+    // place (toggled from both the button next to the section title and
+    // the one below the list) instead of navigating anywhere -- same
+    // wording and toggle-back behavior now also used by
+    // CarExpensesPage's own Recent/All sections.
+    const [recentExpanded, setRecentExpanded] = useState(false);
+    const [allExpanded, setAllExpanded] = useState(false);
 
     // The category tabs below Mileage/This month -- "all" or one of the 4
     // categories. Filters both RECENT and the list below it.
@@ -240,11 +257,17 @@ export default function CarDashboard({
     // dashboard stays a list of what's current, not a growing history.
     // They're never deleted, and still count toward Expenses totals --
     // just find them there, tagged "Archived", not here.
+    //
+    // Documents don't feed into RECENT/ALL at all any more -- they live
+    // permanently in their own Docs page (see CarDocsPage.tsx) instead
+    // of aging in and out of a 7-day window the way fuel/maintenance/
+    // expenses do, since a document doesn't "happen" the way those do.
     const allEntries = buildCarRecentItems({
         fuelEntries: carData.fuelEntries,
         maintenanceEntries: carData.maintenanceEntries.filter((e) => !e.archived),
-        documentEntries: carData.documentEntries.filter((e) => !e.archived),
+        documentEntries: [],
         expenseEntries: carData.expenseEntries,
+        currentOdometer,
     });
 
     const tabFilteredEntries =
@@ -273,11 +296,13 @@ export default function CarDashboard({
     // History instead of implying nothing was ever recorded.
     const hasOlderThanWeek = sortedEntries.length > withinWeekEntries.length;
 
+    // No "Documents" tab -- documents no longer flow through
+    // RECENT/ALL at all (see the allEntries comment above), so a tab
+    // for them here would just always be empty.
     const CATEGORY_TABS: { key: CarRecentItem["type"] | "all"; label: string }[] = [
         { key: "all", label: "All" },
         { key: "fuel", label: "Fuel" },
         { key: "maintenance", label: "Maintenance" },
-        { key: "document", label: "Documents" },
         { key: "expense", label: "Expenses" },
     ];
 
@@ -503,6 +528,22 @@ export default function CarDashboard({
         }
     };
 
+    // Runs the deep-link from TodoCarouselSheet's "Deschide" once carData
+    // has actually loaded (openEntryForEdit needs it to find the entry) --
+    // guarded by a ref, not by clearing initialOpenEntry itself, since
+    // that prop is owned by [id].tsx and this component has no way to
+    // tell it "consumed, stop passing this."
+    const openedInitialEntryRef = useRef<string | null>(null);
+    useEffect(() => {
+        if (!initialOpenEntry) return;
+        const key = `${initialOpenEntry.type}:${initialOpenEntry.id}`;
+        if (openedInitialEntryRef.current === key) return;
+        if (carData.documentEntries.length === 0) return;
+        openedInitialEntryRef.current = key;
+        openEntryForEdit(initialOpenEntry.type, initialOpenEntry.id);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [initialOpenEntry, carData.documentEntries]);
+
     /*
      * =========================================================
      * NEXT ITEM PRESS (RENEW) -- a "Document expiring" or "Maintenance
@@ -674,6 +715,23 @@ export default function CarDashboard({
         );
     }
 
+    if (docsPageVisible) {
+        return (
+            <View
+                style={{
+                    flex: 1,
+                    backgroundColor: colors.surface,
+                }}
+            >
+                <CarDocsPage
+                    carData={carData}
+                    onBack={() => setDocsPageVisible(false)}
+                    onRecordPress={(id) => openEntryForEdit("document", id)}
+                />
+            </View>
+        );
+    }
+
     if (archivePageVisible) {
         return (
             <View
@@ -756,7 +814,7 @@ export default function CarDashboard({
                             width: 40,
                             height: 40,
                             borderRadius: radius.pill,
-                            backgroundColor: colors.surfaceSecondary,
+                            backgroundColor: "transparent",
                             borderWidth: 1,
                             borderColor: colors.border,
                             alignItems: "center",
@@ -785,7 +843,7 @@ export default function CarDashboard({
                             width: 40,
                             height: 40,
                             borderRadius: radius.pill,
-                            backgroundColor: colors.surfaceSecondary,
+                            backgroundColor: "transparent",
                             borderWidth: 1,
                             borderColor: colors.border,
                             alignItems: "center",
@@ -809,7 +867,7 @@ export default function CarDashboard({
                             width: 68,
                             height: 68,
                             borderRadius: radius.lg,
-                            backgroundColor: colors.surfaceSecondary,
+                            backgroundColor: `${SPACE_IDENTITY_COLORS.car}1A`,
                             alignItems: "center",
                             justifyContent: "center",
                             marginBottom: spacing.md,
@@ -818,7 +876,7 @@ export default function CarDashboard({
                         <Ionicons
                             name={(space?.icon || "car-outline") as any}
                             size={32}
-                            color={colors.onSurface}
+                            color={SPACE_IDENTITY_COLORS.car}
                         />
                     </View>
 
@@ -852,21 +910,49 @@ export default function CarDashboard({
                         </Text>
                     ) : null}
 
-                    {/* ARCHIVE / HISTORY -- one destination each, always
-                        visible, no menu step. Archive = specifically what a
-                        renewal replaced (has a "renewed by" reference).
-                        History = literally everything, unbounded, tabbed
-                        the same way the dashboard is. */}
+                    {/* DOCS / ARCHIVE / HISTORY -- one destination each,
+                        always visible, no menu step. Docs = every CURRENT
+                        document, no time limit (documents don't "age out"
+                        the way RECENT/ALL's 7-day window works for
+                        fuel/maintenance/expenses). Archive = specifically
+                        what a renewal replaced (has a "renewed by"
+                        reference). History = fuel/maintenance/expenses
+                        once they fall out of the 7-day window -- documents
+                        no longer pass through it at all, so they're not a
+                        History tab any more either. */}
 
                     <View
                         style={{
                             flexDirection: "row",
                             marginTop: spacing.md,
                             borderRadius: radius.pill,
-                            backgroundColor: colors.surfaceSecondary,
+                            backgroundColor: "transparent",
+                            borderWidth: 1,
+                            borderColor: colors.border,
                             overflow: "hidden",
                         }}
                     >
+                        <Pressable
+                            testID="car-docs-open"
+                            onPress={() => setDocsPageVisible(true)}
+                            accessibilityRole="button"
+                            accessibilityLabel="View documents"
+                            style={{
+                                flexDirection: "row",
+                                alignItems: "center",
+                                gap: 5,
+                                paddingVertical: 7,
+                                paddingHorizontal: spacing.md,
+                            }}
+                        >
+                            <Ionicons name="document-text-outline" size={12} color={colors.onSurfaceTertiary} />
+                            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurface }}>
+                                Docs
+                            </Text>
+                        </Pressable>
+
+                        <View style={{ width: StyleSheet.hairlineWidth, backgroundColor: colors.border }} />
+
                         <Pressable
                             testID="car-archive-open"
                             onPress={() => setArchivePageVisible(true)}
@@ -958,7 +1044,9 @@ export default function CarDashboard({
                                     paddingHorizontal: spacing.md,
                                     minHeight: 34,
                                     borderRadius: radius.pill,
-                                    backgroundColor: isActive ? colors.onSurface : colors.surfaceSecondary,
+                                    backgroundColor: isActive ? colors.onSurface : "transparent",
+                                    borderWidth: 1,
+                                    borderColor: isActive ? colors.onSurface : colors.border,
                                     alignItems: "center",
                                     justifyContent: "center",
                                 }}
@@ -978,13 +1066,15 @@ export default function CarDashboard({
                 </ScrollView>
 
                 {/* =====================================================
-            NEXT
+            DUE SOON (was "NEXT") -- documents get a 3-tier colored
+            badge (see InfoRow/getDocumentUrgencyTier); maintenance
+            keeps its plain "Soon" text, unchanged.
             ===================================================== */}
 
                 {nextItems.length > 0 && (
                     <>
                         <SectionTitle
-                            title="NEXT"
+                            title="DUE SOON"
                             colors={colors}
                         />
 
@@ -1017,19 +1107,29 @@ export default function CarDashboard({
                 {recentItems.length > 0 && (
                     <>
                         <SectionTitle
-                            title="RECENT"
+                            title="RECENT (Today)"
                             colors={colors}
+                            action={
+                                recentItems.length > 5
+                                    ? {
+                                          label: recentExpanded ? "Show less" : "Show more",
+                                          onPress: () => setRecentExpanded((v) => !v),
+                                      }
+                                    : undefined
+                            }
                         />
 
                         <View
                             style={{
-                                backgroundColor: colors.surfaceSecondary,
-                                borderRadius: radius.lg,
+                                backgroundColor: "transparent",
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                borderRadius: radius.sm,
                                 overflow: "hidden",
                                 marginBottom: spacing.md,
                             }}
                         >
-                            {recentItems.slice(0, 5).map((item, index, visible) => (
+                            {(recentExpanded ? recentItems : recentItems.slice(0, 5)).map((item, index, visible) => (
                                 <RecentRow
                                     key={item.id}
                                     {...item}
@@ -1044,7 +1144,7 @@ export default function CarDashboard({
                         {recentItems.length > 5 ? (
                             <Pressable
                                 testID="car-recent-show-more"
-                                onPress={() => openHistoryFor(activeTab)}
+                                onPress={() => setRecentExpanded((v) => !v)}
                                 style={{
                                     flexDirection: "row",
                                     alignItems: "center",
@@ -1055,9 +1155,13 @@ export default function CarDashboard({
                                 }}
                             >
                                 <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurface }}>
-                                    See full history ({recentItems.length - 5} more)
+                                    {recentExpanded ? "Show less" : `Show more (${recentItems.length - 5} more)`}
                                 </Text>
-                                <Ionicons name="chevron-forward" size={13} color={colors.onSurfaceTertiary} />
+                                <Ionicons
+                                    name={recentExpanded ? "chevron-up" : "chevron-down"}
+                                    size={13}
+                                    color={colors.onSurfaceTertiary}
+                                />
                             </Pressable>
                         ) : (
                             <View style={{ marginBottom: spacing.xl }} />
@@ -1069,25 +1173,37 @@ export default function CarDashboard({
             ALL -- the rest of the last 7 days (not today), same tab
             filter, newest first. Anything older than a week doesn't
             appear here at all anymore -- it's moved on to History,
-            reachable via the pill above or "See full history" below.
+            reachable via the pill above; "Show more"/"Show less" below
+            expands/collapses this section in place instead of navigating
+            anywhere.
             ===================================================== */}
 
                 {olderItems.length > 0 ? (
                     <>
                         <SectionTitle
-                            title="ALL"
+                            title="ALL (Last week)"
                             colors={colors}
+                            action={
+                                olderItems.length > 5
+                                    ? {
+                                          label: allExpanded ? "Show less" : "Show more",
+                                          onPress: () => setAllExpanded((v) => !v),
+                                      }
+                                    : undefined
+                            }
                         />
 
                         <View
                             style={{
-                                backgroundColor: colors.surfaceSecondary,
-                                borderRadius: radius.lg,
+                                backgroundColor: "transparent",
+                                borderWidth: 1,
+                                borderColor: colors.border,
+                                borderRadius: radius.sm,
                                 overflow: "hidden",
                                 marginBottom: spacing.md,
                             }}
                         >
-                            {olderItems.slice(0, 5).map((item, index, visible) => (
+                            {(allExpanded ? olderItems : olderItems.slice(0, 5)).map((item, index, visible) => (
                                 <RecentRow
                                     key={item.id}
                                     {...item}
@@ -1102,7 +1218,7 @@ export default function CarDashboard({
                         {olderItems.length > 5 ? (
                             <Pressable
                                 testID="car-all-show-more"
-                                onPress={() => openHistoryFor(activeTab)}
+                                onPress={() => setAllExpanded((v) => !v)}
                                 style={{
                                     flexDirection: "row",
                                     alignItems: "center",
@@ -1113,9 +1229,13 @@ export default function CarDashboard({
                                 }}
                             >
                                 <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurface }}>
-                                    See full history ({olderItems.length - 5} more)
+                                    {allExpanded ? "Show less" : `Show more (${olderItems.length - 5} more)`}
                                 </Text>
-                                <Ionicons name="chevron-forward" size={13} color={colors.onSurfaceTertiary} />
+                                <Ionicons
+                                    name={allExpanded ? "chevron-up" : "chevron-down"}
+                                    size={13}
+                                    color={colors.onSurfaceTertiary}
+                                />
                             </Pressable>
                         ) : (
                             <View style={{ marginBottom: spacing.xl }} />
@@ -1153,22 +1273,67 @@ export default function CarDashboard({
 function SectionTitle({
     title,
     colors,
+    action,
 }: {
     title: string;
     colors: any;
+    /** Optional shortcut shown on the opposite side of the title (e.g.
+     * "Show more"/"Show less" for RECENT/ALL) -- stays put regardless of
+     * expanded state, so collapsing back to 5 never requires scrolling
+     * down to find the (expand-only) link at the bottom of the list. */
+    action?: { label: string; onPress: () => void };
 }) {
+    if (!action) {
+        return (
+            <Text
+                style={{
+                    fontSize: 12,
+                    fontWeight: "800",
+                    letterSpacing: 1,
+                    color: colors.onSurfaceTertiary,
+                    marginBottom: 10,
+                }}
+            >
+                {title}
+            </Text>
+        );
+    }
+
     return (
-        <Text
+        <View
             style={{
-                fontSize: 12,
-                fontWeight: "800",
-                letterSpacing: 1,
-                color: colors.onSurfaceTertiary,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
                 marginBottom: 10,
             }}
         >
-            {title}
-        </Text>
+            <Text
+                style={{
+                    fontSize: 12,
+                    fontWeight: "800",
+                    letterSpacing: 1,
+                    color: colors.onSurfaceTertiary,
+                }}
+            >
+                {title}
+            </Text>
+
+            <Pressable
+                onPress={action.onPress}
+                hitSlop={8}
+                style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+            >
+                <Text style={{ fontSize: 11, fontWeight: "700", color: colors.onSurface }}>
+                    {action.label}
+                </Text>
+                <Ionicons
+                    name={action.label === "Show less" ? "chevron-up" : "chevron-down"}
+                    size={11}
+                    color={colors.onSurfaceTertiary}
+                />
+            </Pressable>
+        </View>
     );
 }
 
@@ -1202,8 +1367,10 @@ function StatCard({
                 flex: 1,
                 minHeight: 110,
                 padding: spacing.lg,
-                backgroundColor: colors.surfaceSecondary,
-                borderRadius: radius.lg,
+                backgroundColor: "transparent",
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: radius.sm,
                 justifyContent: "space-between",
             }}
         >
@@ -1273,11 +1440,31 @@ function StatCard({
    NEXT / INFO ROW
    ============================================================ */
 
+// Documents only -- maps a severity tier to the app's theme tokens (see
+// lib/theme.tsx): 45-31 days left = caution (yellow), 30-16 = warning
+// (orange), 15-0 = error (red). `warning`/`error` are the same tokens
+// used everywhere else in the app; `caution` exists only for this tier.
+function tierColor(tier: "light" | "medium" | "critical", colors: any) {
+    if (tier === "critical") return severityColor("critical", colors);
+    if (tier === "medium") return severityColor("warning", colors);
+    return severityColor("caution", colors);
+}
+
+// Same 3 colors as tierColor, plus "safe" for the status dot shown
+// everywhere a document or maintenance entry appears OUTSIDE of DUE SOON
+// (RECENT/ALL, History, Expenses) -- see CarRecentItem.statusDot.
+function statusDotColor(status: "safe" | "light" | "medium" | "critical", colors: any) {
+    if (status === "safe") return severityColor("safe", colors);
+    return tierColor(status, colors);
+}
+
 function InfoRow({
     icon,
     title,
     subtitle,
     right,
+    urgencyTier,
+    overdue,
     colors,
     radius,
     spacing,
@@ -1292,12 +1479,14 @@ function InfoRow({
         <Pressable
             onPress={onPress}
             style={{
-                backgroundColor: colors.surfaceSecondary,
-                borderRadius: radius.lg,
+                backgroundColor: "transparent",
+                borderRadius: radius.sm,
                 padding: spacing.lg,
                 flexDirection: "row",
                 alignItems: "center",
                 gap: spacing.md,
+                borderWidth: 1,
+                borderColor: urgencyTier ? tierColor(urgencyTier, colors) : colors.border,
             }}
         >
             <View
@@ -1339,15 +1528,64 @@ function InfoRow({
                 </Text>
             </View>
 
-            <Text
-                style={{
-                    fontSize: 12,
-                    fontWeight: "700",
-                    color: colors.onSurfaceTertiary,
-                }}
-            >
-                {right}
-            </Text>
+            {urgencyTier ? (
+                <View
+                    style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 5,
+                        paddingHorizontal: 10,
+                        paddingVertical: 5,
+                        borderRadius: radius.pill,
+                        backgroundColor: `${tierColor(urgencyTier, colors)}22`,
+                    }}
+                >
+                    {overdue ? (
+                        <View
+                            style={{
+                                width: 12,
+                                height: 12,
+                                borderRadius: 6,
+                                backgroundColor: tierColor(urgencyTier, colors),
+                                alignItems: "center",
+                                justifyContent: "center",
+                            }}
+                        >
+                            <Text style={{ fontSize: 9, fontWeight: "900", color: colors.surface, lineHeight: 11 }}>
+                                !
+                            </Text>
+                        </View>
+                    ) : (
+                        <View
+                            style={{
+                                width: 6,
+                                height: 6,
+                                borderRadius: 3,
+                                backgroundColor: tierColor(urgencyTier, colors),
+                            }}
+                        />
+                    )}
+                    <Text
+                        style={{
+                            fontSize: 11.5,
+                            fontWeight: "800",
+                            color: tierColor(urgencyTier, colors),
+                        }}
+                    >
+                        {right}
+                    </Text>
+                </View>
+            ) : (
+                <Text
+                    style={{
+                        fontSize: 12,
+                        fontWeight: "700",
+                        color: colors.onSurfaceTertiary,
+                    }}
+                >
+                    {right}
+                </Text>
+            )}
 
             {onPress ? (
                 <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceTertiary} />
@@ -1360,12 +1598,14 @@ function InfoRow({
    RECENT ROW
    ============================================================ */
 
-function RecentRow({
+export function RecentRow({
     type,
     icon,
     title,
     subtitle,
     amount,
+    statusDot,
+    overdue,
     colors,
     spacing,
     last = false,
@@ -1395,11 +1635,53 @@ function RecentRow({
                 borderBottomColor: colors.border,
             }}
         >
-            <Ionicons
-                name={icon}
-                size={20}
-                color={colors.onSurfaceTertiary}
-            />
+            <View style={{ position: "relative" }}>
+                <Ionicons
+                    name={icon}
+                    size={20}
+                    color={colors.onSurfaceTertiary}
+                />
+
+                {statusDot && overdue ? (
+                    <View
+                        style={{
+                            position: "absolute",
+                            right: -4,
+                            bottom: -4,
+                            width: 13,
+                            height: 13,
+                            borderRadius: 6.5,
+                            backgroundColor: statusDotColor(statusDot, colors),
+                            borderWidth: 1.5,
+                            borderColor: colors.surface,
+                            alignItems: "center",
+                            justifyContent: "center",
+                        }}
+                    >
+                        <Text style={{ fontSize: 9, fontWeight: "900", color: colors.surface, lineHeight: 11 }}>
+                            !
+                        </Text>
+                    </View>
+                ) : statusDot ? (
+                    <View
+                        style={{
+                            position: "absolute",
+                            right: -2,
+                            bottom: -2,
+                            width: 8,
+                            height: 8,
+                            borderRadius: 4,
+                            backgroundColor: statusDotColor(statusDot, colors),
+                            // Matches this row's actual backdrop (the page
+                            // background -- the wrapping RECENT/ALL card
+                            // is a hairline-bordered, unfilled section now)
+                            // so the dot reads as "cut into" it, not floating.
+                            borderWidth: 1.5,
+                            borderColor: colors.surface,
+                        }}
+                    />
+                ) : null}
+            </View>
 
             <View style={{ flex: 1 }}>
                 <Text

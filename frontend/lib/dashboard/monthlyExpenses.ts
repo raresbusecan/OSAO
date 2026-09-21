@@ -19,22 +19,16 @@ export type MonthlyExpensesBreakdown = {
 };
 
 /**
- * Cross-space "Monthly Expenses" aggregation for the app's main Dashboard
- * (see zones.json's car -> dashboard-home connection, which anticipated
- * exactly this). Frontend-only for now, matching every space's own
- * current state -- each space still holds its own mock data locally
- * rather than coming from the backend, so this just sums each space's own
- * "this month" calculation, the same way the backend will eventually
- * query each space's model directly (see the "items" connection in
- * zones.json for the shape that migration should follow).
- *
- * A space with nothing to contribute (Grocery has no price field today)
- * is simply absent -- not listed at 0 -- so the breakdown only ever shows
- * real sources.
- *
- * Adding a new expense-tracking space means adding one line here; this
- * list is deliberately not auto-discovered, so a space that shouldn't
- * count towards spending (Grocery) never accidentally does.
+ * @deprecated Car and Home are both real now (persisted to the backend
+ * `items` table, see lib/spaces/car/carItems.ts and
+ * lib/spaces/home/homeItems.ts) -- this still sums each space's static
+ * *mock* seed, which no longer reflects what's actually saved. Car's mock
+ * ships empty, so its contribution here is permanently 0; Home's mock is
+ * just stale. The main Dashboard (app/(tabs)/home.tsx) gets its real
+ * number from api.dashboard()'s `monthlyExpenses` field instead (see
+ * DashboardController::index()) -- nothing should call this anymore.
+ * Kept in place rather than deleted (file deletion is denied in this
+ * environment), matching how GroceryListsPage.tsx was retired earlier.
  */
 export function getMonthlyExpensesBreakdown(): MonthlyExpensesBreakdown {
   const sources: MonthlyExpenseSource[] = [

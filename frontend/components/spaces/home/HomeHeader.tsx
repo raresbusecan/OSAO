@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 
 export type HomeHeaderProps = {
   space: any;
@@ -39,7 +40,7 @@ export function HomeHeader({ space, subtitle, onBack, onEdit }: HomeHeaderProps)
           width: 40,
           height: 40,
           borderRadius: radius.pill,
-          backgroundColor: colors.surfaceSecondary,
+          backgroundColor: "transparent",
           borderWidth: 1,
           borderColor: colors.border,
           alignItems: "center",
@@ -62,7 +63,7 @@ export function HomeHeader({ space, subtitle, onBack, onEdit }: HomeHeaderProps)
           width: 40,
           height: 40,
           borderRadius: radius.pill,
-          backgroundColor: colors.surfaceSecondary,
+          backgroundColor: "transparent",
           borderWidth: 1,
           borderColor: colors.border,
           alignItems: "center",
@@ -77,7 +78,7 @@ export function HomeHeader({ space, subtitle, onBack, onEdit }: HomeHeaderProps)
           width: 68,
           height: 68,
           borderRadius: radius.lg,
-          backgroundColor: colors.surfaceSecondary,
+          backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
           alignItems: "center",
           justifyContent: "center",
           marginBottom: spacing.md,
@@ -86,7 +87,7 @@ export function HomeHeader({ space, subtitle, onBack, onEdit }: HomeHeaderProps)
         <Ionicons
           name={(space?.icon || "home-outline") as any}
           size={32}
-          color={colors.onSurface}
+          color={SPACE_IDENTITY_COLORS.home}
         />
       </View>
 

@@ -1,7 +1,9 @@
 import React from "react";
 import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import { useTheme } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 
 export type ExpensesHeaderProps = {
   space: any;
@@ -10,6 +12,7 @@ export type ExpensesHeaderProps = {
 
 export function ExpensesHeader({ space, onEdit }: ExpensesHeaderProps) {
   const { colors, spacing, radius } = useTheme();
+  const router = useRouter();
 
   return (
     <View
@@ -20,6 +23,32 @@ export function ExpensesHeader({ space, onEdit }: ExpensesHeaderProps) {
         paddingBottom: spacing.xl,
       }}
     >
+      {/* BACK -- same style/position as Car/Home/Grocery's own space
+          headers; Expenses was missing this, the only way back to
+          Spaces from inside those other 3. */}
+      <Pressable
+        testID="space-back"
+        onPress={() => router.push("/spaces")}
+        hitSlop={10}
+        accessibilityRole="button"
+        accessibilityLabel="Back to Spaces"
+        style={{
+          position: "absolute",
+          left: 0,
+          top: spacing.md + 10,
+          width: 40,
+          height: 40,
+          borderRadius: radius.pill,
+          backgroundColor: "transparent",
+          borderWidth: 1,
+          borderColor: colors.border,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
+      </Pressable>
+
       <Pressable
         testID="space-edit"
         onPress={onEdit}
@@ -33,7 +62,7 @@ export function ExpensesHeader({ space, onEdit }: ExpensesHeaderProps) {
           width: 40,
           height: 40,
           borderRadius: radius.pill,
-          backgroundColor: colors.surfaceSecondary,
+          backgroundColor: "transparent",
           borderWidth: 1,
           borderColor: colors.border,
           alignItems: "center",
@@ -48,7 +77,7 @@ export function ExpensesHeader({ space, onEdit }: ExpensesHeaderProps) {
           width: 68,
           height: 68,
           borderRadius: radius.lg,
-          backgroundColor: colors.surfaceSecondary,
+          backgroundColor: `${SPACE_IDENTITY_COLORS.expenses}1A`,
           alignItems: "center",
           justifyContent: "center",
           marginBottom: spacing.md,
@@ -57,7 +86,7 @@ export function ExpensesHeader({ space, onEdit }: ExpensesHeaderProps) {
         <Ionicons
           name={(space?.icon || "receipt-outline") as any}
           size={32}
-          color={colors.onSurface}
+          color={SPACE_IDENTITY_COLORS.expenses}
         />
       </View>
 

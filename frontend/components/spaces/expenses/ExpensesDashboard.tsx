@@ -1,20 +1,27 @@
 import React, { useMemo, useState } from "react";
-import { ScrollView } from "react-native";
+import { ScrollView, View } from "react-native";
 import { useTheme } from "@/lib/theme";
+import { useRegisterSpaceCategories } from "@/lib/spaceCategoryFab";
 
 import type { ExpensesData } from "./expenses.data.types";
 import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
 import { ExpensesHeader } from "./ExpensesHeader";
 import { ExpensesStats } from "./ExpensesStats";
-import { ExpensesAddBar } from "./ExpensesAddBar";
+import { ExpensesAddBar, type ExpensesAddBarDraft } from "./ExpensesAddBar";
 import { ExpensesListSection } from "./ExpensesListSection";
-import { getThisMonthExpensesTotal } from "@/lib/spaces/expenses/calculations/dashboard.calculations";
+import { ExpenseEditModal } from "./ExpenseEditModal";
+import { ExpensesDetailPage } from "./ExpensesDetailPage";
+import { getAllTimeExpensesTotal } from "@/lib/spaces/expenses/calculations/dashboard.calculations";
 
 export type ExpensesDashboardProps = {
   space: any;
   expensesData: ExpensesData;
   onEdit?: () => void;
-  onEntriesChange?: (entries: ExpenseEntry[]) => void;
+  /** Saves one entry (new or edited) -- id is a client-generated
+   * placeholder for a new one, the real saved id once it round-trips.
+   * See app/(tabs)/[id].tsx's handleExpenseEntrySave. */
+  onEntrySave: (entry: ExpenseEntry) => void;
+  onEntryDelete: (id: string) => void;
 };
 
 function makeEntryId(): string {
@@ -25,29 +32,74 @@ export default function ExpensesDashboard({
   space,
   expensesData,
   onEdit,
-  onEntriesChange,
+  onEntrySave,
+  onEntryDelete,
 }: ExpensesDashboardProps) {
-  const { spacing } = useTheme();
+  const { spacing, colors } = useTheme();
 
-  const [entries, setEntries] = useState<ExpenseEntry[]>(expensesData.entries);
+  const entries = expensesData.entries;
+  const [editingEntry, setEditingEntry] = useState<ExpenseEntry | null>(null);
+  // Opened by tapping the "All time" card -- trend chart + breakdown,
+  // see ExpensesDetailPage.
+  const [detailPageVisible, setDetailPageVisible] = useState(false);
 
-  const handleAdd = (name: string, price: number) => {
-    const newEntry: ExpenseEntry = {
+  const handleAdd = (draft: ExpensesAddBarDraft) => {
+    onEntrySave({
       id: makeEntryId(),
-      name,
-      price,
-      date: new Date().toISOString().slice(0, 10),
-    };
-
-    const next = [newEntry, ...entries];
-    setEntries(next);
-    onEntriesChange?.(next);
+      name: draft.name,
+      price: draft.price,
+      date: draft.date,
+      notes: draft.notes,
+    });
   };
 
-  const thisMonthTotal = useMemo(
-    () => getThisMonthExpensesTotal({ entries }),
+  const handleEditSave = (entry: ExpenseEntry) => {
+    onEntrySave(entry);
+    setEditingEntry(null);
+  };
+
+  const handleEditDelete = (id: string) => {
+    onEntryDelete(id);
+    setEditingEntry(null);
+  };
+
+  const allTimeTotal = useMemo(
+    () => getAllTimeExpensesTotal({ entries }),
     [entries],
   );
+
+  // Registers this space's own FAB behavior -- without this, the shared
+  // "+" falls back to the generic, space-agnostic Quick Add sheet (AI
+  // free-text capture, not scoped to this space at all) on every screen
+  // of this space, detail page included. A single category is enough:
+  // this space only ever adds one kind of thing, via ExpensesAddBar's
+  // inline row -- so pressing it just makes sure that row is on screen
+  // (closes the detail page if that's where you are) instead of opening
+  // anything unrelated.
+  useRegisterSpaceCategories({
+    spaceLabel: "Expenses",
+    categories: [{ key: "add", label: "Add Expense", icon: "receipt-outline" }],
+    onSelect: () => setDetailPageVisible(false),
+  });
+
+  if (detailPageVisible) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.surface }}>
+        <ExpensesDetailPage
+          expensesData={expensesData}
+          onBack={() => setDetailPageVisible(false)}
+          onEntryPress={setEditingEntry}
+        />
+
+        <ExpenseEditModal
+          entry={editingEntry}
+          onClose={() => setEditingEntry(null)}
+          onSave={handleEditSave}
+          onDelete={handleEditDelete}
+        />
+      </View>
+    );
+  }
 
   return (
     <ScrollView
@@ -62,11 +114,22 @@ export default function ExpensesDashboard({
     >
       <ExpensesHeader space={space} onEdit={onEdit} />
 
-      <ExpensesStats thisMonthTotal={thisMonthTotal} itemCount={entries.length} />
+      <ExpensesStats
+        allTimeTotal={allTimeTotal}
+        itemCount={entries.length}
+        onTotalPress={() => setDetailPageVisible(true)}
+      />
 
       <ExpensesAddBar onAdd={handleAdd} />
 
-      <ExpensesListSection entries={entries} />
+      <ExpensesListSection entries={entries} onEntryPress={setEditingEntry} />
+
+      <ExpenseEditModal
+        entry={editingEntry}
+        onClose={() => setEditingEntry(null)}
+        onSave={handleEditSave}
+        onDelete={handleEditDelete}
+      />
     </ScrollView>
   );
 }

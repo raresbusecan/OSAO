@@ -2,6 +2,18 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { api, clearToken, getToken } from "../lib/api";
 
 type User = { id: string; email: string; name: string; created_at: string } | null;
+
+// The backend's User model serializes `id` as a JSON number (Laravel
+// doesn't know this app's User type promises a string) -- normalize it
+// here, the one place a raw API user object becomes this app's `User`,
+// so every comparison against it (e.g. Grocery's "is this me" checks
+// against a list/item's createdBy/addedBy, both already strings) can
+// rely on it actually being one instead of coincidentally working via
+// each call site's own String(...) wrapping.
+function normalizeUser(raw: any): User {
+  if (!raw) return null;
+  return { ...raw, id: String(raw.id) };
+}
 type Ctx = {
   user: User;
   loading: boolean;
@@ -26,7 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       const me = await api.me();
-      setUser(me);
+      setUser(normalizeUser(me));
     } catch (error: any) {
       // Only a real 401 means the token is actually invalid -- clear it and
       // send the user to /login. Anything else (no status at all: a timed
@@ -47,11 +59,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = useCallback(async (email: string, password: string) => {
     const r = await api.login(email, password);
-    setUser(r.user);
+    setUser(normalizeUser(r.user));
   }, []);
   const signUp = useCallback(async (email: string, password: string, name: string) => {
     const r = await api.register(email, password, name);
-    setUser(r.user);
+    setUser(normalizeUser(r.user));
   }, []);
   const signOut = useCallback(async () => {
     await api.logout();

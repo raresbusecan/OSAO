@@ -71,12 +71,13 @@ export default function Login() {
                   onChangeText={setEmail}
                   placeholder="Email"
                   placeholderTextColor={colors.onSurfaceTertiary}
+                  accessibilityLabel="Email"
                   keyboardType="email-address"
                   autoCapitalize="none"
                   autoCorrect={false}
                   style={{
-                    backgroundColor: colors.surfaceSecondary, color: colors.onSurface,
-                    borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: 14, fontSize: 16,
+                    backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, color: colors.onSurface,
+                    borderRadius: radius.sm, paddingHorizontal: spacing.lg, paddingVertical: 14, fontSize: 16,
                   }}
                 />
                 <TextInput
@@ -85,10 +86,11 @@ export default function Login() {
                   onChangeText={setPassword}
                   placeholder="Password"
                   placeholderTextColor={colors.onSurfaceTertiary}
+                  accessibilityLabel="Password"
                   secureTextEntry
                   style={{
-                    backgroundColor: colors.surfaceSecondary, color: colors.onSurface,
-                    borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: 14, fontSize: 16,
+                    backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, color: colors.onSurface,
+                    borderRadius: radius.sm, paddingHorizontal: spacing.lg, paddingVertical: 14, fontSize: 16,
                   }}
                 />
                 {err ? (
@@ -100,10 +102,13 @@ export default function Login() {
                 testID="login-submit-button"
                 onPress={submit}
                 disabled={busy || !email || !password}
+                accessibilityRole="button"
+                accessibilityLabel="Sign in"
+                accessibilityState={{ busy, disabled: busy || !email || !password }}
                 style={{
                   backgroundColor: colors.brandPrimary,
                   opacity: busy || !email || !password ? 0.5 : 1,
-                  paddingVertical: 16, borderRadius: radius.md, alignItems: "center",
+                  paddingVertical: 16, borderRadius: radius.sm, alignItems: "center",
                 }}
               >
                 {busy ? <ActivityIndicator color={colors.onBrandPrimary} /> : (
@@ -112,7 +117,12 @@ export default function Login() {
               </Pressable>
 
               <Link href="/(auth)/register" asChild>
-                <Pressable testID="login-goto-register" style={{ alignItems: "center", paddingVertical: spacing.md }}>
+                <Pressable
+                  testID="login-goto-register"
+                  accessibilityRole="button"
+                  accessibilityLabel="Create an account"
+                  style={{ alignItems: "center", paddingVertical: spacing.md }}
+                >
                   <Text style={{ color: colors.onSurfaceTertiary, fontSize: 14 }}>
                     New here? <Text style={{ color: colors.onSurface, fontWeight: "600" }}>Create an account</Text>
                   </Text>

@@ -35,14 +35,31 @@ import type {
 import HomeDashboard from "@/components/spaces/home/HomeDashboard";
 import { initialHomeData } from "@/components/spaces/home/home.mock";
 import type { HomeData } from "@/components/spaces/home/home.data.types";
+import type {
+  HomeDocumentEntry,
+  HomeExpenseEntry,
+  HomeMaintenanceEntry,
+  HomeRecurringEntry,
+  HomeSupplyEntry,
+  HomeTaskEntry,
+} from "@/lib/spaces/home/home.types";
+import {
+  loadHomeItems,
+  documentEntryToItemBody as homeDocumentEntryToItemBody,
+  expenseEntryToItemBody as homeExpenseEntryToItemBody,
+  maintenanceEntryToItemBody as homeMaintenanceEntryToItemBody,
+  recurringEntryToItemBody,
+  supplyEntryToItemBody,
+  taskEntryToItemBody,
+} from "@/lib/spaces/home/homeItems";
 
 import GroceryDashboard from "@/components/spaces/grocery/GroceryDashboard";
-import { initialGroceryData } from "@/components/spaces/grocery/grocery.mock";
-import type { GroceryData } from "@/components/spaces/grocery/grocery.data.types";
 
 import ExpensesDashboard from "@/components/spaces/expenses/ExpensesDashboard";
 import { initialExpensesData } from "@/components/spaces/expenses/expenses.mock";
 import type { ExpensesData } from "@/components/spaces/expenses/expenses.data.types";
+import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
+import { expenseEntryToItemBody as expensesSpaceEntryToItemBody, loadExpenseItems } from "@/lib/spaces/expenses/expensesItems";
 
 import { EditSpaceModal } from "@/components/spaces/EditSpaceModal";
 import { CarProfileForm } from "@/components/spaces/car/CarProfileForm";
@@ -64,26 +81,48 @@ import {
   archiveDocumentEntry,
   archiveMaintenanceEntry,
 } from "@/lib/spaces/car/carItems";
+import {
+  getCurrentOdometer,
+  getDocumentStatus,
+  getMaintenanceUrgency,
+  isDocumentSuperseded,
+  isMaintenanceSuperseded,
+} from "@/lib/spaces/car/calculations/dashboard.calculations";
 
 export default function SpaceDetail() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, itemId, itemType } = useLocalSearchParams<{ id: string; itemId?: string; itemType?: string }>();
 
   const { colors } = useTheme();
   const router = useRouter();
 
   const [carData, setCarData] = useState<CarData>(initialCarData);
-  // No setter yet -- Home has no save flow until its forms are built
-  // (mirrors Car's own gradual rollout: carData's setter only exists
-  // because handleFuelSave etc. already need it).
-  const [homeData] = useState<HomeData>(initialHomeData);
-  // GroceryDashboard owns its own add/toggle state internally and persists
-  // across re-renders on its own (it doesn't unmount when `space` reloads)
-  // -- this is just the seed, same reasoning as homeData above.
-  const [groceryData] = useState<GroceryData>(initialGroceryData);
-  const [expensesData] = useState<ExpensesData>(initialExpensesData);
+  const [homeData, setHomeData] = useState<HomeData>(initialHomeData);
+  const [expensesData, setExpensesData] = useState<ExpensesData>(initialExpensesData);
   const [space, setSpace] = useState<any>(null);
   const [profile, setProfile] = useState<SpaceProfile | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Reset synchronously, during render, the moment the route's `id`
+  // changes to a DIFFERENT space -- not in an effect, which would still
+  // let one stale frame (the previous space's data, now paired with the
+  // new id) paint before the reset caught up. This is what made
+  // switching between two spaces of the same kind (two Car spaces, two
+  // Expenses spaces, ...) briefly show the space you came FROM: this
+  // screen never unmounts between them, so carData/homeData/expensesData
+  // kept whatever they last held until load() below finished refetching.
+  // Setting `loading` back to true routes through the existing spinner
+  // branch below instead of ever rendering a dashboard with mismatched
+  // data.
+  const [loadedForId, setLoadedForId] = useState(id);
+  if (id !== loadedForId) {
+    setLoadedForId(id);
+    setLoading(true);
+    setSpace(null);
+    setProfile(null);
+    setCarData(initialCarData);
+    setHomeData(initialHomeData);
+    setExpensesData(initialExpensesData);
+  }
 
   /*
    * The 4 handlers below used to be pure local-state updates (setCarData),
@@ -158,26 +197,37 @@ export default function SpaceDetail() {
       }));
 
       // A brand-new entry with renewedFromId set came from the "renew"
-      // flow (see CarDashboard.tsx's handleNextItemPress) -- archive the
-      // entry it replaced so it drops out of RECENT/NEXT but stays in
-      // Expenses history, tagged. Only on create: an edit of an already-
+      // flow (see CarDashboard.tsx's handleNextItemPress). Same reasoning
+      // as handleDocumentSave's matching block below: don't yank the old
+      // entry out of the dashboard while it's still genuinely due later
+      // (by km AND by date, whichever applies) -- only archive right away
+      // if it had already passed its own trigger by the time this
+      // renewal was saved. Otherwise leave it active; the sweep effect
+      // near the bottom of this component archives it for real once it
+      // actually becomes overdue. Only on create: an edit of an already-
       // renewed entry shouldn't re-trigger this.
       if (!isExisting && entry.renewedFromId) {
         const oldId = entry.renewedFromId;
-        setCarData((current) => ({
-          ...current,
-          maintenanceEntries: current.maintenanceEntries.map((e) =>
-            e.id === oldId ? { ...e, archived: true } : e,
-          ),
-        }));
-        archiveMaintenanceEntry(oldId).catch((error: any) => {
-          // The new entry is already saved -- worth surfacing, but not
-          // worth rolling anything back over.
-          notifyAction(
-            "Renewed, dar arhivarea a eșuat",
-            error?.message || "Vechea intervenție tot apare ca activă.",
-          );
-        });
+        const oldEntry = carData.maintenanceEntries.find((e) => e.id === oldId);
+        const alreadyOverdue =
+          !!oldEntry && getMaintenanceUrgency(oldEntry, getCurrentOdometer(carData)).overdue;
+
+        if (alreadyOverdue) {
+          setCarData((current) => ({
+            ...current,
+            maintenanceEntries: current.maintenanceEntries.map((e) =>
+              e.id === oldId ? { ...e, archived: true } : e,
+            ),
+          }));
+          archiveMaintenanceEntry(oldId).catch((error: any) => {
+            // The new entry is already saved -- worth surfacing, but not
+            // worth rolling anything back over.
+            notifyAction(
+              "Renewed, dar arhivarea a eșuat",
+              error?.message || "Vechea intervenție tot apare ca activă.",
+            );
+          });
+        }
       }
     } catch (error: any) {
       setCarData((current) => ({
@@ -214,21 +264,35 @@ export default function SpaceDetail() {
         ),
       }));
 
-      // See the matching block in handleMaintenanceSave above.
+      // Unlike maintenance, a document renewal shouldn't yank the old
+      // entry out of the dashboard the instant it's replaced -- an RCA
+      // renewed 10 days early is still genuinely valid for those 10 days.
+      // Only archive right away if it had *already* expired by the time
+      // this renewal was saved (a late renewal); otherwise leave it
+      // active -- it already drops off the NEXT alert via
+      // isDocumentSuperseded (date-based, see dashboard.calculations.ts)
+      // -- and let the sweep effect below archive it for real once its
+      // own expiryDate actually passes.
       if (!isExisting && entry.renewedFromId) {
         const oldId = entry.renewedFromId;
-        setCarData((current) => ({
-          ...current,
-          documentEntries: current.documentEntries.map((e) =>
-            e.id === oldId ? { ...e, archived: true } : e,
-          ),
-        }));
-        archiveDocumentEntry(oldId).catch((error: any) => {
-          notifyAction(
-            "Renewed, dar arhivarea a eșuat",
-            error?.message || "Vechiul document tot apare ca activ.",
-          );
-        });
+        const oldEntry = carData.documentEntries.find((e) => e.id === oldId);
+        const alreadyExpired =
+          !!oldEntry && getDocumentStatus(oldEntry).status === "expired";
+
+        if (alreadyExpired) {
+          setCarData((current) => ({
+            ...current,
+            documentEntries: current.documentEntries.map((e) =>
+              e.id === oldId ? { ...e, archived: true } : e,
+            ),
+          }));
+          archiveDocumentEntry(oldId).catch((error: any) => {
+            notifyAction(
+              "Renewed, dar arhivarea a eșuat",
+              error?.message || "Vechiul document tot apare ca activ.",
+            );
+          });
+        }
       }
     } catch (error: any) {
       setCarData((current) => ({
@@ -374,6 +438,338 @@ export default function SpaceDetail() {
   };
 
   /*
+   * Home's 5 categories, same optimistic-update -> API call -> reconcile
+   * real id pattern as Car's handlers above (no renewal/archive sweep --
+   * Home's entries don't have that concept). One save + one delete
+   * function per category, passed down to HomeDashboard as props.
+   */
+
+  const handleHomeDocumentSave = async (entry: HomeDocumentEntry) => {
+    const isExisting = homeData.documentEntries.some((e) => e.id === entry.id);
+    setHomeData((current) => ({
+      ...current,
+      documentEntries: isExisting
+        ? current.documentEntries.map((e) => (e.id === entry.id ? entry : e))
+        : [entry, ...current.documentEntries],
+    }));
+
+    try {
+      const body = homeDocumentEntryToItemBody(space.id, entry);
+      const saved = isSavedItemId(entry.id)
+        ? await api.updateItem(entry.id, body)
+        : await api.createItem(body);
+      const savedEntry: HomeDocumentEntry = { ...entry, id: String(saved.id) };
+      setHomeData((current) => ({
+        ...current,
+        documentEntries: current.documentEntries.map((e) => (e.id === entry.id ? savedEntry : e)),
+      }));
+    } catch (error: any) {
+      setHomeData((current) => ({
+        ...current,
+        documentEntries: isExisting
+          ? current.documentEntries
+          : current.documentEntries.filter((e) => e.id !== entry.id),
+      }));
+      notifyAction("Nu am putut salva documentul", error?.message || "A apărut o eroare.");
+    }
+  };
+
+  const handleHomeDocumentDelete = async (id: string) => {
+    const removed = homeData.documentEntries.find((e) => e.id === id);
+    setHomeData((current) => ({
+      ...current,
+      documentEntries: current.documentEntries.filter((e) => e.id !== id),
+    }));
+    if (!isSavedItemId(id)) return;
+    try {
+      await api.deleteItem(id);
+    } catch (error: any) {
+      if (removed) {
+        setHomeData((current) => ({ ...current, documentEntries: [removed, ...current.documentEntries] }));
+      }
+      notifyAction("Nu am putut șterge documentul", error?.message || "A apărut o eroare.");
+    }
+  };
+
+  const handleHomeExpenseSave = async (entry: HomeExpenseEntry) => {
+    const isExisting = homeData.expenseEntries.some((e) => e.id === entry.id);
+    setHomeData((current) => ({
+      ...current,
+      expenseEntries: isExisting
+        ? current.expenseEntries.map((e) => (e.id === entry.id ? entry : e))
+        : [entry, ...current.expenseEntries],
+    }));
+
+    try {
+      const body = homeExpenseEntryToItemBody(space.id, entry);
+      const saved = isSavedItemId(entry.id)
+        ? await api.updateItem(entry.id, body)
+        : await api.createItem(body);
+      const savedEntry: HomeExpenseEntry = { ...entry, id: String(saved.id) };
+      setHomeData((current) => ({
+        ...current,
+        expenseEntries: current.expenseEntries.map((e) => (e.id === entry.id ? savedEntry : e)),
+      }));
+    } catch (error: any) {
+      setHomeData((current) => ({
+        ...current,
+        expenseEntries: isExisting
+          ? current.expenseEntries
+          : current.expenseEntries.filter((e) => e.id !== entry.id),
+      }));
+      notifyAction("Nu am putut salva cheltuiala", error?.message || "A apărut o eroare.");
+    }
+  };
+
+  const handleHomeExpenseDelete = async (id: string) => {
+    const removed = homeData.expenseEntries.find((e) => e.id === id);
+    setHomeData((current) => ({
+      ...current,
+      expenseEntries: current.expenseEntries.filter((e) => e.id !== id),
+    }));
+    if (!isSavedItemId(id)) return;
+    try {
+      await api.deleteItem(id);
+    } catch (error: any) {
+      if (removed) {
+        setHomeData((current) => ({ ...current, expenseEntries: [removed, ...current.expenseEntries] }));
+      }
+      notifyAction("Nu am putut șterge cheltuiala", error?.message || "A apărut o eroare.");
+    }
+  };
+
+  // The dedicated Expenses space's own entries -- same optimistic
+  // save/rollback shape as every handler above, just against
+  // expensesData instead of homeData/carData.
+  const handleExpenseEntrySave = async (entry: ExpenseEntry) => {
+    const isExisting = expensesData.entries.some((e) => e.id === entry.id);
+    setExpensesData((current) => ({
+      entries: isExisting
+        ? current.entries.map((e) => (e.id === entry.id ? entry : e))
+        : [entry, ...current.entries],
+    }));
+
+    try {
+      const body = expensesSpaceEntryToItemBody(space.id, entry);
+      const saved = isSavedItemId(entry.id)
+        ? await api.updateItem(entry.id, body)
+        : await api.createItem(body);
+      const savedEntry: ExpenseEntry = { ...entry, id: String(saved.id) };
+      setExpensesData((current) => ({
+        entries: current.entries.map((e) => (e.id === entry.id ? savedEntry : e)),
+      }));
+    } catch (error: any) {
+      setExpensesData((current) => ({
+        entries: isExisting ? current.entries : current.entries.filter((e) => e.id !== entry.id),
+      }));
+      notifyAction("Nu am putut salva cheltuiala", error?.message || "A apărut o eroare.");
+    }
+  };
+
+  const handleExpenseEntryDelete = async (id: string) => {
+    const removed = expensesData.entries.find((e) => e.id === id);
+    setExpensesData((current) => ({ entries: current.entries.filter((e) => e.id !== id) }));
+
+    if (!isSavedItemId(id)) return;
+    try {
+      await api.deleteItem(id);
+    } catch (error: any) {
+      if (removed) {
+        setExpensesData((current) => ({ entries: [removed, ...current.entries] }));
+      }
+      notifyAction("Nu am putut șterge cheltuiala", error?.message || "A apărut o eroare.");
+    }
+  };
+
+  const handleHomeMaintenanceSave = async (entry: HomeMaintenanceEntry) => {
+    const isExisting = homeData.maintenanceEntries.some((e) => e.id === entry.id);
+    setHomeData((current) => ({
+      ...current,
+      maintenanceEntries: isExisting
+        ? current.maintenanceEntries.map((e) => (e.id === entry.id ? entry : e))
+        : [entry, ...current.maintenanceEntries],
+    }));
+
+    try {
+      const body = homeMaintenanceEntryToItemBody(space.id, entry);
+      const saved = isSavedItemId(entry.id)
+        ? await api.updateItem(entry.id, body)
+        : await api.createItem(body);
+      const savedEntry: HomeMaintenanceEntry = { ...entry, id: String(saved.id) };
+      setHomeData((current) => ({
+        ...current,
+        maintenanceEntries: current.maintenanceEntries.map((e) => (e.id === entry.id ? savedEntry : e)),
+      }));
+    } catch (error: any) {
+      setHomeData((current) => ({
+        ...current,
+        maintenanceEntries: isExisting
+          ? current.maintenanceEntries
+          : current.maintenanceEntries.filter((e) => e.id !== entry.id),
+      }));
+      notifyAction("Nu am putut salva intervenția", error?.message || "A apărut o eroare.");
+    }
+  };
+
+  const handleHomeMaintenanceDelete = async (id: string) => {
+    const removed = homeData.maintenanceEntries.find((e) => e.id === id);
+    setHomeData((current) => ({
+      ...current,
+      maintenanceEntries: current.maintenanceEntries.filter((e) => e.id !== id),
+    }));
+    if (!isSavedItemId(id)) return;
+    try {
+      await api.deleteItem(id);
+    } catch (error: any) {
+      if (removed) {
+        setHomeData((current) => ({ ...current, maintenanceEntries: [removed, ...current.maintenanceEntries] }));
+      }
+      notifyAction("Nu am putut șterge intervenția", error?.message || "A apărut o eroare.");
+    }
+  };
+
+  const handleHomeRecurringSave = async (entry: HomeRecurringEntry) => {
+    const isExisting = homeData.recurringEntries.some((e) => e.id === entry.id);
+    setHomeData((current) => ({
+      ...current,
+      recurringEntries: isExisting
+        ? current.recurringEntries.map((e) => (e.id === entry.id ? entry : e))
+        : [entry, ...current.recurringEntries],
+    }));
+
+    try {
+      const body = recurringEntryToItemBody(space.id, entry);
+      const saved = isSavedItemId(entry.id)
+        ? await api.updateItem(entry.id, body)
+        : await api.createItem(body);
+      const savedEntry: HomeRecurringEntry = { ...entry, id: String(saved.id) };
+      setHomeData((current) => ({
+        ...current,
+        recurringEntries: current.recurringEntries.map((e) => (e.id === entry.id ? savedEntry : e)),
+      }));
+    } catch (error: any) {
+      setHomeData((current) => ({
+        ...current,
+        recurringEntries: isExisting
+          ? current.recurringEntries
+          : current.recurringEntries.filter((e) => e.id !== entry.id),
+      }));
+      notifyAction("Nu am putut salva plata recurentă", error?.message || "A apărut o eroare.");
+    }
+  };
+
+  const handleHomeRecurringDelete = async (id: string) => {
+    const removed = homeData.recurringEntries.find((e) => e.id === id);
+    setHomeData((current) => ({
+      ...current,
+      recurringEntries: current.recurringEntries.filter((e) => e.id !== id),
+    }));
+    if (!isSavedItemId(id)) return;
+    try {
+      await api.deleteItem(id);
+    } catch (error: any) {
+      if (removed) {
+        setHomeData((current) => ({ ...current, recurringEntries: [removed, ...current.recurringEntries] }));
+      }
+      notifyAction("Nu am putut șterge plata recurentă", error?.message || "A apărut o eroare.");
+    }
+  };
+
+  const handleHomeSupplySave = async (entry: HomeSupplyEntry) => {
+    const isExisting = homeData.supplyEntries.some((e) => e.id === entry.id);
+    setHomeData((current) => ({
+      ...current,
+      supplyEntries: isExisting
+        ? current.supplyEntries.map((e) => (e.id === entry.id ? entry : e))
+        : [entry, ...current.supplyEntries],
+    }));
+
+    try {
+      const body = supplyEntryToItemBody(space.id, entry);
+      const saved = isSavedItemId(entry.id)
+        ? await api.updateItem(entry.id, body)
+        : await api.createItem(body);
+      const savedEntry: HomeSupplyEntry = { ...entry, id: String(saved.id) };
+      setHomeData((current) => ({
+        ...current,
+        supplyEntries: current.supplyEntries.map((e) => (e.id === entry.id ? savedEntry : e)),
+      }));
+    } catch (error: any) {
+      setHomeData((current) => ({
+        ...current,
+        supplyEntries: isExisting
+          ? current.supplyEntries
+          : current.supplyEntries.filter((e) => e.id !== entry.id),
+      }));
+      notifyAction("Nu am putut salva proviziile", error?.message || "A apărut o eroare.");
+    }
+  };
+
+  const handleHomeSupplyDelete = async (id: string) => {
+    const removed = homeData.supplyEntries.find((e) => e.id === id);
+    setHomeData((current) => ({
+      ...current,
+      supplyEntries: current.supplyEntries.filter((e) => e.id !== id),
+    }));
+    if (!isSavedItemId(id)) return;
+    try {
+      await api.deleteItem(id);
+    } catch (error: any) {
+      if (removed) {
+        setHomeData((current) => ({ ...current, supplyEntries: [removed, ...current.supplyEntries] }));
+      }
+      notifyAction("Nu am putut șterge proviziile", error?.message || "A apărut o eroare.");
+    }
+  };
+
+  const handleHomeTaskSave = async (entry: HomeTaskEntry) => {
+    const isExisting = homeData.taskEntries.some((e) => e.id === entry.id);
+    setHomeData((current) => ({
+      ...current,
+      taskEntries: isExisting
+        ? current.taskEntries.map((e) => (e.id === entry.id ? entry : e))
+        : [entry, ...current.taskEntries],
+    }));
+
+    try {
+      const body = taskEntryToItemBody(space.id, entry);
+      const saved = isSavedItemId(entry.id)
+        ? await api.updateItem(entry.id, body)
+        : await api.createItem(body);
+      const savedEntry: HomeTaskEntry = { ...entry, id: String(saved.id) };
+      setHomeData((current) => ({
+        ...current,
+        taskEntries: current.taskEntries.map((e) => (e.id === entry.id ? savedEntry : e)),
+      }));
+    } catch (error: any) {
+      setHomeData((current) => ({
+        ...current,
+        taskEntries: isExisting
+          ? current.taskEntries
+          : current.taskEntries.filter((e) => e.id !== entry.id),
+      }));
+      notifyAction("Nu am putut salva task-ul", error?.message || "A apărut o eroare.");
+    }
+  };
+
+  const handleHomeTaskDelete = async (id: string) => {
+    const removed = homeData.taskEntries.find((e) => e.id === id);
+    setHomeData((current) => ({
+      ...current,
+      taskEntries: current.taskEntries.filter((e) => e.id !== id),
+    }));
+    if (!isSavedItemId(id)) return;
+    try {
+      await api.deleteItem(id);
+    } catch (error: any) {
+      if (removed) {
+        setHomeData((current) => ({ ...current, taskEntries: [removed, ...current.taskEntries] }));
+      }
+      notifyAction("Nu am putut șterge task-ul", error?.message || "A apărut o eroare.");
+    }
+  };
+
+  /*
    * ==========================================================
    * LOAD SPACE
    * ==========================================================
@@ -420,6 +816,30 @@ export default function SpaceDetail() {
           setCarData((current) => ({ ...current, ...entries }));
         } catch (error) {
           console.error("[CAR ITEMS] failed to load:", error);
+        }
+      }
+
+      // Same as Car above -- Home's 5 categories live in the generic
+      // `items` table now too (see lib/spaces/home/homeItems.ts).
+      if (detectSpaceType(result, loadedProfile) === "home") {
+        try {
+          const entries = await loadHomeItems(result.id);
+          setHomeData((current) => ({ ...current, ...entries }));
+        } catch (error) {
+          console.error("[HOME ITEMS] failed to load:", error);
+        }
+      }
+
+      // Same as Car/Home above -- the Expenses space's entries live in
+      // the generic `items` table now too (see
+      // lib/spaces/expenses/expensesItems.ts). Used to be pure local
+      // mock state that never left ExpensesDashboard's own useState.
+      if (detectSpaceType(result, loadedProfile) === "expenses") {
+        try {
+          const entries = await loadExpenseItems(result.id);
+          setExpensesData({ entries });
+        } catch (error) {
+          console.error("[EXPENSES ITEMS] failed to load:", error);
         }
       }
     } catch (error) {
@@ -478,6 +898,94 @@ export default function SpaceDetail() {
       load();
     }, [load]),
   );
+
+  /*
+   * ==========================================================
+   * AUTO-ARCHIVE DOCUMENTS ONCE THEY ACTUALLY EXPIRE
+   * ==========================================================
+   * A renewed-but-not-yet-expired document is intentionally left
+   * unarchived by handleDocumentSave above (see comment there) so it
+   * doesn't disappear from the dashboard while still valid. This effect
+   * is what eventually archives it "for real" -- it runs whenever
+   * documentEntries changes (including on every load/focus) and archives
+   * any entry that's both superseded by a newer one of the same type and
+   * has now genuinely expired. Checking `!e.archived` keeps this a no-op
+   * once it's done its job, so it never loops.
+   */
+
+  useEffect(() => {
+    const toArchive = carData.documentEntries.filter(
+      (e) =>
+        !e.archived &&
+        isDocumentSuperseded(e, carData.documentEntries) &&
+        getDocumentStatus(e).status === "expired",
+    );
+
+    if (toArchive.length === 0) return;
+
+    const idsToArchive = new Set(toArchive.map((e) => e.id));
+
+    setCarData((current) => ({
+      ...current,
+      documentEntries: current.documentEntries.map((e) =>
+        idsToArchive.has(e.id) ? { ...e, archived: true } : e,
+      ),
+    }));
+
+    toArchive.forEach((e) => {
+      archiveDocumentEntry(e.id).catch((error: any) => {
+        notifyAction(
+          "Arhivare automată eșuată",
+          error?.message || `"${e.title}" a expirat dar tot apare ca activ.`,
+        );
+      });
+    });
+  }, [carData.documentEntries]);
+
+  /*
+   * ==========================================================
+   * AUTO-ARCHIVE MAINTENANCE ONCE IT ACTUALLY BECOMES OVERDUE
+   * ==========================================================
+   * Same reasoning as the document sweep above, for maintenance's own
+   * km-or-date "whichever comes first" rule (see getMaintenanceUrgency):
+   * a renewed-but-not-yet-due entry stays active until it truly becomes
+   * overdue, on whichever axis gets there first -- this effect is what
+   * archives it "for real" at that point. Depends on the whole carData
+   * (not just maintenanceEntries) because currentOdometer can change from
+   * a new fuel/expense entry alone, without maintenanceEntries itself
+   * changing.
+   */
+
+  useEffect(() => {
+    const currentOdometer = getCurrentOdometer(carData);
+
+    const toArchive = carData.maintenanceEntries.filter(
+      (e) =>
+        !e.archived &&
+        isMaintenanceSuperseded(e, carData.maintenanceEntries) &&
+        getMaintenanceUrgency(e, currentOdometer).overdue,
+    );
+
+    if (toArchive.length === 0) return;
+
+    const idsToArchive = new Set(toArchive.map((e) => e.id));
+
+    setCarData((current) => ({
+      ...current,
+      maintenanceEntries: current.maintenanceEntries.map((e) =>
+        idsToArchive.has(e.id) ? { ...e, archived: true } : e,
+      ),
+    }));
+
+    toArchive.forEach((e) => {
+      archiveMaintenanceEntry(e.id).catch((error: any) => {
+        notifyAction(
+          "Arhivare automată eșuată",
+          error?.message || `"${e.service}" a devenit restant dar tot apare ca activ.`,
+        );
+      });
+    });
+  }, [carData]);
 
   /*
    * ==========================================================
@@ -653,6 +1161,7 @@ export default function SpaceDetail() {
           onMaintenanceDelete={handleMaintenanceDelete}
           onDocumentDelete={handleDocumentDelete}
           onExpenseDelete={handleExpenseDelete}
+          initialOpenEntry={itemType === "car_document" && itemId ? { type: "document", id: itemId } : null}
         />
 
         <CarProfileForm
@@ -691,6 +1200,23 @@ export default function SpaceDetail() {
           homeData={homeData}
           profile={profile as HomeProfile | null}
           onEdit={handleEdit}
+          onDocumentSave={handleHomeDocumentSave}
+          onDocumentDelete={handleHomeDocumentDelete}
+          onExpenseSave={handleHomeExpenseSave}
+          onExpenseDelete={handleHomeExpenseDelete}
+          onMaintenanceSave={handleHomeMaintenanceSave}
+          onMaintenanceDelete={handleHomeMaintenanceDelete}
+          onRecurringSave={handleHomeRecurringSave}
+          onRecurringDelete={handleHomeRecurringDelete}
+          onSupplySave={handleHomeSupplySave}
+          onSupplyDelete={handleHomeSupplyDelete}
+          onTaskSave={handleHomeTaskSave}
+          onTaskDelete={handleHomeTaskDelete}
+          initialOpenItem={
+            (itemType === "home_task" || itemType === "home_recurring" || itemType === "home_maintenance") && itemId
+              ? { type: itemType, id: itemId }
+              : null
+          }
         />
 
         <HomeProfileForm
@@ -724,9 +1250,15 @@ export default function SpaceDetail() {
         }}
         testID="space-detail-screen"
       >
+        {/* key={space.id} forces a full remount on every space switch --
+            GroceryDashboard keeps its own lists/items in local state, and
+            without this it kept the PREVIOUS Grocery space's data on
+            screen (a real re-render, not a fresh mount) for as long as
+            its own data fetch took to resolve, which read as "the new
+            space inherited the old one's list" while switching. */}
         <GroceryDashboard
+          key={space.id}
           space={space}
-          groceryData={groceryData}
           onEdit={handleEdit}
         />
 
@@ -760,6 +1292,8 @@ export default function SpaceDetail() {
           space={space}
           expensesData={expensesData}
           onEdit={handleEdit}
+          onEntrySave={handleExpenseEntrySave}
+          onEntryDelete={handleExpenseEntryDelete}
         />
 
         <EditSpaceModal

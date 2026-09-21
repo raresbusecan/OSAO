@@ -11,7 +11,7 @@ export type CarRecentSectionProps = {
 export function CarRecentSection({
     items,
 }: CarRecentSectionProps) {
-    const { colors, spacing, radius } = useTheme();
+    const { colors, spacing, radius, typography } = useTheme();
 
     if (!items.length) {
         return null;
@@ -19,15 +19,7 @@ export function CarRecentSection({
 
     return (
         <View style={{ marginBottom: spacing.xl }}>
-            <Text
-                style={{
-                    fontSize: 12,
-                    fontWeight: "800",
-                    letterSpacing: 1,
-                    color: colors.onSurfaceTertiary,
-                    marginBottom: 10,
-                }}
-            >
+            <Text style={{ ...typography.label, color: colors.onSurfaceTertiary, marginBottom: 10 }}>
                 RECENT
             </Text>
 
@@ -47,6 +39,7 @@ export function CarRecentSection({
                         amount={item.amount ?? ""}
                         colors={colors}
                         spacing={spacing}
+                        typography={typography}
                         last={index === items.length - 1}
                     />
                 ))}
@@ -62,6 +55,7 @@ function RecentRow({
     amount,
     colors,
     spacing,
+    typography,
     last = false,
 }: {
     icon: string;
@@ -70,6 +64,7 @@ function RecentRow({
     amount: string;
     colors: any;
     spacing: any;
+    typography: any;
     last?: boolean;
 }) {
     return (
@@ -91,34 +86,16 @@ function RecentRow({
             />
 
             <View style={{ flex: 1 }}>
-                <Text
-                    style={{
-                        fontSize: 14,
-                        fontWeight: "600",
-                        color: colors.onSurface,
-                    }}
-                >
+                <Text style={{ ...typography.body, color: colors.onSurface }}>
                     {title}
                 </Text>
 
-                <Text
-                    style={{
-                        marginTop: 2,
-                        fontSize: 12,
-                        color: colors.onSurfaceTertiary,
-                    }}
-                >
+                <Text style={{ ...typography.caption, marginTop: 2, color: colors.onSurfaceTertiary }}>
                     {subtitle}
                 </Text>
             </View>
 
-            <Text
-                style={{
-                    fontSize: 14,
-                    fontWeight: "700",
-                    color: colors.onSurface,
-                }}
-            >
+            <Text style={{ ...typography.body, color: colors.onSurface }}>
                 {amount}
             </Text>
         </View>

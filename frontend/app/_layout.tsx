@@ -8,6 +8,7 @@ import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ThemeProvider } from "@/lib/theme";
+import { ConfirmHost } from "@/lib/confirmHost";
 import { AuthProvider, useAuth } from "@/providers/auth";
 
 LogBox.ignoreAllLogs(true);
@@ -69,6 +70,7 @@ export default function RootLayout() {
             <BottomSheetModalProvider>
               <StatusBar style="auto" />
               <AuthGuard />
+              <ConfirmHost />
             </BottomSheetModalProvider>
           </AuthProvider>
         </ThemeProvider>

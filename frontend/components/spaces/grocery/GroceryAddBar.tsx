@@ -1,3 +1,8 @@
+/** @deprecated Retired by the Grocery space rewrite -- adding a product
+ * now goes through GroceryProductModal.tsx (name + amount + unit +
+ * category), reachable from the "+" FAB and the Shopping List page's
+ * pinned Add button. Kept only because this environment couldn't delete
+ * the file; safe to remove. Not imported anywhere. */
 import React, { useState } from "react";
 import { View, TextInput, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";

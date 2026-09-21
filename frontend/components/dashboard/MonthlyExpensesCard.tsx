@@ -2,12 +2,26 @@ import React, { useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { getMonthlyExpensesBreakdown } from "@/lib/dashboard/monthlyExpenses";
 
-export function MonthlyExpensesCard() {
+export type MonthlyExpenseSource = { spaceName: string; icon: string; amount: number };
+
+export type MonthlyExpensesCardProps = {
+  total: number;
+  sources: MonthlyExpenseSource[];
+};
+
+/**
+ * Real cross-space "this month" spend -- total/sources come from
+ * api.dashboard() (see DashboardController::index()'s monthlyExpenses
+ * field), computed from actually-saved Car/Home expense items. Used to
+ * sum each space's own local mock data instead (frontend/lib/dashboard/
+ * monthlyExpenses.ts, now deprecated) -- that meant Car always showed 0
+ * once Car was migrated onto the real backend, and Home was simply wrong
+ * once Home was migrated too, since neither mock ever changes.
+ */
+export function MonthlyExpensesCard({ total, sources }: MonthlyExpensesCardProps) {
   const { colors, spacing, radius } = useTheme();
   const [expanded, setExpanded] = useState(false);
-  const { total, sources } = getMonthlyExpensesBreakdown();
 
   return (
     <View
@@ -21,6 +35,9 @@ export function MonthlyExpensesCard() {
       <Pressable
         testID="monthly-expenses-toggle"
         onPress={() => setExpanded((current) => !current)}
+        accessibilityRole="button"
+        accessibilityLabel="Monthly expenses"
+        accessibilityState={{ expanded }}
         style={{
           flexDirection: "row",
           alignItems: "center",

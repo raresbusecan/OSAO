@@ -4,6 +4,7 @@ import type {
   HomeMaintenanceEntry,
   HomeRecurringEntry,
   HomeSupplyEntry,
+  HomeTaskEntry,
 } from "@/lib/spaces/home/home.types";
 
 export type HomeData = {
@@ -12,4 +13,5 @@ export type HomeData = {
   maintenanceEntries: HomeMaintenanceEntry[];
   recurringEntries: HomeRecurringEntry[];
   supplyEntries: HomeSupplyEntry[];
+  taskEntries: HomeTaskEntry[];
 };

@@ -3,6 +3,7 @@ import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { useRouter } from "expo-router";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 
 export type CarHeaderProps = {
   space: any;
@@ -130,7 +131,7 @@ export function CarHeader({
             width: 68,
             height: 68,
             borderRadius: radius.lg,
-            backgroundColor: colors.surfaceSecondary,
+            backgroundColor: `${SPACE_IDENTITY_COLORS.car}1A`,
             alignItems: "center",
             justifyContent: "center",
             marginBottom: spacing.md,
@@ -139,7 +140,7 @@ export function CarHeader({
           <Ionicons
             name={(space?.icon || "car-outline") as any}
             size={32}
-            color={colors.onSurface}
+            color={SPACE_IDENTITY_COLORS.car}
           />
         </View>
 

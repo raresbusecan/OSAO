@@ -167,15 +167,40 @@ export const api = {
     return r;
   },
 
-  me: () => request("/user"),
+  // AuthController::user() wraps its response as { user: {...} } (same
+  // shape login/register's own 'user' field has) -- unwrap it here so
+  // every caller gets the actual user object back, not the envelope.
+  // Before this, providers/auth.tsx's `setUser(await api.me())` on an
+  // app boot with an existing token (any session that isn't a fresh
+  // login/register, which already unwraps via `r.user`) stored the
+  // WHOLE { user: {...} } envelope as `user` -- so `user.id` silently
+  // read as `undefined` for the rest of the app, everywhere (Grocery's
+  // "is this me" checks included), until the next fresh login.
+  me: async () => {
+    const r = await request<{ user: { id: number; name: string; email: string; created_at: string } }>("/user");
+    return r.user;
+  },
 
   dashboard: () =>
     request<{
       today: any[];
       upcoming: any[];
       overdue: any[];
-      payments: any[];
+      // Real "this month" spend across Car + Home (see
+      // Item::SPENDING_TYPES on the backend) -- replaces what used to be
+      // a frontend-only mock sum. A space with nothing this month is
+      // simply absent from `sources`, not listed at 0.
+      monthlyExpenses: {
+        total: number;
+        sources: { spaceName: string; icon: string; amount: number }[];
+      };
     }>("/dashboard"),
+
+  // Grouped by day ('YYYY-MM-DD') for the given month ('YYYY-MM') --
+  // everything with a due_at the caller can see (own items + items in any
+  // space they're accessible in). See CalendarController::index.
+  calendar: (month: string) =>
+    request<{ days: Record<string, any[]>; recurring: any[] }>(`/calendar?month=${month}`),
 
   logout: async () => {
     try {
@@ -204,6 +229,10 @@ createSpace: (body: {
   description?: string;
   icon?: string;
   color?: string;
+  /** Fixed permanently at creation -- see spaceProfile.ts's
+   * detectSpaceType, which reads this first (before name/icon) so
+   * renaming a space later can never change what kind it is. */
+  type?: string;
 }) =>
   request("/spaces", {
     method: "POST",
@@ -265,6 +294,80 @@ saveHomeProfile: (
   }),
 
   // -------------------------
+  // SPACE MEMBERS -- sharing a space with other accounts. Either the
+  // owner or a member can list who's in it; only the owner can add or
+  // remove someone (enforced server-side, see SpaceController).
+  // -------------------------
+
+  getSpaceMembers: (spaceId: string | number) =>
+    request<{
+      owner: { id: number; name: string; email: string };
+      members: { id: number; name: string; email: string }[];
+    }>(`/spaces/${spaceId}/members`),
+
+  addSpaceMember: (spaceId: string | number, email: string) =>
+    request<{ message: string; member: { id: number; name: string; email: string } }>(
+      `/spaces/${spaceId}/members`,
+      {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      },
+    ),
+
+  removeSpaceMember: (spaceId: string | number, userId: string | number) =>
+    request(`/spaces/${spaceId}/members/${userId}`, {
+      method: "DELETE",
+    }),
+
+  // -------------------------
+  // LIST MEMBERS -- sharing ONE grocery list (an item with
+  // type='grocery_list') rather than the whole space it lives in. The
+  // space owner always sees every list in their own space; adding
+  // someone here is what lets a non-owner see this one list at all
+  // (see ItemController::canAccessList on the backend).
+  // -------------------------
+
+  getListMembers: (listItemId: string | number) =>
+    request<{
+      owner: { id: number; name: string; email: string };
+      members: { id: number; name: string; email: string }[];
+    }>(`/items/${listItemId}/members`),
+
+  addListMember: (listItemId: string | number, email: string) =>
+    request<{ message: string; member: { id: number; name: string; email: string } }>(
+      `/items/${listItemId}/members`,
+      {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      },
+    ),
+
+  /** removeItems decides what happens to the products this person added
+   * on this list -- true deletes them along with the person, false (the
+   * default) leaves them on the list with their tag cleared instead of
+   * pointing at someone who can no longer see it (see
+   * ItemController::removeMember). The response's affected_item_ids is
+   * exactly what changed, so the caller can update local state without
+   * a full reload. */
+  removeListMember: (listItemId: string | number, userId: string | number, removeItems: boolean = false) =>
+    request<{ message: string; affected_item_ids: number[]; items_deleted: boolean }>(
+      `/items/${listItemId}/members/${userId}`,
+      {
+        method: "DELETE",
+        body: JSON.stringify({ remove_items: removeItems }),
+      },
+    ),
+
+  // Everything Grocery's Home shows for the given Grocery space -- that
+  // space's own lists, plus any list shared with the user from anywhere
+  // (see ItemController::myGrocery). Sharing is a state on the list,
+  // never a different space to visit. spaceId is required now -- without
+  // it, a user with more than one Grocery space saw every space's lists
+  // merged together the moment they opened any one of them.
+  getMyGroceryData: (spaceId: string | number) =>
+    request<{ lists: any[]; items: any[] }>(`/grocery/mine?space_id=${spaceId}`),
+
+  // -------------------------
   // ITEMS
   // -------------------------
 
@@ -310,6 +413,58 @@ saveHomeProfile: (
     }),
 
   // -------------------------
+  // BUDGET -- category spending limits, recurring bills, savings goal.
+  // See BudgetController.
+  // -------------------------
+
+  getBudget: () =>
+    request<{
+      limits: { category: string; monthly_limit: number; spent: number }[];
+      spending: Record<string, { this_month: number; last_month: number; avg_last_3_months: number }>;
+      biggest: Record<string, { title: string; amount: number; from_last_month: boolean } | null>;
+      recurring: Record<string, number>;
+      recurringBills: any[];
+      savingsGoal: { target_amount: number; current_amount: number; target_date: string | null } | null;
+    }>("/budget"),
+
+  saveBudgetLimit: (body: { category: string; monthly_limit: number }) =>
+    request("/budget/limits", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  deleteBudgetLimit: (category: string) =>
+    request(`/budget/limits/${encodeURIComponent(category)}`, {
+      method: "DELETE",
+    }),
+
+  getBudgetSpaceDetail: (category: string) =>
+    request<{
+      category: string;
+      months: { year: number; month: number; label: string; total: number }[];
+      items: { id: number | string; type: string; title: string; amount: number | null; currency: string | null; due_at: string | null }[];
+      recurring_monthly: number;
+    }>(`/budget/spaces/${encodeURIComponent(category)}`),
+
+  saveSavingsGoal: (body: { target_amount: number; current_amount: number; target_date?: string | null }) =>
+    request("/budget/savings-goal", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+
+  getBudgetArchive: () =>
+    request<{
+      months: {
+        month: string;
+        label: string;
+        total_spent: number;
+        total_budget: number;
+        total_diff: number | null;
+        categories: { category: string; budget_limit: number | null; spent: number; diff: number | null }[];
+      }[];
+    }>("/budget/archive"),
+
+  // -------------------------
   // QUICK ADD
   // -------------------------
 
@@ -317,4 +472,32 @@ saveHomeProfile: (
     method: "POST",
     body: JSON.stringify({ text }),
   }),
+
+  // -------------------------
+  // GROCERY -- INGREDIENT REFERENCES
+  // -------------------------
+
+  getIngredientReferences: () =>
+    request<
+      { id: number; name: string; category: string; aliases: string[] | null }[]
+    >("/ingredient-references"),
+
+  // -------------------------
+  // GROCERY -- RECIPES
+  // -------------------------
+
+  listRecipes: () =>
+    request<
+      {
+        id: number;
+        user_id: number | null;
+        title: string;
+        image_key: string | null;
+        time_minutes: number | null;
+        difficulty: string | null;
+        steps: string[] | null;
+        tags: string[] | null;
+        ingredients: { id: number; name: string; quantity: string | null; sort_order: number }[];
+      }[]
+    >("/recipes"),
 };

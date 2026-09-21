@@ -1,18 +1,22 @@
 import React from "react";
-import { View, Text } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 
 export type ExpensesStatsProps = {
-  thisMonthTotal: number;
+  allTimeTotal: number;
   itemCount: number;
   currency?: string;
+  /** Opens ExpensesDetailPage -- the trend chart + filterable breakdown.
+   * Only the total card is pressable; Items is still just a count. */
+  onTotalPress: () => void;
 };
 
 export function ExpensesStats({
-  thisMonthTotal,
+  allTimeTotal,
   itemCount,
   currency = "RON",
+  onTotalPress,
 }: ExpensesStatsProps) {
   const { colors, spacing, radius } = useTheme();
 
@@ -26,12 +30,13 @@ export function ExpensesStats({
     >
       <StatCard
         icon="wallet-outline"
-        value={thisMonthTotal.toLocaleString("en-US")}
-        label="This month"
+        value={allTimeTotal.toLocaleString("en-US")}
+        label="All time"
         suffix={currency}
         colors={colors}
         radius={radius}
         spacing={spacing}
+        onPress={onTotalPress}
       />
 
       <StatCard
@@ -55,6 +60,7 @@ function StatCard({
   colors,
   radius,
   spacing,
+  onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
   value: string;
@@ -63,19 +69,31 @@ function StatCard({
   colors: any;
   radius: any;
   spacing: any;
+  onPress?: () => void;
 }) {
+  const Container: any = onPress ? Pressable : View;
+
   return (
-    <View
+    <Container
+      testID={onPress ? "expenses-total-card" : undefined}
+      onPress={onPress}
+      accessibilityRole={onPress ? "button" : undefined}
+      accessibilityLabel={onPress ? "View all expenses" : undefined}
       style={{
         flex: 1,
         minHeight: 110,
         padding: spacing.lg,
-        backgroundColor: colors.surfaceSecondary,
-        borderRadius: radius.lg,
+        backgroundColor: "transparent",
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: radius.sm,
         justifyContent: "space-between",
       }}
     >
-      <Ionicons name={icon} size={19} color={colors.onSurfaceTertiary} />
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Ionicons name={icon} size={19} color={colors.onSurfaceTertiary} />
+        {onPress ? <Ionicons name="chevron-forward" size={15} color={colors.onSurfaceTertiary} /> : null}
+      </View>
 
       <View>
         <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4 }}>
@@ -99,6 +117,6 @@ function StatCard({
           {label}
         </Text>
       </View>
-    </View>
+    </Container>
   );
 }

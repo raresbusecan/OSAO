@@ -26,9 +26,24 @@ export type CarMaintenanceEntry = {
   service: string;
   description: string;
   price: number;
-  odometer: number;
+  /** Optional -- only Oil Change actually requires it (see
+   * maintenance.validation.ts); any other entry updating this leaves the
+   * car's current-odometer read (getCurrentOdometer) no more informed
+   * than whatever fuel/other entries already provided, so forcing it on
+   * every single maintenance record would just be redundant re-entry. */
+  odometer?: number;
   provider?: string;
   nextServiceOdometer?: number;
+  /** "DD.MM.YYYY", same raw-string convention as CarDocumentEntry's
+   * expiryDate (see dashboard.calculations.ts's parseDateString) --
+   * independent of nextServiceOdometer, either or both can be set.
+   * Whichever comes first wins for urgency, see getMaintenanceUrgency. */
+  nextServiceDate?: string;
+  /** True when this service cost nothing out of pocket (warranty/recall
+   * work) -- lets `price` be validly 0 (see maintenance.validation.ts)
+   * instead of the usual "must be a real positive amount" requirement,
+   * which otherwise catches an accidentally-blank Price field. */
+  underWarranty?: boolean;
   /** Same idea as CarDocumentEntry.archived -- true once a newer service
    * of the same type has been logged via the "renew" flow. */
   archived?: boolean;

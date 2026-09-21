@@ -1,4 +1,10 @@
 import type { CarData } from "@/components/spaces/car/car.data.types";
+import type { CarDocumentEntry, CarMaintenanceEntry } from "@/lib/spaces/car/car.types";
+import {
+  getDocumentStatus,
+  getDocumentUrgencyTier,
+  getMaintenanceUrgency,
+} from "./dashboard.calculations";
 
 /**
  * The single place that knows how to turn Car's 4 category tables (Fuel,
@@ -29,9 +35,45 @@ export type CarExpenseRecord = {
    * the money was still spent -- just tagged so the list can show it's
    * historical, not current. */
   archived?: boolean;
+  /** Documents and maintenance -- the same status dot shown in RECENT/
+   * ALL and History (see CarRecentItem.statusDot), PLUS "archived"
+   * (gray), which only exists here: this is the one place archived
+   * records are ever shown at all (the "Include archived" toggle), so
+   * unlike everywhere else this needs a dot for that case too instead of
+   * none. "safe" = outside the alert window; light/medium/critical
+   * mirror DUE SOON. */
+  statusDot?: "safe" | "light" | "medium" | "critical" | "archived";
+  /** Documents and maintenance, never on an archived one -- true once
+   * the entry has actually passed its trigger. Swaps the status dot for
+   * a small "!". */
+  overdue?: boolean;
 };
 
-export function getCarExpenseRecords(carData: CarData): CarExpenseRecord[] {
+function getDocumentStatusDot(entry: CarDocumentEntry): CarExpenseRecord["statusDot"] {
+  if (entry.archived) return "archived";
+  return getDocumentUrgencyTier(entry) ?? "safe";
+}
+
+// Never true on an archived document -- archiving already resolves it.
+function isDocumentOverdue(entry: CarDocumentEntry): boolean {
+  if (entry.archived) return false;
+  return getDocumentStatus(entry).status === "expired";
+}
+
+function getMaintenanceStatusDot(
+  entry: CarMaintenanceEntry,
+  currentOdometer: number,
+): CarExpenseRecord["statusDot"] {
+  if (entry.archived) return "archived";
+  return getMaintenanceUrgency(entry, currentOdometer).tier ?? "safe";
+}
+
+function isMaintenanceOverdue(entry: CarMaintenanceEntry, currentOdometer: number): boolean {
+  if (entry.archived) return false;
+  return getMaintenanceUrgency(entry, currentOdometer).overdue;
+}
+
+export function getCarExpenseRecords(carData: CarData, currentOdometer: number): CarExpenseRecord[] {
   const records: CarExpenseRecord[] = [];
 
   carData.fuelEntries.forEach((entry) => {
@@ -62,6 +104,8 @@ export function getCarExpenseRecords(carData: CarData): CarExpenseRecord[] {
       date: entry.date,
       amount: entry.price,
       archived: entry.archived,
+      statusDot: getMaintenanceStatusDot(entry, currentOdometer),
+      overdue: isMaintenanceOverdue(entry, currentOdometer),
     });
   });
 
@@ -81,6 +125,8 @@ export function getCarExpenseRecords(carData: CarData): CarExpenseRecord[] {
       date: entry.date,
       amount: entry.price,
       archived: entry.archived,
+      statusDot: getDocumentStatusDot(entry),
+      overdue: isDocumentOverdue(entry),
     });
   });
 
@@ -90,7 +136,10 @@ export function getCarExpenseRecords(carData: CarData): CarExpenseRecord[] {
       category: "expense",
       icon: "receipt-outline",
       categoryLabel: entry.category || "Expense",
-      title: entry.title,
+      // Category and title are both optional now (only Amount is
+      // required, see CarExpenseForm.tsx) -- fall back so a blank one
+      // never renders as an empty title.
+      title: entry.title || entry.category || "Expense",
       subtitle: entry.provider,
       date: entry.date,
       amount: entry.amount,

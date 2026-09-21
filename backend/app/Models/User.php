@@ -30,9 +30,26 @@ class User extends Authenticatable
         return $this->hasMany(Space::class);
     }
 
+    /** Spaces owned by someone else that this user has been added to --
+     * see Space::members(). Kept separate from spaces() (owned only) so
+     * "is this my space" stays unambiguous everywhere that already
+     * calls spaces(); SpaceController::index() is the one place that
+     * merges both. */
+    public function sharedSpaces(): BelongsToMany
+    {
+        return $this->belongsToMany(Space::class, 'space_members')->withTimestamps();
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(Item::class);
+    }
+
+    /** Only this user's own personal recipes -- library recipes have a
+     * null user_id, so they never show up here. See RecipeController. */
+    public function recipes(): HasMany
+    {
+        return $this->hasMany(Recipe::class);
     }
 
     /**

@@ -46,6 +46,26 @@ export type SpaceProfile = CarProfile | HomeProfile;
 
 export type SpaceKind = "car" | "home" | "grocery" | "expenses" | "other";
 
+// Fixed identity color per space -- unrelated to any budget-health tone
+// color (success/warning/error, which shift with how close a space is
+// to its limit). This one never changes, so a color reads as "which
+// space" at a glance the same way the icon does: used by the Budget
+// tab's "Buget total" entry row and by BudgetOverviewPage's ring and
+// ranked list, so both always agree on which color is which space.
+export const SPACE_IDENTITY_COLORS: Partial<Record<SpaceKind, string>> = {
+  car: "#3B82F6",
+  home: "#8B5CF6",
+  grocery: "#F59E0B",
+  expenses: "#14B8A6",
+};
+
+/** Same idea as SPACE_IDENTITY_COLORS, for the one thing that's
+ * deliberately NOT in a space: a custom calendar event created with no
+ * space_id (see calendar.tsx). Kept here rather than re-declared per
+ * screen so Calendar, Home's "De făcut" breakdown and its carousel all
+ * agree on the same pink instead of three independent copies of it. */
+export const CUSTOM_EVENT_COLOR = "#EC4899";
+
 /** backend/app/Http/Controllers/Api/SpaceController.php's car_profile shape. */
 export function carProfileFromApi(raw: any): CarProfile | null {
   if (!raw) return null;
@@ -117,17 +137,32 @@ export function homeProfileName(profile: HomeProfile): string {
 }
 
 /**
- * Real type detection: the real profile's `kind` first (reliable
- * regardless of the space's current display name), falling back to the
- * old type/slug/name heuristic only for spaces with neither profile --
- * either they predate this feature, or their type has no dedicated form
- * at all (Grocery, Expenses, anything custom).
+ * Real type detection, in order of how trustworthy the signal is:
+ *
+ * 1. `space.type` -- a real, permanent DB column set once at creation
+ *    (see SpaceController::store) and never editable afterward. The
+ *    only signal that's reliable for EVERY kind regardless of name --
+ *    previously Car/Home leaned on their profile row for this (below)
+ *    while Grocery/Expenses had nothing but a name/icon guess, so
+ *    renaming "Expenses" to "Expenses Rares" could silently misdetect
+ *    it. Every space created from here on carries this.
+ * 2. The real profile's `kind` -- for a Car/Home space that predates
+ *    this column (`space.type` is null on it), still reliable
+ *    regardless of the space's current display name.
+ * 3. The old type/slug/name/icon heuristic -- last resort, only for a
+ *    space with neither of the above (predates both, or its kind has no
+ *    dedicated form at all, e.g. a hidden "Finance" template).
  */
 export function detectSpaceType(space: any, profile: SpaceProfile | null): SpaceKind {
+  const persistedType = String(space?.type || "").toLowerCase();
+  if (persistedType === "car" || persistedType === "home" || persistedType === "grocery" || persistedType === "expenses") {
+    return persistedType as SpaceKind;
+  }
+
   if (profile?.kind === "car") return "car";
   if (profile?.kind === "home") return "home";
 
-  const spaceType = String(space?.type || space?.slug || space?.kind || "").toLowerCase();
+  const spaceType = String(space?.slug || space?.kind || "").toLowerCase();
   const name = String(space?.name || "").toLowerCase();
   const icon = String(space?.icon || "").toLowerCase();
 

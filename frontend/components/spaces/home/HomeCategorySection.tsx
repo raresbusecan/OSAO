@@ -1,5 +1,6 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 
 export type HomeCategoryRow = {
@@ -13,7 +14,11 @@ export type HomeCategorySectionProps = {
   title: string;
   rows: HomeCategoryRow[];
   emptyLabel: string;
+  /** Tapping the row itself -- used to open it for editing. */
   onRowPress?: (id: string | number) => void;
+  /** The trash icon on the row -- separate from onRowPress so tapping to
+   * edit and tapping to delete never mean the same touch. */
+  onRowDelete?: (id: string | number) => void;
 };
 
 /**
@@ -26,16 +31,15 @@ export function HomeCategorySection({
   rows,
   emptyLabel,
   onRowPress,
+  onRowDelete,
 }: HomeCategorySectionProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing, radius, typography } = useTheme();
 
   return (
     <>
       <Text
         style={{
-          fontSize: 12,
-          fontWeight: "800",
-          letterSpacing: 1,
+          ...typography.label,
           color: colors.onSurfaceTertiary,
           marginBottom: 10,
         }}
@@ -46,21 +50,25 @@ export function HomeCategorySection({
       {rows.length === 0 ? (
         <View
           style={{
-            backgroundColor: colors.surfaceSecondary,
-            borderRadius: radius.lg,
+            backgroundColor: "transparent",
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: radius.sm,
             padding: spacing.lg,
             marginBottom: spacing.xl,
           }}
         >
-          <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>
+          <Text style={{ ...typography.caption, color: colors.onSurfaceTertiary }}>
             {emptyLabel}
           </Text>
         </View>
       ) : (
         <View
           style={{
-            backgroundColor: colors.surfaceSecondary,
-            borderRadius: radius.lg,
+            backgroundColor: "transparent",
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: radius.sm,
             overflow: "hidden",
             marginBottom: spacing.xl,
           }}
@@ -82,37 +90,43 @@ export function HomeCategorySection({
               }}
             >
               <View style={{ flex: 1 }}>
-                <Text
-                  style={{
-                    fontSize: 14,
-                    fontWeight: "600",
-                    color: colors.onSurface,
-                  }}
-                >
+                <Text style={{ ...typography.body, color: colors.onSurface }}>
                   {row.title}
                 </Text>
 
-                <Text
-                  style={{
-                    marginTop: 2,
-                    fontSize: 12,
-                    color: colors.onSurfaceTertiary,
-                  }}
-                >
+                <Text style={{ ...typography.caption, marginTop: 2, color: colors.onSurfaceTertiary }}>
                   {row.subtitle}
                 </Text>
               </View>
 
               {row.amount ? (
-                <Text
-                  style={{
-                    fontSize: 14,
-                    fontWeight: "700",
-                    color: colors.onSurface,
-                  }}
-                >
+                <Text style={{ ...typography.body, color: colors.onSurface }}>
                   {row.amount}
                 </Text>
+              ) : null}
+
+              {/* Only shown when the row actually does something on tap
+                  (onRowPress) -- otherwise a row with just text looked
+                  identical whether it opened an edit form or did nothing.
+                  Same icon/size/color Car's own tappable rows already use
+                  (see CarDashboard.tsx), so this reads as one consistent
+                  "this row is tappable" signal app-wide. */}
+              {onRowPress ? (
+                <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceTertiary} />
+              ) : null}
+
+              {onRowDelete ? (
+                <Pressable
+                  testID={`home-row-delete-${row.id}`}
+                  onPress={(event) => {
+                    event.stopPropagation();
+                    onRowDelete(row.id);
+                  }}
+                  hitSlop={10}
+                  style={{ padding: 2 }}
+                >
+                  <Ionicons name="trash-outline" size={16} color={colors.error} />
+                </Pressable>
               ) : null}
             </Pressable>
           ))}

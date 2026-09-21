@@ -1,10 +1,14 @@
 import React from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
 
 export type ExpensesListSectionProps = {
   entries: ExpenseEntry[];
+  /** Tapping a row opens it for editing/deleting -- rows used to be
+   * plain, non-interactive Views. */
+  onEntryPress?: (entry: ExpenseEntry) => void;
 };
 
 function formatDate(dateString: string): string {
@@ -13,7 +17,7 @@ function formatDate(dateString: string): string {
   return date.toLocaleDateString("en-US", { day: "numeric", month: "short" });
 }
 
-export function ExpensesListSection({ entries }: ExpensesListSectionProps) {
+export function ExpensesListSection({ entries, onEntryPress }: ExpensesListSectionProps) {
   const { colors, spacing, radius } = useTheme();
 
   return (
@@ -32,8 +36,10 @@ export function ExpensesListSection({ entries }: ExpensesListSectionProps) {
 
       <View
         style={{
-          backgroundColor: colors.surfaceSecondary,
-          borderRadius: radius.lg,
+          backgroundColor: "transparent",
+          borderWidth: 1,
+          borderColor: colors.border,
+          borderRadius: radius.sm,
           overflow: "hidden",
           marginBottom: spacing.xl,
         }}
@@ -46,8 +52,11 @@ export function ExpensesListSection({ entries }: ExpensesListSectionProps) {
           </View>
         ) : (
           entries.map((entry, index) => (
-            <View
+            <Pressable
               key={entry.id}
+              testID={`expense-row-${entry.id}`}
+              onPress={onEntryPress ? () => onEntryPress(entry) : undefined}
+              disabled={!onEntryPress}
               style={{
                 flexDirection: "row",
                 alignItems: "center",
@@ -66,17 +75,24 @@ export function ExpensesListSection({ entries }: ExpensesListSectionProps) {
                   {entry.name}
                 </Text>
 
-                <Text
-                  style={{ marginTop: 2, fontSize: 12, color: colors.onSurfaceTertiary }}
-                >
-                  {formatDate(entry.date)}
-                </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 }}>
+                  <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary, flexShrink: 1 }} numberOfLines={1}>
+                    {formatDate(entry.date)}
+                  </Text>
+                  {entry.notes ? (
+                    <Ionicons name="document-text-outline" size={11} color={colors.onSurfaceTertiary} />
+                  ) : null}
+                </View>
               </View>
 
               <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurface }}>
                 {entry.price.toLocaleString("en-US")}
               </Text>
-            </View>
+
+              {onEntryPress ? (
+                <Ionicons name="chevron-forward" size={14} color={colors.onSurfaceTertiary} />
+              ) : null}
+            </Pressable>
           ))
         )}
       </View>

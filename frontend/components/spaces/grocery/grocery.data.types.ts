@@ -1,5 +1,6 @@
-import type { GroceryItem } from "@/lib/spaces/grocery/grocery.types";
+import type { GroceryItem, GroceryList } from "@/lib/spaces/grocery/grocery.types";
 
 export type GroceryData = {
   items: GroceryItem[];
+  lists: GroceryList[];
 };

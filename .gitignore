@@ -12,3 +12,6 @@ node_modules/
 # OS/editor
 .idea/
 .vscode/*.local
+
+# Dev server / tunnel runtime logs
+*.log

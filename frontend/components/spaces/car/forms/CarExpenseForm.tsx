@@ -78,16 +78,6 @@ export default function CarExpenseForm({
       ? Number(odometer.replace(",", "."))
       : undefined;
 
-    if (!category.trim()) {
-      setError("Please select an expense category.");
-      return;
-    }
-
-    if (!title.trim()) {
-      setError("Please enter an expense title.");
-      return;
-    }
-
     if (
       !amount ||
       Number.isNaN(amountValue) ||
@@ -222,8 +212,9 @@ export default function CarExpenseForm({
               width: 36,
               height: 36,
               borderRadius: radius.pill,
-              backgroundColor:
-                colors.surfaceSecondary,
+              backgroundColor: "transparent",
+              borderWidth: 1,
+              borderColor: colors.border,
               alignItems: "center",
               justifyContent: "center",
             }}
@@ -270,7 +261,7 @@ export default function CarExpenseForm({
                   borderRadius: radius.pill,
                   backgroundColor: selected
                     ? colors.onSurface
-                    : colors.surfaceSecondary,
+                    : "transparent",
                   borderWidth: 1,
                   borderColor: selected
                     ? colors.onSurface
@@ -336,6 +327,7 @@ export default function CarExpenseForm({
           placeholder="e.g. 25"
           keyboardType="decimal-pad"
           suffix="RON"
+          required
           colors={colors}
           spacing={spacing}
           radius={radius}
@@ -403,9 +395,10 @@ export default function CarExpenseForm({
             style={{
               marginTop: spacing.sm,
               padding: spacing.md,
-              borderRadius: radius.md,
-              backgroundColor:
-                colors.surfaceSecondary,
+              borderRadius: radius.sm,
+              backgroundColor: "transparent",
+              borderWidth: 1,
+              borderColor: colors.border,
             }}
           >
             <Text
@@ -509,6 +502,9 @@ type FormFieldProps = {
   keyboardType?: "default" | "decimal-pad" | "number-pad";
   suffix?: string;
   multiline?: boolean;
+  /** Shows a red "*" next to the label -- only for fields actually
+   * required to save (see handleSave). */
+  required?: boolean;
   colors: any;
   spacing: any;
   radius: any;
@@ -526,6 +522,7 @@ function FormField({
   keyboardType = "default",
   suffix,
   multiline = false,
+  required = false,
   colors,
   spacing,
   radius,
@@ -547,14 +544,14 @@ function FormField({
         }}
       >
         {label}
+        {required ? <Text style={{ color: colors.error }}> *</Text> : null}
       </Text>
 
       <View
         style={{
           minHeight: multiline ? 90 : 52,
-          borderRadius: radius.md,
-          backgroundColor:
-            colors.surfaceSecondary,
+          borderRadius: radius.sm,
+          backgroundColor: "transparent",
           borderWidth: isFocused ? 2 : 1,
           borderColor: isFocused
             ? colors.onSurface

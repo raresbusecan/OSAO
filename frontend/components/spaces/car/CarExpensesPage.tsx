@@ -13,9 +13,23 @@ import {
   type CarExpensePeriod,
   type CarExpenseRecord,
 } from "@/lib/spaces/car/calculations/expenses.calculations";
+import { getCurrentOdometer } from "@/lib/spaces/car/calculations/dashboard.calculations";
 import { formatCarDate, formatCarNumber } from "./utils/carFormatters";
 import { isRecentToday } from "@/lib/spaces/car/utils/recency";
 import type { CarProfile } from "@/lib/spaces/spaceProfile";
+
+// Same mapping as CarDashboard.tsx's statusDotColor / CarHistoryPage.tsx's
+// statusDotColor -- "safe" (not yet inside the alert window) is
+// success/green, the other 3 mirror DUE SOON's own tiers -- PLUS
+// "archived" (gray, `colors.info`), which only exists on this page: see
+// CarExpenseRecord.statusDot.
+function statusDotColor(status: NonNullable<CarExpenseRecord["statusDot"]>, colors: any) {
+  if (status === "archived") return colors.info;
+  if (status === "safe") return colors.success;
+  if (status === "critical") return colors.error;
+  if (status === "medium") return colors.warning;
+  return colors.caution;
+}
 
 export type CarExpensesPageProps = {
   carData: CarData;
@@ -102,11 +116,13 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
   // being true just because a document got renewed.
   const [includeArchived, setIncludeArchived] = useState(true);
 
-  // "All time" by default. A custom 1-12 month count is selectable from
-  // inside the picker (customMonths) for anything the fixed presets don't
-  // cover, e.g. "last 2 months" or "last 4".
+  // "All time" by default. A custom 1-12 count, in either weeks or
+  // months (unit toggle, same as CarHistoryPage.tsx), is selectable from
+  // inside the picker for anything the fixed presets don't cover, e.g.
+  // "last 2 weeks" or "last 4 months".
   const [period, setPeriod] = useState<CarExpensePeriod>({ kind: "all" });
   const [usingCustom, setUsingCustom] = useState(false);
+  const [customUnit, setCustomUnit] = useState<"weeks" | "months">("months");
   const [customMonths, setCustomMonths] = useState(2);
   const [periodPickerOpen, setPeriodPickerOpen] = useState(false);
 
@@ -124,16 +140,25 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
 
   const selectCustom = () => {
     setUsingCustom(true);
-    setPeriod({ kind: "months", count: customMonths });
+    setPeriod({ kind: customUnit, count: customMonths });
+  };
+
+  const selectCustomUnit = (unit: "weeks" | "months") => {
+    setCustomUnit(unit);
+    setPeriod({ kind: unit, count: customMonths });
   };
 
   const adjustCustomMonths = (delta: number) => {
     const next = Math.min(12, Math.max(1, customMonths + delta));
     setCustomMonths(next);
-    setPeriod({ kind: "months", count: next });
+    setPeriod({ kind: customUnit, count: next });
   };
 
-  const allRecords = useMemo(() => getCarExpenseRecords(carData), [carData]);
+  const currentOdometer = useMemo(() => getCurrentOdometer(carData), [carData]);
+  const allRecords = useMemo(
+    () => getCarExpenseRecords(carData, currentOdometer),
+    [carData, currentOdometer],
+  );
 
   // OVERALL is deliberately computed from allRecords, ignoring every
   // filter on this page -- it's "what has this car cost since day one",
@@ -218,6 +243,45 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
         }}
       >
         <Ionicons name={record.icon} size={17} color={colors.onSurface} />
+
+        {record.statusDot && record.overdue ? (
+          <View
+            style={{
+              position: "absolute",
+              right: -4,
+              bottom: -4,
+              width: 14,
+              height: 14,
+              borderRadius: 7,
+              backgroundColor: statusDotColor(record.statusDot, colors),
+              borderWidth: 1.5,
+              borderColor: colors.surfaceTertiary,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text style={{ fontSize: 9.5, fontWeight: "900", color: colors.surface, lineHeight: 11 }}>
+              !
+            </Text>
+          </View>
+        ) : record.statusDot ? (
+          <View
+            style={{
+              position: "absolute",
+              right: -2,
+              bottom: -2,
+              width: 9,
+              height: 9,
+              borderRadius: 4.5,
+              backgroundColor: statusDotColor(record.statusDot, colors),
+              // Matches this icon circle's own background
+              // (colors.surfaceTertiary), so the dot reads as "cut into"
+              // it, not floating.
+              borderWidth: 1.5,
+              borderColor: colors.surfaceTertiary,
+            }}
+          />
+        ) : null}
       </View>
 
       <View style={{ flex: 1 }}>
@@ -293,7 +357,9 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
             width: 40,
             height: 40,
             borderRadius: radius.pill,
-            backgroundColor: colors.surfaceSecondary,
+            backgroundColor: "transparent",
+            borderWidth: 1,
+            borderColor: colors.border,
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -316,8 +382,10 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
       {/* TOTAL */}
       <View
         style={{
-          backgroundColor: colors.surfaceSecondary,
-          borderRadius: radius.lg,
+          backgroundColor: "transparent",
+          borderWidth: 1,
+          borderColor: colors.border,
+          borderRadius: radius.sm,
           padding: spacing.lg,
           marginBottom: spacing.lg,
         }}
@@ -480,8 +548,10 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
           OVERALL. */}
       <View
         style={{
-          backgroundColor: colors.surfaceSecondary,
-          borderRadius: radius.lg,
+          backgroundColor: "transparent",
+          borderWidth: 1,
+          borderColor: colors.border,
+          borderRadius: radius.sm,
           padding: spacing.lg,
           marginBottom: spacing.lg,
           gap: spacing.md,
@@ -625,63 +695,121 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
             </Pressable>
 
             {usingCustom ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: spacing.lg,
-                  paddingVertical: spacing.md,
-                }}
-              >
-                <Pressable
-                  testID="expense-period-custom-minus"
-                  onPress={() => adjustCustomMonths(-1)}
-                  disabled={customMonths <= 1}
-                  hitSlop={8}
+              <>
+                {/* UNIT -- Weeks vs Months, same toggle as CarHistoryPage's
+                    custom period. Switching resets the stepper's unit,
+                    not its count. */}
+                <View
                   style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: radius.pill,
-                    backgroundColor: colors.surfaceSecondary,
+                    flexDirection: "row",
+                    gap: spacing.sm,
+                    justifyContent: "center",
+                    paddingTop: spacing.sm,
+                  }}
+                >
+                  {(["weeks", "months"] as const).map((unit) => {
+                    const isActive = customUnit === unit;
+
+                    return (
+                      <Pressable
+                        key={unit}
+                        testID={`expense-period-custom-unit-${unit}`}
+                        onPress={() => selectCustomUnit(unit)}
+                        style={{
+                          paddingHorizontal: spacing.md,
+                          minHeight: 30,
+                          borderRadius: radius.pill,
+                          backgroundColor: isActive ? colors.onSurface : "transparent",
+                          borderWidth: 1,
+                          borderColor: isActive ? colors.onSurface : colors.border,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "700",
+                            color: isActive ? colors.surface : colors.onSurface,
+                            textTransform: "capitalize",
+                          }}
+                        >
+                          {unit}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <View
+                  style={{
+                    flexDirection: "row",
                     alignItems: "center",
                     justifyContent: "center",
-                    opacity: customMonths <= 1 ? 0.4 : 1,
+                    gap: spacing.lg,
+                    paddingVertical: spacing.md,
                   }}
                 >
-                  <Ionicons name="remove" size={18} color={colors.onSurface} />
-                </Pressable>
+                  <Pressable
+                    testID="expense-period-custom-minus"
+                    onPress={() => adjustCustomMonths(-1)}
+                    disabled={customMonths <= 1}
+                    hitSlop={8}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: radius.pill,
+                      backgroundColor: "transparent",
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      opacity: customMonths <= 1 ? 0.4 : 1,
+                    }}
+                  >
+                    <Ionicons name="remove" size={18} color={colors.onSurface} />
+                  </Pressable>
 
-                <Text
-                  style={{
-                    fontSize: 15,
-                    fontWeight: "700",
-                    color: colors.onSurface,
-                    minWidth: 110,
-                    textAlign: "center",
-                  }}
-                >
-                  Last {customMonths} {customMonths === 1 ? "month" : "months"}
-                </Text>
+                  <Text
+                    style={{
+                      fontSize: 15,
+                      fontWeight: "700",
+                      color: colors.onSurface,
+                      minWidth: 110,
+                      textAlign: "center",
+                    }}
+                  >
+                    Last {customMonths}{" "}
+                    {customUnit === "weeks"
+                      ? customMonths === 1
+                        ? "week"
+                        : "weeks"
+                      : customMonths === 1
+                        ? "month"
+                        : "months"}
+                  </Text>
 
-                <Pressable
-                  testID="expense-period-custom-plus"
-                  onPress={() => adjustCustomMonths(1)}
-                  disabled={customMonths >= 12}
-                  hitSlop={8}
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: radius.pill,
-                    backgroundColor: colors.surfaceSecondary,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    opacity: customMonths >= 12 ? 0.4 : 1,
-                  }}
-                >
-                  <Ionicons name="add" size={18} color={colors.onSurface} />
-                </Pressable>
-              </View>
+                  <Pressable
+                    testID="expense-period-custom-plus"
+                    onPress={() => adjustCustomMonths(1)}
+                    disabled={customMonths >= 12}
+                    hitSlop={8}
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: radius.pill,
+                      backgroundColor: "transparent",
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      opacity: customMonths >= 12 ? 0.4 : 1,
+                    }}
+                  >
+                    <Ionicons name="add" size={18} color={colors.onSurface} />
+                  </Pressable>
+                </View>
+              </>
             ) : null}
 
             <Pressable
@@ -753,23 +881,51 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
               ALL below, no tag to remove. */}
           {recentRecords.length > 0 ? (
             <>
-              <Text
+              <View
                 style={{
-                  fontSize: 11,
-                  fontWeight: "700",
-                  letterSpacing: 0.6,
-                  color: colors.onSurfaceTertiary,
-                  textTransform: "uppercase",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                   marginBottom: spacing.sm,
                 }}
               >
-                Recent
-              </Text>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "700",
+                    letterSpacing: 0.6,
+                    color: colors.onSurfaceTertiary,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Recent
+                </Text>
+
+                {recentRecords.length > 5 ? (
+                  <Pressable
+                    testID="expenses-recent-toggle"
+                    onPress={() => setRecentExpanded((v) => !v)}
+                    hitSlop={8}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: colors.onSurface }}>
+                      {recentExpanded ? "Show less" : "Show more"}
+                    </Text>
+                    <Ionicons
+                      name={recentExpanded ? "chevron-up" : "chevron-down"}
+                      size={11}
+                      color={colors.onSurfaceTertiary}
+                    />
+                  </Pressable>
+                ) : null}
+              </View>
 
               <View
                 style={{
-                  backgroundColor: colors.surfaceSecondary,
-                  borderRadius: radius.lg,
+                  backgroundColor: "transparent",
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: radius.sm,
                   overflow: "hidden",
                 }}
               >
@@ -778,19 +934,27 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
                 )}
               </View>
 
-              {!recentExpanded && recentRecords.length > 5 ? (
+              {recentRecords.length > 5 ? (
                 <Pressable
                   testID="expenses-recent-show-more"
-                  onPress={() => setRecentExpanded(true)}
+                  onPress={() => setRecentExpanded((v) => !v)}
                   style={{
+                    flexDirection: "row",
                     alignItems: "center",
+                    justifyContent: "center",
+                    gap: 4,
                     paddingVertical: spacing.sm,
                     marginBottom: spacing.lg,
                   }}
                 >
                   <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurface }}>
-                    Show more ({recentRecords.length - 5})
+                    {recentExpanded ? "Show less" : `Show more (${recentRecords.length - 5})`}
                   </Text>
+                  <Ionicons
+                    name={recentExpanded ? "chevron-up" : "chevron-down"}
+                    size={13}
+                    color={colors.onSurfaceTertiary}
+                  />
                 </Pressable>
               ) : (
                 <View style={{ marginBottom: spacing.lg }} />
@@ -800,23 +964,51 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
 
           {olderRecords.length > 0 ? (
             <>
-              <Text
+              <View
                 style={{
-                  fontSize: 11,
-                  fontWeight: "700",
-                  letterSpacing: 0.6,
-                  color: colors.onSurfaceTertiary,
-                  textTransform: "uppercase",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
                   marginBottom: spacing.sm,
                 }}
               >
-                All
-              </Text>
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontWeight: "700",
+                    letterSpacing: 0.6,
+                    color: colors.onSurfaceTertiary,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  All
+                </Text>
+
+                {olderRecords.length > 5 ? (
+                  <Pressable
+                    testID="expenses-all-toggle"
+                    onPress={() => setAllExpanded((v) => !v)}
+                    hitSlop={8}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: "700", color: colors.onSurface }}>
+                      {allExpanded ? "Show less" : "Show more"}
+                    </Text>
+                    <Ionicons
+                      name={allExpanded ? "chevron-up" : "chevron-down"}
+                      size={11}
+                      color={colors.onSurfaceTertiary}
+                    />
+                  </Pressable>
+                ) : null}
+              </View>
 
               <View
                 style={{
-                  backgroundColor: colors.surfaceSecondary,
-                  borderRadius: radius.lg,
+                  backgroundColor: "transparent",
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: radius.sm,
                   overflow: "hidden",
                 }}
               >
@@ -825,18 +1017,26 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
                 )}
               </View>
 
-              {!allExpanded && olderRecords.length > 5 ? (
+              {olderRecords.length > 5 ? (
                 <Pressable
                   testID="expenses-all-show-more"
-                  onPress={() => setAllExpanded(true)}
+                  onPress={() => setAllExpanded((v) => !v)}
                   style={{
+                    flexDirection: "row",
                     alignItems: "center",
+                    justifyContent: "center",
+                    gap: 4,
                     paddingVertical: spacing.sm,
                   }}
                 >
                   <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurface }}>
-                    Show more ({olderRecords.length - 5})
+                    {allExpanded ? "Show less" : `Show more (${olderRecords.length - 5})`}
                   </Text>
+                  <Ionicons
+                    name={allExpanded ? "chevron-up" : "chevron-down"}
+                    size={13}
+                    color={colors.onSurfaceTertiary}
+                  />
                 </Pressable>
               ) : null}
             </>

@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, TextInput, Modal,
-  KeyboardAvoidingView, Platform, ActivityIndicator, DeviceEventEmitter,
+  View, Text, ScrollView, Pressable, ActivityIndicator, DeviceEventEmitter,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useTheme } from "@/lib/theme";
@@ -16,19 +16,33 @@ import { HomeProfileForm } from "@/components/spaces/home/HomeProfileForm";
 import {
   profileFromSpace,
   detectSpaceType,
+  SPACE_IDENTITY_COLORS,
   type SpaceProfile,
   type CarProfile,
   type HomeProfile,
 } from "@/lib/spaces/spaceProfile";
 
+// Same identity colors used everywhere a Car/Home/Grocery/Expenses space
+// shows up (Budget, Calendar, Home, the per-space headers) -- previously a
+// separate set of near-black grays here, so a newly created space's own
+// picker card never matched what that space would actually look like
+// everywhere else.
+// `kind` is sent as the new space's `type` on creation (see
+// api.createSpace) -- a permanent, rename-proof marker so "Expenses
+// Rares" is still recognized as an Expenses space forever, the same way
+// Car/Home already were via their profile row's existence.
 const TEMPLATES = [
-  { name: "Car", icon: "car-outline", color: "#111111" },
-  { name: "Home", icon: "home-outline", color: "#374151" },
-  { name: "Grocery", icon: "cart-outline", color: "#4B5563" },
-  { name: "Expenses", icon: "receipt-outline", color: "#111111" },
+  { name: "Car", icon: "car-outline", color: SPACE_IDENTITY_COLORS.car!, kind: "car" },
+  { name: "Home", icon: "home-outline", color: SPACE_IDENTITY_COLORS.home!, kind: "home" },
+  { name: "Grocery", icon: "cart-outline", color: SPACE_IDENTITY_COLORS.grocery!, kind: "grocery" },
+  { name: "Expenses", icon: "receipt-outline", color: SPACE_IDENTITY_COLORS.expenses!, kind: "expenses" },
   // { name: "Study", icon: "school-outline", color: "#4B5563" },
   // { name: "Travel", icon: "airplane-outline", color: "#6B7280" },
-  { name: "Finance", icon: "wallet-outline", color: "#111111" },
+  // "Finance" hidden deliberately (2026-09-20) -- real accounts/investments
+  // tracking is a much bigger feature than a generic items-table category
+  // can fake convincingly, unlike Car/Home/Grocery/Expenses. Re-add here
+  // (with a real identity color and dashboard) once that's actually built.
+  // { name: "Finance", icon: "wallet-outline", color: "#111111" },
   // { name: "Fitness", icon: "barbell-outline", color: "#374151" },
   // { name: "Work", icon: "briefcase-outline", color: "#4B5563" },
   // { name: "Health", icon: "medkit-outline", color: "#6B7280" },
@@ -39,10 +53,6 @@ export default function Spaces() {
   const router = useRouter();
   const [spaces, setSpaces] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [name, setName] = useState("");
-  const [icon, setIcon] = useState<string>("folder-outline");
-  const [busy, setBusy] = useState(false);
   const [profiles, setProfiles] = useState<Record<string, SpaceProfile | null>>({});
 
   type CarFormState = { visible: boolean; mode: "create" | "edit"; space: any | null; profile: CarProfile | null };
@@ -71,22 +81,13 @@ export default function Spaces() {
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  const create = async () => {
-    if (!name.trim()) return;
-    setBusy(true);
-    try {
-      await api.createSpace({ name: name.trim(), icon, color: "#111111" });
-      setName(""); setIcon("folder-outline"); setCreating(false);
-      await load();
-    } catch { } finally { setBusy(false); }
-  };
-
-  const createFromTemplate = async (t: typeof TEMPLATES[number]) => {
-    // Car and Home get a dedicated form (Make/Model/.../price;
-    // County/City/ownership) instead of an instant, generically-named
-    // space -- see spaceProfile.ts for why. Every other template keeps
-    // the old instant-create behavior; no dedicated form was asked for
-    // Grocery/Expenses/Finance.
+  const createFromTemplate = (t: typeof TEMPLATES[number]) => {
+    // Car and Home get their own dedicated form (Make/Model/.../price;
+    // County/City/ownership) -- see spaceProfile.ts for why. Every other
+    // template (Grocery, Expenses, ...) gets the same "name it before
+    // it's created" step via EditSpaceModal's create mode instead of the
+    // old instant, generically-named creation -- that's what let two
+    // Grocery spaces both end up just called "Grocery".
     if (t.name === "Car") {
       setCarForm({ visible: true, mode: "create", space: null, profile: null });
       return;
@@ -97,11 +98,8 @@ export default function Spaces() {
       return;
     }
 
-    setBusy(true);
-    try {
-      await api.createSpace({ name: t.name, icon: t.icon, color: t.color });
-      await load();
-    } catch { } finally { setBusy(false); }
+    setEditSpaceMode("create");
+    setEditingSpace({ name: t.name, icon: t.icon, color: t.color, type: t.kind });
   };
 
   const openEditForSpace = (spaceItem: any) => {
@@ -121,11 +119,13 @@ export default function Spaces() {
     // No dedicated form for this type (Grocery/Expenses/custom) -- the
     // generic name+icon editor is the right fallback here, since there's
     // nothing type-specific to protect.
+    setEditSpaceMode("edit");
     setEditingSpace(spaceItem);
   };
 
   const [deletingId, setDeletingId] = useState<string | number | null>(null);
   const [editingSpace, setEditingSpace] = useState<any>(null);
+  const [editSpaceMode, setEditSpaceMode] = useState<"edit" | "create">("edit");
 
   const confirmDeleteSpace = async (spaceItem: any) => {
     const confirmed = await confirmAction(
@@ -152,16 +152,8 @@ export default function Spaces() {
 
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="spaces-screen">
-      <View style={{ padding: spacing.xl, paddingBottom: spacing.md, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+      <View style={{ padding: spacing.xl, paddingBottom: spacing.md }}>
         <Text style={{ fontSize: 30, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 }}>Spaces</Text>
-        <Pressable
-          testID="spaces-create-button"
-          onPress={() => setCreating(true)}
-          hitSlop={12}
-          style={{ padding: spacing.sm, borderRadius: radius.pill, backgroundColor: colors.surfaceSecondary }}
-        >
-          <Ionicons name="add" size={22} color={colors.onSurface} />
-        </Pressable>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 140, gap: spacing.md }}>
@@ -186,20 +178,67 @@ export default function Spaces() {
                     flexDirection: "row", alignItems: "center", gap: 6,
                   }}
                 >
-                  <Ionicons name={t.icon as any} size={14} color={colors.onSurface} />
+                  <Ionicons name={t.icon as any} size={14} color={t.color} />
                   <Text style={{ color: colors.onSurface, fontSize: 13, fontWeight: "600" }}>{t.name}</Text>
                 </Pressable>
               ))}
             </View>
           </View>
         ) : (
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.md }}>
+          <>
+            <View style={{ gap: spacing.md, marginBottom: spacing.md }}>
+              <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, fontWeight: "700", letterSpacing: 0.4 }}>
+                QUICK TEMPLATES
+              </Text>
+              {/* Horizontal carousel, not a wrapping row -- keeps this
+                  section to one fixed height regardless of how many
+                  templates exist, with a fade on the trailing edge as
+                  the only hint there's more to scroll to (no dots, no
+                  arrows -- the partially-cut-off last card already does
+                  that job). */}
+              <View style={{ position: "relative", marginHorizontal: -spacing.xl }}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.xl }}
+                >
+                  {TEMPLATES.map((t) => (
+                    <Pressable
+                      key={t.name}
+                      testID={`template-quick-${t.name.toLowerCase()}`}
+                      onPress={() => createFromTemplate(t)}
+                      style={{
+                        width: 84, height: 84,
+                        borderRadius: radius.sm,
+                        backgroundColor: "transparent",
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        alignItems: "center", justifyContent: "center", gap: spacing.sm,
+                      }}
+                    >
+                      <Ionicons name={t.icon as any} size={20} color={t.color} />
+                      <Text style={{ color: colors.onSurface, fontSize: 12, fontWeight: "700" }}>{t.name}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+                <LinearGradient
+                  colors={["transparent", colors.surface]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  pointerEvents="none"
+                  style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 32 }}
+                />
+              </View>
+            </View>
+
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.md }}>
             {spaces.map((s) => {
               // Gray subtitle under the name, from the same per-space
               // profile the edit button already loads -- Model for Car,
               // County for Home. Nothing for a type with no profile.
               const profile = profiles[s.id] ?? null;
               const kind = detectSpaceType(s, profile);
+              const identityColor = SPACE_IDENTITY_COLORS[kind] ?? colors.onSurface;
               const cardSubtitle =
                 kind === "car"
                   ? (profile as CarProfile | null)?.model
@@ -215,8 +254,10 @@ export default function Spaces() {
                 style={{
                   width: "48%",
                   minHeight: 140,
-                  backgroundColor: colors.surfaceSecondary,
-                  borderRadius: radius.lg,
+                  backgroundColor: "transparent",
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  borderRadius: radius.sm,
                   padding: spacing.lg,
                   alignItems: "center",
                   justifyContent: "center",
@@ -238,7 +279,9 @@ export default function Spaces() {
                     width: 28,
                     height: 28,
                     borderRadius: radius.pill,
-                    backgroundColor: colors.surfaceTertiary,
+                    backgroundColor: "transparent",
+                    borderWidth: 1,
+                    borderColor: colors.border,
                     alignItems: "center",
                     justifyContent: "center",
                   }}
@@ -265,7 +308,9 @@ export default function Spaces() {
                     width: 28,
                     height: 28,
                     borderRadius: radius.pill,
-                    backgroundColor: colors.surfaceTertiary,
+                    backgroundColor: "transparent",
+                    borderWidth: 1,
+                    borderColor: colors.border,
                     alignItems: "center",
                     justifyContent: "center",
                     opacity: deletingId === s.id ? 0.5 : 1,
@@ -277,7 +322,7 @@ export default function Spaces() {
                     <Ionicons
                       name="trash-outline"
                       size={14}
-                      color={colors.onSurfaceTertiary}
+                      color={colors.error}
                     />
                   )}
                 </Pressable>
@@ -287,7 +332,7 @@ export default function Spaces() {
                     width: 48,
                     height: 48,
                     borderRadius: radius.md,
-                    backgroundColor: colors.surfaceTertiary,
+                    backgroundColor: `${identityColor}1A`,
                     alignItems: "center",
                     justifyContent: "center",
                   }}
@@ -295,7 +340,7 @@ export default function Spaces() {
                   <Ionicons
                     name={(s.icon || "folder-outline") as any}
                     size={22}
-                    color={colors.onSurface}
+                    color={identityColor}
                   />
                 </View>
 
@@ -327,87 +372,14 @@ export default function Spaces() {
               </Pressable>
               );
             })}
-          </View>
-        )}
-
-        {spaces.length > 0 && (
-          <View style={{ marginTop: spacing.xl, gap: spacing.md }}>
-            <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, fontWeight: "700", letterSpacing: 0.4 }}>
-              QUICK TEMPLATES
-            </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-              {TEMPLATES.map((t) => (
-                <Pressable
-                  key={t.name}
-                  testID={`template-quick-${t.name.toLowerCase()}`}
-                  onPress={() => createFromTemplate(t)}
-                  style={{
-                    paddingHorizontal: spacing.md, paddingVertical: 8,
-                    borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border,
-                    flexDirection: "row", alignItems: "center", gap: 6,
-                  }}
-                >
-                  <Ionicons name={t.icon as any} size={12} color={colors.onSurface} />
-                  <Text style={{ color: colors.onSurface, fontSize: 12 }}>{t.name}</Text>
-                </Pressable>
-              ))}
             </View>
-          </View>
+          </>
         )}
       </ScrollView>
 
-      <Modal visible={creating} animationType="slide" transparent onRequestClose={() => setCreating(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, justifyContent: "flex-end" }}>
-          <Pressable onPress={() => setCreating(false)} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }} />
-          <View style={{ backgroundColor: colors.surface, padding: spacing.xl, gap: spacing.lg, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg }}>
-            <Text style={{ fontSize: 20, fontWeight: "700", color: colors.onSurface }}>New Space</Text>
-            <TextInput
-              testID="new-space-name"
-              value={name} onChangeText={setName}
-              placeholder="e.g. Car, Home, Study"
-              placeholderTextColor={colors.onSurfaceTertiary}
-              autoFocus
-              style={{
-                backgroundColor: colors.surfaceSecondary, color: colors.onSurface,
-                borderRadius: radius.md, paddingHorizontal: spacing.lg, paddingVertical: 14, fontSize: 16,
-              }}
-            />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-              {["folder-outline", "car-outline", "home-outline", "school-outline", "airplane-outline", "wallet-outline", "barbell-outline", "briefcase-outline", "medkit-outline", "paw-outline", "camera-outline", "cafe-outline"].map((ic) => (
-                <Pressable
-                  key={ic}
-                  testID={`icon-pick-${ic}`}
-                  onPress={() => setIcon(ic)}
-                  style={{
-                    width: 44, height: 44, borderRadius: radius.md,
-                    alignItems: "center", justifyContent: "center",
-                    backgroundColor: icon === ic ? colors.brandPrimary : colors.surfaceSecondary,
-                  }}
-                >
-                  <Ionicons name={ic as any} size={20} color={icon === ic ? colors.onBrandPrimary : colors.onSurface} />
-                </Pressable>
-              ))}
-            </ScrollView>
-            <Pressable
-              testID="new-space-create-button"
-              onPress={create}
-              disabled={busy || !name.trim()}
-              style={{
-                backgroundColor: colors.brandPrimary,
-                opacity: busy || !name.trim() ? 0.5 : 1,
-                paddingVertical: 14, borderRadius: radius.md, alignItems: "center",
-              }}
-            >
-              {busy ? <ActivityIndicator color={colors.onBrandPrimary} /> : (
-                <Text style={{ color: colors.onBrandPrimary, fontWeight: "700", fontSize: 15 }}>Create Space</Text>
-              )}
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
       <EditSpaceModal
         visible={!!editingSpace}
+        mode={editSpaceMode}
         space={editingSpace}
         onClose={() => setEditingSpace(null)}
         onSaved={() => load()}

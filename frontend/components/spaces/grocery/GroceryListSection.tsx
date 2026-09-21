@@ -1,3 +1,8 @@
+/** @deprecated Retired by the Grocery space rewrite -- GroceryDashboard.tsx
+ * / GroceryShoppingListPage.tsx now own this rendering directly, grouped
+ * by category instead of TO BUY/IN CART. Kept only because this
+ * environment couldn't delete the file; safe to remove. Not imported
+ * anywhere. */
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { useTheme } from "@/lib/theme";
@@ -57,7 +62,7 @@ export function GroceryListSection({
                 borderBottomColor: colors.border,
               }}
             >
-              <GroceryItemRow item={item} onToggle={onToggle} />
+              <GroceryItemRow item={item} onToggle={onToggle} onOpenMenu={() => {}} onDelete={() => {}} />
             </View>
           ))
         )}

@@ -5,6 +5,12 @@ import type {
   CarFuelEntry,
   CarMaintenanceEntry,
 } from "@/lib/spaces/car/car.types";
+import { isSavedItemId } from "@/lib/spaces/itemSync";
+
+// Re-exported for existing importers (app/(tabs)/[id].tsx) -- the check
+// itself now lives in itemSync.ts so home/homeItems.ts can share it
+// instead of duplicating the same regex.
+export { isSavedItemId };
 
 /**
  * Fuel/Maintenance/Documents/Expenses entries were frontend-only local
@@ -84,6 +90,8 @@ export function maintenanceEntryToItemBody(spaceId: string | number, entry: CarM
       odometer: entry.odometer ?? null,
       provider: entry.provider ?? null,
       nextServiceOdometer: entry.nextServiceOdometer ?? null,
+      nextServiceDate: entry.nextServiceDate ?? null,
+      underWarranty: entry.underWarranty ?? null,
       renewedFromId: entry.renewedFromId ?? null,
     },
   };
@@ -97,9 +105,11 @@ function itemToMaintenanceEntry(item: any): CarMaintenanceEntry {
     service: item.title,
     description: meta.description ?? "",
     price: item.amount != null ? Number(item.amount) : 0,
-    odometer: meta.odometer ?? 0,
+    odometer: meta.odometer ?? undefined,
     provider: meta.provider ?? undefined,
     nextServiceOdometer: meta.nextServiceOdometer ?? undefined,
+    nextServiceDate: meta.nextServiceDate ?? undefined,
+    underWarranty: meta.underWarranty ?? false,
     archived: item.status === "archived",
     renewedFromId: meta.renewedFromId ?? undefined,
   };
@@ -218,10 +228,3 @@ export async function loadCarItems(spaceId: string | number) {
   };
 }
 
-/** A client-generated placeholder id (see CarFuelForm.tsx etc.) looks like
- * "fuel-<timestamp>" -- never a bare number. A real, already-saved item's
- * id is the numeric database id (as a string, via itemTo*Entry above). Used
- * to decide create vs. update when a *Save handler fires. */
-export function isSavedItemId(id: string): boolean {
-  return /^\d+$/.test(id);
-}

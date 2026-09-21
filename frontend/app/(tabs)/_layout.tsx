@@ -1,13 +1,14 @@
-import { Tabs } from "expo-router";
+import { Tabs, useSegments } from "expo-router";
 import {
   View,
+  Text,
   Pressable,
   StyleSheet,
   Platform,
   Animated,
   DeviceEventEmitter,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useTheme } from "@/lib/theme";
 import { QuickAddSheet, QuickAddSheetRef } from "@/components/quick_add/quickAdd";
@@ -17,47 +18,28 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 export const REFRESH_EVENT = "lifeos.refresh";
 
 const FAB_SIZE = 56;
-const ITEM_SIZE = 56;
-const ITEM_ICON_SIZE = 22;
-const ITEM_GAP = 12; // minimum visible gap between two neighboring circles
+const ITEM_SIZE = 44;
+const ITEM_ICON_SIZE = 18;
+const ITEM_V_GAP = 12; // vertical gap between two stacked items
+const FAB_CLEARANCE = 22; // gap between the FAB's own top edge and the first item
 const FAB_BOTTOM = Platform.OS === "ios" ? 100 : 80;
 
 /**
- * Where each category circle lands once the fan is fully open, relative to
- * the FAB's own center -- a round arc, sweeping from just past straight-up
- * to exactly straight-left.
- *
- * No labels ride along with the circles any more, so the only thing that
- * has to clear its neighbor is the circle itself -- radius is computed
- * from the item size, just large enough that consecutive circles keep a
- * small gap, never more. That keeps the whole fan noticeably tighter than
- * the labeled version needed to be.
- *
- * The sweep is capped at exactly horizontal (never past straight-left), so
- * dy is never positive -- every item stays level with or above the FAB,
- * never below it, so the arc can never reach down into the tab bar no
- * matter how many categories a space has.
+ * Where each category item lands once the fan is fully open, relative to
+ * the FAB's own anchor point -- a straight vertical stack directly above
+ * it, one item per row. Replaces an earlier radial arc that kept circles
+ * icon-only (no room on the arc for a label without the circles
+ * colliding) -- stacking removes that constraint entirely, since each
+ * row can be as wide as its label needs without touching its neighbors,
+ * and it's a more familiar "speed dial" shape than a fan (Gmail, most
+ * Material apps). dx stays 0 for every item; only dy (how far up the
+ * stack) changes.
  */
 function getFanOffsets(count: number): { dx: number; dy: number }[] {
-  if (count <= 0) return [];
-  if (count === 1) return [{ dx: 0, dy: -(ITEM_SIZE + 44) }];
-
-  const startDeg = 94; // just past straight up
-  const maxSpanDeg = 86; // stops just shy of straight left
-  const stepDegTarget = 28;
-  const spanDeg = Math.min(stepDegTarget * (count - 1), maxSpanDeg);
-  const stepDeg = spanDeg / (count - 1);
-  const minChord = ITEM_SIZE + ITEM_GAP;
-  const radius = minChord / (2 * Math.sin((stepDeg / 2) * (Math.PI / 180)));
-
-  return Array.from({ length: count }, (_, i) => {
-    const thetaDeg = startDeg + stepDeg * i;
-    const phiRad = ((thetaDeg - 90) * Math.PI) / 180;
-    return {
-      dx: -radius * Math.sin(phiRad),
-      dy: -radius * Math.cos(phiRad),
-    };
-  });
+  return Array.from({ length: count }, (_, i) => ({
+    dx: 0,
+    dy: -(FAB_SIZE + FAB_CLEARANCE + i * (ITEM_SIZE + ITEM_V_GAP)),
+  }));
 }
 
 /**
@@ -69,8 +51,18 @@ function getFanOffsets(count: number): { dx: number; dy: number }[] {
  * it's on, only whether something has claimed the FAB right now.
  */
 function TabsLayoutInner() {
-  const { colors, isDark, spacing } = useTheme();
+  const { colors, isDark, spacing, radius } = useTheme();
   const { config } = useSpaceCategoryFab();
+  // Hidden on every tab except an actual space page ([id].tsx) -- Home,
+  // Spaces and Budget have no single space to quick-add into (the FAB's
+  // fallback there was just the generic Quick Add sheet, a second entry
+  // point nobody asked for), and Calendar creates its custom event
+  // inline on the page itself (see calendar.tsx) instead. Only [id]
+  // still wants it, for its per-space category fan.
+  const segments = useSegments();
+  const currentTab = segments[segments.length - 1];
+  const fabHiddenOn = new Set(["home", "spaces", "calendar", "budget"]);
+  const hideFab = fabHiddenOn.has(currentTab);
 
   const quickAddRef = useRef<QuickAddSheetRef>(null);
   const [fanOpen, setFanOpen] = useState(false);
@@ -122,7 +114,6 @@ function TabsLayoutInner() {
     [config?.categories.length],
   );
 
-  const fabRotation = fanAnim.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "45deg"] });
   const backdropOpacity = fanAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
 
   return (
@@ -160,12 +151,16 @@ function TabsLayoutInner() {
           }}
         />
         <Tabs.Screen
-          name="search"
+          name="budget"
           options={{
-            title: "Search",
-            tabBarIcon: ({ color, size }) => <Ionicons name="search-outline" size={size} color={color} />,
+            title: "Budget",
+            tabBarIcon: ({ color, size }) => <Ionicons name="wallet-outline" size={size} color={color} />,
           }}
         />
+        {/* Search was removed (replaced by Budget above) -- deleting the
+            route file is denied in this environment, so it's emptied to a
+            stub (see search.tsx) and hidden from the tab bar here instead. */}
+        <Tabs.Screen name="search" options={{ href: null }} />
         <Tabs.Screen name="[id]" options={{ href: null }} />
       </Tabs>
 
@@ -177,15 +172,23 @@ function TabsLayoutInner() {
           pointerEvents={fanOpen ? "auto" : "none"}
           style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.5)", opacity: backdropOpacity }]}
         >
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setFanOpen(false)} />
+          <Pressable
+            style={StyleSheet.absoluteFillObject}
+            onPress={() => setFanOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Close menu"
+          />
         </Animated.View>
       ) : null}
 
       {/* Category fan -- one circle per category of whichever space is
-          currently registered, launching out of the FAB's own corner.
-          Icon only, no label -- a fixed white-on-black badge regardless of
-          theme, so it reads the same crisp way against the dimmed
-          backdrop whether the app is in light or dark mode. */}
+          currently registered, launching out of the FAB's own corner as a
+          vertical stack. Each row pairs a text label (what the icon alone
+          used to leave you guessing) with its icon circle -- colors below
+          follow the theme (surface/onSurface, surfaceTertiary/
+          onSurfaceTertiary for the dimmed "soon" state) instead of fixed
+          hex, so the fan actually flips with the rest of the app in dark
+          mode instead of staying a fixed white-on-black badge. */}
       {config
         ? config.categories.map((category, index) => {
             const { dx, dy } = offsets[index] ?? { dx: 0, dy: 0 };
@@ -208,51 +211,164 @@ function TabsLayoutInner() {
                 <Pressable
                   testID={`fab-category-${category.key}`}
                   onPress={() => onPickCategory(category.key)}
-                  style={{
-                    width: ITEM_SIZE,
-                    height: ITEM_SIZE,
-                    borderRadius: ITEM_SIZE / 2,
-                    backgroundColor: "#FFFFFF",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    shadowColor: "#000",
-                    shadowOpacity: 0.3,
-                    shadowRadius: 8,
-                    shadowOffset: { width: 0, height: 4 },
-                    elevation: 6,
-                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={category.badge === "soon" ? `${category.label} (coming soon)` : category.label}
+                  style={{ flexDirection: "row", alignItems: "center" }}
                 >
-                  <Ionicons name={category.icon} size={ITEM_ICON_SIZE} color="#000000" />
+                  {/* Label pill -- reads right-to-left toward the icon,
+                      same direction a thumb sweeps up from the FAB. Width
+                      follows the text, so it never collides with a
+                      neighboring row the way trying to fit a label onto
+                      the old radial arc would have. */}
+                  <View
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 7,
+                      borderRadius: radius.pill,
+                      backgroundColor: colors.surface,
+                      marginRight: 10,
+                      shadowColor: "#000",
+                      shadowOpacity: 0.25,
+                      shadowRadius: 6,
+                      shadowOffset: { width: 0, height: 3 },
+                      elevation: 5,
+                    }}
+                  >
+                    <Text
+                      numberOfLines={1}
+                      style={{ fontSize: 13, fontWeight: "700", color: category.badge === "soon" ? colors.onSurfaceTertiary : colors.onSurface }}
+                    >
+                      {category.label}
+                    </Text>
+                  </View>
+
+                  <View
+                    style={{
+                      width: ITEM_SIZE,
+                      height: ITEM_SIZE,
+                      borderRadius: ITEM_SIZE / 2,
+                      // Dimmed fill for a "soon" category -- reads as
+                      // inactive at a glance, distinct from every other
+                      // (live) circle in the same fan, without needing a
+                      // label to say so.
+                      backgroundColor: category.badge === "soon" ? colors.surfaceTertiary : colors.surface,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      shadowColor: "#000",
+                      shadowOpacity: 0.3,
+                      shadowRadius: 8,
+                      shadowOffset: { width: 0, height: 4 },
+                      elevation: 6,
+                    }}
+                  >
+                    {category.iconSet === "material-community" ? (
+                      <MaterialCommunityIcons
+                        name={category.icon as keyof typeof MaterialCommunityIcons.glyphMap}
+                        size={ITEM_ICON_SIZE}
+                        color={category.badge === "soon" ? colors.onSurfaceTertiary : colors.onSurface}
+                      />
+                    ) : (
+                      <Ionicons
+                        name={category.icon as keyof typeof Ionicons.glyphMap}
+                        size={ITEM_ICON_SIZE}
+                        color={category.badge === "soon" ? colors.onSurfaceTertiary : colors.onSurface}
+                      />
+                    )}
+
+                    {/* Small "create a new one" badge in the corner -- the
+                        base icon alone (e.g. a receipt) reads as the
+                        thing being created, not that this makes a new
+                        one; the plus is what says "new". Border matches
+                        the circle's own background so it still cuts a
+                        clean ring in either theme. */}
+                    {category.badge === "plus" ? (
+                      <View
+                        style={{
+                          position: "absolute",
+                          right: -2,
+                          bottom: -2,
+                          width: 16,
+                          height: 16,
+                          borderRadius: 8,
+                          backgroundColor: colors.onSurface,
+                          borderWidth: 2,
+                          borderColor: colors.surface,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Ionicons name="add" size={10} color={colors.surface} />
+                      </View>
+                    ) : null}
+
+                    {/* "Not live yet" badge -- paired with the dimmed
+                        circle above; pressing still fires onPickCategory
+                        (the space itself decides what that means -- for a
+                        "soon" category, a "coming soon" notice instead of
+                        actually navigating anywhere). */}
+                    {category.badge === "soon" ? (
+                      <View
+                        style={{
+                          position: "absolute",
+                          right: -2,
+                          bottom: -2,
+                          width: 16,
+                          height: 16,
+                          borderRadius: 8,
+                          backgroundColor: colors.onSurfaceTertiary,
+                          borderWidth: 2,
+                          borderColor: colors.surface,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Ionicons name="time-outline" size={10} color={colors.surface} />
+                      </View>
+                    ) : null}
+                  </View>
                 </Pressable>
               </Animated.View>
             );
           })
         : null}
 
-      <View pointerEvents="box-none" style={{ position: "absolute", right: spacing.xl, bottom: FAB_BOTTOM }}>
-        <Pressable
-          testID="quick-add-fab"
-          onPress={onFabPress}
-          style={({ pressed }) => ({
-            width: FAB_SIZE,
-            height: FAB_SIZE,
-            borderRadius: FAB_SIZE / 2,
-            backgroundColor: colors.brandPrimary,
-            alignItems: "center",
-            justifyContent: "center",
-            transform: [{ scale: pressed ? 0.94 : 1 }],
-            shadowColor: "#000",
-            shadowOffset: { width: 0, height: 6 },
-            shadowOpacity: isDark ? 0.6 : 0.15,
-            shadowRadius: 12,
-            elevation: 8,
-          })}
-        >
-          <Animated.View style={{ transform: [{ rotate: fabRotation }] }}>
-            <Ionicons name="add" size={28} color={colors.onBrandPrimary} />
-          </Animated.View>
-        </Pressable>
-      </View>
+      {hideFab ? null : (
+        <View pointerEvents="box-none" style={{ position: "absolute", right: spacing.xl, bottom: FAB_BOTTOM }}>
+          <Pressable
+            testID="quick-add-fab"
+            onPress={onFabPress}
+            accessibilityRole="button"
+            accessibilityLabel={config ? (fanOpen ? "Close menu" : `Open ${config.spaceLabel} menu`) : "Quick add"}
+            style={({ pressed }) => ({
+              width: FAB_SIZE,
+              height: FAB_SIZE,
+              borderRadius: FAB_SIZE / 2,
+              backgroundColor: colors.brandPrimary,
+              alignItems: "center",
+              justifyContent: "center",
+              transform: [{ scale: pressed ? 0.94 : 1 }],
+              shadowColor: "#000",
+              shadowOffset: { width: 0, height: 6 },
+              shadowOpacity: isDark ? 0.6 : 0.15,
+              shadowRadius: 12,
+              elevation: 8,
+            })}
+          >
+            {/* Hamburger (3-line "menu") when closed -- matches the
+                sheet/fan this opens being a MENU of choices, not a
+                single "add" action. Swaps to a close "X" only while the
+                category fan is actually open (config + fanOpen); rotating
+                a hamburger the way the old "+" rotated into an "X"
+                wouldn't read as a close affordance the same way, so this
+                is a hard icon swap instead of a transform. */}
+            <Ionicons
+              name={config && fanOpen ? "close" : "menu-outline"}
+              size={26}
+              color={colors.onBrandPrimary}
+            />
+          </Pressable>
+        </View>
+      )}
 
       <QuickAddSheet ref={quickAddRef} onSaved={onSaved} />
     </View>

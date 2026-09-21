@@ -90,11 +90,6 @@ export default function CarDocumentForm({
       return;
     }
 
-    if (!title.trim()) {
-      setError("Please enter a document title.");
-      return;
-    }
-
     if (
       price &&
       (priceValue === undefined ||
@@ -112,7 +107,17 @@ export default function CarDocumentForm({
       return;
     }
 
-    if (expiryDate && !isValidDate(expiryDate)) {
+    // Expiry date is required -- the whole urgency system (DUE SOON,
+    // status dots, overdue) is built on it, see
+    // getDocumentUrgencyTier/getDocumentStatus in
+    // dashboard.calculations.ts. A document truly without one (rare --
+    // most have SOME validity window) just isn't trackable that way.
+    if (!expiryDate.trim()) {
+      setError("Please enter the expiry date.");
+      return;
+    }
+
+    if (!isValidDate(expiryDate)) {
       setError(
         "Expiry date must use the format DD.MM.YYYY.",
       );
@@ -246,8 +251,9 @@ export default function CarDocumentForm({
               width: 36,
               height: 36,
               borderRadius: radius.pill,
-              backgroundColor:
-                colors.surfaceSecondary,
+              backgroundColor: "transparent",
+              borderWidth: 1,
+              borderColor: colors.border,
               alignItems: "center",
               justifyContent: "center",
             }}
@@ -266,8 +272,10 @@ export default function CarDocumentForm({
               flexDirection: "row",
               gap: spacing.sm,
               padding: spacing.md,
-              borderRadius: radius.md,
-              backgroundColor: colors.surfaceSecondary,
+              borderRadius: radius.sm,
+              backgroundColor: "transparent",
+              borderWidth: 1,
+              borderColor: colors.border,
               marginBottom: spacing.lg,
             }}
           >
@@ -285,16 +293,16 @@ export default function CarDocumentForm({
               flexDirection: "row",
               gap: spacing.sm,
               padding: spacing.md,
-              borderRadius: radius.md,
-              backgroundColor: colors.surfaceSecondary,
+              borderRadius: radius.sm,
+              backgroundColor: "transparent",
+              borderWidth: 1,
+              borderColor: colors.border,
               marginBottom: spacing.lg,
             }}
           >
             <Ionicons name="lock-closed-outline" size={18} color={colors.onSurfaceTertiary} />
             <Text style={{ flex: 1, fontSize: 12, color: colors.onSurfaceTertiary, lineHeight: 17 }}>
-              {entry?.archived
-                ? "This document was replaced by a renewal, so it's locked -- an archived record stays exactly as filed."
-                : "This document is in History (older than 7 days), so it's locked -- edit it while it's still on the dashboard, or use it as the source for a renewal instead."}
+              This document was replaced by a renewal, so it's locked -- an archived record stays exactly as filed.
             </Text>
           </View>
         ) : null}
@@ -310,6 +318,7 @@ export default function CarDocumentForm({
           }}
         >
           Document Type
+          <Text style={{ color: colors.error }}> *</Text>
         </Text>
 
         <View
@@ -334,7 +343,7 @@ export default function CarDocumentForm({
                   borderRadius: radius.pill,
                   backgroundColor: selected
                     ? colors.onSurface
-                    : colors.surfaceSecondary,
+                    : "transparent",
                   borderWidth: 1,
                   borderColor: selected
                     ? colors.onSurface
@@ -420,6 +429,7 @@ export default function CarDocumentForm({
           onChangeText={setExpiryDate}
           placeholder="DD.MM.YYYY"
           keyboardType="default"
+          required
           colors={colors}
           spacing={spacing}
           radius={radius}
@@ -474,9 +484,10 @@ export default function CarDocumentForm({
             style={{
               marginTop: spacing.sm,
               padding: spacing.md,
-              borderRadius: radius.md,
-              backgroundColor:
-                colors.surfaceSecondary,
+              borderRadius: radius.sm,
+              backgroundColor: "transparent",
+              borderWidth: 1,
+              borderColor: colors.border,
             }}
           >
             <Text
@@ -548,7 +559,11 @@ export default function CarDocumentForm({
           </Text>
         </Pressable>
 
-        {!readOnly && isEditing && onDelete ? (
+        {/* TEMP (testing only): archived documents are otherwise fully
+            locked, but deletion is allowed here too for now so wrongly-
+            archived test entries can be cleaned up. History-locked (>7
+            days old, not archived) still hides this -- only archived. */}
+        {isEditing && onDelete && (!readOnly || entry?.archived) ? (
           <Pressable
             onPress={handleDelete}
             accessibilityRole="button"
@@ -588,6 +603,9 @@ type FormFieldProps = {
   /** Read-only mode (see the `readOnly` form prop) -- dims the field and
    * blocks typing, the input still shows its saved value. */
   disabled?: boolean;
+  /** Shows a red "*" next to the label -- only for fields actually
+   * required to save (see handleSave). */
+  required?: boolean;
   colors: any;
   spacing: any;
   radius: any;
@@ -606,6 +624,7 @@ function FormField({
   suffix,
   multiline = false,
   disabled = false,
+  required = false,
   colors,
   spacing,
   radius,
@@ -627,14 +646,14 @@ function FormField({
         }}
       >
         {label}
+        {required ? <Text style={{ color: colors.error }}> *</Text> : null}
       </Text>
 
       <View
         style={{
           minHeight: multiline ? 90 : 52,
-          borderRadius: radius.md,
-          backgroundColor:
-            colors.surfaceSecondary,
+          borderRadius: radius.sm,
+          backgroundColor: "transparent",
           borderWidth: isFocused ? 2 : 1,
           borderColor: isFocused
             ? colors.onSurface

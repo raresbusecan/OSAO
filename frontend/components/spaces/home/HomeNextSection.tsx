@@ -34,8 +34,10 @@ export function HomeNextSection({ items }: HomeNextSectionProps) {
           <View
             key={item.id}
             style={{
-              backgroundColor: colors.surfaceSecondary,
-              borderRadius: radius.lg,
+              backgroundColor: "transparent",
+              borderWidth: 1,
+              borderColor: colors.border,
+              borderRadius: radius.sm,
               padding: spacing.lg,
               flexDirection: "row",
               alignItems: "center",

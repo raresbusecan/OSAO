@@ -280,7 +280,9 @@ export default function CarFuelForm({
               width: 36,
               height: 36,
               borderRadius: radius.pill,
-              backgroundColor: colors.surfaceSecondary,
+              backgroundColor: "transparent",
+              borderWidth: 1,
+              borderColor: colors.border,
               alignItems: "center",
               justifyContent: "center",
             }}
@@ -430,6 +432,7 @@ export default function CarFuelForm({
           placeholder="e.g. 250"
           keyboardType="decimal-pad"
           suffix="RON"
+          required
           colors={colors}
           spacing={spacing}
           radius={radius}
@@ -501,8 +504,10 @@ export default function CarFuelForm({
             style={{
               marginTop: spacing.sm,
               padding: spacing.md,
-              borderRadius: radius.md,
-              backgroundColor: colors.surfaceSecondary,
+              borderRadius: radius.sm,
+              backgroundColor: "transparent",
+              borderWidth: 1,
+              borderColor: colors.border,
             }}
           >
             <Text
@@ -616,6 +621,9 @@ type FormFieldProps = {
   hint?: string;
   /** Optional tappable action shown next to the hint (e.g. "Use suggested"). */
   hintAction?: { label: string; onPress: () => void };
+  /** Shows a red "*" next to the label -- only for fields actually
+   * required to save (see validateFuelEntry). */
+  required?: boolean;
 };
 
 function FormField({
@@ -634,6 +642,7 @@ function FormField({
   onBlur,
   hint,
   hintAction,
+  required = false,
 }: FormFieldProps) {
   const isFocused = focusedField === fieldName;
 
@@ -648,13 +657,14 @@ function FormField({
         }}
       >
         {label}
+        {required ? <Text style={{ color: colors.error }}> *</Text> : null}
       </Text>
 
       <View
         style={{
           minHeight: 52,
-          borderRadius: radius.md,
-          backgroundColor: colors.surfaceSecondary,
+          borderRadius: radius.sm,
+          backgroundColor: "transparent",
           borderWidth: isFocused ? 2 : 1,
           borderColor: isFocused
             ? colors.onSurface
@@ -755,8 +765,10 @@ function ConsumptionPreviewCard({
       style={{
         marginBottom: spacing.xl,
         padding: spacing.md,
-        borderRadius: radius.md,
-        backgroundColor: colors.surfaceSecondary,
+        borderRadius: radius.sm,
+        backgroundColor: "transparent",
+        borderWidth: 1,
+        borderColor: colors.border,
         flexDirection: "row",
       }}
     >

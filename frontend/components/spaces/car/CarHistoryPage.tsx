@@ -11,7 +11,18 @@ import {
   periodCutoffDate,
   type CarExpensePeriod,
 } from "@/lib/spaces/car/calculations/expenses.calculations";
+import { getCurrentOdometer } from "@/lib/spaces/car/calculations/dashboard.calculations";
 import { isDocumentLocked } from "@/lib/spaces/car/utils/documentLock";
+
+// Same mapping as CarDashboard.tsx's statusDotColor -- "safe" (not yet
+// inside the alert window) is success/green, the other 3 mirror DUE
+// SOON's own tiers. See CarRecentItem.statusDot.
+function statusDotColor(status: "safe" | "light" | "medium" | "critical", colors: any) {
+  if (status === "safe") return colors.success;
+  if (status === "critical") return colors.error;
+  if (status === "medium") return colors.warning;
+  return colors.caution;
+}
 
 export type CarHistoryPageProps = {
   carData: CarData;
@@ -22,11 +33,12 @@ export type CarHistoryPageProps = {
   onRecordPress?: (type: CarRecentItem["type"], id: string | number) => void;
 };
 
+// No "Documents" tab -- see allEntries below, documents never reach
+// this page's feed at all any more.
 const CATEGORY_TABS: { key: CarRecentItem["type"] | "all"; label: string }[] = [
   { key: "all", label: "All" },
   { key: "fuel", label: "Fuel" },
   { key: "maintenance", label: "Maintenance" },
-  { key: "document", label: "Documents" },
   { key: "expense", label: "Expenses" },
 ];
 
@@ -54,19 +66,24 @@ function periodsEqual(a: CarExpensePeriod, b: CarExpensePeriod): boolean {
 }
 
 /**
- * Every record that isn't (or can't be) on the dashboard right now, and
- * isn't exclusively Archive's either -- one tap away from the header,
- * and the destination for "Show more" on RECENT/ALL instead of
- * expanding those inline forever. That's the complement of
- * CarDashboard's 7-day RECENT/ALL, not a superset of it: a record shows
- * up HERE once it ages out of that 7-day window, OR (maintenance only)
- * gets archived -- see pastDashboardEntries below. Still inside the
- * window and not archived? It's still on the dashboard, not here yet --
- * showing it in both places would just be duplication, not "moved to
- * History". Archived maintenance stays tagged rather than hidden, since
- * it's still a real record, just no longer current -- but archived
- * DOCUMENTS don't show here at all, only in Archive (CarArchivePage),
- * to avoid that same duplication for them.
+ * Every Fuel/Maintenance/Expense record that isn't (or can't be) on the
+ * dashboard right now -- one tap away from the header, and the
+ * destination for "Show more" on RECENT/ALL instead of expanding those
+ * inline forever. That's the complement of CarDashboard's 7-day
+ * RECENT/ALL, not a superset of it: a record shows up HERE once it ages
+ * out of that 7-day window, OR (maintenance only) gets archived -- see
+ * pastDashboardEntries below. Still inside the window and not archived?
+ * It's still on the dashboard, not here yet -- showing it in both
+ * places would just be duplication, not "moved to History". Archived
+ * maintenance stays tagged rather than hidden, since it's still a real
+ * record, just no longer current.
+ *
+ * Documents don't appear here at all, in any state -- they never flow
+ * through the dashboard's 7-day window to begin with (see
+ * CarDashboard.tsx's allEntries), so there's no "aged out" state for
+ * them to land in History with. Current documents live permanently in
+ * CarDocsPage; archived ones live exclusively in Archive
+ * (CarArchivePage).
  * Defaults to "All time" (no period cutoff beyond the above); the
  * PERIOD picker below narrows that on request, same period system
  * Expenses uses.
@@ -106,15 +123,24 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
     setPeriod({ kind: customUnit, count: next });
   };
 
+  const currentOdometer = useMemo(() => getCurrentOdometer(carData), [carData]);
+
+  // Documents never reach this feed -- they don't pass through the
+  // dashboard's 7-day window at all any more (see CarDashboard.tsx's
+  // allEntries), so there's nothing of theirs to "age into" History
+  // with. Current documents live permanently in CarDocsPage; archived
+  // ones live exclusively in Archive (CarArchivePage) -- neither ever
+  // shows up here.
   const allEntries = useMemo(
     () =>
       buildCarRecentItems({
         fuelEntries: carData.fuelEntries,
         maintenanceEntries: carData.maintenanceEntries,
-        documentEntries: carData.documentEntries,
+        documentEntries: [],
         expenseEntries: carData.expenseEntries,
+        currentOdometer,
       }),
-    [carData],
+    [carData, currentOdometer],
   );
 
   // History is the complement of the dashboard, not a superset of it --
@@ -125,21 +151,10 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
   // places until a week passes, which isn't "moved to History", it's
   // just duplicated. This is the same cutoff the dashboard filters
   // *in* with -- History filters everything *before* it out.
-  //
-  // Archived DOCUMENTS are the one exception: those live exclusively in
-  // Archive now (CarArchivePage), not here too -- an archived document
-  // showing up in both places is exactly the duplication above, just
-  // for the archived case instead of the date-window case. Archived
-  // maintenance keeps showing here (tagged), same as always -- only
-  // Documents got this split (see documentLock.ts/CarDocumentForm's
-  // readOnly mode, both document-only for the same reason).
   const pastDashboardEntries = useMemo(() => {
     const cutoff = periodCutoffDate({ kind: "weeks", count: 1 })!;
 
-    return allEntries.filter((e) => {
-      if (e.type === "document" && e.archived) return false;
-      return e.archived || new Date(e.date).getTime() < cutoff.getTime();
-    });
+    return allEntries.filter((e) => e.archived || new Date(e.date).getTime() < cutoff.getTime());
   }, [allEntries]);
 
   const items = useMemo(() => {
@@ -175,7 +190,9 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
             width: 40,
             height: 40,
             borderRadius: radius.pill,
-            backgroundColor: colors.surfaceSecondary,
+            backgroundColor: "transparent",
+            borderWidth: 1,
+            borderColor: colors.border,
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -208,7 +225,9 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
                 paddingHorizontal: spacing.md,
                 minHeight: 34,
                 borderRadius: radius.pill,
-                backgroundColor: isActive ? colors.onSurface : colors.surfaceSecondary,
+                backgroundColor: isActive ? colors.onSurface : "transparent",
+                borderWidth: 1,
+                borderColor: isActive ? colors.onSurface : colors.border,
                 alignItems: "center",
                 justifyContent: "center",
               }}
@@ -234,8 +253,10 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
-          backgroundColor: colors.surfaceSecondary,
-          borderRadius: radius.lg,
+          backgroundColor: "transparent",
+          borderWidth: 1,
+          borderColor: colors.border,
+          borderRadius: radius.sm,
           paddingHorizontal: spacing.lg,
           paddingVertical: spacing.md,
           marginBottom: spacing.xl,
@@ -345,7 +366,9 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
                           paddingHorizontal: spacing.md,
                           minHeight: 30,
                           borderRadius: radius.pill,
-                          backgroundColor: isActive ? colors.onSurface : colors.surfaceSecondary,
+                          backgroundColor: isActive ? colors.onSurface : "transparent",
+                          borderWidth: 1,
+                          borderColor: isActive ? colors.onSurface : colors.border,
                           alignItems: "center",
                           justifyContent: "center",
                         }}
@@ -383,7 +406,9 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
                       width: 36,
                       height: 36,
                       borderRadius: radius.pill,
-                      backgroundColor: colors.surfaceSecondary,
+                      backgroundColor: "transparent",
+                      borderWidth: 1,
+                      borderColor: colors.border,
                       alignItems: "center",
                       justifyContent: "center",
                       opacity: customCount <= 1 ? 0.4 : 1,
@@ -413,7 +438,9 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
                       width: 36,
                       height: 36,
                       borderRadius: radius.pill,
-                      backgroundColor: colors.surfaceSecondary,
+                      backgroundColor: "transparent",
+                      borderWidth: 1,
+                      borderColor: colors.border,
                       alignItems: "center",
                       justifyContent: "center",
                       opacity: customCount >= 12 ? 0.4 : 1,
@@ -459,7 +486,7 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
           ) : null}
         </View>
       ) : (
-        <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, overflow: "hidden" }}>
+        <View style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, overflow: "hidden" }}>
           {items.map((item, index) => {
             // Documents only -- locked (read-only) once archived or
             // older than the dashboard's 7-day window. Still tappable:
@@ -496,6 +523,45 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
                 }}
               >
                 <Ionicons name={item.icon} size={17} color={colors.onSurface} />
+
+                {item.statusDot && item.overdue ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      right: -4,
+                      bottom: -4,
+                      width: 14,
+                      height: 14,
+                      borderRadius: 7,
+                      backgroundColor: statusDotColor(item.statusDot, colors),
+                      borderWidth: 1.5,
+                      borderColor: colors.surfaceTertiary,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Text style={{ fontSize: 9.5, fontWeight: "900", color: colors.surface, lineHeight: 11 }}>
+                      !
+                    </Text>
+                  </View>
+                ) : item.statusDot ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      right: -2,
+                      bottom: -2,
+                      width: 9,
+                      height: 9,
+                      borderRadius: 4.5,
+                      backgroundColor: statusDotColor(item.statusDot, colors),
+                      // Matches this icon circle's own background
+                      // (colors.surfaceTertiary), so the dot reads as
+                      // "cut into" it, not floating.
+                      borderWidth: 1.5,
+                      borderColor: colors.surfaceTertiary,
+                    }}
+                  />
+                ) : null}
               </View>
 
               <View style={{ flex: 1 }}>

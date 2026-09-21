@@ -13,4 +13,7 @@ export const initialHomeData: HomeData = {
   maintenanceEntries: MOCK_MAINTENANCE_ENTRIES,
   recurringEntries: MOCK_RECURRING_ENTRIES,
   supplyEntries: MOCK_SUPPLY_ENTRIES,
+  // No mock seed -- tasks launched without demo data, loadHomeItems()
+  // fills this from the API like every other category.
+  taskEntries: [],
 };

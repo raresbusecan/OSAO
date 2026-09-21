@@ -60,7 +60,9 @@ export function CarArchivePage({ carData, onBack, onRecordPress }: CarArchivePag
             width: 40,
             height: 40,
             borderRadius: radius.pill,
-            backgroundColor: colors.surfaceSecondary,
+            backgroundColor: "transparent",
+            borderWidth: 1,
+            borderColor: colors.border,
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -102,8 +104,10 @@ export function CarArchivePage({ carData, onBack, onRecordPress }: CarArchivePag
       ) : (
         <View
           style={{
-            backgroundColor: colors.surfaceSecondary,
-            borderRadius: radius.lg,
+            backgroundColor: "transparent",
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: radius.sm,
             overflow: "hidden",
           }}
         >

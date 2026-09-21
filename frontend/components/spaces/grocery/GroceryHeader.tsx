@@ -1,3 +1,7 @@
+/** @deprecated Retired by the Grocery space rewrite -- the new
+ * GroceryDashboard.tsx has its own greeting-based header inline. Kept
+ * only because this environment couldn't delete the file; safe to
+ * remove. Not imported anywhere. */
 import React from "react";
 import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";

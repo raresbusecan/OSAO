@@ -18,7 +18,7 @@ export type CarNextSectionProps = {
 export function CarNextSection({
   items,
 }: CarNextSectionProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing, radius, typography } = useTheme();
 
   if (!items.length) {
     return null;
@@ -26,7 +26,7 @@ export function CarNextSection({
 
   return (
     <View style={{ marginBottom: spacing.xl }}>
-      <SectionTitle title="NEXT" colors={colors} />
+      <SectionTitle title="NEXT" colors={colors} typography={typography} />
 
       <View style={{ gap: spacing.sm }}>
         {items.map((item) => (
@@ -39,6 +39,7 @@ export function CarNextSection({
             colors={colors}
             radius={radius}
             spacing={spacing}
+            typography={typography}
           />
         ))}
       </View>
@@ -49,20 +50,14 @@ export function CarNextSection({
 function SectionTitle({
   title,
   colors,
+  typography,
 }: {
   title: string;
   colors: any;
+  typography: any;
 }) {
   return (
-    <Text
-      style={{
-        fontSize: 12,
-        fontWeight: "800",
-        letterSpacing: 1,
-        color: colors.onSurfaceTertiary,
-        marginBottom: 10,
-      }}
-    >
+    <Text style={{ ...typography.label, color: colors.onSurfaceTertiary, marginBottom: 10 }}>
       {title}
     </Text>
   );
@@ -76,6 +71,7 @@ function InfoRow({
   colors,
   radius,
   spacing,
+  typography,
 }: {
   icon: string;
   title: string;
@@ -84,6 +80,7 @@ function InfoRow({
   colors: any;
   radius: any;
   spacing: any;
+  typography: any;
 }) {
   return (
     <View
@@ -114,34 +111,16 @@ function InfoRow({
       </View>
 
       <View style={{ flex: 1 }}>
-        <Text
-          style={{
-            fontSize: 15,
-            fontWeight: "700",
-            color: colors.onSurface,
-          }}
-        >
+        <Text style={{ ...typography.body, color: colors.onSurface }}>
           {title}
         </Text>
 
-        <Text
-          style={{
-            marginTop: 3,
-            fontSize: 12,
-            color: colors.onSurfaceTertiary,
-          }}
-        >
+        <Text style={{ ...typography.caption, marginTop: 3, color: colors.onSurfaceTertiary }}>
           {subtitle}
         </Text>
       </View>
 
-      <Text
-        style={{
-          fontSize: 12,
-          fontWeight: "700",
-          color: colors.onSurfaceTertiary,
-        }}
-      >
+      <Text style={{ ...typography.caption, fontWeight: "700", color: colors.onSurfaceTertiary }}>
         {right}
       </Text>
     </View>

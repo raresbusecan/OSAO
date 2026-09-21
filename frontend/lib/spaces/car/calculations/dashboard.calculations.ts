@@ -12,7 +12,6 @@ import {
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const DOC_ALERT_DAYS = 45;
-const MAINT_ALERT_KM = 2000;
 
 export function getCurrentOdometer(carData: CarData): number {
   let maxOdometer = carData.vehicle.mileage || 0;
@@ -24,7 +23,7 @@ export function getCurrentOdometer(carData: CarData): number {
   });
 
   carData.maintenanceEntries.forEach((entry) => {
-    if (entry.odometer > maxOdometer) {
+    if (entry.odometer !== undefined && entry.odometer > maxOdometer) {
       maxOdometer = entry.odometer;
     }
   });
@@ -190,6 +189,44 @@ export function getDocumentStatus(
   return { status: "valid", daysUntilExpiry };
 }
 
+// Shared by documents (day-based) and maintenance (km-based, day-based,
+// or both -- see getMaintenanceUrgency below): the same 3 severity bands,
+// so DUE SOON/RECENT/History/Expenses can render both categories with
+// one set of colors/badges regardless of which one a row is.
+export type UrgencyTier = "light" | "medium" | "critical";
+/** @deprecated use UrgencyTier -- kept as an alias so existing call sites
+ * that name it explicitly don't need to change. */
+export type DocumentUrgencyTier = UrgencyTier;
+
+const DOC_TIER_MEDIUM_DAYS = 30;
+const DOC_TIER_CRITICAL_DAYS = 15;
+
+function urgencyTierFromDays(daysUntilExpiry: number): UrgencyTier {
+  if (daysUntilExpiry <= DOC_TIER_CRITICAL_DAYS) return "critical";
+  if (daysUntilExpiry <= DOC_TIER_MEDIUM_DAYS) return "medium";
+  return "light";
+}
+
+/**
+ * Which of the 3 severity bands a document falls into -- a presentation
+ * split of the existing expiring_soon/expired window (see
+ * getDocumentStatus / DOC_ALERT_DAYS above), not a new alert boundary:
+ * 45→30 days left is "light", 30→15 is "medium", under 15 -- including
+ * already expired, since daysUntilExpiry goes negative -- is "critical".
+ * null once the document isn't in the alert window at all (getUpcomingItems
+ * already filters those out before this ever matters, but exported for
+ * anywhere else that wants the same 3-way read on a single document).
+ */
+export function getDocumentUrgencyTier(
+  entry: CarDocumentEntry,
+  referenceDate: Date = new Date(),
+): DocumentUrgencyTier | null {
+  const { status, daysUntilExpiry } = getDocumentStatus(entry, referenceDate);
+  if (status !== "expiring_soon" && status !== "expired") return null;
+  if (daysUntilExpiry === null) return null;
+  return urgencyTierFromDays(daysUntilExpiry);
+}
+
 export type CarDocumentEntryWithStatus = CarDocumentEntry &
   DocumentStatusResult;
 
@@ -230,61 +267,130 @@ export function isDocumentSuperseded(
 }
 
 /* ============================================================
-   MAINTENANCE STATUS
-   ============================================================ */
+   MAINTENANCE URGENCY -- km OR date, whichever comes first
+   ============================================================
+   A real interval like "10,000 km or 12 months" has two independent
+   triggers; nextServiceOdometer and nextServiceDate on the entry are
+   each optional and don't depend on each other. Whichever one is closer
+   decides the tier, same as the actual rule mechanics/manufacturers use. */
 
-export type MaintenanceStatus =
-  | "ok"
-  | "due_soon"
-  | "overdue"
-  | "not_scheduled";
+const MAINT_TIER_LIGHT_KM = 2000; // entry point, same value MAINT_ALERT_KM used to alert at alone
+const MAINT_TIER_MEDIUM_KM = 1000;
+const MAINT_TIER_CRITICAL_KM = 500;
 
-export type MaintenanceStatusResult = {
-  status: MaintenanceStatus;
-  remainingKm: number | null;
-};
+function urgencyTierFromKm(remainingKm: number): UrgencyTier {
+  if (remainingKm <= MAINT_TIER_CRITICAL_KM) return "critical";
+  if (remainingKm <= MAINT_TIER_MEDIUM_KM) return "medium";
+  return "light";
+}
 
-export function getMaintenanceStatus(
+type SingleDimensionUrgency = { tier: UrgencyTier; overdue: boolean };
+
+function maintenanceKmUrgency(
   entry: CarMaintenanceEntry,
   currentOdometer: number,
-): MaintenanceStatusResult {
-  if (!entry.nextServiceOdometer) {
-    return { status: "not_scheduled", remainingKm: null };
-  }
+): (SingleDimensionUrgency & { remainingKm: number }) | null {
+  if (entry.nextServiceOdometer === undefined) return null;
 
   const remainingKm = entry.nextServiceOdometer - currentOdometer;
+  if (remainingKm > MAINT_TIER_LIGHT_KM) return null; // not in the alert window yet
 
-  if (remainingKm < 0) {
-    return { status: "overdue", remainingKm };
-  }
-
-  if (remainingKm <= MAINT_ALERT_KM) {
-    return { status: "due_soon", remainingKm };
-  }
-
-  return { status: "ok", remainingKm };
+  return { tier: urgencyTierFromKm(remainingKm), overdue: remainingKm < 0, remainingKm };
 }
 
-export type CarMaintenanceEntryWithStatus = CarMaintenanceEntry &
-  MaintenanceStatusResult;
+function maintenanceDateUrgency(
+  entry: CarMaintenanceEntry,
+  referenceDate: Date,
+): (SingleDimensionUrgency & { daysUntilService: number }) | null {
+  if (!entry.nextServiceDate) return null;
 
-export function getMaintenanceEntriesWithStatus(
-  carData: CarData,
+  const target = parseDateString(entry.nextServiceDate);
+  if (!target) return null;
+
+  const daysUntilService = Math.ceil((target.getTime() - referenceDate.getTime()) / MS_PER_DAY);
+  if (daysUntilService > DOC_ALERT_DAYS) return null; // not in the alert window yet
+
+  return { tier: urgencyTierFromDays(daysUntilService), overdue: daysUntilService < 0, daysUntilService };
+}
+
+// critical+overdue outranks plain critical, which outranks medium, then
+// light, then "not in window at all" (rank 0) -- this is the whole
+// "whichever comes first" comparison, reduced to one number per dimension.
+function urgencyRank(urgency: SingleDimensionUrgency | null): number {
+  if (!urgency) return 0;
+  const base = urgency.tier === "critical" ? 3 : urgency.tier === "medium" ? 2 : 1;
+  return urgency.overdue ? base + 0.5 : base;
+}
+
+export type MaintenanceUrgencyResult = {
+  tier: UrgencyTier | null;
+  overdue: boolean;
+  /** Which dimension actually produced `tier`/`overdue` -- null when
+   * neither km nor date is close enough to matter (tier is null then
+   * too). Lets callers build a message/label from the right numbers
+   * instead of guessing which one to read. */
+  decidedBy: "km" | "date" | null;
+  remainingKm: number | null;
+  daysUntilService: number | null;
+};
+
+/**
+ * The single combined "how urgent is this service" read. Either,
+ * both, or neither of nextServiceOdometer/nextServiceDate can be set on
+ * an entry; when both are, whichever is more urgent wins -- exactly how
+ * a real "X km or Y months" interval is meant to work. `tier` is null
+ * (nothing to show) once neither dimension is within its own alert
+ * window (2000 km / 45 days).
+ */
+export function getMaintenanceUrgency(
+  entry: CarMaintenanceEntry,
   currentOdometer: number,
-): CarMaintenanceEntryWithStatus[] {
-  return carData.maintenanceEntries.map((entry) => ({
-    ...entry,
-    ...getMaintenanceStatus(entry, currentOdometer),
-  }));
+  referenceDate: Date = new Date(),
+): MaintenanceUrgencyResult {
+  const byKm = maintenanceKmUrgency(entry, currentOdometer);
+  const byDate = maintenanceDateUrgency(entry, referenceDate);
+
+  const decidedBy: "km" | "date" | null =
+    urgencyRank(byKm) === 0 && urgencyRank(byDate) === 0
+      ? null
+      : urgencyRank(byKm) >= urgencyRank(byDate)
+        ? "km"
+        : "date";
+
+  const winner = decidedBy === "date" ? byDate : byKm;
+
+  return {
+    tier: winner?.tier ?? null,
+    overdue: winner?.overdue ?? false,
+    decidedBy,
+    remainingKm: byKm?.remainingKm ?? null,
+    daysUntilService: byDate?.daysUntilService ?? null,
+  };
 }
 
-/** Same idea as isDocumentSuperseded -- a later entry of the same service
- * (e.g. a second "Oil Change" logged after this one) means this one's own
- * "next service due" prediction is stale; stop alerting on it. */
+/**
+ * Service types that are inherently one-off, unpredictable events, not a
+ * periodic thing with an interval -- a repair just happens when it
+ * happens, there's no "next one due" to forecast. CarMaintenanceForm.tsx
+ * uses this to skip asking for Next Service km/date at all for these
+ * (nothing to predict), and isMaintenanceSuperseded below uses it so two
+ * unrelated entries that happen to share this generic name (e.g. two
+ * different "Repair" entries months apart) never get treated as one
+ * renewing the other -- they're independent, both stay active forever.
+ */
+export const NON_RECURRING_MAINTENANCE_TYPES = new Set(["Repair"]);
+
+/** Same idea as isDocumentSuperseded -- a later entry of the same
+ * *recurring* service (e.g. a second "Oil Change" logged after this one)
+ * means this one's own "next service due" prediction is stale; stop
+ * alerting on it. Never true for NON_RECURRING_MAINTENANCE_TYPES (see
+ * above) -- those just accumulate, they don't replace each other. */
 export function isMaintenanceSuperseded(
   entry: CarMaintenanceEntry,
   allEntries: CarMaintenanceEntry[],
 ): boolean {
+  if (NON_RECURRING_MAINTENANCE_TYPES.has(entry.service)) return false;
+
   return allEntries.some((other) => {
     if (other.id === entry.id) return false;
     if (other.service !== entry.service) return false;
@@ -327,7 +433,9 @@ export function getUpcomingItems(
     const subtitle =
       entry.status === "expired"
         ? `Expired ${Math.abs(entry.daysUntilExpiry)} day${Math.abs(entry.daysUntilExpiry) !== 1 ? 's' : ''} ago`
-        : `Expires in ${entry.daysUntilExpiry} day${entry.daysUntilExpiry !== 1 ? 's' : ''}`;
+        : entry.daysUntilExpiry === 0
+          ? "Expires today"
+          : `Expires in ${entry.daysUntilExpiry} day${entry.daysUntilExpiry !== 1 ? 's' : ''}`;
 
     items.push({
       id: `doc-${entry.id}`,
@@ -336,49 +444,68 @@ export function getUpcomingItems(
       subtitle,
       right: `${expiry.getDate()} ${expiry.toLocaleString('default', { month: 'short' })}`,
       urgency: entry.daysUntilExpiry, // Lower (more negative once expired) is more urgent
+      urgencyTier: urgencyTierFromDays(entry.daysUntilExpiry),
+      overdue: entry.status === "expired",
       sourceType: "document",
       sourceId: entry.id,
     });
   });
 
-  // 2. Maintenance due soon or overdue -- same "already renewed" guard.
-  const maintenanceWithStatus = getMaintenanceEntriesWithStatus(
-    carData,
-    currentOdometer,
-  );
-
-  maintenanceWithStatus.forEach((entry) => {
-    if (
-      (entry.status !== "due_soon" && entry.status !== "overdue") ||
-      entry.remainingKm === null
-    ) {
-      return;
-    }
+  // 2. Maintenance due soon or overdue -- same "already renewed" guard,
+  // and the same km-or-date "whichever comes first" read as the DUE
+  // SOON badge/dots elsewhere (see getMaintenanceUrgency above).
+  carData.maintenanceEntries.forEach((entry) => {
+    const urgency = getMaintenanceUrgency(entry, currentOdometer);
+    if (!urgency.tier) return;
 
     if (entry.archived || isMaintenanceSuperseded(entry, carData.maintenanceEntries)) {
       return;
     }
 
-    // Skip maintenance overdue by a lot — it's likely stale/irrelevant.
-    if (entry.remainingKm < -5000) {
+    // Skip maintenance overdue by a lot on the km side — it's likely
+    // stale/irrelevant (no equivalent guard needed for date: nothing
+    // stays silently "overdue by years" the way an untouched odometer
+    // reading can).
+    if (urgency.remainingKm !== null && urgency.remainingKm < -5000) {
       return;
     }
 
-    // Heuristic so it's comparable to "days" urgency for documents (~30km/day).
-    const equivalentDays = entry.remainingKm / 30;
+    // Heuristic so km-based urgency sorts comparably against documents'
+    // real day counts (~30km/day) -- date-based urgency already IS a day
+    // count, no conversion needed.
+    const equivalentDays =
+      urgency.decidedBy === "date" ? urgency.daysUntilService! : urgency.remainingKm! / 30;
 
-    const subtitle =
-      entry.remainingKm < 0
-        ? `Overdue by ${Math.abs(entry.remainingKm).toLocaleString()} km`
-        : `Due in ${entry.remainingKm.toLocaleString()} km`;
+    let subtitle: string;
+    let right: string;
+
+    if (urgency.decidedBy === "date") {
+      const days = urgency.daysUntilService!;
+      subtitle = urgency.overdue
+        ? `Overdue by ${Math.abs(days)} day${Math.abs(days) !== 1 ? 's' : ''}`
+        : days === 0
+          ? "Due today"
+          : `Due in ${days} day${days !== 1 ? 's' : ''}`;
+
+      const target = parseDateString(entry.nextServiceDate!)!;
+      right = `${target.getDate()} ${target.toLocaleString('default', { month: 'short' })}`;
+    } else {
+      const km = urgency.remainingKm!;
+      subtitle = urgency.overdue
+        ? `Overdue by ${Math.abs(km).toLocaleString()} km`
+        : `Due in ${km.toLocaleString()} km`;
+      right = `${km.toLocaleString()} km`;
+    }
 
     items.push({
       id: `maint-${entry.id}`,
       icon: "construct-outline",
       title: entry.service,
       subtitle,
-      right: "Soon",
+      right,
       urgency: equivalentDays,
+      urgencyTier: urgency.tier,
+      overdue: urgency.overdue,
       sourceType: "maintenance",
       sourceId: entry.id,
     });

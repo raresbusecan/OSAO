@@ -6,11 +6,11 @@ export type FuelValidationResult = {
 };
 
 /**
- * All fuel fields are optional except one thing: the entry has to
- * record SOMETHING — either how much fuel went in, or how much was
- * paid. Everything else (odometer, tank levels, station) is only
- * validated when the user actually provided it, since not everyone
- * cares about tracking consumption — some just want to log spend.
+ * Only the price is actually required -- everything else (liters,
+ * odometer, tank levels, station) is only validated when the user
+ * actually provided it, since not everyone cares about tracking
+ * consumption in liters, or logging every reading -- some just want to
+ * log what they spent.
  */
 export function validateFuelEntry(
   entry: Omit<CarFuelEntry, "id" | "date">,
@@ -22,10 +22,10 @@ export function validateFuelEntry(
   const hasLevelBefore = entry.level_before !== undefined;
   const hasLevelAfter = entry.level_after !== undefined;
 
-  if (!hasLiters && !hasPrice) {
+  if (!hasPrice) {
     return {
       valid: false,
-      error: "Please enter at least the liters or the price.",
+      error: "Please enter the price.",
     };
   }
 

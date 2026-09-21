@@ -14,7 +14,7 @@ export function CarStats({
   monthlyCost,
   currency = "RON",
 }: CarStatsProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing, radius, typography } = useTheme();
 
   return (
     <View
@@ -32,6 +32,7 @@ export function CarStats({
         colors={colors}
         radius={radius}
         spacing={spacing}
+        typography={typography}
       />
 
       <StatCard
@@ -42,6 +43,7 @@ export function CarStats({
         colors={colors}
         radius={radius}
         spacing={spacing}
+        typography={typography}
       />
     </View>
   );
@@ -55,6 +57,7 @@ function StatCard({
   colors,
   radius,
   spacing,
+  typography,
 }: {
   icon: string;
   value: string;
@@ -63,6 +66,7 @@ function StatCard({
   colors: any;
   radius: any;
   spacing: any;
+  typography: any;
 }) {
   return (
     <View
@@ -70,8 +74,10 @@ function StatCard({
         flex: 1,
         minHeight: 110,
         padding: spacing.lg,
-        backgroundColor: colors.surfaceSecondary,
-        borderRadius: radius.lg,
+        backgroundColor: "transparent",
+        borderWidth: 1,
+        borderColor: colors.border,
+        borderRadius: radius.sm,
         justifyContent: "space-between",
       }}
     >
@@ -89,35 +95,16 @@ function StatCard({
             gap: 4,
           }}
         >
-          <Text
-            style={{
-              fontSize: 22,
-              fontWeight: "800",
-              color: colors.onSurface,
-              letterSpacing: -0.4,
-            }}
-          >
+          <Text style={{ ...typography.title, color: colors.onSurface }}>
             {value}
           </Text>
 
-          <Text
-            style={{
-              fontSize: 11,
-              fontWeight: "600",
-              color: colors.onSurfaceTertiary,
-            }}
-          >
+          <Text style={{ ...typography.micro, color: colors.onSurfaceTertiary }}>
             {suffix}
           </Text>
         </View>
 
-        <Text
-          style={{
-            marginTop: 2,
-            fontSize: 12,
-            color: colors.onSurfaceTertiary,
-          }}
-        >
+        <Text style={{ ...typography.caption, marginTop: 2, color: colors.onSurfaceTertiary }}>
           {label}
         </Text>
       </View>

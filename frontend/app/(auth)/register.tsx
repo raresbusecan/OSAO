@@ -135,9 +135,11 @@ export default function Register() {
                 autoCorrect={false}
                 autoComplete="off"
                 style={{
-                  backgroundColor: colors.surfaceSecondary,
+                  backgroundColor: "transparent",
+                  borderWidth: 1,
+                  borderColor: colors.border,
                   color: colors.onSurface,
-                  borderRadius: radius.md,
+                  borderRadius: radius.sm,
                   paddingHorizontal: spacing.lg,
                   paddingVertical: 14,
                   fontSize: 16,
@@ -155,9 +157,11 @@ export default function Register() {
                 autoCorrect={false}
                 autoComplete="off"
                 style={{
-                  backgroundColor: colors.surfaceSecondary,
+                  backgroundColor: "transparent",
+                  borderWidth: 1,
+                  borderColor: colors.border,
                   color: colors.onSurface,
-                  borderRadius: radius.md,
+                  borderRadius: radius.sm,
                   paddingHorizontal: spacing.lg,
                   paddingVertical: 14,
                   fontSize: 16,
@@ -175,9 +179,11 @@ export default function Register() {
                 autoCorrect={false}
                 autoComplete="off"
                 style={{
-                  backgroundColor: colors.surfaceSecondary,
+                  backgroundColor: "transparent",
+                  borderWidth: 1,
+                  borderColor: colors.border,
                   color: colors.onSurface,
-                  borderRadius: radius.md,
+                  borderRadius: radius.sm,
                   paddingHorizontal: spacing.lg,
                   paddingVertical: 14,
                   fontSize: 16,
@@ -205,7 +211,7 @@ export default function Register() {
                 backgroundColor: colors.brandPrimary,
                 opacity: disabled ? 0.5 : 1,
                 paddingVertical: 16,
-                borderRadius: radius.md,
+                borderRadius: radius.sm,
                 alignItems: "center",
               }}
             >

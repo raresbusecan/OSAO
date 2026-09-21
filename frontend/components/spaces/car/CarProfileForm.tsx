@@ -116,6 +116,7 @@ export function CarProfileForm({
           name: derivedName,
           icon: "car-outline",
           color: "#111111",
+          type: "car",
         });
         targetSpace = created?.space ?? created;
       } else if (space) {
@@ -268,8 +269,10 @@ function Field({
         style={{
           height: 44,
           paddingHorizontal: spacing.md,
-          borderRadius: radius.md,
-          backgroundColor: colors.surfaceSecondary,
+          borderRadius: radius.sm,
+          backgroundColor: "transparent",
+          borderWidth: 1,
+          borderColor: colors.border,
           color: colors.onSurface,
           fontSize: 14,
         }}

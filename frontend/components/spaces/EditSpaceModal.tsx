@@ -15,7 +15,17 @@ import { notifyAction } from "@/lib/confirm";
 
 export type EditSpaceModalProps = {
   visible: boolean;
-  space: { id: string | number; name: string; icon?: string } | null;
+  /** "edit" (the default -- every existing call site) renames an
+   * already-saved space. "create" collects just a name for a NEW space
+   * before it exists at all -- same modal, same UX as Car/Home's own
+   * "fill in details, then Create" forms, for the 2 kinds (Grocery,
+   * Expenses) that have no dedicated profile form of their own. */
+  mode?: "edit" | "create";
+  /** In "edit" mode: the existing space (id required). In "create"
+   * mode: the template's own icon/color/type, carried straight through
+   * to api.createSpace once the user confirms a name -- id is never
+   * read here. */
+  space: { id?: string | number; name: string; icon?: string; color?: string; type?: string } | null;
   onClose: () => void;
   onSaved: (updated: any) => void;
 };
@@ -23,12 +33,15 @@ export type EditSpaceModalProps = {
 /**
  * Renaming for any space type with no dedicated form of its own (Grocery,
  * Expenses, a custom space) -- name only, deliberately not the same
- * name+icon editor the "New Space" creation flow uses. Car/Home don't use
- * this at all anymore (see CarProfileForm.tsx/HomeProfileForm.tsx) --
- * changing icon/type here would let a space impersonate a different one,
- * which is exactly what those dedicated forms exist to prevent.
+ * name+icon editor Car/Home's own dedicated forms use (see
+ * CarProfileForm.tsx/HomeProfileForm.tsx) -- changing icon/type here
+ * would let a space impersonate a different one, which those forms
+ * exist to prevent. In "create" mode this doubles as the pre-creation
+ * naming step those 2 kinds were missing -- a space no longer gets
+ * created with a generic template name (then only renameable
+ * afterward); the user names it before it's created at all.
  */
-export function EditSpaceModal({ visible, space, onClose, onSaved }: EditSpaceModalProps) {
+export function EditSpaceModal({ visible, mode = "edit", space, onClose, onSaved }: EditSpaceModalProps) {
   const { colors, spacing, radius } = useTheme();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,8 +57,18 @@ export function EditSpaceModal({ visible, space, onClose, onSaved }: EditSpaceMo
 
     setBusy(true);
     try {
-      const result = await api.updateSpace(space.id, { name: name.trim() });
-      onSaved(result?.space ?? { ...space, name: name.trim() });
+      if (mode === "create") {
+        const result = await api.createSpace({
+          name: name.trim(),
+          icon: space.icon,
+          color: space.color,
+          type: space.type,
+        });
+        onSaved(result?.space ?? result);
+      } else {
+        const result = await api.updateSpace(space.id!, { name: name.trim() });
+        onSaved(result?.space ?? { ...space, name: name.trim() });
+      }
       onClose();
     } catch (error: any) {
       notifyAction(
@@ -78,7 +101,7 @@ export function EditSpaceModal({ visible, space, onClose, onSaved }: EditSpaceMo
           }}
         >
           <Text style={{ fontSize: 20, fontWeight: "700", color: colors.onSurface }}>
-            Rename Space
+            {mode === "create" ? "New Space" : "Rename Space"}
           </Text>
 
           <Text
@@ -102,9 +125,11 @@ export function EditSpaceModal({ visible, space, onClose, onSaved }: EditSpaceMo
             placeholderTextColor={colors.onSurfaceTertiary}
             autoFocus
             style={{
-              backgroundColor: colors.surfaceSecondary,
+              backgroundColor: "transparent",
+              borderWidth: 1,
+              borderColor: colors.border,
               color: colors.onSurface,
-              borderRadius: radius.md,
+              borderRadius: radius.sm,
               paddingHorizontal: spacing.lg,
               paddingVertical: 14,
               fontSize: 16,
@@ -119,7 +144,7 @@ export function EditSpaceModal({ visible, space, onClose, onSaved }: EditSpaceMo
               backgroundColor: colors.brandPrimary,
               opacity: busy || !name.trim() ? 0.5 : 1,
               paddingVertical: 14,
-              borderRadius: radius.md,
+              borderRadius: radius.sm,
               alignItems: "center",
             }}
           >
@@ -127,7 +152,7 @@ export function EditSpaceModal({ visible, space, onClose, onSaved }: EditSpaceMo
               <ActivityIndicator color={colors.onBrandPrimary} />
             ) : (
               <Text style={{ color: colors.onBrandPrimary, fontWeight: "700", fontSize: 15 }}>
-                Save Changes
+                {mode === "create" ? "Create" : "Save Changes"}
               </Text>
             )}
           </Pressable>

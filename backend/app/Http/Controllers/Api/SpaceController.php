@@ -5,19 +5,30 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Space;
+use App\Models\User;
 
 class SpaceController extends Controller
 {
     /**
-     * Display a listing of the resource.
+     * Display a listing of the resource -- owned spaces plus anything
+     * shared with this user (see Space::scopeAccessibleBy). Each space
+     * carries `is_owner` so the frontend can tell the two apart (only an
+     * owner can rename/delete a space or manage its members).
      */
     public function index(Request $request)
     {
-        $spaces = $request->user()
-            ->spaces()
+        // A statement body, not an arrow-fn expression -- Collection::each()
+        // stops iterating the moment a callback returns exactly `false`,
+        // and `fn ($s) => $s->is_owner = ...` returns the assignment's own
+        // value, silently truncating the list right after the first
+        // not-owned space.
+        $spaces = Space::accessibleBy($request->user())
             ->with(['carProfile', 'homeProfile'])
             ->latest()
-            ->get();
+            ->get()
+            ->each(function (Space $space) use ($request) {
+                $space->is_owner = $space->user_id === $request->user()->id;
+            });
 
         return response()->json([
             'spaces' => $spaces,
@@ -32,8 +43,14 @@ class SpaceController extends Controller
             'description' => ['nullable', 'string'],
             'icon' => ['nullable', 'string', 'max:50'],
             'color' => ['nullable', 'string', 'max:20'],
+            // Set once, here, and never accepted by update() below --
+            // deliberately not editable, so renaming a space (or changing
+            // its icon) can never change what kind of space it is. See
+            // spaceProfile.ts's detectSpaceType.
+            'type' => ['nullable', 'string', 'max:50'],
         ]);
         $space = $request->user()->spaces()->create($validated);
+        $space->is_owner = true;
         return response()->json([
             'message' => 'Space created successfully.',
             'space' => $space,
@@ -44,10 +61,10 @@ class SpaceController extends Controller
      * Display the specified resource.
      */
     public function show(Request $request, string $id) {
-        $space = $request->user()
-            ->spaces()
+        $space = Space::accessibleBy($request->user())
             ->with(['carProfile', 'homeProfile'])
             ->findOrFail($id);
+        $space->is_owner = $space->user_id === $request->user()->id;
         return response()->json([
             'space' => $space,
         ]);
@@ -141,6 +158,71 @@ class SpaceController extends Controller
         return response()->json([
             'message' => 'Home profile saved successfully.',
             'profile' => $profile,
+        ]);
+    }
+
+    /**
+     * List who can use this space -- the owner plus every member. Either
+     * one can call this (accessibleBy, not owner-only) since anyone
+     * inside a shared space should be able to see who else is in it.
+     */
+    public function members(Request $request, string $id)
+    {
+        $space = Space::accessibleBy($request->user())->findOrFail($id);
+
+        return response()->json([
+            'owner' => $space->user()->select('id', 'name', 'email')->first(),
+            'members' => $space->members()->select('users.id', 'users.name', 'users.email')->get(),
+        ]);
+    }
+
+    /**
+     * Add an existing user (by email) to this space -- owner-only, same
+     * as update()/destroy() above. There's no invite/notification system
+     * yet, so this only works for someone who already has an account;
+     * anything else is a plain 404 rather than a silent no-op.
+     */
+    public function addMember(Request $request, string $id)
+    {
+        $space = $request->user()->spaces()->findOrFail($id);
+
+        $validated = $request->validate([
+            'email' => ['required', 'email'],
+        ]);
+
+        $user = User::where('email', $validated['email'])->first();
+
+        if (!$user) {
+            return response()->json([
+                'message' => 'Nu există niciun cont cu acest email.',
+            ], 404);
+        }
+
+        if ($user->id === $space->user_id) {
+            return response()->json([
+                'message' => 'Este deja proprietarul acestui space.',
+            ], 422);
+        }
+
+        $space->members()->syncWithoutDetaching([$user->id]);
+
+        return response()->json([
+            'message' => 'Membru adăugat cu succes.',
+            'member' => $user->only(['id', 'name', 'email']),
+        ], 201);
+    }
+
+    /**
+     * Remove a member -- owner-only. Detaching someone who was never a
+     * member (or removing twice) is a harmless no-op, not an error.
+     */
+    public function removeMember(Request $request, string $id, string $userId)
+    {
+        $space = $request->user()->spaces()->findOrFail($id);
+        $space->members()->detach($userId);
+
+        return response()->json([
+            'message' => 'Membru eliminat cu succes.',
         ]);
     }
 }

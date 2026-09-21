@@ -1,5 +1,6 @@
 import type { HomeData } from "@/components/spaces/home/home.data.types";
 import type { HomeNextItem } from "@/components/spaces/home/home.ui.types";
+import type { SupplyRestockEvent } from "@/lib/spaces/home/home.types";
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const DOC_ALERT_DAYS = 45;
@@ -25,6 +26,17 @@ export function getThisMonthHomeExpenses(homeData: HomeData): number {
 
   homeData.maintenanceEntries.forEach((entry) => {
     if (isCurrentMonth(entry.date)) {
+      total += entry.price;
+    }
+  });
+
+  // A resolved purchase task -- keyed off completedAt (when it was
+  // actually paid), not dueDate. dueDate can't double as "payment date"
+  // anymore now that a recurring task repoints it to its NEXT
+  // occurrence on resolve (see nextTaskOccurrence/resolveTask) -- that's
+  // a future date, the opposite of what a spend total wants.
+  homeData.taskEntries.forEach((entry) => {
+    if (entry.isPurchase && entry.price && entry.completedAt && isCurrentMonth(entry.completedAt)) {
       total += entry.price;
     }
   });
@@ -102,7 +114,245 @@ export function getUpcomingHomeItems(
 
   items.sort((a, b) => a.urgency - b.urgency);
 
-  const limited = limit !== undefined ? items.slice(0, limit) : items;
+  return limit !== undefined ? items.slice(0, limit) : items;
+}
 
-  return limited.map(({ urgency, ...item }) => item);
+// -------------------------------------------------------------------
+// Tasks -- overdue/due-today counts for the dashboard's stat card, and
+// the DUE SOON / RECENT / ALL grouping for HomeTasksPage. Kept local to
+// Home for now (see PLAN.md Faza 3: extract a shared urgency helper
+// with Car once a second real consumer justifies it).
+// -------------------------------------------------------------------
+
+/** Where a recurring task's dueDate lands after being resolved --
+ * advances from its existing dueDate (keeps a fixed schedule, e.g.
+ * every Monday, instead of drifting whenever it happens to get done
+ * late), or from today if it never had one. */
+export function nextTaskOccurrence(
+  fromDate: string | undefined,
+  frequency: "daily" | "weekly" | "monthly" | undefined,
+): string {
+  const base = fromDate ? new Date(fromDate) : new Date();
+  const next = new Date(base);
+
+  if (frequency === "daily") next.setDate(next.getDate() + 1);
+  else if (frequency === "monthly") next.setMonth(next.getMonth() + 1);
+  else next.setDate(next.getDate() + 7); // weekly, and the fallback if unset
+
+  return next.toISOString();
+}
+
+// -------------------------------------------------------------------
+// Recurring-task warnings -- the Restanțe card's 4-state breakdown and
+// the detail list it opens. Scoped to recurring tasks only (a
+// non-recurring task just archives once resolved, so there's nothing
+// to warn about ahead of time the way there is for a task that keeps
+// coming back).
+// -------------------------------------------------------------------
+
+export type RecurringWarningTier = "yellow" | "orangeDays" | "orangeToday" | "red";
+
+export type RecurringWarningRow = HomeTaskRow & { tier: RecurringWarningTier; daysRemaining: number };
+
+export function getRecurringTaskWarnings(homeData: HomeData): {
+  counts: Record<RecurringWarningTier, number>;
+  rows: RecurringWarningRow[];
+} {
+  const now = new Date();
+  const rows: RecurringWarningRow[] = [];
+
+  homeData.taskEntries.forEach((task) => {
+    if (!task.isRecurring || task.completed || !task.dueDate) return;
+
+    const remaining = daysUntil(task.dueDate, now);
+    let tier: RecurringWarningTier | null = null;
+
+    if (remaining < 0) tier = "red";
+    else if (remaining === 0) tier = "orangeToday";
+    else if (remaining <= 2) tier = "orangeDays";
+    else if (remaining <= 4) tier = "yellow";
+
+    if (tier) rows.push({ ...task, tier, daysRemaining: remaining });
+  });
+
+  rows.sort((a, b) => a.daysRemaining - b.daysRemaining);
+
+  const counts: Record<RecurringWarningTier, number> = { yellow: 0, orangeDays: 0, orangeToday: 0, red: 0 };
+  rows.forEach((row) => {
+    counts[row.tier] += 1;
+  });
+
+  return { counts, rows };
+}
+
+export type HomeTaskRow = {
+  id: string;
+  title: string;
+  dueDate?: string;
+  completed: boolean;
+  completedAt?: string;
+  notes?: string;
+  isPurchase?: boolean;
+  price?: number;
+  isRecurring?: boolean;
+  /** Only set for an incomplete task with a due date in the past or today. */
+  tier?: "critical" | "medium";
+  overdue?: boolean;
+};
+
+function isToday(dateString: string, now: Date): boolean {
+  const d = new Date(dateString);
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
+
+export function getHomeTaskStats(homeData: HomeData): { overdue: number; dueToday: number } {
+  const now = new Date();
+  let overdue = 0;
+  let dueToday = 0;
+
+  homeData.taskEntries.forEach((task) => {
+    if (task.completed || !task.dueDate) return;
+    const remaining = daysUntil(task.dueDate, now);
+    if (remaining < 0) overdue += 1;
+    else if (remaining === 0) dueToday += 1;
+  });
+
+  return { overdue, dueToday };
+}
+
+/** Splits tasks into the 3 sections HomeTasksPage renders: overdue/due
+ * today first (DUE SOON), everything else not yet done (ALL, soonest
+ * first, no-date tasks last), and whatever was completed today (RECENT). */
+export function getHomeTasksView(homeData: HomeData): {
+  dueSoon: HomeTaskRow[];
+  upcoming: HomeTaskRow[];
+  recentDone: HomeTaskRow[];
+} {
+  const now = new Date();
+  const dueSoon: HomeTaskRow[] = [];
+  const upcoming: HomeTaskRow[] = [];
+  const recentDone: HomeTaskRow[] = [];
+
+  homeData.taskEntries.forEach((task) => {
+    if (task.completed) {
+      if (task.completedAt && isToday(task.completedAt, now)) {
+        recentDone.push({ ...task });
+      }
+      return;
+    }
+
+    if (!task.dueDate) {
+      upcoming.push({ ...task });
+      return;
+    }
+
+    const remaining = daysUntil(task.dueDate, now);
+
+    if (remaining < 0) {
+      dueSoon.push({ ...task, tier: "critical", overdue: true });
+    } else if (remaining === 0) {
+      dueSoon.push({ ...task, tier: "medium" });
+    } else {
+      upcoming.push({ ...task });
+    }
+  });
+
+  dueSoon.sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
+  upcoming.sort((a, b) => {
+    if (!a.dueDate) return 1;
+    if (!b.dueDate) return -1;
+    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+  });
+
+  return { dueSoon, upcoming, recentDone };
+}
+
+/** Every resolved task, newest first -- HomeTaskArchivePage's list.
+ * Resolved tasks are never deleted, only marked completed, so this is
+ * the one place to see all of them, not just today's (see recentDone
+ * above, which is just this list's newest slice). */
+export function getHomeTaskArchive(homeData: HomeData): {
+  rows: HomeTaskRow[];
+  spentThisMonth: number;
+} {
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  const rows = homeData.taskEntries
+    .filter((task) => task.completed)
+    .map((task) => ({ ...task }))
+    .sort((a, b) => new Date(b.completedAt ?? 0).getTime() - new Date(a.completedAt ?? 0).getTime());
+
+  let spentThisMonth = 0;
+  rows.forEach((row) => {
+    if (!row.isPurchase || !row.price || !row.completedAt) return;
+    const d = new Date(row.completedAt);
+    if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+      spentThisMonth += row.price;
+    }
+  });
+
+  return { rows, spentThisMonth };
+}
+
+// -------------------------------------------------------------------
+// Supply restock pattern -- how fast a tracked supply actually gets
+// consumed. A raw day-gap between restocks isn't reliable on its own,
+// since buying 1 unit vs. 5 units of the same product naturally lasts
+// different lengths of time -- so this learns a consumption RATE
+// (units/day) from every logged {date, quantity} pair instead, and
+// projects it forward from however much was bought last time. Unlimited
+// restocks can be logged; every interval refines the average. Only
+// starts estimating after the 2nd logged restock (1 real interval), per
+// the user's own rule -- a single restockHistory entry has nothing to
+// measure a rate against yet.
+// -------------------------------------------------------------------
+
+export type SupplyRestockEstimate = {
+  /** Units consumed per day, averaged across every logged interval. */
+  averageDailyConsumption: number;
+  daysSinceLastRestock: number;
+  /** How many days the most recent restock's quantity is projected to
+   * last, at the learned consumption rate. */
+  predictedDaysUntilEmpty: number;
+  /** True once daysSinceLastRestock has caught up to (or passed) the
+   * predicted days-until-empty -- "probably running low by now". */
+  isLow: boolean;
+};
+
+export function getSupplyRestockEstimate(entry: {
+  restockHistory?: SupplyRestockEvent[];
+  lastRestockedDate?: string;
+}): SupplyRestockEstimate | null {
+  const history = (entry.restockHistory ?? []).filter((e) => e && e.date && e.quantity > 0);
+  if (history.length < 2) return null;
+
+  const sorted = [...history].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  // Each interval's consumption is the quantity bought at the START of
+  // that interval (that's the stock that had to last until the next
+  // restock), divided by how many days it took to run out.
+  const rates: number[] = [];
+  for (let i = 1; i < sorted.length; i++) {
+    const days = (new Date(sorted[i].date).getTime() - new Date(sorted[i - 1].date).getTime()) / MS_PER_DAY;
+    if (days > 0) rates.push(sorted[i - 1].quantity / days);
+  }
+  if (rates.length === 0) return null;
+
+  const averageDailyConsumption = rates.reduce((a, b) => a + b, 0) / rates.length;
+  const last = sorted[sorted.length - 1];
+  const daysSinceLastRestock = (Date.now() - new Date(last.date).getTime()) / MS_PER_DAY;
+  const predictedDaysUntilEmpty = last.quantity / averageDailyConsumption;
+
+  return {
+    averageDailyConsumption,
+    daysSinceLastRestock,
+    predictedDaysUntilEmpty,
+    isLow: daysSinceLastRestock >= predictedDaysUntilEmpty,
+  };
 }

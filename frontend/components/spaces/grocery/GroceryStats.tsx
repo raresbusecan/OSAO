@@ -1,3 +1,7 @@
+/** @deprecated Retired by the Grocery space rewrite -- the new
+ * "YOUR SHOPPING LIST" card in GroceryDashboard.tsx (bought/total +
+ * progress bar) replaces this. Kept only because this environment
+ * couldn't delete the file; safe to remove. Not imported anywhere. */
 import React from "react";
 import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
