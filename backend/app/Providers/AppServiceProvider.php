@@ -29,6 +29,19 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(5)->by($request->ip());
         });
 
+        // forgot-password/reset-password share 'auth's threat model
+        // (unauthenticated, keyed by IP) but not its abuse profile --
+        // login is what credential-stuffing actually targets, while a
+        // genuinely confused user recovering their own account (a
+        // couple of mistyped-password attempts, then requesting a
+        // reset, then fumbling the new password once) can plausibly
+        // reach 5 requests on its own with zero malicious intent. A
+        // bit more headroom here, still well short of anything useful
+        // for scripted abuse.
+        RateLimiter::for('password-reset', function ($request) {
+            return Limit::perMinute(10)->by($request->ip());
+        });
+
         // Everything behind auth:sanctum -- a much looser cap than 'auth'
         // above, since a normal session fires several requests on every
         // screen open (Dashboard/Budget/Calendar all load together). This

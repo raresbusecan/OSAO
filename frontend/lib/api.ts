@@ -101,6 +101,14 @@ async function request<T = any>(
 
   if (!res.ok) {
     const msg =
+      // Laravel's raw throttle message ("Too Many Attempts.") reads as
+      // a system error, not guidance -- most jarring on a flow someone
+      // is already frustrated in (e.g. recovering a forgotten
+      // password after a couple of failed logins). English to match
+      // every other string in the auth screens that surface it (the
+      // app's mixed-language copy elsewhere is a known, separate
+      // issue -- not one to add to here).
+      (res.status === 429 && "Too many attempts. Please wait a minute and try again.") ||
       body?.message ||
       body?.error ||
       body?.errors ||
@@ -165,6 +173,33 @@ export const api = {
     await setToken(r.token);
 
     return r;
+  },
+
+  // Always resolves with the same generic message the backend returns
+  // (whether or not the email matches a real account) -- never throws
+  // just because the email doesn't exist, so the UI can't be used to
+  // probe which emails have accounts.
+  forgotPassword: async (email: string) => {
+    return request<{ message: string }>("/forgot-password", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  resetPassword: async (
+    email: string,
+    token: string,
+    password: string,
+  ) => {
+    return request<{ message: string }>("/reset-password", {
+      method: "POST",
+      body: JSON.stringify({
+        email,
+        token,
+        password,
+        password_confirmation: password,
+      }),
+    });
   },
 
   // AuthController::user() wraps its response as { user: {...} } (same

@@ -96,6 +96,19 @@ export default function Login() {
                 {err ? (
                   <Text testID="login-error" style={{ color: colors.error, fontSize: 13 }}>{err}</Text>
                 ) : null}
+
+                <Link href="/(auth)/forgot-password" asChild>
+                  <Pressable
+                    testID="login-goto-forgot-password"
+                    accessibilityRole="button"
+                    accessibilityLabel="Forgot password"
+                    style={{ alignSelf: "flex-end" }}
+                  >
+                    <Text style={{ color: colors.onSurfaceTertiary, fontSize: 13, fontWeight: "600" }}>
+                      Forgot password?
+                    </Text>
+                  </Pressable>
+                </Link>
               </View>
 
               <Pressable

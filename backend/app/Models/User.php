@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use App\Notifications\ResetPasswordNotification;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -43,6 +44,16 @@ class User extends Authenticatable
     public function items(): HasMany
     {
         return $this->hasMany(Item::class);
+    }
+
+    /** Overrides the base Authenticatable's default (which sends
+     * Illuminate\Auth\Notifications\ResetPassword -- built around
+     * route('password.reset', ...), which doesn't exist here) with one
+     * that links to the Expo app's own reset screen instead. Called
+     * internally by Password::sendResetLink(). */
+    public function sendPasswordResetNotification($token): void
+    {
+        $this->notify(new ResetPasswordNotification($token, $this->email));
     }
 
     /** Only this user's own personal recipes -- library recipes have a

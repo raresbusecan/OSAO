@@ -56,6 +56,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Frontend URL
+    |--------------------------------------------------------------------------
+    |
+    | Where the Expo app itself is reachable -- used to build links that
+    | need to open a specific screen in the app (e.g. the password-reset
+    | email's link, which points at /reset-password there, not anywhere
+    | on this API). Until real hosting exists, this is a Cloudflare
+    | tunnel URL that changes on every restart, same as the frontend's
+    | own EXPO_PUBLIC_BACKEND_URL pointing back at this API.
+    |
+    */
+
+    'frontend_url' => env('FRONTEND_URL', 'http://localhost:443'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |
