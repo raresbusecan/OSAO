@@ -6,6 +6,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import * as Sentry from "@sentry/react-native";
 
 import { ThemeProvider } from "@/lib/theme";
 import { ConfirmHost } from "@/lib/confirmHost";
@@ -13,6 +14,19 @@ import { AuthProvider, useAuth } from "@/providers/auth";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
+
+// Error monitoring only -- matches the same choice made in Sentry's own
+// onboarding for the backend project (tracing/profiling/metrics all
+// deliberately skipped there too). No sendDefaultPii, same reasoning as
+// the backend: no privacy policy/consent flow exists yet, so no
+// request/user PII goes to Sentry until one does.
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN,
+  environment: __DEV__ ? "development" : "production",
+  enabled: !!process.env.EXPO_PUBLIC_SENTRY_DSN,
+  sendDefaultPii: false,
+  tracesSampleRate: 0,
+});
 
 if (Platform.OS === "web") {
   const RNTextInput = TextInput as any;
@@ -61,7 +75,7 @@ function AuthGuard() {
   return <Stack screenOptions={{ headerShown: false }} />;
 }
 
-export default function RootLayout() {
+function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
@@ -78,3 +92,5 @@ export default function RootLayout() {
     </GestureHandlerRootView>
   );
 }
+
+export default Sentry.wrap(RootLayout);

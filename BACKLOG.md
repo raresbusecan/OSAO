@@ -24,6 +24,39 @@ this API-only app, so an unauthenticated request throws
 verification, 2026-09]`. Confirmed pre-existing, unrelated to that
 task's actual diff.
 
+### `league/commonmark` has a high-severity DoS advisory (PKSA-zyf5-hrxv-hrd7)
+
+**Where:** `backend/composer.lock` — transitive dependency (not in
+`composer.json` directly; pulled in by something else, not by
+Sentry). Affected: `>=1.5.0,<2.10.0`. No CVE assigned yet, advisory
+only (GHSA-8rr7-cvq3-gmfh) — a denial-of-service via distinctly-named
+attributes in the Attributes extension.
+
+**What:** Check what actually requires it (`composer why
+league/commonmark`) and whether bumping to `^2.10` is a clean, low-risk
+`composer update league/commonmark` or pulls in breaking changes from
+whatever depends on it.
+
+**Found:** `[from: Task #3 observability — composer require
+sentry/sentry-laravel surfaced it via composer audit, 2026-09]`. Not
+introduced by Sentry; pre-existing.
+
+### `expo`/`expo-constants` slightly behind Expo SDK 54's expected patch versions
+
+**Where:** `frontend/package.json` — Metro prints "should be updated for
+best compatibility": `expo@54.0.36` (expected `~54.0.37`),
+`expo-constants@18.0.13` (expected `~18.0.14`). Patch-level only, not a
+major gap like the Sentry SDK mismatch this session already fixed.
+
+**What:** `npx expo install --fix` (or install the two exact expected
+versions) once there's a moment to verify nothing regresses — low risk
+given it's a patch bump, but still worth its own quick verification
+pass rather than folding into an unrelated task.
+
+**Found:** `[from: Task #3 observability — noticed in Metro's startup
+output after installing @sentry/react-native, 2026-09]`. Pre-existing,
+unrelated to Sentry.
+
 ## Open
 
 ### 1. Draggable period counter in Car → Expenses
