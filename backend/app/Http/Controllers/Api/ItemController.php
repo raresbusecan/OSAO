@@ -308,7 +308,31 @@ class ItemController extends Controller
 
         $data = $validator->validated();
 
-        if (in_array($item->type, ['grocery_list', 'grocery_item'], true)) {
+        // Retyping an item ACROSS the grocery/non-grocery boundary is
+        // never legitimate, and closing it here is what actually matters
+        // security-wise: grocery_list's owner-only creation rule (see
+        // store() above) only ever runs at creation time. Without this,
+        // canAccessItem() above already lets any space member load an
+        // item they have plain space-level access to (e.g. their own
+        // home_task), and the two checks below used to key off the item's
+        // PRE-update type -- so retyping a non-grocery item straight to
+        // grocery_list skipped canManageList entirely (it only fires for
+        // an item that was ALREADY a list) and skipped the space_id
+        // stripping too, letting the request's own space_id (any space
+        // the attacker merely has access to) pass through unchecked.
+        // Rejecting the boundary crossing outright removes the need to
+        // re-derive store()'s authorization rules here a second time.
+        $newType = $data['type'] ?? $item->type;
+        $wasGrocery = in_array($item->type, ['grocery_list', 'grocery_item'], true);
+        $willBeGrocery = in_array($newType, ['grocery_list', 'grocery_item'], true);
+
+        if ($wasGrocery !== $willBeGrocery) {
+            return response()->json([
+                'message' => 'Tipul unui item nu poate fi schimbat între grocery și alt tip.'
+            ], 422);
+        }
+
+        if ($willBeGrocery) {
             // A list's space is permanent, and a product's space always
             // tracks its list's (see store() above) -- never move either
             // via a generic update. groceryItemToItemBody on the
