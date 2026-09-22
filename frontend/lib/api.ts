@@ -209,6 +209,17 @@ export const api = {
     });
   },
 
+  updatePassword: async (currentPassword: string, password: string) => {
+    return request<{ message: string }>("/profile/password", {
+      method: "PUT",
+      body: JSON.stringify({
+        current_password: currentPassword,
+        password,
+        password_confirmation: password,
+      }),
+    });
+  },
+
   // AuthController::user() wraps its response as { user: {...} } (same
   // shape login/register's own 'user' field has) -- unwrap it here so
   // every caller gets the actual user object back, not the envelope.

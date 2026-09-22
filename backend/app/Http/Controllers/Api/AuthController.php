@@ -140,6 +140,41 @@ class AuthController extends Controller
         ]);
     }
 
+    /** Task #9 subtask 3 -- changing a password while already logged in,
+     * distinct from forgotPassword/resetPassword above (which exist for
+     * the opposite case: no session, no proof of identity except the
+     * email link). Here the current password IS the proof, so no email
+     * round-trip. Ends every OTHER session/token on success (someone
+     * changing their password on purpose is a reasonable moment to also
+     * kick out any device they no longer recognize) but deliberately
+     * keeps THIS request's own token alive -- unlike resetPassword's
+     * "burn everything," a deliberate in-app change shouldn't log the
+     * user themselves out mid-flow. */
+    public function updatePassword(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ]);
+
+        $user = $request->user();
+
+        if (!Hash::check($validated['current_password'], $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['Parola actuală este incorectă.'],
+            ]);
+        }
+
+        $user->forceFill(['password' => $validated['password']])->save();
+
+        $currentTokenId = $request->user()->currentAccessToken()->id;
+        $user->tokens()->where('id', '!=', $currentTokenId)->delete();
+
+        return response()->json([
+            'message' => 'Parola a fost schimbată.',
+        ]);
+    }
+
     public function logout(Request $request): JsonResponse
     {
         $request->user()->currentAccessToken()?->delete();

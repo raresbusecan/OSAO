@@ -27,6 +27,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
     Route::put('/profile/name', [AuthController::class, 'updateName']);
+    Route::put('/profile/password', [AuthController::class, 'updatePassword']);
 
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/calendar', [CalendarController::class, 'index']);

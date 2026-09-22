@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/providers/auth";
 import { api } from "@/lib/api";
+import { notifyAction } from "@/lib/confirm";
 
 type SettingsRow = {
   key: string;
@@ -29,10 +30,11 @@ export default function Settings() {
   const router = useRouter();
   const { user, updateUser } = useAuth();
   const [editingName, setEditingName] = useState(false);
+  const [editingPassword, setEditingPassword] = useState(false);
 
   const rows: SettingsRow[] = [
     { key: "name", icon: "person-outline", label: "Nume", value: user?.name, onPress: () => setEditingName(true) },
-    { key: "password", icon: "lock-closed-outline", label: "Parolă" },
+    { key: "password", icon: "lock-closed-outline", label: "Parolă", onPress: () => setEditingPassword(true) },
     { key: "email", icon: "mail-outline", label: "Email", value: user?.email },
     { key: "language", icon: "language-outline", label: "Limbă" },
     { key: "colors", icon: "color-palette-outline", label: "Culori" },
@@ -136,6 +138,8 @@ export default function Settings() {
           setEditingName(false);
         }}
       />
+
+      <EditPasswordModal visible={editingPassword} onClose={() => setEditingPassword(false)} />
     </View>
   );
 }
@@ -253,6 +257,185 @@ function EditNameModal({
 
             <Pressable
               testID="settings-name-save"
+              onPress={handleSave}
+              disabled={!canSave}
+              style={{
+                flex: 1,
+                minHeight: 48,
+                borderRadius: radius.sm,
+                backgroundColor: colors.onSurface,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: canSave ? 1 : 0.5,
+              }}
+            >
+              {saving ? (
+                <ActivityIndicator color={colors.surface} />
+              ) : (
+                <Text style={{ fontSize: 14, fontWeight: "800", color: colors.surface }}>Salvează</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+function EditPasswordModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { colors, spacing, radius } = useTheme();
+  const [current, setCurrent] = useState("");
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Password fields never pre-fill and never carry a draft across
+  // opens (unlike EditNameModal's name, which has a real current
+  // value worth showing) -- every open starts from a clean slate.
+  const wasVisible = React.useRef(visible);
+  if (visible && !wasVisible.current) {
+    setCurrent("");
+    setNext("");
+    setConfirm("");
+    setError(null);
+  }
+  wasVisible.current = visible;
+
+  const canSave = current.length > 0 && next.length >= 8 && next === confirm && !saving;
+
+  const handleSave = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await api.updatePassword(current, next);
+      onClose();
+      notifyAction("Parolă schimbată", "Parola ta a fost actualizată cu succes.");
+    } catch (err: any) {
+      setError(err?.message || "Nu am putut schimba parola.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <Pressable onPress={onClose} style={{ ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.4)" }} />
+
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 380,
+            borderRadius: radius.lg,
+            backgroundColor: colors.surface,
+            padding: spacing.xl,
+          }}
+        >
+          <Text style={{ fontSize: 17, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.lg }}>
+            Schimbă parola
+          </Text>
+
+          <View style={{ gap: spacing.sm }}>
+            <TextInput
+              testID="settings-password-current"
+              value={current}
+              onChangeText={(text) => {
+                setCurrent(text);
+                if (error) setError(null);
+              }}
+              placeholder="Parola actuală"
+              placeholderTextColor={colors.onSurfaceTertiary}
+              secureTextEntry
+              autoFocus
+              style={{
+                minHeight: 48,
+                paddingHorizontal: spacing.md,
+                borderRadius: radius.sm,
+                backgroundColor: "transparent",
+                borderWidth: 1,
+                borderColor: colors.border,
+                color: colors.onSurface,
+                fontSize: 14,
+              }}
+            />
+
+            <TextInput
+              testID="settings-password-next"
+              value={next}
+              onChangeText={(text) => {
+                setNext(text);
+                if (error) setError(null);
+              }}
+              placeholder="Parola nouă (minim 8 caractere)"
+              placeholderTextColor={colors.onSurfaceTertiary}
+              secureTextEntry
+              style={{
+                minHeight: 48,
+                paddingHorizontal: spacing.md,
+                borderRadius: radius.sm,
+                backgroundColor: "transparent",
+                borderWidth: 1,
+                borderColor: colors.border,
+                color: colors.onSurface,
+                fontSize: 14,
+              }}
+            />
+
+            <TextInput
+              testID="settings-password-confirm"
+              value={confirm}
+              onChangeText={(text) => {
+                setConfirm(text);
+                if (error) setError(null);
+              }}
+              onSubmitEditing={handleSave}
+              returnKeyType="done"
+              placeholder="Confirmă parola nouă"
+              placeholderTextColor={colors.onSurfaceTertiary}
+              secureTextEntry
+              style={{
+                minHeight: 48,
+                paddingHorizontal: spacing.md,
+                borderRadius: radius.sm,
+                backgroundColor: "transparent",
+                borderWidth: 1,
+                borderColor: colors.border,
+                color: colors.onSurface,
+                fontSize: 14,
+              }}
+            />
+          </View>
+
+          {next.length > 0 && confirm.length > 0 && next !== confirm ? (
+            <Text style={{ fontSize: 12, color: colors.error, marginTop: spacing.sm }}>Parolele nu coincid.</Text>
+          ) : null}
+          {error ? <Text style={{ fontSize: 12, color: colors.error, marginTop: spacing.sm }}>{error}</Text> : null}
+
+          <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg }}>
+            <Pressable
+              testID="settings-password-cancel"
+              onPress={onClose}
+              disabled={saving}
+              style={{
+                flex: 1,
+                minHeight: 48,
+                borderRadius: radius.sm,
+                borderWidth: 1,
+                borderColor: colors.border,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurface }}>Anulează</Text>
+            </Pressable>
+
+            <Pressable
+              testID="settings-password-save"
               onPress={handleSave}
               disabled={!canSave}
               style={{
