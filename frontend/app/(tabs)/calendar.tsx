@@ -10,7 +10,16 @@ import { notifyAction, confirmAction } from "@/lib/confirm";
 import { detectSpaceType, SPACE_IDENTITY_COLORS, CUSTOM_EVENT_COLOR } from "@/lib/spaces/spaceProfile";
 import { densityColor } from "@/lib/statusColors";
 
-function ymd(d: Date) { return d.toISOString().slice(0, 10); }
+// Local calendar date, NOT toISOString().slice(0,10) -- that reads UTC
+// components, so for any user whose local time has already crossed
+// (or hasn't yet reached) midnight relative to UTC, it silently
+// returns tomorrow's or yesterday's date instead of today's. The grid
+// itself (`key` below, built from local y/m/d state) was always local
+// -- this just makes ymd() match it, for both "is this cell today"
+// and the initial/recurring-bill `selected` value.
+function ymd(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 function firstOfMonth(y: number, m: number) { return new Date(Date.UTC(y, m, 1)); }
 function daysInMonth(y: number, m: number) { return new Date(Date.UTC(y, m + 1, 0)).getUTCDate(); }
 

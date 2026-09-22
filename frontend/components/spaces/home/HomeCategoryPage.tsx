@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { HomeCategorySection, type HomeCategoryRow } from "./HomeCategorySection";
-import type { HomeCategoryField } from "./homeCategoryConfig";
+import { parseLeadingNumber, type HomeCategoryField } from "./homeCategoryConfig";
 import { HomeDatePickerSheet } from "./HomeDatePickerSheet";
 import { confirmAction } from "@/lib/confirm";
 
@@ -61,9 +61,26 @@ export function HomeCategoryPage({
   const isFieldVisible = (field: HomeCategoryField) =>
     !field.showWhen || values[field.showWhen] === "true";
 
+  // A nonNegativeNumber field only actually blocks submit once it has
+  // something typed into it -- an empty required field is already
+  // caught by the plain non-empty check below, and re-flagging it as
+  // "invalid number" too would just show two contradictory reasons for
+  // the same disabled button.
+  const isFieldInvalid = (field: HomeCategoryField) => {
+    if (!field.nonNegativeNumber) return false;
+    const raw = values[field.key] || "";
+    if (!raw.trim()) return false;
+    const n = parseLeadingNumber(raw);
+    return n === null || n < 0;
+  };
+
   const canSubmit = fields
-    .filter((field) => field.required !== false && isFieldVisible(field))
-    .every((field) => (values[field.key] || "").trim().length > 0);
+    .filter((field) => isFieldVisible(field))
+    .every((field) => {
+      if (field.required !== false && !(values[field.key] || "").trim().length) return false;
+      if (isFieldInvalid(field)) return false;
+      return true;
+    });
 
   const reset = () => {
     setValues({});
@@ -273,6 +290,11 @@ export function HomeCategoryPage({
                 }}
               />
             )}
+            {isFieldInvalid(field) ? (
+              <Text style={{ fontSize: 12, color: colors.error, marginTop: 4 }}>
+                Enter a valid, non-negative number.
+              </Text>
+            ) : null}
           </View>
         ))}
 

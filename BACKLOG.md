@@ -13,6 +13,29 @@ one up like any other "Open" item once nothing more pressing is ahead
 of it. Mark it `[from: <task>]` so there's a trail back to how it was
 found.
 
+### Backend buckets Calendar days by UTC, with no user-timezone concept anywhere
+
+**Where:** `backend/app/Http/Controllers/Api/CalendarController.php`
+(`$key = Carbon::parse($item->due_at)->toDateString()`, both
+occurrences) — `Carbon::toDateString()` reads the app's configured
+timezone, which is `UTC` everywhere (`config/app.php`). Nothing in
+this app — no column on `users`, no request header, no stored
+preference — captures a user's actual timezone at all.
+
+**What:** Task #5 fixed the frontend's own `ymd()` (it compared a
+UTC-derived string against a locally-built grid key, a self-inflicted
+mismatch) — but that only makes the frontend internally consistent
+with itself. The backend still buckets an item due near midnight into
+whatever day it falls on in UTC, not the day it actually falls on for
+the user viewing it. A real fix needs a design decision first: where
+does the user's timezone come from (device-reported at login/each
+request? a stored profile setting?), then thread it into
+`Carbon::parse($item->due_at)->setTimezone($userTz)->toDateString()`
+in both places in `CalendarController`.
+
+**Found:** `[from: Task #5 frontend fixes — investigating the ymd()
+bug led here, 2026-09]`.
+
 ### `GET /api/user` returns 500 instead of a clean 401 when unauthenticated
 
 **Where:** Sanctum/Auth middleware config — the `web` guard's

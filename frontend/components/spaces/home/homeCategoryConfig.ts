@@ -48,7 +48,35 @@ export type HomeCategoryField = {
    * keyboardType -- "numeric" for a plain-text field that should only
    * ever hold digits (e.g. Maintenance's "every N periods" interval). */
   keyboardType?: "default" | "numeric";
+  /** HomeCategoryPage blocks submit (and shows an inline error once the
+   * field has been typed into) unless this field's LEADING number --
+   * see parseLeadingNumber -- exists and is >= 0. Covers both a pure
+   * amount field ("50") and a combined one like Supplies' quantity
+   * ("12 rolls") the same way, since both are just "a number, maybe
+   * with trailing text." Without this, `Number(raw) || 0`/`|| 1` in
+   * buildEntry below silently accepted "-50" as a real negative
+   * expense, or "abc" as a nonsensical one coerced to 0/1 with no
+   * indication anything was wrong. */
+  nonNegativeNumber?: boolean;
 };
+
+// Shared between parseLeadingNumber and the Supplies unit-extraction
+// below, so the two never drift apart -- `\.?\d*` (not `(\.\d+)?`)
+// deliberately also consumes a bare trailing dot ("50."), otherwise a
+// leftover "." was left behind as the "unit" instead of falling back
+// to "pcs"/existing.
+const LEADING_NUMBER = /^[+-]?\d+\.?\d*/;
+
+/** The numeric value a field like "50", "-12.5", "+8", or "12 rolls"
+ * leads with -- comma treated as a decimal separator (matches how
+ * every buildEntry below already parses amounts). Null when the
+ * string doesn't start with a number at all (empty, or non-numeric
+ * text). */
+export function parseLeadingNumber(raw: string): number | null {
+  const match = raw.trim().replace(",", ".").match(LEADING_NUMBER);
+  if (!match) return null;
+  return Number(match[0]);
+}
 
 export type HomeCategoryKey =
   | "documents"
@@ -131,7 +159,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
     icon: "card-outline",
     fields: [
       { key: "title", label: "Title", placeholder: "e.g. Roof Repair" },
-      { key: "amount", label: "Amount (RON)", placeholder: "0" },
+      { key: "amount", label: "Amount (RON)", placeholder: "0", nonNegativeNumber: true },
     ],
     submitLabel: "Add Expense",
     emptyLabel: "No expenses yet.",
@@ -140,7 +168,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       id: existing?.id ?? makeId("exp"),
       date: existing?.date ?? today(),
       title: values.title,
-      amount: Number(values.amount.replace(",", ".")) || 0,
+      amount: parseLeadingNumber(values.amount) ?? 0,
       notes: existing?.notes,
     }),
     valuesFromEntry: (entry: HomeExpenseEntry) => ({
@@ -161,7 +189,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
     icon: "construct-outline",
     fields: [
       { key: "service", label: "Service", placeholder: "e.g. Plumbing Check" },
-      { key: "price", label: "Price (RON)", placeholder: "0" },
+      { key: "price", label: "Price (RON)", placeholder: "0", nonNegativeNumber: true },
       { key: "date", label: "Date", placeholder: "", type: "date", required: false },
       { key: "isRecurring", label: "Recurring", placeholder: "Recurent", type: "toggle", required: false },
       {
@@ -197,7 +225,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
         date: values.date || existing?.date || today(),
         service: values.service,
         description: existing?.description ?? values.service,
-        price: Number(values.price.replace(",", ".")) || 0,
+        price: parseLeadingNumber(values.price) ?? 0,
         provider: existing?.provider,
         nextDueDate: existing?.nextDueDate,
         isRecurring,
@@ -231,7 +259,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
     icon: "repeat-outline",
     fields: [
       { key: "title", label: "Title", placeholder: "e.g. Internet Subscription" },
-      { key: "amount", label: "Amount (RON)", placeholder: "0" },
+      { key: "amount", label: "Amount (RON)", placeholder: "0", nonNegativeNumber: true },
       { key: "nextDueDate", label: "Next due date", placeholder: "", type: "date", required: false },
       {
         key: "frequency",
@@ -254,7 +282,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       id: existing?.id ?? makeId("rec"),
       title: values.title,
       category: existing?.category ?? "Other",
-      amount: Number(values.amount.replace(",", ".")) || 0,
+      amount: parseLeadingNumber(values.amount) ?? 0,
       frequency: (values.frequency as HomeRecurringEntry["frequency"]) || existing?.frequency || "monthly",
       nextDueDate: values.nextDueDate || existing?.nextDueDate || today(),
       notes: existing?.notes,
@@ -279,7 +307,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
     icon: "basket-outline",
     fields: [
       { key: "name", label: "Name", placeholder: "e.g. Toilet Paper" },
-      { key: "quantity", label: "Quantity", placeholder: "e.g. 12 rolls" },
+      { key: "quantity", label: "Quantity", placeholder: "e.g. 12 rolls", nonNegativeNumber: true },
     ],
     submitLabel: "Add Supply",
     emptyLabel: "No supplies tracked yet.",
@@ -288,8 +316,20 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       id: existing?.id ?? makeId("sup"),
       name: values.name,
       category: existing?.category ?? "Other",
-      quantity: Number(values.quantity) || 1,
-      unit: values.quantity.replace(/[0-9]/g, "").trim() || existing?.unit || "pcs",
+      // Was `Number(values.quantity) || 1` -- for a combined value like
+      // "12 rolls" that's NaN (the whole string isn't a number), so it
+      // silently saved quantity 1 no matter what number was actually
+      // typed. parseLeadingNumber reads just the leading numeric part,
+      // and the unit is now whatever's left AFTER that exact match
+      // (not a blanket digit-strip, which also broke on a decimal like
+      // "2.5 L" -- left a stray ". L").
+      quantity: parseLeadingNumber(values.quantity) ?? existing?.quantity ?? 1,
+      // Same comma-as-decimal-separator normalization as
+      // parseLeadingNumber above, so "2,5 kg" (a very normal way to
+      // type a decimal in Romanian) doesn't leave ",5 kg" behind as a
+      // nonsense "unit" -- before this matched LEADING_NUMBER directly
+      // against the raw string, which doesn't understand a comma.
+      unit: values.quantity.trim().replace(",", ".").replace(LEADING_NUMBER, "").trim() || existing?.unit || "pcs",
       lastRestockedDate: existing?.lastRestockedDate,
       notes: existing?.notes,
     }),

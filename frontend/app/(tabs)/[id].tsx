@@ -7,7 +7,6 @@ import {
   View,
   ActivityIndicator,
   DeviceEventEmitter,
-  Alert,
 } from "react-native";
 import {
   useLocalSearchParams,
@@ -19,7 +18,7 @@ import { Ionicons } from "@expo/vector-icons";
 
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
-import { notifyAction } from "@/lib/confirm";
+import { confirmAction, notifyAction } from "@/lib/confirm";
 import CarDashboard from "@/components/spaces/car/CarDashboard";
 
 import { initialCarData } from "@/components/spaces/car/car.mock";
@@ -998,34 +997,28 @@ export default function SpaceDetail() {
    * dedicat Space-ului.
    */
 
-  const deleteSpace = useCallback(() => {
+  const deleteSpace = useCallback(async () => {
     if (!id) return;
 
-    Alert.alert(
+    // Alert.alert is a no-op on react-native-web (see lib/confirm.ts) --
+    // this used it directly instead of confirmAction/notifyAction like
+    // every other confirmation in the app, so wiring this up to a real
+    // button would have silently done nothing on web. Not currently
+    // called from anywhere (see the comment above this function) --
+    // fixed in place so it's correct whenever it does get wired up.
+    const confirmed = await confirmAction(
       "Delete space",
       `Are you sure you want to delete "${space?.name || "this space"}"?`,
-      [
-        {
-          text: "Cancel",
-          style: "cancel",
-        },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await api.deleteSpace(id);
-              router.back();
-            } catch (error: any) {
-              Alert.alert(
-                "Could not delete space",
-                error?.message || "Something went wrong.",
-              );
-            }
-          },
-        },
-      ],
+      { confirmLabel: "Delete", destructive: true },
     );
+    if (!confirmed) return;
+
+    try {
+      await api.deleteSpace(id);
+      router.back();
+    } catch (error: any) {
+      notifyAction("Could not delete space", error?.message || "Something went wrong.");
+    }
   }, [id, router, space]);
 
   /*
