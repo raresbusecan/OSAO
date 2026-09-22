@@ -152,6 +152,24 @@ the type definition and its ~9 read sites.
 
 **Found:** `[from: qa-lead verification of Task #6, 2026-09]`.
 
+### `backend/CLAUDE.md` says login/register have no throttle middleware — that's stale
+
+**Where:** `backend/CLAUDE.md`'s `AuthController.php` bullet ("**Login/register
+have no throttle middleware** (known issue, not yet fixed)."). In reality
+`backend/routes/api.php` already wraps both in `Route::middleware('throttle:auth')`
+(`RateLimiter::for('auth')` in `AppServiceProvider.php`, 5/min by IP) — added
+by the "Backend security hardening: rate limiting, fix retype IDOR, remove
+public adminer.php" commit, well before this session. Confirmed live: 5
+rapid `/register` calls during qa-lead testing on `feat/settings-change-email`
+tripped a real 429.
+
+**What:** Just needs the stale bullet in `backend/CLAUDE.md` deleted/updated
+so it stops sending future sessions looking for a gap that was already
+closed.
+
+**Found:** `[from: qa-lead verification of Task #9 subtask 4 (change email),
+2026-09-22 — hit the throttle mid-test while registering QA accounts]`.
+
 ## Open
 
 ### 0. Real app icon (currently still Expo's default template icon)
