@@ -332,6 +332,13 @@ saveHomeProfile: (
   // SPACE MEMBERS -- sharing a space with other accounts. Either the
   // owner or a member can list who's in it; only the owner can add or
   // remove someone (enforced server-side, see SpaceController).
+  //
+  // Deliberately unused by any screen right now -- confirmed with the
+  // product owner (2026-09) that multi-user sharing stays Grocery-only
+  // for the foreseeable future (see LIST MEMBERS below, which IS wired
+  // up). Kept here rather than deleted because the backend route/logic
+  // is real and tested, not a stub -- Car/Home/Expenses sharing is a
+  // deliberately deferred feature, not dead code to clean up.
   // -------------------------
 
   getSpaceMembers: (spaceId: string | number) =>
