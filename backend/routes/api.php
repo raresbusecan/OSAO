@@ -26,6 +26,7 @@ Route::middleware('throttle:password-reset')->group(function () {
 Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
+    Route::put('/profile/name', [AuthController::class, 'updateName']);
 
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/calendar', [CalendarController::class, 'index']);

@@ -1,10 +1,11 @@
-import React from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import React, { useState } from "react";
+import { View, Text, Pressable, ScrollView, Modal, TextInput, KeyboardAvoidingView, Platform, ActivityIndicator, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/providers/auth";
+import { api } from "@/lib/api";
 
 type SettingsRow = {
   key: string;
@@ -26,10 +27,11 @@ type SettingsRow = {
 export default function Settings() {
   const { colors, spacing, radius, typography } = useTheme();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
+  const [editingName, setEditingName] = useState(false);
 
   const rows: SettingsRow[] = [
-    { key: "name", icon: "person-outline", label: "Nume", value: user?.name },
+    { key: "name", icon: "person-outline", label: "Nume", value: user?.name, onPress: () => setEditingName(true) },
     { key: "password", icon: "lock-closed-outline", label: "Parolă" },
     { key: "email", icon: "mail-outline", label: "Email", value: user?.email },
     { key: "language", icon: "language-outline", label: "Limbă" },
@@ -124,6 +126,154 @@ export default function Settings() {
           ))}
         </ScrollView>
       </SafeAreaView>
+
+      <EditNameModal
+        visible={editingName}
+        initialName={user?.name ?? ""}
+        onClose={() => setEditingName(false)}
+        onSaved={(name) => {
+          updateUser({ name });
+          setEditingName(false);
+        }}
+      />
     </View>
+  );
+}
+
+function EditNameModal({
+  visible,
+  initialName,
+  onClose,
+  onSaved,
+}: {
+  visible: boolean;
+  initialName: string;
+  onClose: () => void;
+  onSaved: (name: string) => void;
+}) {
+  const { colors, spacing, radius } = useTheme();
+  const [name, setName] = useState(initialName);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Re-seed from the current name every time the modal opens -- same
+  // reason GroceryRecipeDetailModal snapshots on open rather than
+  // reading the live prop: it should always start from what's actually
+  // saved, not whatever was left typed from a previous open/cancel.
+  const wasVisible = React.useRef(visible);
+  if (visible && !wasVisible.current) {
+    if (name !== initialName) setName(initialName);
+    if (error) setError(null);
+  }
+  wasVisible.current = visible;
+
+  const trimmed = name.trim();
+  const canSave = trimmed.length > 0 && trimmed.length <= 50 && !saving;
+
+  const handleSave = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await api.updateName(trimmed);
+      onSaved(res.user.name);
+    } catch (err: any) {
+      setError(err?.message || "Nu am putut actualiza numele.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <Pressable onPress={onClose} style={{ ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.4)" }} />
+
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 380,
+            borderRadius: radius.lg,
+            backgroundColor: colors.surface,
+            padding: spacing.xl,
+          }}
+        >
+          <Text style={{ fontSize: 17, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.lg }}>
+            Schimbă numele
+          </Text>
+
+          <TextInput
+            testID="settings-name-input"
+            value={name}
+            onChangeText={(text) => {
+              setName(text);
+              if (error) setError(null);
+            }}
+            onSubmitEditing={handleSave}
+            returnKeyType="done"
+            placeholder="Numele tău"
+            placeholderTextColor={colors.onSurfaceTertiary}
+            autoFocus
+            maxLength={50}
+            style={{
+              minHeight: 48,
+              paddingHorizontal: spacing.md,
+              borderRadius: radius.sm,
+              backgroundColor: "transparent",
+              borderWidth: 1,
+              borderColor: colors.border,
+              color: colors.onSurface,
+              fontSize: 14,
+              marginBottom: spacing.sm,
+            }}
+          />
+
+          {error ? <Text style={{ fontSize: 12, color: colors.error, marginBottom: spacing.sm }}>{error}</Text> : null}
+
+          <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm }}>
+            <Pressable
+              testID="settings-name-cancel"
+              onPress={onClose}
+              disabled={saving}
+              style={{
+                flex: 1,
+                minHeight: 48,
+                borderRadius: radius.sm,
+                borderWidth: 1,
+                borderColor: colors.border,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurface }}>Anulează</Text>
+            </Pressable>
+
+            <Pressable
+              testID="settings-name-save"
+              onPress={handleSave}
+              disabled={!canSave}
+              style={{
+                flex: 1,
+                minHeight: 48,
+                borderRadius: radius.sm,
+                backgroundColor: colors.onSurface,
+                alignItems: "center",
+                justifyContent: "center",
+                opacity: canSave ? 1 : 0.5,
+              }}
+            >
+              {saving ? (
+                <ActivityIndicator color={colors.surface} />
+              ) : (
+                <Text style={{ fontSize: 14, fontWeight: "800", color: colors.surface }}>Salvează</Text>
+              )}
+            </Pressable>
+          </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }

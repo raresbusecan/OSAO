@@ -122,6 +122,24 @@ class AuthController extends Controller
         ]);
     }
 
+    /** Task #9 subtask 2 -- the only field this endpoint ever touches is
+     * `name`; email/password each get their own dedicated endpoint in a
+     * later subtask instead of one combined "update profile" action, so
+     * each stays independently validated/throttled/auditable. */
+    public function updateName(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:50'],
+        ]);
+
+        $request->user()->update(['name' => $validated['name']]);
+
+        return response()->json([
+            'message' => 'Numele a fost actualizat.',
+            'user' => $request->user()->fresh()->load('roles'),
+        ]);
+    }
+
     public function logout(Request $request): JsonResponse
     {
         $request->user()->currentAccessToken()?->delete();

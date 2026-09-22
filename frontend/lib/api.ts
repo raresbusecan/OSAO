@@ -202,6 +202,13 @@ export const api = {
     });
   },
 
+  updateName: async (name: string) => {
+    return request<{ message: string; user: { id: number; name: string; email: string } }>("/profile/name", {
+      method: "PUT",
+      body: JSON.stringify({ name }),
+    });
+  },
+
   // AuthController::user() wraps its response as { user: {...} } (same
   // shape login/register's own 'user' field has) -- unwrap it here so
   // every caller gets the actual user object back, not the envelope.

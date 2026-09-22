@@ -20,6 +20,10 @@ type Ctx = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Merges a patch into the current user without a round-trip to
+   * /user -- for a Settings edit (name, later email) that already got
+   * the updated fields back in its own response. */
+  updateUser: (patch: Partial<NonNullable<User>>) => void;
 };
 
 const AuthCtx = createContext<Ctx>({} as Ctx);
@@ -70,8 +74,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  const updateUser = useCallback((patch: Partial<NonNullable<User>>) => {
+    setUser((current) => (current ? { ...current, ...patch } : current));
+  }, []);
+
   return (
-    <AuthCtx.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthCtx.Provider value={{ user, loading, signIn, signUp, signOut, updateUser }}>
       {children}
     </AuthCtx.Provider>
   );
