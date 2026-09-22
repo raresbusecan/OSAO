@@ -170,10 +170,10 @@ function TabsLayoutInner() {
       {config ? (
         <Animated.View
           pointerEvents={fanOpen ? "auto" : "none"}
-          style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(0,0,0,0.5)", opacity: backdropOpacity }]}
+          style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(0,0,0,0.5)", opacity: backdropOpacity }]}
         >
           <Pressable
-            style={StyleSheet.absoluteFillObject}
+            style={StyleSheet.absoluteFill}
             onPress={() => setFanOpen(false)}
             accessibilityRole="button"
             accessibilityLabel="Close menu"

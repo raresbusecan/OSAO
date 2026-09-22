@@ -45,7 +45,7 @@ export function GrocerySuggestionModal({ visible, suggestions, onAdd, onClose }:
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl }}>
-        <Pressable onPress={onClose} style={{ ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" }} />
+        <Pressable onPress={onClose} style={{ ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.4)" }} />
 
         <View
           style={{

@@ -79,7 +79,7 @@ export function SpaceMembersModal({ visible, onClose, isOwner, owner, members, o
         style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl }}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <Pressable onPress={onClose} style={{ ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" }} />
+        <Pressable onPress={onClose} style={{ ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.4)" }} />
 
         <View
           style={{
@@ -239,7 +239,7 @@ export function SpaceMembersModal({ visible, onClose, isOwner, owner, members, o
         >
           <Pressable
             onPress={() => setPendingRemoval(null)}
-            style={{ ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.4)" }}
+            style={{ ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.4)" }}
           />
 
           <View

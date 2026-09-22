@@ -99,6 +99,33 @@ pass rather than folding into an unrelated task.
 output after installing @sentry/react-native, 2026-09]`. Pre-existing,
 unrelated to Sentry.
 
+### `RecurringWarningRow`'s `tier` field is typed `never` — a naming collision between two unrelated "tier" concepts
+
+**Where:** `frontend/lib/spaces/home/calculations/dashboard.calculations.ts`
+— `HomeTaskRow` (line 188) already declares its own
+`tier?: "critical" | "medium"`. `RecurringWarningRow` (line 155) is
+defined as `HomeTaskRow & { tier: RecurringWarningTier; daysRemaining:
+number }`, where `RecurringWarningTier = "yellow" | "orangeDays" |
+"orangeToday" | "red"` (line 153) — a completely different value set.
+Intersecting the two `tier` types has zero overlap, so TypeScript
+collapses the property to `never`, which cascades into `error TS2339`
+("Property 'X' does not exist on type 'never'") everywhere a
+`RecurringWarningRow` is read: `dashboard.calculations.ts` itself
+(lines 175, 178, 182) and `components/spaces/home/
+HomeRecurringWarningsPage.tsx` (lines 30, 31, 80, 83, 84, 110, 112).
+
+**What:** `npx tsc --noEmit` was run for the first time in recent
+memory (as part of qa-lead's SDK-bump verification, not previously
+gated by any script/CI) and surfaced this — it's a pre-existing type
+bug, not something the Expo 54→57 bump introduced or touched (this
+source file is untouched in that diff). Whether TypeScript 5.9 (the
+version before this bump) already flagged the same error wasn't
+verified. Fix is a rename: `RecurringWarningTier` needs its own field
+name (e.g. `warningTier`) instead of reusing `tier`, updated at both
+the type definition and its ~9 read sites.
+
+**Found:** `[from: qa-lead verification of Task #6, 2026-09]`.
+
 ## Open
 
 ### 0. Real app icon (currently still Expo's default template icon)
