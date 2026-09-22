@@ -36,6 +36,32 @@ in both places in `CalendarController`.
 **Found:** `[from: Task #5 frontend fixes — investigating the ymd()
 bug led here, 2026-09]`.
 
+### `DashboardControllerTest` expects a `payments` bucket that `DashboardController` doesn't return
+
+**Where:** `backend/tests/Feature/DashboardControllerTest.php` (both
+`test_dashboard_returns_correct_categories` and
+`test_dashboard_returns_empty_arrays_when_no_items`) vs.
+`backend/app/Http/Controllers/Api/DashboardController.php::index()`'s
+actual response, which only ever has `today`/`upcoming`/`overdue`/
+`monthlyExpenses` — no `payments` key at all.
+
+**What:** The test also creates its item with `'type' => 'expense'`,
+which isn't a real type in this app's `items.type` vocabulary (real
+expense-shaped types are `expense_item`, `car_expense`,
+`home_expense`, ... — see `Item::SPENDING_TYPES`); it falls into none
+of `ACTIONABLE_TYPES`/`RECURRING_ACTIONABLE_TYPES`, so it's silently
+dropped from every bucket. Either the test predates a Dashboard
+refactor that intentionally dropped a separate "payments" grouping
+(and the test should be deleted/rewritten to match the real 3+1-bucket
+shape), or a "payments" bucket was meant to ship and never did — needs
+a product call, not a blind test edit. Until decided, these 2 tests
+fail (`test_dashboard_unauthorized_without_authentication` passes
+fine, unaffected).
+
+**Found:** `[from: Task #7 — fixing the SQLite-breaking migration
+syntax got the suite running again, which surfaced these as
+pre-existing failures unrelated to that fix, 2026-09-22]`.
+
 ### `GET /api/user` returns 500 instead of a clean 401 when unauthenticated
 
 **Where:** Sanctum/Auth middleware config — the `web` guard's
