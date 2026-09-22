@@ -156,9 +156,19 @@ export default function Home() {
             <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, letterSpacing: 0.4, fontWeight: "600" }}>
               {new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }).toUpperCase()}
             </Text>
-            <Text style={{ fontSize: 26, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 }}>
-              {greeting(user?.name)}
-            </Text>
+            <Pressable
+              onPress={() => router.push("/settings")}
+              testID="home-greeting-settings-link"
+              accessibilityRole="button"
+              accessibilityLabel="Open settings"
+              hitSlop={8}
+              style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}
+            >
+              <Text style={{ fontSize: 26, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 }}>
+                {greeting(user?.name)}
+              </Text>
+              <Ionicons name="chevron-forward" size={18} color={colors.onSurfaceTertiary} />
+            </Pressable>
           </View>
           <Pressable
             onPress={signOut}
