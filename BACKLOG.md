@@ -398,6 +398,181 @@ miss this screen entirely. One-line addition to the file map.
 
 **Found:** `[from: design-lead Phase 2 Expenses space audit, 2026-09-22]`.
 
+### Home tab's "De făcut" widget colors the same row with two unrelated color scales
+
+**Where:** `frontend/app/(tabs)/home.tsx` lines 250-256 (`todoBySpace`
+render) — the Ionicons space icon uses `SPACE_IDENTITY_COLORS[card.kind]`
+(brand identity color) while the adjacent count `Text` uses
+`severityColor(g.severity, colors)` (urgency color), with no visual
+distinction between the two systems and no legend.
+
+**What:** A non-technical user has no way to tell that the icon's color
+means "which space" while the number's color means "how urgent" — they
+read as one color language. Either neutralize the icon color or add a
+one-time explainer.
+
+**Found:** `[from: design-lead Phase 3 Home tab audit, 2026-09-22]`.
+
+### Home tab's "RECURENTE APROPIATE" bills don't deep-link to their own date on Calendar
+
+**Where:** `frontend/app/(tabs)/home.tsx` line 299, inside the
+`nextBills.map(...)` Pressable — `onPress={() => router.push("/calendar")}`
+with no `?date=` param, unlike `TodoCarouselSheet.openTarget`'s
+same-purpose deep-link a few lines away in the same file's ecosystem.
+
+**What:** Tapping a specific upcoming bill lands on Calendar's default
+(today) view instead of jumping to that bill's actual due date, forcing
+manual re-navigation. Cheap fix: pass the same `?date=` param already
+used elsewhere in this file.
+
+**Found:** `[from: design-lead Phase 3 Home tab audit, 2026-09-22]`.
+
+### Home tab's sign-out icon fires with no confirmation
+
+**Where:** `frontend/app/(tabs)/home.tsx` lines 173-181 —
+`onPress={signOut}` directly, no `confirmAction` gate, unlike this app's
+convention for other consequential actions.
+
+**What:** One accidental tap on the first screen the user sees on every
+open logs them out with no recovery step. Spec-able: reuse `confirmAction`
+here, same as elsewhere in the app.
+
+**Found:** `[from: design-lead Phase 3 Home tab audit, 2026-09-22]`.
+
+### Calendar's density coloring conflates item count with urgency, reusing the app's own "critical" red for harmless busy days
+
+**Where:** `frontend/lib/statusColors.ts` (`DENSITY_TIERS`, consumed via
+`densityColor()` in `frontend/app/(tabs)/calendar.tsx` month-grid cells).
+
+**What:** Day-cell fill is a 4-tier heat scale (yellow/orange/purple/red)
+keyed only to `dayItems.length`, unrelated to whether anything on that day
+is actually overdue or critical. The same file's `severityColor`/
+`budgetSeverity` use red to mean "critical" elsewhere in the app (e.g.
+Budget), so a day cell can turn red purely because 4 harmless grocery
+items are due, misleading a user scanning for what actually needs
+attention.
+
+**Found:** `[from: design-lead Phase 3 Calendar audit, 2026-09-22]`.
+
+### Calendar's per-space dots (the only "which Space is this" cue on the month grid) are 4×4px and capped at 4
+
+**Where:** `frontend/app/(tabs)/calendar.tsx`, the
+`dayGroups.slice(0, 4).map(...)` dot row under each grid cell, fed by
+`groupBySpace()`.
+
+**What:** These dots are the sole at-a-glance signal distinguishing which
+Space(s) a day's items belong to (only shown when `dayGroups.length > 1`).
+At 4px they're not realistically distinguishable while scanning a month,
+and a day touching 5+ spaces silently drops the rest. Undermines the
+whole point of merging 4 Spaces into one calendar — users can't tell
+what's on a day without tapping in.
+
+**Found:** `[from: design-lead Phase 3 Calendar audit, 2026-09-22]`.
+
+### Calendar's "CHELTUIELI RECURENTE" (Recurring Expenses) section includes non-expense recurring items
+
+**Where:** `frontend/app/(tabs)/calendar.tsx` (~line 601, the
+`recurringUpcoming` list) fed by `backend/app/Models/Item.php`'s
+`RECURRING_ACTIONABLE_TYPES` (`home_task`, `home_recurring`,
+`car_document`, `custom_event`, `home_maintenance`) — none guaranteed to
+carry an `amount`.
+
+**What:** The section title promises spend info, but a recurring
+`home_task` with no amount (e.g. a chore reminder) lists under it
+identically to an actual recurring bill. A non-technical user scanning
+this for "what recurring costs are coming" gets chores mixed in with
+money. Needs a product call: rename the section (e.g. "Recurring items")
+or filter it to amount-bearing entries only.
+
+**Found:** `[from: design-lead Phase 3 Calendar audit, 2026-09-22]`.
+
+### Calendar's toggle pills and frequency buttons are under the 44/48pt minimum touch target
+
+**Where:** `frontend/app/(tabs)/calendar.tsx` — "Implică o cumpărare" /
+"Recurent" pills (`height: 34`, ~line 426/444) and the weekly/monthly/
+yearly frequency buttons (`paddingVertical: 8`, no explicit height, ~line
+482).
+
+**What:** Below Apple HIG's 44×44pt and Material Design 3's 48×48dp
+minimum interactive target guidance. Small but real friction for less
+precise taps.
+
+**Found:** `[from: design-lead Phase 3 Calendar audit, 2026-09-22]`.
+
+### Calendar has no "Today" quick-jump, only prev/next month chevrons
+
+**Where:** `frontend/app/(tabs)/calendar.tsx`, the month-nav row
+(`cal-prev-month`/`cal-next-month` Pressables, ~line 271-291).
+
+**What:** Paging several months away (e.g. to check a future car document
+renewal) and returning to the present requires repeated chevron taps with
+no shortcut back to today. Every mainstream calendar app offers a one-tap
+"Today" control; its absence here is a real efficiency-of-use gap.
+
+**Found:** `[from: design-lead Phase 3 Calendar audit, 2026-09-22]`.
+
+### Budget's Savings Goal auto-update depends invisibly on per-space budget limits being set
+
+**Where:** `frontend/app/(tabs)/budget.tsx` (Savings Goal card, lines
+~216-263) + `backend/app/Http/Controllers/Api/BudgetController.php`'s
+`applyMonthlySavings`.
+
+**What:** The savings goal's month-end auto-add only sources from spaces
+that have a `BudgetCategory` limit set (via `BudgetSpaceDetailPage`). A
+user who sets a savings target without ever opening a space's budget
+detail page gets a goal that never updates, with no on-screen indication
+why. Consider surfacing "based on N spaces with a budget set" in the
+card, or a hint once a month passes with zero movement and zero limits
+set.
+
+**Found:** `[from: design-lead Phase 3 Budget audit, 2026-09-22]`.
+
+### Budget ring color reuses the same warning hue for two different facts (ratio-tier vs. pace)
+
+**Where:** `frontend/app/(tabs)/budget.tsx`, `paceDelta()`/`tone` logic
+(lines ~71-76, ~402-403) vs. `lib/statusColors.ts`'s `budgetSeverity`.
+
+**What:** A ring can turn `colors.warning` orange either because
+spend/limit ratio crossed 80%, or because spend is pacing ahead of the
+elapsed-month fraction even under 80% — same color, different meaning,
+distinguishable only by reading the small caption underneath. Consider a
+visually distinct treatment (e.g. different hue or an icon-only badge)
+for the pace signal vs. the ratio-severity signal.
+
+**Found:** `[from: design-lead Phase 3 Budget audit, 2026-09-22]`.
+
+### Budget's per-space limit entry has two competing UIs (3 presets + manual field) for one number
+
+**Where:** `frontend/components/dashboard/BudgetSpaceDetailPage.tsx`,
+`BUDGET_PRESETS` + manual `TextInput`/save (lines ~30-34, ~349-472).
+
+**What:** Setting a monthly limit offers 3 percentage-over-3-month-average
+presets (Conservator/Echilibrat/Flexibil, Romanian-only labels) plus a
+fully separate manual amount input with its own save button — two
+parallel paths to the same single field, and the preset math ("bază" =
+3-month average) isn't explained beyond a caption. Product question worth
+the owner's input: does this earn its complexity for a non-technical
+user, or would manual-entry-plus-one-suggestion serve the same need with
+less to parse?
+
+**Found:** `[from: design-lead Phase 3 Budget audit, 2026-09-22]`.
+
+### Budget's monthly archive (ISTORIC LUNAR) is 3 taps deep and only lazily backfilled
+
+**Where:** `frontend/components/dashboard/BudgetOverviewPage.tsx`
+(ISTORIC LUNAR section, lines ~167-245), reached via Budget tab → "Buget
+total" entry row; backed by `BudgetController::archiveCompletedMonths`,
+which only runs as a side effect of `index()` (no scheduled job).
+
+**What:** Not a bug, but worth a product check: is monthly spend history
+over multiple past months something the target user actually revisits, or
+is this filler modeled on finance-app conventions? If kept, consider
+surfacing it higher — it's currently nested past the composition ring and
+ranked list, inside a page that's itself one tap off the main Budget
+screen.
+
+**Found:** `[from: design-lead Phase 3 Budget audit, 2026-09-22]`.
+
 ## Open
 
 ### 0. Real app icon (currently still Expo's default template icon)
