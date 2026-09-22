@@ -110,7 +110,7 @@ export default function Register() {
                   letterSpacing: -0.5,
                 }}
               >
-                Create your LifeOS
+                Create your orgOS
               </Text>
 
               <Text

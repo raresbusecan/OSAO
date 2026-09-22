@@ -41,6 +41,25 @@ whatever depends on it.
 sentry/sentry-laravel surfaced it via composer audit, 2026-09]`. Not
 introduced by Sentry; pre-existing.
 
+### Stale `frontend/dist/` web export still bakes in the old "frontend" app identity
+
+**Where:** `frontend/dist/_expo/static/js/web/entry-<hash>.js` — a leftover
+static web export (from `npx expo export`, presumably run before the
+Task #4 rename) whose embedded Expo Constants manifest is still
+`{"name":"frontend","slug":"frontend","scheme":"frontend",...}`, baked
+in as a JSON string literal inside the bundled JS. `frontend/dist/` is
+gitignored and untracked (`frontend/.gitignore` has `dist/`), so it's
+not in the diff and doesn't affect the live Metro dev server (port
+443) — only a stale local build artifact.
+
+**What:** Harmless as long as nothing actually serves from this old
+`dist/` folder. Re-running `npx expo export` (web) would regenerate it
+with the correct "orgOS"/"orgos" identity. Worth deleting the stale
+folder or re-exporting before it's ever used for a real web deploy, so
+no one accidentally ships/serves the old-branded build.
+
+**Found:** `[from: qa-lead verification of Task #4, 2026-09]`.
+
 ### `expo`/`expo-constants` slightly behind Expo SDK 54's expected patch versions
 
 **Where:** `frontend/package.json` — Metro prints "should be updated for
@@ -58,6 +77,25 @@ output after installing @sentry/react-native, 2026-09]`. Pre-existing,
 unrelated to Sentry.
 
 ## Open
+
+### 0. Real app icon (currently still Expo's default template icon)
+
+**Where:** `frontend/assets/images/icon.png`,
+`android-icon-foreground.png`/`-background.png`/`-monochrome.png`,
+`splash-icon.png`, `favicon.png` — all still the unmodified Expo
+bootstrap defaults. `app.json`'s `name`/`slug`/`scheme` were already
+fixed to "orgOS"/"orgos" (Task #4); the icon is the one piece of that
+task deliberately deferred.
+
+**What:** Needs an actual PNG asset — no image-generation/conversion
+tooling (ImageMagick, Inkscape, Node `sharp`, etc.) is available in
+this environment, so this can't be produced without either a file from
+the user or an external tool/generator. Once a source image exists,
+wiring it into `app.json` and generating the Android
+adaptive-icon variants is straightforward.
+
+**Found:** `[from: Task #4 app identity, 2026-09]`. Deliberately
+deferred, not forgotten.
 
 ### 1. Draggable period counter in Car → Expenses
 

@@ -57,7 +57,7 @@ export default function Login() {
             >
               <View style={{ gap: spacing.xs, marginBottom: spacing.lg }}>
                 <Text style={{ fontSize: 34, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 }}>
-                  LifeOS
+                  orgOS
                 </Text>
                 <Text style={{ fontSize: 15, color: colors.onSurfaceTertiary }}>
                   Your personal command center. Capture anything.
