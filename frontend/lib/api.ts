@@ -220,6 +220,20 @@ export const api = {
     });
   },
 
+  requestEmailChange: async (email: string, currentPassword: string) => {
+    return request<{ message: string }>("/profile/email", {
+      method: "PUT",
+      body: JSON.stringify({ email, current_password: currentPassword }),
+    });
+  },
+
+  confirmEmailChange: async (email: string, token: string) => {
+    return request<{ message: string; email: string }>("/confirm-email", {
+      method: "POST",
+      body: JSON.stringify({ email, token }),
+    });
+  },
+
   // AuthController::user() wraps its response as { user: {...} } (same
   // shape login/register's own 'user' field has) -- unwrap it here so
   // every caller gets the actual user object back, not the envelope.

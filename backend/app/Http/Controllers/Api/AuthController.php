@@ -5,11 +5,15 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Role;
 use App\Models\User;
+use App\Notifications\ConfirmEmailChangeNotification;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Notification;
 use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
@@ -172,6 +176,110 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Parola a fost schimbată.',
+        ]);
+    }
+
+    /** Task #9 subtask 4, step 1 of 2 -- starts an email change, doesn't
+     * apply it yet. Requires the current password (same identity proof
+     * as updatePassword) AND, per the user's own call when we discussed
+     * this feature, a confirmation link sent to the NEW address --
+     * unlike name/password, a wrong or attacker-supplied email here
+     * would silently steal the account (whoever controls the new
+     * address controls future password resets), so it needs proof the
+     * user actually controls that inbox before it takes effect. One
+     * pending request per user (upsert on user_id) -- a second request
+     * replaces the first rather than leaving two live tokens around. */
+    public function requestEmailChange(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'current_password' => ['required', 'string'],
+            'email' => ['required', 'email', 'max:255', 'unique:users,email'],
+        ]);
+
+        $user = $request->user();
+
+        if (!Hash::check($validated['current_password'], $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['Parola actuală este incorectă.'],
+            ]);
+        }
+
+        $token = Str::random(64);
+
+        DB::table('email_change_requests')->updateOrInsert(
+            ['user_id' => $user->id],
+            [
+                'new_email' => $validated['email'],
+                'token' => Hash::make($token),
+                'created_at' => now(),
+            ],
+        );
+
+        Notification::route('mail', $validated['email'])
+            ->notify(new ConfirmEmailChangeNotification($token, $validated['email']));
+
+        return response()->json([
+            'message' => 'Verifică noua adresă de email pentru a confirma schimbarea.',
+        ]);
+    }
+
+    /** Task #9 subtask 4, step 2 of 2 -- consumes the link from
+     * ConfirmEmailChangeNotification. Deliberately NOT behind
+     * auth:sanctum: this request comes from whatever browser opened the
+     * email link, which usually isn't the same authenticated app
+     * session that started the request (see the frontend's
+     * confirm-email.tsx, reachable while logged out for exactly this
+     * reason -- same shape as resetPassword). The token is the only
+     * proof of identity here, same as a password reset. */
+    public function confirmEmailChange(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'email' => ['required', 'email'],
+            'token' => ['required', 'string'],
+        ]);
+
+        $pending = DB::table('email_change_requests')->where('new_email', $validated['email'])->first();
+
+        if (!$pending || !Hash::check($validated['token'], $pending->token)) {
+            throw ValidationException::withMessages([
+                'token' => ['Acest link nu este valid.'],
+            ]);
+        }
+
+        if (now()->diffInMinutes($pending->created_at) > 60) {
+            DB::table('email_change_requests')->where('user_id', $pending->user_id)->delete();
+
+            throw ValidationException::withMessages([
+                'token' => ['Acest link a expirat.'],
+            ]);
+        }
+
+        // Re-check uniqueness -- the address could have been taken by a
+        // different registration in the time between the request and
+        // this confirmation (the original validation only ran once, at
+        // request time).
+        if (User::where('email', $pending->new_email)->where('id', '!=', $pending->user_id)->exists()) {
+            DB::table('email_change_requests')->where('user_id', $pending->user_id)->delete();
+
+            throw ValidationException::withMessages([
+                'email' => ['Acest email este deja folosit de alt cont.'],
+            ]);
+        }
+
+        $user = User::find($pending->user_id);
+
+        if (!$user) {
+            throw ValidationException::withMessages([
+                'token' => ['Acest link nu este valid.'],
+            ]);
+        }
+
+        $user->forceFill(['email' => $pending->new_email])->save();
+        DB::table('email_change_requests')->where('user_id', $pending->user_id)->delete();
+
+        return response()->json([
+            'message' => 'Emailul a fost actualizat.',
+            'email' => $user->email,
         ]);
     }
 

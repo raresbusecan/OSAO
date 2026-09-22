@@ -63,8 +63,14 @@ function AuthGuard() {
   }
 
   const inAuthGroup = segments[0] === "(auth)";
+  // Reached from an email link (see ConfirmEmailChangeNotification), which
+  // could open in a browser that's logged out entirely, or logged in as a
+  // DIFFERENT session than the one that requested the change -- either way
+  // the screen itself only needs the token in the URL, not a session, so it
+  // has to render regardless of auth state instead of bouncing to /login.
+  const isPublicRoute = segments[0] === "confirm-email";
 
-  if (!user && !inAuthGroup) {
+  if (!user && !inAuthGroup && !isPublicRoute) {
     return <Redirect href="/(auth)/login" />;
   }
 

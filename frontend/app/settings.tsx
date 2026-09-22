@@ -31,11 +31,12 @@ export default function Settings() {
   const { user, updateUser } = useAuth();
   const [editingName, setEditingName] = useState(false);
   const [editingPassword, setEditingPassword] = useState(false);
+  const [editingEmail, setEditingEmail] = useState(false);
 
   const rows: SettingsRow[] = [
     { key: "name", icon: "person-outline", label: "Nume", value: user?.name, onPress: () => setEditingName(true) },
     { key: "password", icon: "lock-closed-outline", label: "Parolă", onPress: () => setEditingPassword(true) },
-    { key: "email", icon: "mail-outline", label: "Email", value: user?.email },
+    { key: "email", icon: "mail-outline", label: "Email", value: user?.email, onPress: () => setEditingEmail(true) },
     { key: "language", icon: "language-outline", label: "Limbă" },
     { key: "colors", icon: "color-palette-outline", label: "Culori" },
     { key: "theme", icon: "sparkles-outline", label: "Temă" },
@@ -140,6 +141,8 @@ export default function Settings() {
       />
 
       <EditPasswordModal visible={editingPassword} onClose={() => setEditingPassword(false)} />
+
+      <EditEmailModal visible={editingEmail} onClose={() => setEditingEmail(false)} />
     </View>
   );
 }
@@ -455,6 +458,198 @@ function EditPasswordModal({ visible, onClose }: { visible: boolean; onClose: ()
               )}
             </Pressable>
           </View>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function EditEmailModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { colors, spacing, radius } = useTheme();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  // Unlike name/password, a successful request doesn't change anything
+  // yet -- the new address only takes effect once its own link is
+  // opened (see confirm-email.tsx). This stays true after the modal
+  // closes and reopens, until the user explicitly asks to start over.
+  const [sentTo, setSentTo] = useState<string | null>(null);
+
+  const wasVisible = React.useRef(visible);
+  if (visible && !wasVisible.current) {
+    setEmail("");
+    setPassword("");
+    setError(null);
+  }
+  wasVisible.current = visible;
+
+  const trimmedEmail = email.trim();
+  const canSave = EMAIL_RE.test(trimmedEmail) && password.length > 0 && !saving;
+
+  const handleSave = async () => {
+    if (!canSave) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await api.requestEmailChange(trimmedEmail, password);
+      setSentTo(trimmedEmail);
+    } catch (err: any) {
+      setError(err?.message || "Nu am putut trimite cererea.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleClose = () => {
+    onClose();
+    // Reset the "sent" confirmation only after the close animation would
+    // have started -- reopening the row should offer a fresh attempt,
+    // not show a stale confirmation from a previous request.
+    setSentTo(null);
+  };
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose}>
+      <KeyboardAvoidingView
+        style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <Pressable onPress={handleClose} style={{ ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.4)" }} />
+
+        <View
+          style={{
+            width: "100%",
+            maxWidth: 380,
+            borderRadius: radius.lg,
+            backgroundColor: colors.surface,
+            padding: spacing.xl,
+          }}
+        >
+          {sentTo ? (
+            <>
+              <Text style={{ fontSize: 17, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.sm }}>
+                Verifică email-ul nou
+              </Text>
+              <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, lineHeight: 20, marginBottom: spacing.lg }}>
+                Am trimis un link de confirmare la „{sentTo}". Emailul contului tău se schimbă abia după ce deschizi acel link -- expiră în 60 de minute.
+              </Text>
+              <Pressable
+                testID="settings-email-done"
+                onPress={handleClose}
+                style={{
+                  minHeight: 48,
+                  borderRadius: radius.sm,
+                  backgroundColor: colors.onSurface,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "800", color: colors.surface }}>Am înțeles</Text>
+              </Pressable>
+            </>
+          ) : (
+            <>
+              <Text style={{ fontSize: 17, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.lg }}>
+                Schimbă emailul
+              </Text>
+
+              <View style={{ gap: spacing.sm }}>
+                <TextInput
+                  testID="settings-email-new"
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    if (error) setError(null);
+                  }}
+                  placeholder="Emailul nou"
+                  placeholderTextColor={colors.onSurfaceTertiary}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="email-address"
+                  autoFocus
+                  style={{
+                    minHeight: 48,
+                    paddingHorizontal: spacing.md,
+                    borderRadius: radius.sm,
+                    backgroundColor: "transparent",
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    color: colors.onSurface,
+                    fontSize: 14,
+                  }}
+                />
+
+                <TextInput
+                  testID="settings-email-password"
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    if (error) setError(null);
+                  }}
+                  onSubmitEditing={handleSave}
+                  returnKeyType="done"
+                  placeholder="Parola actuală"
+                  placeholderTextColor={colors.onSurfaceTertiary}
+                  secureTextEntry
+                  style={{
+                    minHeight: 48,
+                    paddingHorizontal: spacing.md,
+                    borderRadius: radius.sm,
+                    backgroundColor: "transparent",
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    color: colors.onSurface,
+                    fontSize: 14,
+                  }}
+                />
+              </View>
+
+              {error ? <Text style={{ fontSize: 12, color: colors.error, marginTop: spacing.sm }}>{error}</Text> : null}
+
+              <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg }}>
+                <Pressable
+                  testID="settings-email-cancel"
+                  onPress={handleClose}
+                  disabled={saving}
+                  style={{
+                    flex: 1,
+                    minHeight: 48,
+                    borderRadius: radius.sm,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurface }}>Anulează</Text>
+                </Pressable>
+
+                <Pressable
+                  testID="settings-email-save"
+                  onPress={handleSave}
+                  disabled={!canSave}
+                  style={{
+                    flex: 1,
+                    minHeight: 48,
+                    borderRadius: radius.sm,
+                    backgroundColor: colors.onSurface,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    opacity: canSave ? 1 : 0.5,
+                  }}
+                >
+                  {saving ? (
+                    <ActivityIndicator color={colors.surface} />
+                  ) : (
+                    <Text style={{ fontSize: 14, fontWeight: "800", color: colors.surface }}>Trimite link</Text>
+                  )}
+                </Pressable>
+              </View>
+            </>
+          )}
         </View>
       </KeyboardAvoidingView>
     </Modal>

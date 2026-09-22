@@ -21,6 +21,10 @@ Route::middleware('throttle:auth')->group(function () {
 Route::middleware('throttle:password-reset')->group(function () {
     Route::post('/forgot-password', [AuthController::class, 'forgotPassword']);
     Route::post('/reset-password', [AuthController::class, 'resetPassword']);
+    // Same throttle as the password-reset pair above -- an unauthenticated,
+    // token-consuming endpoint with the same abuse shape (someone hammering
+    // it trying to guess a valid token).
+    Route::post('/confirm-email', [AuthController::class, 'confirmEmailChange']);
 });
 
 Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
@@ -28,6 +32,7 @@ Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
     Route::put('/profile/name', [AuthController::class, 'updateName']);
     Route::put('/profile/password', [AuthController::class, 'updatePassword']);
+    Route::put('/profile/email', [AuthController::class, 'requestEmailChange']);
 
     Route::get('/dashboard', [DashboardController::class, 'index']);
     Route::get('/calendar', [CalendarController::class, 'index']);
