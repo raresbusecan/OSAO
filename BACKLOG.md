@@ -13,42 +13,6 @@ one up like any other "Open" item once nothing more pressing is ahead
 of it. Mark it `[from: <task>]` so there's a trail back to how it was
 found.
 
-### Every other save handler in [id].tsx has the same silent-failure bug just fixed for Home Tasks
-
-**Where:** [frontend/app/(tabs)/[id].tsx](<frontend/app/(tabs)/[id].tsx>) —
-every `handle*Save` function (10 of them: `handleFuelSave`,
-`handleMaintenanceSave`, `handleDocumentSave`, `handleExpenseSave` for
-Car; `handleHomeDocumentSave`, `handleHomeExpenseSave`,
-`handleHomeMaintenanceSave`, `handleHomeRecurringSave`,
-`handleHomeSupplySave` for Home; `handleExpenseEntrySave` for the
-Expenses space) follows the exact same pattern `handleHomeTaskSave`
-just got fixed for: optimistically apply the edit to local state, then
-on a failed `api.updateItem`/`api.createItem` call, the `catch` block
-only reverts a brand-NEW entry (removes it) — an EXISTING entry being
-edited/resolved has no revert at all (`isExisting ? current.X : ...`,
-where the `isExisting` branch is a no-op, keeping the never-actually-
-saved optimistic value).
-
-**What:** Confirmed as the real root cause of a user-reported bug: a
-plain, non-recurring Home Task checked off via its checkbox looked
-resolved immediately, but reappeared as unresolved in Restanțe later —
-the PUT to the backend silently failed (this session hit real
-Cloudflare tunnel flakiness more than once), the catch block's no-op
-revert left the UI showing "resolved" anyway, and the illusion held
-until the next full data reload pulled the server's still-unresolved
-truth back in. Only a toast (`notifyAction("Nu am putut salva...")`)
-ever signaled anything was wrong, easy to miss on a phone mid-tap.
-
-`handleHomeTaskSave` now snapshots the entry BEFORE the optimistic
-update and reverts to that exact snapshot on failure, instead of a
-no-op. The other 9 handlers still have the old, silent-failure
-behavior — same fix shape, just not applied yet (deliberately scoped
-to the one that had a concrete, confirmed bug report rather than
-sweeping all 10 unreviewed in the same pass).
-
-**Found:** `[from: fixing the Home Tasks Restanțe "still unresolved"
-bug report, 2026-09-26]`.
-
 ### Backend buckets Calendar days by UTC, with no user-timezone concept anywhere
 
 **Where:** `backend/app/Http/Controllers/Api/CalendarController.php`
@@ -838,6 +802,10 @@ Fixed as a side effect of unifying Home Tasks' urgency coloring: `HomeTaskRow.ti
 ### Home's Maintenance "Recurring" toggle had no way to set a due date (2026-09-26)
 
 Also stale by the time it was re-checked — Home Maintenance's "Resolved" action work (built earlier this same session) already fixed this as a side effect: `homeCategoryConfig.ts`'s maintenance `buildEntry` now seeds `nextDueDate` via `addRecurrenceInterval(date, frequency, interval)` the moment "Recurent" is toggled on (or preserves it across later unrelated edits via the `wasAlreadyRecurring` check), instead of leaving it permanently `undefined`. Confirmed by reading the current `buildEntry` — removed from "Found along the way" rather than left describing a bug that no longer exists.
+
+### All 11 save handlers in [id].tsx had the same silent-failure-on-edit bug (2026-09-26)
+
+`handleHomeTaskSave` was fixed first (root cause of a real user-reported bug: a resolved Task reappeared as unresolved in Restanțe after a silently-failed save). The other 10 (`handleFuelSave`, `handleMaintenanceSave`, `handleDocumentSave`, `handleExpenseSave` for Car; `handleHomeDocumentSave`, `handleHomeExpenseSave`, `handleHomeMaintenanceSave`, `handleHomeRecurringSave`, `handleHomeSupplySave` for Home; `handleExpenseEntrySave` for the Expenses space) had the identical bug and are now fixed the same way — each snapshots the entry before its optimistic update and reverts to that exact snapshot on a failed save, instead of a no-op that kept showing the never-actually-persisted edit. qa-lead verified all 10 individually (diffed each against main, confirmed the "new entry" failure path and every function's other logic, e.g. Car's renewal-flow branches, were untouched) plus a live end-to-end test against 3 of them (Car/Home/Expenses) with real forced `422` failures.
 
 ### `league/commonmark` high-severity DoS advisory (2026-09-26)
 
