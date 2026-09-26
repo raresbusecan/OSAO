@@ -164,6 +164,12 @@ export type RecurringWarningRow = {
    * flow HomeCategoryPage's own checkbox already uses. See
    * HomeDashboard's onResolvePress. */
   kind: "task" | "maintenance" | "recurring";
+  /** Always true for "maintenance"/"recurring" (both only ever appear
+   * here when they genuinely recur -- see the guards below), only
+   * sometimes true for "task" now that a plain, non-recurring task can
+   * show up here too. Lets the page pick a "this repeats" vs. "this is
+   * just urgent" icon instead of a blanket repeat glyph on every row. */
+  isRecurring: boolean;
 };
 
 /** The one place "how urgent is N days remaining" turns into a tier --
@@ -187,13 +193,19 @@ export function getRecurringTaskWarnings(homeData: HomeData): {
   const now = new Date();
   const rows: RecurringWarningRow[] = [];
 
+  // Any urgent task, recurring or not -- widened per explicit user
+  // request to match getHomeTasksView's own DUE SOON population below,
+  // which already shows both. A non-recurring task still disappears
+  // for good once resolved (archives instead of advancing), it just
+  // also gets a heads-up here while it's still open and urgent, same
+  // as it already does on the main Tasks page.
   homeData.taskEntries.forEach((task) => {
-    if (!task.isRecurring || task.completed || !task.dueDate) return;
+    if (task.completed || !task.dueDate) return;
 
     const remaining = daysUntil(task.dueDate, now);
     const tier = classifyTaskUrgencyTier(remaining);
 
-    if (tier) rows.push({ id: task.id, title: task.title, tier, daysRemaining: remaining, kind: "task" });
+    if (tier) rows.push({ id: task.id, title: task.title, tier, daysRemaining: remaining, kind: "task", isRecurring: !!task.isRecurring });
   });
 
   // Maintenance -- same 4-day/overdue window, keyed off nextDueDate
@@ -208,7 +220,7 @@ export function getRecurringTaskWarnings(homeData: HomeData): {
     const remaining = daysUntil(entry.nextDueDate, now);
     const tier = classifyTaskUrgencyTier(remaining);
 
-    if (tier) rows.push({ id: entry.id, title: entry.service, tier, daysRemaining: remaining, kind: "maintenance" });
+    if (tier) rows.push({ id: entry.id, title: entry.service, tier, daysRemaining: remaining, kind: "maintenance", isRecurring: true });
   });
 
   // Recurring -- always recurring by definition (no on/off toggle), so
@@ -218,7 +230,7 @@ export function getRecurringTaskWarnings(homeData: HomeData): {
     const remaining = daysUntil(entry.nextDueDate, now);
     const tier = classifyTaskUrgencyTier(remaining);
 
-    if (tier) rows.push({ id: entry.id, title: entry.title, tier, daysRemaining: remaining, kind: "recurring" });
+    if (tier) rows.push({ id: entry.id, title: entry.title, tier, daysRemaining: remaining, kind: "recurring", isRecurring: true });
   });
 
   // Ascending by daysRemaining -- most negative (furthest overdue, most

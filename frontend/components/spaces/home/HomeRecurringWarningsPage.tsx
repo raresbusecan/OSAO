@@ -104,7 +104,7 @@ export function HomeRecurringWarningsPage({ homeData, onBack, onResolvePress }: 
                       flexShrink: 0,
                     }}
                   >
-                    <Ionicons name="repeat-outline" size={16} color={style.color} />
+                    <Ionicons name={row.isRecurring ? "repeat-outline" : "alert-circle-outline"} size={16} color={style.color} />
                   </View>
                   <Text style={{ flex: 1, fontSize: 14.5, fontWeight: "700", color: colors.onSurface }} numberOfLines={1}>
                     {row.title}
