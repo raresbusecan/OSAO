@@ -29,9 +29,38 @@ class CalendarController extends Controller
             'month' => ['required', 'date_format:Y-m'],
         ]);
 
-        $start = Carbon::createFromFormat('Y-m', $validated['month'])->startOfMonth();
-        $end = $start->copy()->endOfMonth();
         $user = $request->user();
+        // Null until SyncUserTimezone middleware has seen a request from
+        // this user carrying the device-read X-Timezone header (see
+        // frontend/lib/api.ts) -- UTC until then, same as before this
+        // existed at all.
+        $userTz = $user->timezone ?? 'UTC';
+
+        // Computed IN the user's own timezone, then Carbon converts to
+        // UTC under the hood for the whereBetween() query below -- "the
+        // user's September" starts at their own local midnight, not
+        // UTC midnight, so an item due right after local midnight near
+        // either edge of the month doesn't fall into the wrong month's
+        // view. All display-side grouping (both toDateString() calls
+        // below) also has to read back in the same $userTz, or the two
+        // notions of "which day" would disagree with each other.
+        $start = Carbon::createFromFormat('Y-m', $validated['month'], $userTz)->startOfMonth();
+        $end = $start->copy()->endOfMonth();
+
+        // The query builder serializes a Carbon straight to its OWN
+        // wall-clock string (whatever timezone it's tagged with) as the
+        // literal SQL parameter -- it does NOT auto-convert to the
+        // connection's timezone the way an in-PHP Carbon comparison
+        // would. due_at is stored UTC-normalized, so whereBetween()
+        // below needs these explicitly in UTC or it silently compares
+        // against the wrong wall-clock hours (an item near either edge
+        // of the month would vanish from both months' views). $start/
+        // $end themselves stay in $userTz for every other use in this
+        // method (RecurrenceProjector's and car_document's own
+        // Carbon-to-Carbon comparisons are instant-based and don't care
+        // which timezone the operands are tagged with).
+        $startUtc = $start->copy()->setTimezone('UTC');
+        $endUtc = $end->copy()->setTimezone('UTC');
 
         // space:id,name,icon eager-loaded so the frontend can group and
         // label each day's items by their real space (name + the icon
@@ -59,7 +88,7 @@ class CalendarController extends Controller
         // small, so this stays cheap.
         $plainItems = (clone $plainItemsBase)
             ->where('type', '!=', 'car_document')
-            ->whereBetween('due_at', [$start, $end])
+            ->whereBetween('due_at', [$startUtc, $endUtc])
             ->with('space:id,name,icon')
             ->get()
             ->merge(
@@ -92,14 +121,14 @@ class CalendarController extends Controller
         // so sorting and the frontend's date parsing never have to care
         // which branch an entry came from.
         foreach ($plainItems as $item) {
-            $key = Carbon::parse($item->due_at)->toDateString();
+            $key = Carbon::parse($item->due_at)->setTimezone($userTz)->toDateString();
             $days[$key] ??= [];
             $days[$key][] = $item->toArray();
         }
 
         foreach ($recurringItems as $item) {
             foreach (RecurrenceProjector::occurrencesBetween($item, $start, $end) as $occurrence) {
-                $key = $occurrence['due']->toDateString();
+                $key = $occurrence['due']->copy()->setTimezone($userTz)->toDateString();
                 $days[$key] ??= [];
                 // The real row's due_at is untouched -- this is only
                 // the response shape. `created_at` is swapped for this

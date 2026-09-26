@@ -50,6 +50,14 @@ export async function clearToken() {
   await SecureStore.deleteItemAsync(TOKEN_KEY);
 }
 
+function getDeviceTimezone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  } catch {
+    return "UTC";
+  }
+}
+
 async function request<T = any>(
   path: string,
   init: RequestInit = {},
@@ -64,6 +72,14 @@ async function request<T = any>(
     // API calls over the tunnel get HTML back instead of JSON. Harmless when
     // hitting the backend directly (ignored).
     "Bypass-Tunnel-Reminder": "true",
+    // Read fresh on every request (not cached at module load) so it
+    // self-corrects immediately if the device's own timezone changes
+    // mid-session (travel), instead of only on next app restart. The
+    // backend's SyncUserTimezone middleware persists this onto the
+    // user's own record -- see CalendarController for where it's read
+    // back, so Calendar buckets a day the same way the user's own
+    // device would, not UTC.
+    "X-Timezone": getDeviceTimezone(),
     ...(init.headers as Record<string, string> | undefined),
   };
 

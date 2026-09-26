@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\QuickAddController;
 use App\Http\Controllers\Api\CalendarController;
 use App\Http\Controllers\Api\BudgetController;
+use App\Http\Middleware\SyncUserTimezone;
 
 
 Route::middleware('throttle:auth')->group(function () {
@@ -27,7 +28,7 @@ Route::middleware('throttle:password-reset')->group(function () {
     Route::post('/confirm-email', [AuthController::class, 'confirmEmailChange']);
 });
 
-Route::middleware(['auth:sanctum', 'throttle:api'])->group(function () {
+Route::middleware(['auth:sanctum', 'throttle:api', SyncUserTimezone::class])->group(function () {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/user', [AuthController::class, 'user']);
     Route::put('/profile/name', [AuthController::class, 'updateName']);
