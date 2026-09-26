@@ -47,9 +47,14 @@ function addMonths(y: number, m: number, delta: number): MonthKey {
 export function HomeDatePickerSheet({ value, onCancel, onSelect }: HomeDatePickerSheetProps) {
   const { colors, spacing, radius } = useTheme();
 
-  // Always starts at the real current month, never at the month of an
-  // already-picked value -- a due date in the past shouldn't be
-  // reachable at all, per "only forward from today".
+  // Index 0 is always the real current month, never a due date in the
+  // past -- per "only forward from today" (see the disabled "Previous"
+  // chevron at index 0 below). The picker's INITIAL position is
+  // different: it opens already scrolled to `value`'s own month when
+  // one is set, instead of always index 0 -- previously every open
+  // landed on today's month regardless of `value`, so editing a task
+  // due several months out meant manually paging/swiping through every
+  // month in between just to see the current selection highlighted.
   const now = new Date();
   const anchorYear = now.getFullYear();
   const anchorMonth = now.getMonth();
@@ -65,7 +70,18 @@ export function HomeDatePickerSheet({ value, onCancel, onSelect }: HomeDatePicke
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const [index, setIndex] = useState(0); // the current month is always the first entry now
+  const initialIndex = useMemo(() => {
+    if (!value) return 0;
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return 0;
+    const offset = (d.getFullYear() * 12 + d.getMonth()) - (anchorYear * 12 + anchorMonth);
+    return Math.max(0, Math.min(MONTH_RANGE, offset));
+    // Only computed once, off the value this sheet was opened with --
+    // scrolling around inside the sheet afterward shouldn't re-anchor it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const [index, setIndex] = useState(initialIndex);
   const [pageWidth, setPageWidth] = useState(0);
   const listRef = useRef<FlatList<MonthKey>>(null);
 
@@ -162,7 +178,7 @@ export function HomeDatePickerSheet({ value, onCancel, onSelect }: HomeDatePicke
                 horizontal
                 pagingEnabled
                 showsHorizontalScrollIndicator={false}
-                initialScrollIndex={0}
+                initialScrollIndex={initialIndex}
                 getItemLayout={(_, i) => ({ length: pageWidth, offset: pageWidth * i, index: i })}
                 onScroll={handleScroll}
                 scrollEventThrottle={32}
