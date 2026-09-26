@@ -138,7 +138,8 @@ export default function SpaceDetail() {
    */
 
   const handleFuelSave = async (entry: CarFuelEntry) => {
-    const isExisting = carData.fuelEntries.some((e) => e.id === entry.id);
+    const previous = carData.fuelEntries.find((e) => e.id === entry.id);
+    const isExisting = !!previous;
 
     setCarData((current) => ({
       ...current,
@@ -164,7 +165,7 @@ export default function SpaceDetail() {
       setCarData((current) => ({
         ...current,
         fuelEntries: isExisting
-          ? current.fuelEntries
+          ? current.fuelEntries.map((e) => (e.id === entry.id ? previous! : e))
           : current.fuelEntries.filter((e) => e.id !== entry.id),
       }));
       notifyAction("Nu am putut salva alimentarea", error?.message || "A apărut o eroare.");
@@ -172,7 +173,8 @@ export default function SpaceDetail() {
   };
 
   const handleMaintenanceSave = async (entry: CarMaintenanceEntry) => {
-    const isExisting = carData.maintenanceEntries.some((e) => e.id === entry.id);
+    const previous = carData.maintenanceEntries.find((e) => e.id === entry.id);
+    const isExisting = !!previous;
 
     setCarData((current) => ({
       ...current,
@@ -232,7 +234,7 @@ export default function SpaceDetail() {
       setCarData((current) => ({
         ...current,
         maintenanceEntries: isExisting
-          ? current.maintenanceEntries
+          ? current.maintenanceEntries.map((e) => (e.id === entry.id ? previous! : e))
           : current.maintenanceEntries.filter((e) => e.id !== entry.id),
       }));
       notifyAction("Nu am putut salva intervenția", error?.message || "A apărut o eroare.");
@@ -240,7 +242,8 @@ export default function SpaceDetail() {
   };
 
   const handleDocumentSave = async (entry: CarDocumentEntry) => {
-    const isExisting = carData.documentEntries.some((e) => e.id === entry.id);
+    const previous = carData.documentEntries.find((e) => e.id === entry.id);
+    const isExisting = !!previous;
 
     setCarData((current) => ({
       ...current,
@@ -297,7 +300,7 @@ export default function SpaceDetail() {
       setCarData((current) => ({
         ...current,
         documentEntries: isExisting
-          ? current.documentEntries
+          ? current.documentEntries.map((e) => (e.id === entry.id ? previous! : e))
           : current.documentEntries.filter((e) => e.id !== entry.id),
       }));
       notifyAction("Nu am putut salva documentul", error?.message || "A apărut o eroare.");
@@ -305,7 +308,8 @@ export default function SpaceDetail() {
   };
 
   const handleExpenseSave = async (entry: CarExpenseEntry) => {
-    const isExisting = carData.expenseEntries.some((e) => e.id === entry.id);
+    const previous = carData.expenseEntries.find((e) => e.id === entry.id);
+    const isExisting = !!previous;
 
     setCarData((current) => ({
       ...current,
@@ -331,7 +335,7 @@ export default function SpaceDetail() {
       setCarData((current) => ({
         ...current,
         expenseEntries: isExisting
-          ? current.expenseEntries
+          ? current.expenseEntries.map((e) => (e.id === entry.id ? previous! : e))
           : current.expenseEntries.filter((e) => e.id !== entry.id),
       }));
       notifyAction("Nu am putut salva cheltuiala", error?.message || "A apărut o eroare.");
@@ -444,7 +448,8 @@ export default function SpaceDetail() {
    */
 
   const handleHomeDocumentSave = async (entry: HomeDocumentEntry) => {
-    const isExisting = homeData.documentEntries.some((e) => e.id === entry.id);
+    const previous = homeData.documentEntries.find((e) => e.id === entry.id);
+    const isExisting = !!previous;
     setHomeData((current) => ({
       ...current,
       documentEntries: isExisting
@@ -466,7 +471,7 @@ export default function SpaceDetail() {
       setHomeData((current) => ({
         ...current,
         documentEntries: isExisting
-          ? current.documentEntries
+          ? current.documentEntries.map((e) => (e.id === entry.id ? previous! : e))
           : current.documentEntries.filter((e) => e.id !== entry.id),
       }));
       notifyAction("Nu am putut salva documentul", error?.message || "A apărut o eroare.");
@@ -491,7 +496,8 @@ export default function SpaceDetail() {
   };
 
   const handleHomeExpenseSave = async (entry: HomeExpenseEntry) => {
-    const isExisting = homeData.expenseEntries.some((e) => e.id === entry.id);
+    const previous = homeData.expenseEntries.find((e) => e.id === entry.id);
+    const isExisting = !!previous;
     setHomeData((current) => ({
       ...current,
       expenseEntries: isExisting
@@ -513,7 +519,7 @@ export default function SpaceDetail() {
       setHomeData((current) => ({
         ...current,
         expenseEntries: isExisting
-          ? current.expenseEntries
+          ? current.expenseEntries.map((e) => (e.id === entry.id ? previous! : e))
           : current.expenseEntries.filter((e) => e.id !== entry.id),
       }));
       notifyAction("Nu am putut salva cheltuiala", error?.message || "A apărut o eroare.");
@@ -541,7 +547,8 @@ export default function SpaceDetail() {
   // save/rollback shape as every handler above, just against
   // expensesData instead of homeData/carData.
   const handleExpenseEntrySave = async (entry: ExpenseEntry) => {
-    const isExisting = expensesData.entries.some((e) => e.id === entry.id);
+    const previous = expensesData.entries.find((e) => e.id === entry.id);
+    const isExisting = !!previous;
     setExpensesData((current) => ({
       entries: isExisting
         ? current.entries.map((e) => (e.id === entry.id ? entry : e))
@@ -559,7 +566,9 @@ export default function SpaceDetail() {
       }));
     } catch (error: any) {
       setExpensesData((current) => ({
-        entries: isExisting ? current.entries : current.entries.filter((e) => e.id !== entry.id),
+        entries: isExisting
+          ? current.entries.map((e) => (e.id === entry.id ? previous! : e))
+          : current.entries.filter((e) => e.id !== entry.id),
       }));
       notifyAction("Nu am putut salva cheltuiala", error?.message || "A apărut o eroare.");
     }
@@ -581,7 +590,8 @@ export default function SpaceDetail() {
   };
 
   const handleHomeMaintenanceSave = async (entry: HomeMaintenanceEntry) => {
-    const isExisting = homeData.maintenanceEntries.some((e) => e.id === entry.id);
+    const previous = homeData.maintenanceEntries.find((e) => e.id === entry.id);
+    const isExisting = !!previous;
     setHomeData((current) => ({
       ...current,
       maintenanceEntries: isExisting
@@ -603,7 +613,7 @@ export default function SpaceDetail() {
       setHomeData((current) => ({
         ...current,
         maintenanceEntries: isExisting
-          ? current.maintenanceEntries
+          ? current.maintenanceEntries.map((e) => (e.id === entry.id ? previous! : e))
           : current.maintenanceEntries.filter((e) => e.id !== entry.id),
       }));
       notifyAction("Nu am putut salva intervenția", error?.message || "A apărut o eroare.");
@@ -628,7 +638,8 @@ export default function SpaceDetail() {
   };
 
   const handleHomeRecurringSave = async (entry: HomeRecurringEntry) => {
-    const isExisting = homeData.recurringEntries.some((e) => e.id === entry.id);
+    const previous = homeData.recurringEntries.find((e) => e.id === entry.id);
+    const isExisting = !!previous;
     setHomeData((current) => ({
       ...current,
       recurringEntries: isExisting
@@ -650,7 +661,7 @@ export default function SpaceDetail() {
       setHomeData((current) => ({
         ...current,
         recurringEntries: isExisting
-          ? current.recurringEntries
+          ? current.recurringEntries.map((e) => (e.id === entry.id ? previous! : e))
           : current.recurringEntries.filter((e) => e.id !== entry.id),
       }));
       notifyAction("Nu am putut salva plata recurentă", error?.message || "A apărut o eroare.");
@@ -675,7 +686,8 @@ export default function SpaceDetail() {
   };
 
   const handleHomeSupplySave = async (entry: HomeSupplyEntry) => {
-    const isExisting = homeData.supplyEntries.some((e) => e.id === entry.id);
+    const previous = homeData.supplyEntries.find((e) => e.id === entry.id);
+    const isExisting = !!previous;
     setHomeData((current) => ({
       ...current,
       supplyEntries: isExisting
@@ -697,7 +709,7 @@ export default function SpaceDetail() {
       setHomeData((current) => ({
         ...current,
         supplyEntries: isExisting
-          ? current.supplyEntries
+          ? current.supplyEntries.map((e) => (e.id === entry.id ? previous! : e))
           : current.supplyEntries.filter((e) => e.id !== entry.id),
       }));
       notifyAction("Nu am putut salva proviziile", error?.message || "A apărut o eroare.");
