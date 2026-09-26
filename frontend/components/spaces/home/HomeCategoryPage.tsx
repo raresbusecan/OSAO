@@ -368,8 +368,7 @@ export function HomeCategoryPage({
             style={{
               height: 46,
               borderRadius: radius.sm,
-              borderWidth: 1,
-              borderColor: colors.success,
+              backgroundColor: colors.success,
               alignItems: "center",
               justifyContent: "center",
               flexDirection: "row",
@@ -377,8 +376,8 @@ export function HomeCategoryPage({
               marginTop: 4,
             }}
           >
-            <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
-            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.success }}>
+            <Ionicons name="checkmark-circle-outline" size={16} color={colors.surface} />
+            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.surface }}>
               Rezolvă
             </Text>
           </Pressable>
