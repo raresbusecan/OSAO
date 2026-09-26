@@ -180,23 +180,6 @@ this API-only app, so an unauthenticated request throws
 verification, 2026-09]`. Confirmed pre-existing, unrelated to that
 task's actual diff.
 
-### `league/commonmark` has a high-severity DoS advisory (PKSA-zyf5-hrxv-hrd7)
-
-**Where:** `backend/composer.lock` — transitive dependency (not in
-`composer.json` directly; pulled in by something else, not by
-Sentry). Affected: `>=1.5.0,<2.10.0`. No CVE assigned yet, advisory
-only (GHSA-8rr7-cvq3-gmfh) — a denial-of-service via distinctly-named
-attributes in the Attributes extension.
-
-**What:** Check what actually requires it (`composer why
-league/commonmark`) and whether bumping to `^2.10` is a clean, low-risk
-`composer update league/commonmark` or pulls in breaking changes from
-whatever depends on it.
-
-**Found:** `[from: Task #3 observability — composer require
-sentry/sentry-laravel surfaced it via composer audit, 2026-09]`. Not
-introduced by Sentry; pre-existing.
-
 ### Stale `frontend/dist/` web export still bakes in the old "frontend" app identity
 
 **Where:** `frontend/dist/_expo/static/js/web/entry-<hash>.js` — a leftover
@@ -855,3 +838,7 @@ Fixed as a side effect of unifying Home Tasks' urgency coloring: `HomeTaskRow.ti
 ### Home's Maintenance "Recurring" toggle had no way to set a due date (2026-09-26)
 
 Also stale by the time it was re-checked — Home Maintenance's "Resolved" action work (built earlier this same session) already fixed this as a side effect: `homeCategoryConfig.ts`'s maintenance `buildEntry` now seeds `nextDueDate` via `addRecurrenceInterval(date, frequency, interval)` the moment "Recurent" is toggled on (or preserves it across later unrelated edits via the `wasAlreadyRecurring` check), instead of leaving it permanently `undefined`. Confirmed by reading the current `buildEntry` — removed from "Found along the way" rather than left describing a bug that no longer exists.
+
+### `league/commonmark` high-severity DoS advisory (2026-09-26)
+
+Bumped 2.9.1 → 2.10.3 via `composer update league/commonmark --with-all-dependencies` — Laravel's own `^2.8.1` requirement is satisfied by 2.10.x, so this was a same-major, in-range patch, not a breaking change. `composer audit` now reports zero advisories. Backend test suite re-run after the bump: only the 2 already-known, pre-existing `DashboardControllerTest` failures remain (the "payments" bucket issue, logged separately above) — nothing new broke.
