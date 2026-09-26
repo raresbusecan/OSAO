@@ -322,14 +322,17 @@ export function HomeCategoryPage({
               flex: 1,
               height: 46,
               borderRadius: radius.sm,
-              backgroundColor: colors.onSurface,
+              // Editing an existing row is a save, not a creation --
+              // green like the resolve button below it, distinct from
+              // the black "add new" fill. Per explicit user request.
+              backgroundColor: editingId ? colors.success : colors.onSurface,
               alignItems: "center",
               justifyContent: "center",
               opacity: canSubmit ? 1 : 0.5,
             }}
           >
             <Text style={{ fontSize: 14, fontWeight: "700", color: colors.surface }}>
-              {editingId ? `Update ${title.replace(/s$/, "")}` : submitLabel}
+              {editingId ? "Save" : submitLabel}
             </Text>
           </Pressable>
 
