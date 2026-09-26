@@ -133,17 +133,6 @@ fine, unaffected).
 syntax got the suite running again, which surfaced these as
 pre-existing failures unrelated to that fix, 2026-09-22]`.
 
-### `GET /api/user` returns 500 instead of a clean 401 when unauthenticated
-
-**Where:** Sanctum/Auth middleware config — the `web` guard's
-`redirectTo` references a `login` named route that doesn't exist in
-this API-only app, so an unauthenticated request throws
-`RouteNotFoundException` instead of a normal 401 JSON response.
-
-**Found:** `[from: Task #1 security hardening — qa-lead's independent
-verification, 2026-09]`. Confirmed pre-existing, unrelated to that
-task's actual diff.
-
 ### Stale `frontend/dist/` web export still bakes in the old "frontend" app identity
 
 **Where:** `frontend/dist/_expo/static/js/web/entry-<hash>.js` — a leftover
@@ -806,6 +795,10 @@ Also stale by the time it was re-checked — Home Maintenance's "Resolved" actio
 ### All 11 save handlers in [id].tsx had the same silent-failure-on-edit bug (2026-09-26)
 
 `handleHomeTaskSave` was fixed first (root cause of a real user-reported bug: a resolved Task reappeared as unresolved in Restanțe after a silently-failed save). The other 10 (`handleFuelSave`, `handleMaintenanceSave`, `handleDocumentSave`, `handleExpenseSave` for Car; `handleHomeDocumentSave`, `handleHomeExpenseSave`, `handleHomeMaintenanceSave`, `handleHomeRecurringSave`, `handleHomeSupplySave` for Home; `handleExpenseEntrySave` for the Expenses space) had the identical bug and are now fixed the same way — each snapshots the entry before its optimistic update and reverts to that exact snapshot on a failed save, instead of a no-op that kept showing the never-actually-persisted edit. qa-lead verified all 10 individually (diffed each against main, confirmed the "new entry" failure path and every function's other logic, e.g. Car's renewal-flow branches, were untouched) plus a live end-to-end test against 3 of them (Car/Home/Expenses) with real forced `422` failures.
+
+### `GET /api/user` (and any protected route) crashed 500 instead of 401 (2026-09-26)
+
+Root cause: the default `Authenticate` middleware tries `route('login')` for any unauthenticated request whose Accept header doesn't explicitly say "application/json" — this app has no web login route at all (API-only), so that threw `RouteNotFoundException`, a raw 500 with a leaked stack trace, instead of a clean 401. Fixed with `$middleware->redirectGuestsTo(null)` in `bootstrap/app.php`, disabling the redirect entirely. Verified live: no-Accept-header request now returns a clean 401, a valid bearer token still returns 200 as before, and the backend test suite shows no new failures (same 2 already-known `DashboardControllerTest` ones).
 
 ### `league/commonmark` high-severity DoS advisory (2026-09-26)
 
