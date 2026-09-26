@@ -62,6 +62,11 @@ export function HomeCategoryPage({
   const [values, setValues] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [datePickerFor, setDatePickerFor] = useState<string | null>(null);
+  // The form (add or edit) starts collapsed behind a "+ Add X" row --
+  // opened either by that row or by tapping an existing entry to edit
+  // it. Never both at once with the list underneath fighting for
+  // attention on entry.
+  const [formExpanded, setFormExpanded] = useState(false);
 
   const isFieldVisible = (field: HomeCategoryField) =>
     !field.showWhen || values[field.showWhen] === "true";
@@ -92,15 +97,21 @@ export function HomeCategoryPage({
     setEditingId(null);
   };
 
+  const closeForm = () => {
+    reset();
+    setFormExpanded(false);
+  };
+
   const submit = () => {
     if (!canSubmit) return;
     onSubmit(values, editingId ?? undefined);
-    reset();
+    closeForm();
   };
 
   const startEdit = (id: string | number) => {
     setEditingId(String(id));
     setValues(getEditValues(String(id)));
+    setFormExpanded(true);
   };
 
   const openedInitialEditRef = useRef<string | null>(null);
@@ -120,7 +131,7 @@ export function HomeCategoryPage({
     );
     if (!confirmed) return;
 
-    if (editingId === String(id)) reset();
+    if (editingId === String(id)) closeForm();
     onDelete(String(id));
   };
 
@@ -131,7 +142,7 @@ export function HomeCategoryPage({
   const resolve = () => {
     if (!editingId || !onResolve) return;
     onResolve(editingId);
-    reset();
+    closeForm();
   };
 
   return (
@@ -172,6 +183,29 @@ export function HomeCategoryPage({
         </Text>
       </View>
 
+      {!formExpanded ? (
+        <Pressable
+          testID="category-add-row"
+          onPress={() => setFormExpanded(true)}
+          accessibilityRole="button"
+          accessibilityLabel={submitLabel}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            height: 46,
+            borderRadius: radius.sm,
+            backgroundColor: colors.onSurface,
+            marginBottom: spacing.xl,
+          }}
+        >
+          <Ionicons name="add" size={15} color={colors.surface} />
+          <Text style={{ fontSize: 13.5, fontWeight: "800", color: colors.surface }}>
+            {submitLabel}
+          </Text>
+        </Pressable>
+      ) : (
       <View
         style={{
           backgroundColor: "transparent",
@@ -336,25 +370,23 @@ export function HomeCategoryPage({
             </Text>
           </Pressable>
 
-          {editingId ? (
-            <Pressable
-              testID="category-cancel-edit"
-              onPress={reset}
-              style={{
-                height: 46,
-                paddingHorizontal: spacing.lg,
-                borderRadius: radius.sm,
-                borderWidth: 1,
-                borderColor: colors.error,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>
-                Cancel
-              </Text>
-            </Pressable>
-          ) : null}
+          <Pressable
+            testID="category-cancel-edit"
+            onPress={closeForm}
+            style={{
+              height: 46,
+              paddingHorizontal: spacing.lg,
+              borderRadius: radius.sm,
+              borderWidth: 1,
+              borderColor: colors.error,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>
+              Cancel
+            </Text>
+          </Pressable>
         </View>
 
         {/* Only while editing an existing row, for a category that has a
@@ -385,6 +417,7 @@ export function HomeCategoryPage({
           </Pressable>
         ) : null}
       </View>
+      )}
 
       <HomeCategorySection
         title="Existing"
