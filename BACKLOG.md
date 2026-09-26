@@ -708,6 +708,33 @@ cost, next to the existing bought/total progress).
   model "need" from scratch; revisit scope with the user before building
   the fuller version.
 
+### 3. Home Supplies restocks have no price, so they never count as spend
+
+**Where:** [frontend/lib/spaces/home/home.types.ts](frontend/lib/spaces/home/home.types.ts)'s
+`HomeSupplyEntry`/`SupplyRestockEvent` (no price/cost field at all,
+only quantity/unit) —
+[frontend/components/spaces/home/HomeSupplyRestockSheet.tsx](frontend/components/spaces/home/HomeSupplyRestockSheet.tsx)'s
+"Restocked" flow only ever asks for quantity —
+[frontend/lib/spaces/home/calculations/spend.calculations.ts](frontend/lib/spaces/home/calculations/spend.calculations.ts)'s
+`getHomeSpendRecords` (the source both HomeDashboard's "This month" card
+and HomeSpendPage read from) has no 4th branch for Supplies as a result.
+
+**What:** User noticed a bought item (e.g. toilet paper) never shows up
+in Home's spend total, and asked whether an optional price field should
+be added to the restock flow. Deliberately NOT built yet — the user's
+own words: "nu știu cum o să fie dacă adăugăm preț pentru ca partea de
+restock este conectată și cu lista de cumpărături și încă nu am un
+model în cap cum să îl facem exact să funcționeze" (restock is also
+wired into Grocery's shopping list, and there's no clear model yet for
+how a price would fit both flows without them fighting each other).
+Needs a design decision first: where would the price actually get
+entered (Home's own restock sheet? Grocery's "Finish Shopping" flow,
+which already posts a lump-sum expense elsewhere — see backlog #2
+above? both, and if so how do they not double-count the same
+purchase?) before touching the data model.
+
+**Found:** `[from: Home feedback follow-up, 2026-09-26]`.
+
 ## Bigger ideas (need a design pass before scoping into tasks)
 
 ### A. Learned restock patterns per product (Grocery)
