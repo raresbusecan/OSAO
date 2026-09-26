@@ -265,6 +265,19 @@ export default function HomeDashboard({
     setEditingTaskEntry(null);
   };
 
+  // The task row's own trash icon (HomeTasksPage) -- same confirm copy
+  // as HomeTaskForm's own delete button, since this reaches the exact
+  // same permanent delete without going through that form first.
+  const handleTaskRowDelete = async (entry: HomeTaskEntry) => {
+    const confirmed = await confirmAction(
+      "Delete task",
+      "This entry will be permanently deleted.",
+      { confirmLabel: "Delete", destructive: true },
+    );
+    if (!confirmed) return;
+    onTaskDelete(entry.id);
+  };
+
   // Shared by a direct checkbox tap and the resolve sheet's confirm --
   // price is undefined for a non-purchase task, or when "Rezolvă fără
   // preț" was tapped (still resolves, just never counts as spend; see
@@ -557,6 +570,7 @@ export default function HomeDashboard({
             setTaskFormVisible(true);
           }}
           onCheckboxPress={handleCheckboxPress}
+          onDelete={handleTaskRowDelete}
         />
         {resolveSheetEntry ? (
           <HomeTaskResolveSheet

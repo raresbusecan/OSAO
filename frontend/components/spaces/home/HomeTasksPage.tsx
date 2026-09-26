@@ -26,6 +26,10 @@ export type HomeTasksPageProps = {
    * opens HomeTaskResolveSheet for the price, everything else completes
    * instantly. Not named onToggleComplete because it isn't always one. */
   onCheckboxPress: (entry: HomeTaskEntry) => void;
+  /** The row's own trash icon -- deletes directly, without going
+   * through the edit form first. Caller is expected to confirm before
+   * actually deleting (see HomeDashboard's handleTaskRowDelete). */
+  onDelete: (entry: HomeTaskEntry) => void;
 };
 
 function formatDate(dateString: string): string {
@@ -58,6 +62,7 @@ export function HomeTasksPage({
   onEdit,
   onWarningsPress,
   onCheckboxPress,
+  onDelete,
 }: HomeTasksPageProps) {
   const { colors, spacing, radius } = useTheme();
 
@@ -170,6 +175,7 @@ export function HomeTasksPage({
                   radius={radius}
                   onToggle={() => onCheckboxPress(findEntry(row.id))}
                   onPress={() => onEdit(findEntry(row.id))}
+                  onDelete={() => onDelete(findEntry(row.id))}
                 />
               ))}
             </View>
@@ -210,6 +216,7 @@ export function HomeTasksPage({
                   last={index === upcoming.length - 1}
                   onToggle={() => onCheckboxPress(findEntry(row.id))}
                   onPress={() => onEdit(findEntry(row.id))}
+                  onDelete={() => onDelete(findEntry(row.id))}
                 />
               ))}
             </View>
@@ -316,6 +323,7 @@ function TaskRowCard({
   radius,
   onToggle,
   onPress,
+  onDelete,
 }: {
   row: HomeTaskRow;
   colors: any;
@@ -323,6 +331,7 @@ function TaskRowCard({
   radius: any;
   onToggle: () => void;
   onPress: () => void;
+  onDelete: () => void;
 }) {
   const color = tierColor(row.tier, colors);
 
@@ -359,6 +368,11 @@ function TaskRowCard({
         ) : (
           <Text style={{ fontSize: 11.5, fontWeight: "800", color }}>{tierLabel(row)}</Text>
         )}
+      </Pressable>
+      {/* Direct delete, same trash icon/color as HomeCategorySection's
+          own row delete -- no longer only reachable via the edit form. */}
+      <Pressable onPress={onDelete} hitSlop={14} accessibilityRole="button" accessibilityLabel="Delete task" style={{ padding: 2 }}>
+        <Ionicons name="trash-outline" size={16} color={colors.error} />
       </Pressable>
     </View>
   );
@@ -415,6 +429,7 @@ function UpcomingRow({
   last,
   onToggle,
   onPress,
+  onDelete,
 }: {
   row: HomeTaskRow;
   colors: any;
@@ -422,6 +437,7 @@ function UpcomingRow({
   last: boolean;
   onToggle: () => void;
   onPress: () => void;
+  onDelete: () => void;
 }) {
   return (
     <View
@@ -444,6 +460,9 @@ function UpcomingRow({
         </Text>
         <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>{row.dueDate ? formatDate(row.dueDate) : "Fără dată"}</Text>
         <Ionicons name="chevron-forward" size={15} color={colors.onSurfaceTertiary} />
+      </Pressable>
+      <Pressable onPress={onDelete} hitSlop={14} accessibilityRole="button" accessibilityLabel="Delete task" style={{ padding: 2 }}>
+        <Ionicons name="trash-outline" size={16} color={colors.error} />
       </Pressable>
     </View>
   );
