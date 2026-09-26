@@ -369,6 +369,13 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       nextDueDate: values.nextDueDate || existing?.nextDueDate || today(),
       notes: existing?.notes,
     }),
+    // Every entry here recurs by definition (there's no on/off toggle
+    // like Maintenance's "Recurent") -- Resolved always just advances
+    // nextDueDate one cycle forward and stays active, never retires.
+    resolveEntry: (existing: HomeRecurringEntry): HomeRecurringEntry => ({
+      ...existing,
+      nextDueDate: addRecurrenceInterval(existing.nextDueDate, existing.frequency, 1),
+    }),
     valuesFromEntry: (entry: HomeRecurringEntry) => ({
       title: entry.title,
       amount: String(entry.amount),
@@ -381,6 +388,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
         title: entry.title,
         subtitle: `${entry.frequency} · next ${formatDate(entry.nextDueDate)}`,
         amount: entry.amount.toLocaleString("en-US"),
+        isRecurring: true,
       })),
   },
   {

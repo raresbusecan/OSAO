@@ -159,10 +159,11 @@ export type RecurringWarningRow = {
   tier: RecurringWarningTier;
   daysRemaining: number;
   /** Which list this row actually resolves through -- a task opens
-   * HomeTaskResolveSheet (price + next-date), a maintenance entry goes
-   * through the same resolveEntry/confirmAction flow HomeCategoryPage's
-   * own checkbox already uses. See HomeDashboard's onResolvePress. */
-  kind: "task" | "maintenance";
+   * HomeTaskResolveSheet (price + next-date), a maintenance or
+   * recurring entry goes through the same resolveEntry/confirmAction
+   * flow HomeCategoryPage's own checkbox already uses. See
+   * HomeDashboard's onResolvePress. */
+  kind: "task" | "maintenance" | "recurring";
 };
 
 /** The one place "how urgent is N days remaining" turns into a tier --
@@ -208,6 +209,16 @@ export function getRecurringTaskWarnings(homeData: HomeData): {
     const tier = classifyTaskUrgencyTier(remaining);
 
     if (tier) rows.push({ id: entry.id, title: entry.service, tier, daysRemaining: remaining, kind: "maintenance" });
+  });
+
+  // Recurring -- always recurring by definition (no on/off toggle), so
+  // unlike Maintenance there's no completed/nextDueDate-less state to
+  // guard against; every entry always has a nextDueDate.
+  homeData.recurringEntries.forEach((entry) => {
+    const remaining = daysUntil(entry.nextDueDate, now);
+    const tier = classifyTaskUrgencyTier(remaining);
+
+    if (tier) rows.push({ id: entry.id, title: entry.title, tier, daysRemaining: remaining, kind: "recurring" });
   });
 
   // Ascending by daysRemaining -- most negative (furthest overdue, most

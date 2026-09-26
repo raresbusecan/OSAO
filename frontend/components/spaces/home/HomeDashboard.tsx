@@ -350,26 +350,30 @@ export default function HomeDashboard({
     // recoverable afterward (a resolved non-recurring entry vanishes
     // from the list; a recurring one's nextDueDate only ever advances
     // via this same action, nothing lets you set it back by hand -- see
-    // homeCategoryConfig.ts's buildEntry).
+    // homeCategoryConfig.ts's buildEntry). Whether it stays active is
+    // read off the RESOLVED entry's own nextDueDate, not an
+    // `isRecurring` field -- Recurring entries always recur but have no
+    // such field at all (every one of them resolves by advancing, never
+    // retiring), while Maintenance's optional toggle does set it.
     const resolved = category.resolveEntry(existing);
-    const isRecurring = !!(existing as { isRecurring?: boolean }).isRecurring;
-    const nextDueLabel = resolved.nextDueDate
+    const staysActive = !!resolved.nextDueDate;
+    const nextDueLabel = staysActive
       ? new Date(resolved.nextDueDate).toLocaleDateString("ro-RO", { day: "numeric", month: "short", year: "numeric" })
       : null;
 
     const confirmed = await confirmAction(
       "Marchezi ca rezolvat?",
-      isRecurring && nextDueLabel
+      staysActive && nextDueLabel
         ? `Data următoare se mută la ${nextDueLabel} și rămâne activă.`
         : "Intrarea devine inactivă și dispare din listă.",
-      { confirmLabel: "Rezolvă", destructive: !isRecurring },
+      { confirmLabel: "Rezolvă", destructive: !staysActive },
     );
     if (!confirmed) return;
 
     saveHandlers[categoryKey](resolved);
     notifyAction(
       "Rezolvat",
-      isRecurring && nextDueLabel
+      staysActive && nextDueLabel
         ? `Rămâne activ — următoarea dată: ${nextDueLabel}.`
         : "Mutat la inactiv.",
     );
@@ -530,16 +534,16 @@ export default function HomeDashboard({
           onBack={() => setWarningsPageVisible(false)}
           // A task row opens the resolve sheet directly (details
           // unchanged, only the price/next-date fields are editable) --
-          // not the full edit form. A maintenance row goes through the
-          // exact same confirm-then-advance flow as its own category
-          // page's checkbox/button (resolveCategoryEntry).
+          // not the full edit form. A maintenance or recurring row goes
+          // through the exact same confirm-then-advance flow as its own
+          // category page's checkbox/button (resolveCategoryEntry).
           onResolvePress={(row) => {
             if (row.kind === "task") {
               const entry = homeData.taskEntries.find((t) => t.id === row.id);
               if (entry) setResolveSheetEntry(entry);
               return;
             }
-            resolveCategoryEntry("maintenance", row.id);
+            resolveCategoryEntry(row.kind, row.id);
           }}
         />
         {resolveSheetEntry ? (
