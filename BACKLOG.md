@@ -574,6 +574,38 @@ doesn't depend on this.
 **Found:** `[from: design-lead review of Home Maintenance's new
 "Resolved" action, 2026-09-22]`.
 
+### HomeCategoryPage's row-level "resolve" checkbox doesn't close/refresh the edit form if that same row is open for editing
+
+**Where:** `frontend/components/spaces/home/HomeCategorySection.tsx`'s
+`onRowResolve` checkbox (rendered at each row's left edge, only for
+Maintenance) is wired straight to `resolveCategoryEntry` via
+`HomeCategoryPage.tsx`'s `onRowResolve={onResolve ? (id) =>
+onResolve(String(id)) : undefined}` (~line 428) -- a second, independent
+path into the same `onResolve` prop the form's own "Rezolvă" button
+uses. The form's own path (`resolve()`, ~line 142) calls `closeForm()`
+afterward; the row checkbox's path does not touch `formExpanded`/
+`editingId`/`values` at all.
+
+**What:** If a user opens a Maintenance entry for editing (form
+expanded, `editingId` = that row's id) and then taps that SAME row's
+own inline resolve checkbox in the list below (still visible/tappable
+underneath the open form, since `HomeCategorySection` renders
+unconditionally regardless of `formExpanded`), the entry gets resolved
+but the form stays open referencing a now-stale `editingId`. If the
+resolve was non-recurring, the entry drops out of
+`category.entries(homeData)` (filtered by `!completed`) entirely --
+tapping Save on the still-open stale form would then find no
+`existing` match and silently create a brand-new duplicate entry
+instead of erroring or updating the (now-hidden) original. This isn't
+introduced by commit c90019f (the collapsed-by-default form) -- the
+same two independent paths into `onResolve` existed before that diff,
+just with the form always visible instead of conditionally expanded --
+but c90019f's review surfaced it while tracing every `onResolve`
+call site.
+
+**Found:** `[from: qa-lead review of c90019f (Home category form
+collapse), 2026-09-26]`.
+
 ### The shared "+" FAB's fan/Quick-Add rendering is now fully dead code
 
 **Where:** `frontend/app/(tabs)/_layout.tsx` -- the FAB `Pressable` itself
