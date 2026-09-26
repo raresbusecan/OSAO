@@ -114,7 +114,7 @@ export function CarHeader({
             borderRadius: radius.pill,
             backgroundColor: colors.surfaceSecondary,
             borderWidth: 1,
-            borderColor: colors.border,
+            borderColor: colors.caution,
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -122,7 +122,7 @@ export function CarHeader({
           <Ionicons
             name="create-outline"
             size={19}
-            color={colors.onSurface}
+            color={colors.caution}
           />
         </Pressable>
 

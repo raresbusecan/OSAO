@@ -282,7 +282,7 @@ export default function Spaces() {
                     borderRadius: radius.pill,
                     backgroundColor: "transparent",
                     borderWidth: 1,
-                    borderColor: colors.border,
+                    borderColor: colors.caution,
                     alignItems: "center",
                     justifyContent: "center",
                   }}
@@ -290,7 +290,7 @@ export default function Spaces() {
                   <Ionicons
                     name="create-outline"
                     size={14}
-                    color={colors.onSurfaceTertiary}
+                    color={colors.caution}
                   />
                 </Pressable>
 

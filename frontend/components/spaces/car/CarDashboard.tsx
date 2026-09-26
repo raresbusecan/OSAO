@@ -846,7 +846,7 @@ export default function CarDashboard({
                             borderRadius: radius.pill,
                             backgroundColor: "transparent",
                             borderWidth: 1,
-                            borderColor: colors.border,
+                            borderColor: colors.caution,
                             alignItems: "center",
                             justifyContent: "center",
                         }}
@@ -854,7 +854,7 @@ export default function CarDashboard({
                         <Ionicons
                             name="create-outline"
                             size={19}
-                            color={colors.onSurface}
+                            color={colors.caution}
                         />
                     </Pressable>
 

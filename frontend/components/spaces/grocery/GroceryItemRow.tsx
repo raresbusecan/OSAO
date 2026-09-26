@@ -113,7 +113,7 @@ export function GroceryItemRow({ item, onToggle, onOpenMenu, onDelete }: Grocery
           accessibilityRole="button"
           accessibilityLabel={`Edit ${item.name}`}
         >
-          <Ionicons name="create-outline" size={18} color={colors.onSurfaceTertiary} />
+          <Ionicons name="create-outline" size={18} color={colors.caution} />
         </Pressable>
       </View>
     </Pressable>

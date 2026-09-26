@@ -231,7 +231,7 @@ export default function BudgetScreen() {
                 <Text style={{ ...typography.label, color: colors.onSurfaceTertiary }}>
                   SAVINGS GOAL
                 </Text>
-                <Ionicons name="create-outline" size={16} color={colors.onSurfaceTertiary} />
+                <Ionicons name="create-outline" size={16} color={colors.caution} />
               </View>
 
               {savingsGoal ? (

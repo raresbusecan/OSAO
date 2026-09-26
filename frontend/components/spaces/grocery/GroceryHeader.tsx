@@ -39,12 +39,12 @@ export function GroceryHeader({ space, onEdit }: GroceryHeaderProps) {
           borderRadius: radius.pill,
           backgroundColor: colors.surfaceSecondary,
           borderWidth: 1,
-          borderColor: colors.border,
+          borderColor: colors.caution,
           alignItems: "center",
           justifyContent: "center",
         }}
       >
-        <Ionicons name="create-outline" size={19} color={colors.onSurface} />
+        <Ionicons name="create-outline" size={19} color={colors.caution} />
       </Pressable>
 
       <View

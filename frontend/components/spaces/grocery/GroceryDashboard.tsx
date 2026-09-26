@@ -892,12 +892,12 @@ export default function GroceryDashboard({
               borderRadius: radius.pill,
               backgroundColor: "transparent",
               borderWidth: 1,
-              borderColor: colors.border,
+              borderColor: colors.caution,
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            <Ionicons name="create-outline" size={19} color={colors.onSurface} />
+            <Ionicons name="create-outline" size={19} color={colors.caution} />
           </Pressable>
 
           {/* SPACE ICON -- every other Space (Car/Home/Expenses) leads
