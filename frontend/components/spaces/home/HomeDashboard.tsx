@@ -562,6 +562,7 @@ export default function HomeDashboard({
     return (
       <HomeSpendPage
         homeData={homeData}
+        profile={profile}
         onBack={() => setSpendPageVisible(false)}
         onRecordPress={(category, id) => {
           setSpendPageVisible(false);

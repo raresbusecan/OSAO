@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import type { HomeData } from "./home.data.types";
+import type { HomeProfile } from "@/lib/spaces/spaceProfile";
 import {
   getHomeSpendRecords,
   getTotalHomeSpend,
@@ -16,6 +17,13 @@ import {
 
 export type HomeSpendPageProps = {
   homeData: HomeData;
+  /** From the dedicated Home form (Edit -> Ownership/Purchase price) --
+   * used only to add the purchase price into the OVERALL figure below
+   * TOTAL CHELTUIT, same as CarExpensesPage's own OVERALL. null/no
+   * price entered means OVERALL isn't shown at all -- this was
+   * missing entirely until a user pointed out the house's own purchase
+   * price never factored into Home's spend totals anywhere. */
+  profile?: HomeProfile | null;
   onBack: () => void;
   /** Tapping a record opens it back in its own category's edit form
    * (Expenses/Maintenance) or the Tasks edit form -- same idea as
@@ -61,8 +69,17 @@ function formatAmount(value: number): string {
  * spend.calculations.ts; this component only renders what that
  * returns.
  */
-export function HomeSpendPage({ homeData, onBack, onRecordPress }: HomeSpendPageProps) {
+export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: HomeSpendPageProps) {
   const { colors, spacing, radius } = useTheme();
+
+  // "Introdus" -- purchasePrice is always a number on a saved profile
+  // (HomeProfileForm defaults it to 0 rather than leaving it undefined),
+  // so 0 is treated the same as "not entered": nothing to add, and
+  // showing "Overall: 7,592 RON" right next to a real purchase price of
+  // 0 would misleadingly look like a free house. Same reasoning as
+  // CarExpensesPage's own hasPurchasePrice.
+  const purchasePrice = profile?.purchasePrice ?? 0;
+  const hasPurchasePrice = purchasePrice > 0;
 
   const [activeCategories, setActiveCategories] = useState<Set<HomeSpendCategory>>(new Set());
   const [period, setPeriod] = useState<HomeSpendPeriod>({ kind: "thisMonth" });
@@ -79,6 +96,13 @@ export function HomeSpendPage({ homeData, onBack, onRecordPress }: HomeSpendPage
   };
 
   const allRecords = useMemo(() => getHomeSpendRecords(homeData), [homeData]);
+
+  // OVERALL is deliberately computed from allRecords, ignoring every
+  // filter on this page -- it's "what has this house cost since day
+  // one", a fixed figure, not something that should shrink because
+  // you're looking at just Cheltuieli in the last 3 months.
+  const allTimeTotal = useMemo(() => getTotalHomeSpend(allRecords), [allRecords]);
+  const overall = purchasePrice + allTimeTotal;
 
   // period only -- what the breakdown chips' own counts are based on,
   // so a chip always shows "how much Cheltuieli cost in this period"
@@ -226,19 +250,50 @@ export function HomeSpendPage({ homeData, onBack, onRecordPress }: HomeSpendPage
           marginBottom: spacing.lg,
         }}
       >
-        <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurfaceTertiary, marginBottom: 4 }}>
-          TOTAL CHELTUIT
-        </Text>
-        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-          <Text style={{ fontSize: 30, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 }}>
-            {formatAmount(total)}
-          </Text>
-          <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurfaceTertiary }}>RON</Text>
+        <View style={{ flexDirection: "row" }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurfaceTertiary, marginBottom: 4 }}>
+              TOTAL CHELTUIT
+            </Text>
+            <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
+              <Text style={{ fontSize: 30, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 }}>
+                {formatAmount(total)}
+              </Text>
+              <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurfaceTertiary }}>RON</Text>
+            </View>
+            <Text style={{ marginTop: 4, fontSize: 12, color: colors.onSurfaceTertiary }}>
+              {formatSpendPeriodLabel(period)}
+              {activeCategories.size > 0 ? ` · ${categoryLabelsSelected}` : ""}
+            </Text>
+          </View>
+
+          {hasPurchasePrice ? (
+            <>
+              <View
+                style={{
+                  width: StyleSheet.hairlineWidth,
+                  backgroundColor: colors.border,
+                  marginHorizontal: spacing.md,
+                }}
+              />
+
+              <View style={{ flex: 1 }} testID="home-overall-cost">
+                <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurfaceTertiary, marginBottom: 4 }}>
+                  OVERALL
+                </Text>
+                <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
+                  <Text style={{ fontSize: 30, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 }}>
+                    {formatAmount(overall)}
+                  </Text>
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurfaceTertiary }}>RON</Text>
+                </View>
+                <Text style={{ marginTop: 4, fontSize: 12, color: colors.onSurfaceTertiary }}>
+                  {formatAmount(purchasePrice)} RON purchase
+                </Text>
+              </View>
+            </>
+          ) : null}
         </View>
-        <Text style={{ marginTop: 4, fontSize: 12, color: colors.onSurfaceTertiary }}>
-          {formatSpendPeriodLabel(period)}
-          {activeCategories.size > 0 ? ` · ${categoryLabelsSelected}` : ""}
-        </Text>
 
         {byCategory.length > 0 ? (
           <View
