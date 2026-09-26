@@ -6,6 +6,8 @@ import { HomeCategorySection, type HomeCategoryRow } from "./HomeCategorySection
 import { parseLeadingNumber, type HomeCategoryField } from "./homeCategoryConfig";
 import { HomeDatePickerSheet } from "./HomeDatePickerSheet";
 import { confirmAction } from "@/lib/confirm";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import type { HomeIcon } from "./home.ui.types";
 
 // Old-architecture Android needs this opt-in for LayoutAnimation to do
 // anything at all; a no-op everywhere else (new architecture, iOS, web).
@@ -29,6 +31,11 @@ function formatFieldDate(iso: string): string {
 
 export type HomeCategoryPageProps = {
   title: string;
+  /** Shown as a tinted identity-color chip next to the title -- same
+   * glyph each category's own rows already use (see
+   * homeCategoryConfig.ts's `icon`), so the page you land on visually
+   * matches the rows inside it instead of a bare, icon-less title. */
+  icon: HomeIcon;
   fields: HomeCategoryField[];
   submitLabel: string;
   rows: HomeCategoryRow[];
@@ -61,6 +68,7 @@ export type HomeCategoryPageProps = {
  */
 export function HomeCategoryPage({
   title,
+  icon,
   fields,
   submitLabel,
   rows,
@@ -193,6 +201,19 @@ export function HomeCategoryPage({
         >
           <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
         </Pressable>
+
+        <View
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: radius.md,
+            backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Ionicons name={icon} size={17} color={SPACE_IDENTITY_COLORS.home} />
+        </View>
 
         <Text style={{ ...typography.title, color: colors.onSurface }}>
           {title}

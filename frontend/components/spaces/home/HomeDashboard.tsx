@@ -575,6 +575,7 @@ export default function HomeDashboard({
     return (
       <HomeCategoryPage
         title={category.label}
+        icon={category.icon}
         fields={category.fields}
         submitLabel={category.submitLabel}
         emptyLabel={category.emptyLabel}
