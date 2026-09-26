@@ -127,7 +127,7 @@ export function HomeRecurringWarningsPage({ homeData, onBack, onResolvePress }: 
           <View style={{ alignItems: "center", paddingVertical: spacing.xl, gap: spacing.sm }}>
             <Ionicons name="checkmark-done-outline" size={26} color={colors.onSurfaceTertiary} />
             <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>
-              Niciun task recurent nu se apropie de scadență.
+              Nimic nu se apropie de scadență.
             </Text>
           </View>
         )}
