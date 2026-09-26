@@ -92,7 +92,16 @@ export function HomeDatePickerSheet({ value, onCancel, onSelect }: HomeDatePicke
   const goToIndex = (target: number) => {
     const clamped = Math.max(0, Math.min(months.length - 1, target));
     setIndex(clamped);
-    listRef.current?.scrollToIndex({ index: clamped, animated: true });
+    // NOT animated -- an animated scrollToIndex fires a stream of
+    // intermediate onScroll events as it slides from the old page to
+    // the new one (handleScroll below, which exists to track a manual
+    // DRAG smoothly). Every one of those intermediate offsets rounds to
+    // SOME index -- typically the old page again right after the tap,
+    // then the new one once the slide is far enough along -- so
+    // setIndex ping-pongs old-new-old-new for the whole animation,
+    // visibly flickering the month label back and forth before
+    // settling. Jumping straight there has no in-between frame to race.
+    listRef.current?.scrollToIndex({ index: clamped, animated: false });
   };
 
   const handleLayout = (e: LayoutChangeEvent) => {
