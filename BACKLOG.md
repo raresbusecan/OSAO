@@ -13,29 +13,6 @@ one up like any other "Open" item once nothing more pressing is ahead
 of it. Mark it `[from: <task>]` so there's a trail back to how it was
 found.
 
-### Backend buckets Calendar days by UTC, with no user-timezone concept anywhere
-
-**Where:** `backend/app/Http/Controllers/Api/CalendarController.php`
-(`$key = Carbon::parse($item->due_at)->toDateString()`, both
-occurrences) — `Carbon::toDateString()` reads the app's configured
-timezone, which is `UTC` everywhere (`config/app.php`). Nothing in
-this app — no column on `users`, no request header, no stored
-preference — captures a user's actual timezone at all.
-
-**What:** Task #5 fixed the frontend's own `ymd()` (it compared a
-UTC-derived string against a locally-built grid key, a self-inflicted
-mismatch) — but that only makes the frontend internally consistent
-with itself. The backend still buckets an item due near midnight into
-whatever day it falls on in UTC, not the day it actually falls on for
-the user viewing it. A real fix needs a design decision first: where
-does the user's timezone come from (device-reported at login/each
-request? a stored profile setting?), then thread it into
-`Carbon::parse($item->due_at)->setTimezone($userTz)->toDateString()`
-in both places in `CalendarController`.
-
-**Found:** `[from: Task #5 frontend fixes — investigating the ymd()
-bug led here, 2026-09]`.
-
 ### Dead `search.tsx` stub left in the route tree instead of fully removed
 
 **Where:** `frontend/app/(tabs)/search.tsx` (a `@deprecated` stub that
@@ -799,6 +776,12 @@ Also stale by the time it was re-checked — Home Maintenance's "Resolved" actio
 ### `GET /api/user` (and any protected route) crashed 500 instead of 401 (2026-09-26)
 
 Root cause: the default `Authenticate` middleware tries `route('login')` for any unauthenticated request whose Accept header doesn't explicitly say "application/json" — this app has no web login route at all (API-only), so that threw `RouteNotFoundException`, a raw 500 with a leaked stack trace, instead of a clean 401. Fixed with `$middleware->redirectGuestsTo(null)` in `bootstrap/app.php`, disabling the redirect entirely. Verified live: no-Accept-header request now returns a clean 401, a valid bearer token still returns 200 as before, and the backend test suite shows no new failures (same 2 already-known `DashboardControllerTest` ones).
+
+### Calendar bucketed days by UTC, with no user-timezone concept anywhere (2026-09-27)
+
+Design decision (user's own call): collect the timezone automatically from the device, then persist it — not a stateless per-request header alone, not a manual Settings field. `frontend/lib/api.ts` now sends `X-Timezone` (from `Intl.DateTimeFormat().resolvedOptions().timeZone`) on every request; a new `SyncUserTimezone` middleware persists it onto a new `users.timezone` column whenever it's present, valid, and different from what's stored; `CalendarController` reads `$user->timezone ?? 'UTC'` for both the month's start/end boundaries and both day-grouping `toDateString()` calls. A user who's never sent it falls back to the exact old UTC behavior, confirmed unchanged.
+
+Found and fixed a real Laravel/Carbon gotcha while verifying this live: the query builder serializes a Carbon straight to its own wall-clock string for a raw SQL parameter (e.g. `whereBetween`) — it does NOT auto-convert to UTC the way an in-PHP Carbon comparison does. Needed an explicit `->setTimezone('UTC')` copy of the month bounds for that one query, separate from the `$userTz`-tagged Carbons used everywhere else in the method (those are instant-based comparisons, unaffected by the tag). qa-lead independently reproduced the gotcha at the PDO-binding level and re-verified the fix with a different timezone/item/user (Asia/Tokyo) than the implementation session's own test.
 
 ### `league/commonmark` high-severity DoS advisory (2026-09-26)
 
