@@ -996,7 +996,7 @@ export function GroceryRecipesPage({
                 onPress={() => setPendingAdd(null)}
                 style={{ minHeight: 44, alignItems: "center", justifyContent: "center" }}
               >
-                <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurfaceTertiary }}>Cancel</Text>
+                <Text style={{ fontSize: 13, fontWeight: "700", color: colors.error }}>Cancel</Text>
               </Pressable>
             </>
           ) : null}

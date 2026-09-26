@@ -61,7 +61,22 @@ function TabsLayoutInner() {
   // still wants it, for its per-space category fan.
   const segments = useSegments();
   const currentTab = segments[segments.length - 1];
-  const fabHiddenOn = new Set(["home", "spaces", "calendar", "budget"]);
+  // Removed space by space as each grew its own always-visible entry
+  // points that made the fan a second way to reach the same thing:
+  // Car's "QUICK ACTIONS" row opens the same 4 forms the fan did;
+  // Home's category grid plus Tasks'/Supplies' own in-page "add" rows
+  // cover what the fan's categories did (the fan's one extra trick --
+  // a second tap on an already-open category jumping straight to its
+  // add form -- wasn't worth keeping a whole floating button for);
+  // Grocery's Recipes moved next to Invite in its own header, Smart
+  // List is paused anyway; Expenses' fan only ever closed its detail
+  // page, `ExpensesAddBar` is already on screen underneath it. No
+  // Space needs the fan anymore, so `[id]` is hidden outright here --
+  // deliberately NOT keyed off `config` (whether some space has
+  // registered): that only resolves once useFocusEffect commits, a
+  // beat after this first renders, so the FAB used to flash on screen
+  // for a frame on every space-page load before disappearing.
+  const fabHiddenOn = new Set(["home", "spaces", "calendar", "budget", "[id]"]);
   const hideFab = fabHiddenOn.has(currentTab);
 
   const quickAddRef = useRef<QuickAddSheetRef>(null);
@@ -338,7 +353,11 @@ function TabsLayoutInner() {
             testID="quick-add-fab"
             onPress={onFabPress}
             accessibilityRole="button"
-            accessibilityLabel={config ? (fanOpen ? "Close menu" : `Open ${config.spaceLabel} menu`) : "Quick add"}
+            // `config` is always null whenever this button can actually
+            // render now (hideFab is true for every Space that registers
+            // one) -- the space-specific label only ever applied to the
+            // fan this button no longer opens for anyone.
+            accessibilityLabel={fanOpen ? "Close menu" : "Quick add"}
             style={({ pressed }) => ({
               width: FAB_SIZE,
               height: FAB_SIZE,

@@ -17,6 +17,7 @@ import {
 
 import { useRegisterSpaceCategories, type SpaceCategory } from "@/lib/spaceCategoryFab";
 
+import { CarQuickActions } from "./CarQuickActions";
 import CarFuelForm from "./forms/CarFuelForm";
 import CarMaintenanceForm from "./forms/CarMaintenanceForm";
 import CarDocumentForm from "./forms/CarDocumentForm";
@@ -1021,6 +1022,16 @@ export default function CarDashboard({
                 </View>
 
                 {/* =====================================================
+            QUICK ACTIONS -- revived, now that the shared FAB is hidden
+            for Car (app/(tabs)/_layout.tsx) so this is the one way in,
+            not a second one alongside it.
+            ===================================================== */}
+
+                <View style={{ marginBottom: spacing.xl }}>
+                    <CarQuickActions actions={carCategories} onAction={handleCarAction} />
+                </View>
+
+                {/* =====================================================
             CATEGORY TABS -- filters both RECENT and the list below.
             Doesn't touch NEXT (that's alerts, not browsing).
             ===================================================== */}
@@ -1494,7 +1505,13 @@ function InfoRow({
                     width: 42,
                     height: 42,
                     borderRadius: radius.md,
-                    backgroundColor: colors.surfaceTertiary,
+                    // Same tinted-chip recipe as Quick Actions/the header
+                    // avatar -- this icon identifies which entry TYPE is
+                    // due soon, the same signal those already carry in
+                    // blue; the urgency itself is conveyed separately by
+                    // this row's own border color (tierColor, above), not
+                    // by this icon, so the two meanings don't collide.
+                    backgroundColor: `${SPACE_IDENTITY_COLORS.car}1A`,
                     alignItems: "center",
                     justifyContent: "center",
                 }}
@@ -1502,7 +1519,7 @@ function InfoRow({
                 <Ionicons
                     name={icon}
                     size={20}
-                    color={colors.onSurface}
+                    color={SPACE_IDENTITY_COLORS.car}
                 />
             </View>
 
@@ -1636,10 +1653,18 @@ export function RecentRow({
             }}
         >
             <View style={{ position: "relative" }}>
+                {/* This icon means "this row is a Fuel/Maintenance/
+                    Document/Expense entry" -- the same identity signal
+                    Quick Actions' own icons already carry in this Space's
+                    blue, just previously left neutral here instead of
+                    matching. Not a state or navigation signal (those stay
+                    neutral, see chevron-forward below), so extending
+                    identity color here doesn't cross back into the
+                    "active state" territory ruled out earlier. */}
                 <Ionicons
                     name={icon}
                     size={20}
-                    color={colors.onSurfaceTertiary}
+                    color={SPACE_IDENTITY_COLORS.car}
                 />
 
                 {statusDot && overdue ? (

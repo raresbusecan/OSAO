@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import type { CarData } from "./car.data.types";
 import { getDocumentStatus, type DocumentStatus } from "@/lib/spaces/car/calculations/dashboard.calculations";
 import { formatCarDate, formatCarNumber } from "./utils/carFormatters";
@@ -104,7 +105,10 @@ export function CarDocsPage({ carData, onBack, onRecordPress }: CarDocsPageProps
 
       {documents.length === 0 ? (
         <View style={{ alignItems: "center", paddingVertical: spacing["3xl"] ?? 48, gap: spacing.sm }}>
-          <Ionicons name="document-text-outline" size={28} color={colors.onSurfaceTertiary} />
+          {/* Same identity glyph as the real rows two lines down (already
+              tinted) -- was left neutral here, the one moment it reads
+              differently depending on whether the list is empty. */}
+          <Ionicons name="document-text-outline" size={28} color={SPACE_IDENTITY_COLORS.car} />
           <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, textAlign: "center" }}>
             No documents on file yet. Add one from the + menu's Document category.
           </Text>
@@ -132,12 +136,15 @@ export function CarDocsPage({ carData, onBack, onRecordPress }: CarDocsPageProps
                   width: 36,
                   height: 36,
                   borderRadius: radius.md,
-                  backgroundColor: colors.surfaceTertiary,
+                  // Tinted with the Space's identity color, same as Quick
+                  // Actions/DUE SOON's chips -- this icon's whole job is
+                  // "this row is a document," the same identity signal.
+                  backgroundColor: `${SPACE_IDENTITY_COLORS.car}1A`,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <Ionicons name="document-text-outline" size={17} color={colors.onSurface} />
+                <Ionicons name="document-text-outline" size={17} color={SPACE_IDENTITY_COLORS.car} />
               </View>
 
               <View style={{ flex: 1 }}>

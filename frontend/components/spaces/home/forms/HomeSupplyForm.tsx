@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import { confirmAction } from "@/lib/confirm";
 
 import type { HomeSupplyEntry } from "@/lib/spaces/home/home.types";
@@ -94,12 +95,14 @@ export default function HomeSupplyForm({ onCancel, onSave, entry, onDelete }: Ho
                   width: 36,
                   height: 36,
                   borderRadius: radius.md,
-                  backgroundColor: colors.surfaceSecondary,
+                  // Same tinted-chip identity signal as HomeTaskForm's
+                  // own header chip and the Space header avatar.
+                  backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <Ionicons name="basket-outline" size={19} color={colors.onSurface} />
+                <Ionicons name="basket-outline" size={19} color={SPACE_IDENTITY_COLORS.home} />
               </View>
 
               <Text style={{ fontSize: 22, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.3 }}>
@@ -244,12 +247,12 @@ export default function HomeSupplyForm({ onCancel, onSave, entry, onDelete }: Ho
             minHeight: 48,
             borderRadius: radius.md,
             borderWidth: 1,
-            borderColor: colors.border,
+            borderColor: colors.error,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurface }}>Cancel</Text>
+          <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>Cancel</Text>
         </Pressable>
 
         {isEditing && onDelete ? (
@@ -317,7 +320,9 @@ function FormField({
           borderWidth: isFocused ? 2 : 1,
           borderColor: isFocused ? colors.onSurface : colors.border,
           flexDirection: "row",
-          alignItems: multiline ? "flex-start" : "center",
+          // "stretch" so a multiline field's TextInput fills the whole
+          // box height -- otherwise only its top ~20px was tappable.
+          alignItems: multiline ? "stretch" : "center",
           paddingHorizontal: spacing.md,
           paddingVertical: multiline ? spacing.md : 0,
         }}

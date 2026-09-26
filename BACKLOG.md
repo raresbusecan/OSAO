@@ -196,33 +196,6 @@ pass rather than folding into an unrelated task.
 output after installing @sentry/react-native, 2026-09]`. Pre-existing,
 unrelated to Sentry.
 
-### `RecurringWarningRow`'s `tier` field is typed `never` — a naming collision between two unrelated "tier" concepts
-
-**Where:** `frontend/lib/spaces/home/calculations/dashboard.calculations.ts`
-— `HomeTaskRow` (line 188) already declares its own
-`tier?: "critical" | "medium"`. `RecurringWarningRow` (line 155) is
-defined as `HomeTaskRow & { tier: RecurringWarningTier; daysRemaining:
-number }`, where `RecurringWarningTier = "yellow" | "orangeDays" |
-"orangeToday" | "red"` (line 153) — a completely different value set.
-Intersecting the two `tier` types has zero overlap, so TypeScript
-collapses the property to `never`, which cascades into `error TS2339`
-("Property 'X' does not exist on type 'never'") everywhere a
-`RecurringWarningRow` is read: `dashboard.calculations.ts` itself
-(lines 175, 178, 182) and `components/spaces/home/
-HomeRecurringWarningsPage.tsx` (lines 30, 31, 80, 83, 84, 110, 112).
-
-**What:** `npx tsc --noEmit` was run for the first time in recent
-memory (as part of qa-lead's SDK-bump verification, not previously
-gated by any script/CI) and surfaced this — it's a pre-existing type
-bug, not something the Expo 54→57 bump introduced or touched (this
-source file is untouched in that diff). Whether TypeScript 5.9 (the
-version before this bump) already flagged the same error wasn't
-verified. Fix is a rename: `RecurringWarningTier` needs its own field
-name (e.g. `warningTier`) instead of reusing `tier`, updated at both
-the type definition and its ~9 read sites.
-
-**Found:** `[from: qa-lead verification of Task #6, 2026-09]`.
-
 ### `backend/CLAUDE.md` says login/register have no throttle middleware — that's stale
 
 **Where:** `backend/CLAUDE.md`'s `AuthController.php` bullet ("**Login/register
@@ -573,6 +546,62 @@ screen.
 
 **Found:** `[from: design-lead Phase 3 Budget audit, 2026-09-22]`.
 
+### Home Maintenance has no archive/undo for a resolved non-recurring entry, which is the real reason its new "Resolved" action needed a confirm dialog
+
+**Where:** `frontend/components/spaces/home/homeCategoryConfig.ts`'s
+"maintenance" category (`entries` filters out `completed` rows with no
+other view that ever shows them again) vs. Tasks in the same Home space,
+which has a dedicated `HomeTaskArchivePage.tsx` plus an undo (tapping a
+done row's checkbox again flips `completed` back, see
+`HomeDashboard.tsx`'s `handleCheckboxPress`). `HomeDashboard.tsx`'s
+`onResolve` wiring (~line 543) has to show a `confirmAction` dialog before
+every non-recurring Maintenance resolve specifically because that action
+is otherwise silent and permanent — there's nowhere to see or undo it
+afterward.
+
+**What:** This is the underlying gap a confirm-dialog patched over instead
+of fixing. Recommended direction: give Maintenance the same lightweight
+archive + undo pattern Tasks already has (reuse `HomeTaskArchivePage`'s
+shape rather than inventing a new one). Once resolved entries are visible
+and reversible somewhere, the confirm-dialog friction on the (likely more
+common) recurring-resolve path can come back out, matching Tasks' own
+no-confirm precedent. This is a functional change (new view + toggle,
+not a visual tweak) and needs the user's separate sign-off before
+frontend-lead builds it — see the design review's full report for the
+accompanying visual/interaction spec (row layout, recurring badge) that
+doesn't depend on this.
+
+**Found:** `[from: design-lead review of Home Maintenance's new
+"Resolved" action, 2026-09-22]`.
+
+### The shared "+" FAB's fan/Quick-Add rendering is now fully dead code
+
+**Where:** `frontend/app/(tabs)/_layout.tsx` -- the FAB `Pressable` itself
+is unreachable now (`hideFab` includes `"[id]"` unconditionally, see the
+comment right above it), which means everything downstream of tapping it
+is dead too: the category-fan `Animated.View`s (~lines 170-345), the
+backdrop, `fanOpen` state, `onFabPress`/`onPickCategory`, and
+`openQuickAdd`/`<QuickAddSheet>` at the bottom of the file. Also dead:
+every Space's own `useRegisterSpaceCategories(...)` call now just feeds
+a `config` object nothing reads anymore (Car's `handleCarAction`-wired
+categories, Home's `fabCategories`, Grocery's `fabCategories`,
+Expenses' single "add" category) -- each still runs, harmlessly, but
+none of it can ever surface in the UI.
+
+**What:** All 4 Spaces grew their own always-visible entry points
+(Car's QUICK ACTIONS row, Home's category grid + Tasks'/Supplies' own
+add rows, Grocery's Recipes button next to Invite, Expenses'
+always-on `ExpensesAddBar`), so the FAB was turned off everywhere
+rather than case-by-case. Worth an actual removal pass once nothing
+else is competing for attention: strip the fan/backdrop/animation code
+and `QuickAddSheet` wiring from `_layout.tsx`, and each Space's now-
+pointless `useRegisterSpaceCategories` call plus whatever
+`SpaceCategory[]`/`onSelect` plumbing only existed to feed it (e.g.
+Car's `carCategories`/`handleCarAction`'s FAB-only branch, if nothing
+else calls it directly).
+
+**Found:** `[from: removing the FAB from all 4 Spaces, 2026-09-22]`.
+
 ## Open
 
 ### 0. Real app icon (currently still Expo's default template icon)
@@ -743,4 +772,6 @@ gets migrated incrementally.
 
 ## Done
 
-_(none yet)_
+### `RecurringWarningRow`'s `tier` field typed `never` (2026-09-26)
+
+Fixed as a side effect of unifying Home Tasks' urgency coloring: `HomeTaskRow.tier` used to be its own unrelated `"critical" | "medium"` set; it's now the same `RecurringWarningTier` (`"yellow" | "orangeDays" | "orangeToday" | "red"`) Restanțe already used, via a shared `classifyTaskUrgencyTier()`. The intersection in `RecurringWarningRow` no longer collapses to `never` — confirmed via a full `npx tsc --noEmit` run, zero errors left in `dashboard.calculations.ts`/`HomeRecurringWarningsPage.tsx`.

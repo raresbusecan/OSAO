@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, useWindowDimensions, DeviceEventEmit
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import { confirmAction, notifyAction } from "@/lib/confirm";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/auth";
@@ -816,20 +817,13 @@ export default function GroceryDashboard({
 
   // Home shows the active tab's list only (see effectiveActiveListId
   // above) -- switching tabs, not navigating anywhere, is how another
-  // list's items show up here. Stat cards, the category filter and the
-  // TO BUY/IN CART sections below are all scoped to just this one list.
+  // list's items show up here. The stat cards and the single ITEMS
+  // section below are both scoped to just this one list.
   const activeList = lists.find((list) => list.id === effectiveActiveListId);
   const activeListItems = effectiveActiveListId ? getItemsForList(items, effectiveActiveListId) : [];
 
   const toBuyTotal = activeListItems.filter((item) => !item.inCart).length;
   const inCartTotal = activeListItems.filter((item) => item.inCart).length;
-
-  // No category filter for now (pulled per user request -- most lists
-  // only ever have one or two categories on them in practice, so the
-  // pill row was mostly just "All" + "Other"). toBuyItems/inCartItems
-  // just split the active list's own items, unfiltered.
-  const toBuyItems = activeListItems.filter((item) => !item.inCart);
-  const inCartItems = activeListItems.filter((item) => item.inCart);
 
   // Everyone else on this list -- deliberately excludes the viewer's
   // own avatar (seeing your own face reflected back is just clutter,
@@ -906,6 +900,27 @@ export default function GroceryDashboard({
             <Ionicons name="create-outline" size={19} color={colors.onSurface} />
           </Pressable>
 
+          {/* SPACE ICON -- every other Space (Car/Home/Expenses) leads
+              with this tinted avatar before its name; Grocery skipped it
+              entirely, the one header that didn't match the other 3. */}
+          <View
+            style={{
+              width: 68,
+              height: 68,
+              borderRadius: radius.lg,
+              backgroundColor: `${SPACE_IDENTITY_COLORS.grocery}1A`,
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: spacing.md,
+            }}
+          >
+            <Ionicons
+              name={(space?.icon || "cart-outline") as any}
+              size={32}
+              color={SPACE_IDENTITY_COLORS.grocery}
+            />
+          </View>
+
           <Text style={{ textAlign: "center", fontSize: 30, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.7 }}>
             {space?.name || "Grocery"}
           </Text>
@@ -916,72 +931,102 @@ export default function GroceryDashboard({
             </Text>
           ) : null}
 
-          {/* INVITE / MEMBERS -- who has access to the active list.
-              Used to sit where BACK now is (top-left, in place of the
-              corner button every other space has); moved here, under
-              the list's own name+subtitle, since it's about this
-              list's access, not the space-level chrome the back/edit
-              corners are. */}
-          <Pressable
-            testID="grocery-members-stack"
-            onPress={() => setMembersModalVisible(true)}
-            disabled={!effectiveActiveListId}
-            accessibilityRole="button"
-            accessibilityLabel="Manage who has access to this list"
-            style={{ flexDirection: "row", alignItems: "center", marginTop: spacing.md, opacity: effectiveActiveListId ? 1 : 0.4 }}
-          >
-            {otherPeople.slice(0, 2).map((person, index) => (
-              <View key={person.id} style={{ marginLeft: index === 0 ? 0 : -12, zIndex: 10 - index }}>
-                <Avatar id={person.id} name={person.name} size={40} ringed />
-              </View>
-            ))}
+          {/* INVITE + RECIPES -- both now sit here as a pair. Invite used
+              to sit where BACK now is (top-left, in place of the corner
+              button every other space has); moved here, under the
+              list's own name+subtitle, since it's about this list's
+              access, not the space-level chrome the back/edit corners
+              are. Recipes used to only be reachable through the shared
+              FAB's fan (now removed everywhere -- see
+              app/(tabs)/_layout.tsx); it's not tied to a list the way
+              Invite is, but lives beside it as the second "space-wide"
+              action on this header rather than getting its own row. */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginTop: spacing.md }}>
+            <Pressable
+              testID="grocery-members-stack"
+              onPress={() => setMembersModalVisible(true)}
+              disabled={!effectiveActiveListId}
+              accessibilityRole="button"
+              accessibilityLabel="Manage who has access to this list"
+              style={{ flexDirection: "row", alignItems: "center", opacity: effectiveActiveListId ? 1 : 0.4 }}
+            >
+              {otherPeople.slice(0, 2).map((person, index) => (
+                <View key={person.id} style={{ marginLeft: index === 0 ? 0 : -12, zIndex: 10 - index }}>
+                  <Avatar id={person.id} name={person.name} size={40} ringed />
+                </View>
+              ))}
 
-            {/* Nobody on this list yet -- a bare "+" here doesn't read
-                as "invite someone" on its own, so it grows into a
-                labeled pill instead. The moment there's a real avatar
-                to look at, the label's job is done (that's the
-                context now) and it shrinks back to the plain dashed
-                circle everyone already recognizes as "add more". */}
-            {otherPeople.length === 0 ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
-                  height: 40,
-                  paddingLeft: 14,
-                  paddingRight: 14,
-                  borderRadius: 20,
-                  borderWidth: 1.5,
-                  borderStyle: "dashed",
-                  borderColor: colors.border,
-                  backgroundColor: "transparent",
-                }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurfaceTertiary }}>
-                  Invite someone
-                </Text>
-                <Ionicons name="add" size={16} color={colors.onSurfaceTertiary} />
-              </View>
-            ) : (
-              <View
-                style={{
-                  marginLeft: -12,
-                  width: 40,
-                  height: 40,
-                  borderRadius: 20,
-                  borderWidth: 1.5,
-                  borderStyle: "dashed",
-                  borderColor: colors.border,
-                  backgroundColor: "transparent",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons name="add" size={18} color={colors.onSurfaceTertiary} />
-              </View>
-            )}
-          </Pressable>
+              {/* Nobody on this list yet -- a bare "+" here doesn't read
+                  as "invite someone" on its own, so it grows into a
+                  labeled pill instead. The moment there's a real avatar
+                  to look at, the label's job is done (that's the
+                  context now) and it shrinks back to the plain dashed
+                  circle everyone already recognizes as "add more". */}
+              {otherPeople.length === 0 ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                    height: 40,
+                    paddingLeft: 14,
+                    paddingRight: 14,
+                    borderRadius: 20,
+                    borderWidth: 1.5,
+                    borderStyle: "dashed",
+                    borderColor: colors.border,
+                    backgroundColor: "transparent",
+                  }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurfaceTertiary }}>
+                    Invite someone
+                  </Text>
+                  <Ionicons name="add" size={16} color={colors.onSurfaceTertiary} />
+                </View>
+              ) : (
+                <View
+                  style={{
+                    marginLeft: -12,
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    borderWidth: 1.5,
+                    borderStyle: "dashed",
+                    borderColor: colors.border,
+                    backgroundColor: "transparent",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Ionicons name="add" size={18} color={colors.onSurfaceTertiary} />
+                </View>
+              )}
+            </Pressable>
+
+            <Pressable
+              testID="grocery-recipes-button"
+              onPress={() => setView("recipes")}
+              accessibilityRole="button"
+              accessibilityLabel="Recipes"
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 6,
+                height: 40,
+                paddingLeft: 14,
+                paddingRight: 14,
+                borderRadius: 20,
+                borderWidth: 1.5,
+                borderColor: colors.border,
+                backgroundColor: "transparent",
+              }}
+            >
+              <Ionicons name="restaurant-outline" size={16} color={colors.onSurfaceTertiary} />
+              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurfaceTertiary }}>
+                Recipes
+              </Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* LIST GRID -- tapping a card never navigates anywhere; it just
@@ -1104,7 +1149,9 @@ export default function GroceryDashboard({
 
             {activeListItems.length === 0 ? (
               <View style={{ alignItems: "center", paddingVertical: spacing["3xl"] ?? 48, gap: spacing.sm }}>
-                <Ionicons name="cart-outline" size={28} color={colors.onSurfaceTertiary} />
+                {/* Same identity glyph as the header avatar (already
+                    tinted) -- was left neutral here. */}
+                <Ionicons name="cart-outline" size={28} color={SPACE_IDENTITY_COLORS.grocery} />
                 <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface, textAlign: "center" }}>
                   {activeList?.name ?? "This list"} is empty.
                 </Text>
@@ -1113,22 +1160,30 @@ export default function GroceryDashboard({
                 </Text>
               </View>
             ) : (
-              <>
-                <HomeItemSection
-                  title="TO BUY"
-                  items={toBuyItems}
-                  onToggle={handleToggle}
-                  onOpenMenu={setHomeEditingItem}
-                  onDelete={handleDelete}
-                />
-                <HomeItemSection
-                  title="IN CART"
-                  items={inCartItems}
-                  onToggle={handleToggle}
-                  onOpenMenu={setHomeEditingItem}
-                  onDelete={handleDelete}
-                />
-              </>
+              // One list, not two -- checking an item off used to move it
+              // out of TO BUY into a separate IN CART section below; now
+              // it just stays where it is and its own row recolors (see
+              // GroceryItemRow's checked-circle fill), matching how a
+              // paper list actually works -- you cross something off in
+              // place, you don't re-sort the page. toBuyTotal/inCartTotal
+              // above still split for the stat cards; nothing about
+              // what's tracked changed, only this one render.
+              <HomeItemSection
+                title={
+                  activeList ? (
+                    <>
+                      Items from list:{" "}
+                      <Text style={{ color: SPACE_IDENTITY_COLORS.grocery }}>{activeList.name}</Text>
+                    </>
+                  ) : (
+                    "ITEMS"
+                  )
+                }
+                items={activeListItems}
+                onToggle={handleToggle}
+                onOpenMenu={setHomeEditingItem}
+                onDelete={handleDelete}
+              />
             )}
           </>
         )}
@@ -1349,7 +1404,10 @@ function HomeItemSection({
   onOpenMenu,
   onDelete,
 }: {
-  title: string;
+  // ReactNode (not just string) so the caller can color just the
+  // dynamic list-name portion of the label without a second Text
+  // element duplicating the base font/letterSpacing/weight styling.
+  title: React.ReactNode;
   items: GroceryItem[];
   onToggle: (id: string) => void;
   onOpenMenu: (item: GroceryItem) => void;

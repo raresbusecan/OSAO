@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import type { HomeNextItem } from "./home.ui.types";
 
 export type HomeNextSectionProps = {
@@ -49,12 +50,17 @@ export function HomeNextSection({ items }: HomeNextSectionProps) {
                 width: 42,
                 height: 42,
                 borderRadius: radius.md,
-                backgroundColor: colors.surfaceTertiary,
+                // Tinted with Home's identity color, same recipe as
+                // Home's "CATEGORII" tile chips and Car's own DUE
+                // SOON/Quick Actions -- this icon's job is "this is a
+                // Documents/Maintenance/Recurring/... entry," the same
+                // identity signal those already carry.
+                backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Ionicons name={item.icon} size={20} color={colors.onSurface} />
+              <Ionicons name={item.icon} size={20} color={SPACE_IDENTITY_COLORS.home} />
             </View>
 
             <View style={{ flex: 1 }}>

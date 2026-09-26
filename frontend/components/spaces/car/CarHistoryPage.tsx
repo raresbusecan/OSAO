@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { View, Text, ScrollView, Pressable, Modal, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import { buildCarRecentItems } from "./utils/carEntries";
 import type { CarRecentItem } from "./utils/carEntries.types";
 import type { CarData } from "./car.data.types";
@@ -516,13 +517,17 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
                   width: 36,
                   height: 36,
                   borderRadius: radius.md,
-                  backgroundColor: colors.surfaceTertiary,
+                  // Same tinted-chip identity signal used everywhere else
+                  // in Car for "this row is a Fuel/Maintenance/Document/
+                  // Expense entry" -- the archived dimming below still
+                  // applies on top of it.
+                  backgroundColor: `${SPACE_IDENTITY_COLORS.car}1A`,
                   alignItems: "center",
                   justifyContent: "center",
                   opacity: item.archived ? 0.5 : 1,
                 }}
               >
-                <Ionicons name={item.icon} size={17} color={colors.onSurface} />
+                <Ionicons name={item.icon} size={17} color={SPACE_IDENTITY_COLORS.car} />
 
                 {item.statusDot && item.overdue ? (
                   <View

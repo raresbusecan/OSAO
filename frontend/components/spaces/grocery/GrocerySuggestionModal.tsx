@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { View, Text, Pressable, Modal, ScrollView, TextInput, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 
 export type SupplySuggestion = {
   /** The Home supply's own item id -- carried through so the added
@@ -64,12 +65,12 @@ export function GrocerySuggestionModal({ visible, suggestions, onAdd, onClose }:
                   width: 32,
                   height: 32,
                   borderRadius: radius.md,
-                  backgroundColor: colors.surfaceSecondary,
+                  backgroundColor: `${SPACE_IDENTITY_COLORS.grocery}1A`,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <Ionicons name="basket-outline" size={16} color={colors.onSurface} />
+                <Ionicons name="basket-outline" size={16} color={SPACE_IDENTITY_COLORS.grocery} />
               </View>
               <Text style={{ fontSize: 17, fontWeight: "800", color: colors.onSurface }}>Probabil pe terminate</Text>
             </View>

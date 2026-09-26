@@ -250,12 +250,12 @@ function EditNameModal({
                 minHeight: 48,
                 borderRadius: radius.sm,
                 borderWidth: 1,
-                borderColor: colors.border,
+                borderColor: colors.error,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurface }}>Anulează</Text>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>Anulează</Text>
             </Pressable>
 
             <Pressable
@@ -429,12 +429,12 @@ function EditPasswordModal({ visible, onClose }: { visible: boolean; onClose: ()
                 minHeight: 48,
                 borderRadius: radius.sm,
                 borderWidth: 1,
-                borderColor: colors.border,
+                borderColor: colors.error,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurface }}>Anulează</Text>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>Anulează</Text>
             </Pressable>
 
             <Pressable
@@ -619,12 +619,12 @@ function EditEmailModal({ visible, onClose }: { visible: boolean; onClose: () =>
                     minHeight: 48,
                     borderRadius: radius.sm,
                     borderWidth: 1,
-                    borderColor: colors.border,
+                    borderColor: colors.error,
                     alignItems: "center",
                     justifyContent: "center",
                   }}
                 >
-                  <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurface }}>Anulează</Text>
+                  <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>Anulează</Text>
                 </Pressable>
 
                 <Pressable

@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import { confirmAction } from "@/lib/confirm";
 
 import type { CarDocumentEntry } from "@/lib/spaces/car/car.types";
@@ -202,8 +203,9 @@ export default function CarDocumentForm({
                   width: 36,
                   height: 36,
                   borderRadius: radius.md,
-                  backgroundColor:
-                    colors.surfaceSecondary,
+                  // Same tinted-chip identity signal as the main
+                  // dashboard's own Document icons.
+                  backgroundColor: `${SPACE_IDENTITY_COLORS.car}1A`,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
@@ -211,7 +213,7 @@ export default function CarDocumentForm({
                 <Ionicons
                   name="document-text-outline"
                   size={19}
-                  color={colors.onSurface}
+                  color={SPACE_IDENTITY_COLORS.car}
                 />
               </View>
 
@@ -543,7 +545,7 @@ export default function CarDocumentForm({
             minHeight: 48,
             borderRadius: radius.md,
             borderWidth: 1,
-            borderColor: colors.border,
+            borderColor: readOnly ? colors.border : colors.error,
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -552,7 +554,7 @@ export default function CarDocumentForm({
             style={{
               fontSize: 14,
               fontWeight: "700",
-              color: colors.onSurface,
+              color: readOnly ? colors.onSurface : colors.error,
             }}
           >
             {readOnly ? "Close" : "Cancel"}
@@ -659,8 +661,10 @@ function FormField({
             ? colors.onSurface
             : colors.border,
           flexDirection: "row",
+          // "stretch" so a multiline field's TextInput fills the whole
+          // box height -- otherwise only its top ~20px was tappable.
           alignItems: multiline
-            ? "flex-start"
+            ? "stretch"
             : "center",
           paddingHorizontal: spacing.md,
           paddingVertical: multiline

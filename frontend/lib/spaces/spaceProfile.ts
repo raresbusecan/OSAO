@@ -54,7 +54,7 @@ export type SpaceKind = "car" | "home" | "grocery" | "expenses" | "other";
 // ranked list, so both always agree on which color is which space.
 export const SPACE_IDENTITY_COLORS: Partial<Record<SpaceKind, string>> = {
   car: "#3B82F6",
-  home: "#8B5CF6",
+  home: "#9333EA",
   grocery: "#F59E0B",
   expenses: "#14B8A6",
 };

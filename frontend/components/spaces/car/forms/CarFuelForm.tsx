@@ -11,6 +11,7 @@ import {
 import Slider from "@react-native-community/slider";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import { confirmAction } from "@/lib/confirm";
 
 import type { CarFuelEntry, CarVehicle } from "@/lib/spaces/car/car.types";
@@ -234,7 +235,11 @@ export default function CarFuelForm({
                   width: 36,
                   height: 36,
                   borderRadius: radius.md,
-                  backgroundColor: colors.surfaceSecondary,
+                  // Same tinted-chip identity signal as the main
+                  // dashboard's own Fuel icons (Quick Actions, DUE SOON,
+                  // Recent/All) -- was left gray here, the one spot that
+                  // still didn't match once you actually opened the form.
+                  backgroundColor: `${SPACE_IDENTITY_COLORS.car}1A`,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
@@ -242,7 +247,7 @@ export default function CarFuelForm({
                 <Ionicons
                   name="water-outline"
                   size={19}
-                  color={colors.onSurface}
+                  color={SPACE_IDENTITY_COLORS.car}
                 />
               </View>
 
@@ -329,9 +334,13 @@ export default function CarFuelForm({
             step={1}
             value={levelBefore ?? 0}
             onValueChange={setLevelBefore}
-            minimumTrackTintColor={colors.onSurface}
+            // Identity color on the filled track + thumb -- this is a
+            // value picker, not a selected/active state, so it's the
+            // same "this is Car" signal as everywhere else in the form,
+            // not the kind of state indicator that stays neutral.
+            minimumTrackTintColor={SPACE_IDENTITY_COLORS.car}
             maximumTrackTintColor={colors.border}
-            thumbTintColor={colors.onSurface}
+            thumbTintColor={SPACE_IDENTITY_COLORS.car}
           />
 
           <Text
@@ -362,9 +371,9 @@ export default function CarFuelForm({
             step={1}
             value={levelAfter ?? 0}
             onValueChange={setLevelAfter}
-            minimumTrackTintColor={colors.onSurface}
+            minimumTrackTintColor={SPACE_IDENTITY_COLORS.car}
             maximumTrackTintColor={colors.border}
-            thumbTintColor={colors.onSurface}
+            thumbTintColor={SPACE_IDENTITY_COLORS.car}
           />
 
           <Text
@@ -558,7 +567,7 @@ export default function CarFuelForm({
             minHeight: 48,
             borderRadius: radius.md,
             borderWidth: 1,
-            borderColor: colors.border,
+            borderColor: colors.error,
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -567,7 +576,7 @@ export default function CarFuelForm({
             style={{
               fontSize: 14,
               fontWeight: "700",
-              color: colors.onSurface,
+              color: colors.error,
             }}
           >
             Cancel

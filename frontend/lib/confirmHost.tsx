@@ -114,12 +114,12 @@ export function ConfirmHost() {
                   borderRadius: radius.sm,
                   backgroundColor: "transparent",
                   borderWidth: 1,
-                  borderColor: colors.border,
+                  borderColor: colors.error,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurface }}>
+                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>
                   {request.cancelLabel ?? "Cancel"}
                 </Text>
               </Pressable>

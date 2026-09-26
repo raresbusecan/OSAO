@@ -25,6 +25,10 @@ export type HomeCategoryPageProps = {
    * the full entry via the category's own `entries`/`buildEntry`. */
   onSubmit: (values: Record<string, string>, editingId?: string) => void;
   onDelete: (id: string) => void;
+  /** The "Resolved" checkmark on a row -- only passed for a category
+   * that actually has one (see homeCategoryConfig.ts's resolveEntry).
+   * Omitted entirely for every other category. */
+  onResolve?: (id: string) => void;
   /** Prefills the form when a row is tapped, via the category's own
    * `valuesFromEntry`. */
   getEditValues: (id: string) => Record<string, string>;
@@ -50,6 +54,7 @@ export function HomeCategoryPage({
   onBack,
   onSubmit,
   onDelete,
+  onResolve,
   getEditValues,
   initialEditId,
 }: HomeCategoryPageProps) {
@@ -327,12 +332,12 @@ export function HomeCategoryPage({
                 paddingHorizontal: spacing.lg,
                 borderRadius: radius.sm,
                 borderWidth: 1,
-                borderColor: colors.border,
+                borderColor: colors.error,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurfaceTertiary }}>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>
                 Cancel
               </Text>
             </Pressable>
@@ -346,6 +351,7 @@ export function HomeCategoryPage({
         emptyLabel={emptyLabel}
         onRowPress={startEdit}
         onRowDelete={remove}
+        onRowResolve={onResolve ? (id) => onResolve(String(id)) : undefined}
       />
     </ScrollView>
 

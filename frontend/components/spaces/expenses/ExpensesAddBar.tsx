@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { View, Text, TextInput, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import { ExpenseDatePickerSheet } from "./ExpenseDatePickerSheet";
 
 export type ExpensesAddBarDraft = {
@@ -117,15 +118,19 @@ export function ExpensesAddBar({ onAdd }: ExpensesAddBarProps) {
             width: 48,
             height: 48,
             borderRadius: radius.sm,
-            backgroundColor: "transparent",
-            borderWidth: 1,
-            borderColor: colors.border,
+            // Expenses' identity color, same fill treatment as
+            // Grocery's own quick-add button. Fixed dark icon (not
+            // colors.surface/white): teal fails contrast against white
+            // (~2.5:1, under WCAG's 3:1 minimum for graphical objects),
+            // same issue Grocery's amber had.
+            backgroundColor: SPACE_IDENTITY_COLORS.expenses,
+            borderWidth: 0,
             alignItems: "center",
             justifyContent: "center",
             opacity: canSubmit ? 1 : 0.5,
           }}
         >
-          <Ionicons name="add" size={22} color={colors.onSurface} />
+          <Ionicons name="add" size={22} color="#111111" />
         </Pressable>
       </View>
 

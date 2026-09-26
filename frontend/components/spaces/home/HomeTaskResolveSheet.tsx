@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Modal, View, Text, TextInput, Pressable, Platform, KeyboardAvoidingView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 
 import type { HomeTaskEntry } from "@/lib/spaces/home/home.types";
 import { nextTaskOccurrence } from "@/lib/spaces/home/calculations/dashboard.calculations";
@@ -47,6 +48,14 @@ export function HomeTaskResolveSheet({ entry, onCancel, onResolve }: HomeTaskRes
       setError("Preț invalid.");
       return;
     }
+    // 0 is a syntactically valid number but not a real price -- forces
+    // the explicit "Rezolvă fără preț" path instead of silently logging
+    // a 0-RON purchase (which would still count as "priced" downstream,
+    // e.g. showing up in spend totals as a real, if zero, entry).
+    if (value === 0) {
+      setError("Introdu un preț real sau alege „Rezolvă fără preț”.");
+      return;
+    }
     resolveWith(value);
   };
 
@@ -77,23 +86,50 @@ export function HomeTaskResolveSheet({ entry, onCancel, onResolve }: HomeTaskRes
               }}
             />
 
-            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: 4 }}>
-              <View
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm, marginBottom: 4 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1 }}>
+                <View
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: radius.md,
+                    // Same tinted-chip pattern as HomeTaskForm/HomeSupplyForm's
+                    // header chips -- this sheet was the one missed spot.
+                    backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <Ionicons name={entry.isPurchase ? "cart-outline" : "checkmark-circle-outline"} size={16} color={SPACE_IDENTITY_COLORS.home} />
+                </View>
+                <Text style={{ fontSize: 18, fontWeight: "800", color: colors.onSurface }}>
+                  Marchează ca rezolvat
+                </Text>
+              </View>
+
+              {/* Explicit exit -- backdrop-tap-only dismiss wasn't
+                  discoverable enough; this is the same "way out without
+                  resolving" every other modal/sheet in the app gets. */}
+              <Pressable
+                onPress={onCancel}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Close"
                 style={{
                   width: 32,
                   height: 32,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.surfaceSecondary,
+                  borderRadius: radius.pill,
+                  backgroundColor: "transparent",
+                  borderWidth: 1,
+                  borderColor: colors.error,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <Ionicons name={entry.isPurchase ? "cart-outline" : "checkmark-circle-outline"} size={16} color={colors.onSurface} />
-              </View>
-              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.onSurface }}>
-                Marchează ca rezolvat
-              </Text>
+                <Ionicons name="close" size={18} color={colors.error} />
+              </Pressable>
             </View>
+
             <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, marginLeft: 42, marginBottom: spacing.xl }} numberOfLines={1}>
               {entry.title}
             </Text>

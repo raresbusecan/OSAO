@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { View, Text, TextInput, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import type { GroceryCategory } from "@/lib/spaces/grocery/grocery.types";
 import { matchIngredientCategory, useIngredientReferences } from "@/lib/spaces/grocery/ingredientLookup";
 
@@ -80,13 +81,19 @@ export function GroceryQuickAddBar({ onAdd }: GroceryQuickAddBarProps) {
             width: 52,
             height: 52,
             borderRadius: radius.md,
-            backgroundColor: colors.onSurface,
+            // Grocery's identity color, same signal Car/Home already
+            // carry on their own primary "add" affordances. Amber is
+            // bright enough that a white "+" fails contrast on it
+            // (~2.2:1, computed against WCAG's 3:1 minimum for
+            // graphical objects) -- fixed dark icon instead, same value
+            // in both themes since the fill itself doesn't flip either.
+            backgroundColor: SPACE_IDENTITY_COLORS.grocery,
             alignItems: "center",
             justifyContent: "center",
             opacity: value.trim() ? 1 : 0.4,
           }}
         >
-          <Ionicons name="add" size={22} color={colors.surface} />
+          <Ionicons name="add" size={22} color="#111111" />
         </Pressable>
       </View>
 

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import type { GroceryItem, GroceryCategory } from "@/lib/spaces/grocery/grocery.types";
 import { getGroceryProgress, groupGroceryItemsByCategory } from "@/lib/spaces/grocery/grocery.calculations";
 import { useRecipes } from "@/lib/spaces/grocery/recipeMatching";
@@ -171,7 +172,7 @@ export function GroceryShoppingListPage({
         {/* LIST */}
         {total === 0 ? (
           <View style={{ alignItems: "center", paddingVertical: spacing["3xl"] ?? 48, gap: spacing.sm }}>
-            <Ionicons name="cart-outline" size={28} color={colors.onSurfaceTertiary} />
+            <Ionicons name="cart-outline" size={28} color={SPACE_IDENTITY_COLORS.grocery} />
             <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface, textAlign: "center" }}>
               Your shopping list is empty.
             </Text>

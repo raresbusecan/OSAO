@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme, type ThemeColors } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import { severityColor, severityTint } from "@/lib/statusColors";
 
 import type { HomeData } from "./home.data.types";
@@ -141,7 +142,9 @@ export function HomeSuppliesPage({ homeData, onBack, onAdd, onEdit, onRestock }:
           </View>
         ) : (
           <View style={{ alignItems: "center", paddingVertical: spacing.xl, gap: spacing.sm }}>
-            <Ionicons name="basket-outline" size={26} color={colors.onSurfaceTertiary} />
+            {/* Same identity glyph as HomeSupplyForm's own header chip
+                (already tinted) -- was left neutral here. */}
+            <Ionicons name="basket-outline" size={26} color={SPACE_IDENTITY_COLORS.home} />
             <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Nimic urmărit încă.</Text>
           </View>
         )}

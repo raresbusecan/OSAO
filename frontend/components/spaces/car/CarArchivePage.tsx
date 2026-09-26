@@ -2,6 +2,7 @@ import React, { useMemo } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import type { CarData } from "./car.data.types";
 import { getArchivedCarRecords } from "@/lib/spaces/car/calculations/expenses.calculations";
 import { formatCarDate, formatCarNumber } from "./utils/carFormatters";
@@ -139,13 +140,17 @@ export function CarArchivePage({ carData, onBack, onRecordPress }: CarArchivePag
                     width: 36,
                     height: 36,
                     borderRadius: radius.md,
-                    backgroundColor: colors.surfaceTertiary,
+                    // Same tinted-chip identity signal as everywhere else
+                    // in Car -- the 0.6 opacity below already mutes it
+                    // appropriately for an archived/superseded record,
+                    // same as it muted the old neutral fill.
+                    backgroundColor: `${SPACE_IDENTITY_COLORS.car}1A`,
                     alignItems: "center",
                     justifyContent: "center",
                     opacity: 0.6,
                   }}
                 >
-                  <Ionicons name={record.icon} size={17} color={colors.onSurface} />
+                  <Ionicons name={record.icon} size={17} color={SPACE_IDENTITY_COLORS.car} />
                 </View>
 
                 <View style={{ flex: 1 }}>

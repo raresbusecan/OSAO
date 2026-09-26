@@ -36,6 +36,12 @@ export type HomeMaintenanceEntry = {
    * matching a plain recurring bill; 3 with frequency "monthly" means
    * every 3 months, 2 with "yearly" means every 2 years, etc. */
   recurrenceInterval?: number;
+  /** Set only via the "Resolved" action (never the create/edit form) --
+   * a non-recurring entry marked resolved goes inactive/hidden for
+   * good; a recurring one never sets this at all, it just advances
+   * nextDueDate and stays active instead. See homeCategoryConfig.ts's
+   * "maintenance" resolveEntry. */
+  completed?: boolean;
 };
 
 export type HomeRecurringEntry = {

@@ -85,6 +85,7 @@ export function getUpcomingHomeItems(
   });
 
   homeData.maintenanceEntries.forEach((entry) => {
+    if (entry.completed) return;
     if (!entry.nextDueDate) return;
 
     const remaining = daysUntil(entry.nextDueDate, now);
@@ -154,6 +155,20 @@ export type RecurringWarningTier = "yellow" | "orangeDays" | "orangeToday" | "re
 
 export type RecurringWarningRow = HomeTaskRow & { tier: RecurringWarningTier; daysRemaining: number };
 
+/** The one place "how urgent is N days remaining" turns into a tier --
+ * shared by getRecurringTaskWarnings (Restanțe) and getHomeTasksView
+ * (the main Tasks page's DUE SOON section) below, so a task reads the
+ * same urgency color wherever it's shown instead of two independent
+ * (and previously inconsistent) classifications. undefined means "not
+ * urgent enough to color" -- more than 4 days out. */
+export function classifyTaskUrgencyTier(remaining: number): RecurringWarningTier | undefined {
+  if (remaining < 0) return "red";
+  if (remaining === 0) return "orangeToday";
+  if (remaining <= 2) return "orangeDays";
+  if (remaining <= 4) return "yellow";
+  return undefined;
+}
+
 export function getRecurringTaskWarnings(homeData: HomeData): {
   counts: Record<RecurringWarningTier, number>;
   rows: RecurringWarningRow[];
@@ -165,16 +180,14 @@ export function getRecurringTaskWarnings(homeData: HomeData): {
     if (!task.isRecurring || task.completed || !task.dueDate) return;
 
     const remaining = daysUntil(task.dueDate, now);
-    let tier: RecurringWarningTier | null = null;
-
-    if (remaining < 0) tier = "red";
-    else if (remaining === 0) tier = "orangeToday";
-    else if (remaining <= 2) tier = "orangeDays";
-    else if (remaining <= 4) tier = "yellow";
+    const tier = classifyTaskUrgencyTier(remaining);
 
     if (tier) rows.push({ ...task, tier, daysRemaining: remaining });
   });
 
+  // Ascending by daysRemaining -- most negative (furthest overdue, most
+  // urgent) first, descending in urgency from there (today, then 2
+  // days out, then 4) down to "can still wait a little."
   rows.sort((a, b) => a.daysRemaining - b.daysRemaining);
 
   const counts: Record<RecurringWarningTier, number> = { yellow: 0, orangeDays: 0, orangeToday: 0, red: 0 };
@@ -195,8 +208,13 @@ export type HomeTaskRow = {
   isPurchase?: boolean;
   price?: number;
   isRecurring?: boolean;
-  /** Only set for an incomplete task with a due date in the past or today. */
-  tier?: "critical" | "medium";
+  /** Set (via classifyTaskUrgencyTier) for any incomplete task within 4
+   * days of -- or past -- its due date, same tier vocabulary/colors
+   * Restanțe already uses, regardless of isRecurring: a plain task
+   * getting urgent is just as worth coloring as a recurring one. */
+  tier?: RecurringWarningTier;
+  /** Only meaningful alongside `tier` -- negative once past due. */
+  daysRemaining?: number;
   overdue?: boolean;
 };
 
@@ -251,11 +269,14 @@ export function getHomeTasksView(homeData: HomeData): {
     }
 
     const remaining = daysUntil(task.dueDate, now);
+    const tier = classifyTaskUrgencyTier(remaining);
 
-    if (remaining < 0) {
-      dueSoon.push({ ...task, tier: "critical", overdue: true });
-    } else if (remaining === 0) {
-      dueSoon.push({ ...task, tier: "medium" });
+    if (tier) {
+      // Widened from "overdue or due today only" to the same 4-day
+      // window Restanțe warns about -- a task with the same urgency
+      // reads with the same color/label wherever it shows up, not just
+      // on the recurring-only warnings page.
+      dueSoon.push({ ...task, tier, daysRemaining: remaining, overdue: remaining < 0 });
     } else {
       upcoming.push({ ...task });
     }

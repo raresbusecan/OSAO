@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { View, Text, ScrollView, Pressable, Switch, Modal, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import type { CarData } from "./car.data.types";
 import {
   getCarExpenseRecords,
@@ -236,13 +237,14 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
           width: 36,
           height: 36,
           borderRadius: radius.md,
-          backgroundColor: colors.surfaceTertiary,
+          // Same tinted-chip identity signal used everywhere else in Car.
+          backgroundColor: `${SPACE_IDENTITY_COLORS.car}1A`,
           alignItems: "center",
           justifyContent: "center",
           opacity: record.archived ? 0.5 : 1,
         }}
       >
-        <Ionicons name={record.icon} size={17} color={colors.onSurface} />
+        <Ionicons name={record.icon} size={17} color={SPACE_IDENTITY_COLORS.car} />
 
         {record.statusDot && record.overdue ? (
           <View
@@ -841,7 +843,9 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
             gap: spacing.sm,
           }}
         >
-          <Ionicons name="receipt-outline" size={28} color={colors.onSurfaceTertiary} />
+          {/* Same identity glyph as the real Expense rows/form header
+              (already tinted) -- was left neutral here. */}
+          <Ionicons name="receipt-outline" size={28} color={SPACE_IDENTITY_COLORS.car} />
           <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, textAlign: "center" }}>
             No expenses recorded yet. Add Fuel, Maintenance, a Document or an
             Expense from the menu to see them here.

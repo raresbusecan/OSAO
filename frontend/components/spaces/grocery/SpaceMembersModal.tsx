@@ -295,7 +295,7 @@ export function SpaceMembersModal({ visible, onClose, isOwner, owner, members, o
               onPress={() => setPendingRemoval(null)}
               style={{ minHeight: 48, alignItems: "center", justifyContent: "center" }}
             >
-              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurfaceTertiary }}>Cancel</Text>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>Cancel</Text>
             </Pressable>
           </View>
         </KeyboardAvoidingView>

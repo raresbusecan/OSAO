@@ -3,6 +3,7 @@ import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { confirmAction } from "@/lib/confirm";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import type { GroceryItem } from "@/lib/spaces/grocery/grocery.types";
 
 export type GroceryItemRowProps = {
@@ -52,12 +53,19 @@ export function GroceryItemRow({ item, onToggle, onOpenMenu, onDelete }: Grocery
           borderRadius: 13,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: item.inCart ? colors.onSurface : "transparent",
+          // Grocery's identity color once checked -- same "this is
+          // Grocery" signal Car/Home already carry, instead of the
+          // generic black/white fill every category used before. Fixed
+          // dark checkmark (not colors.surface, which flips to white in
+          // light mode): amber fails contrast against white
+          // (~2.2:1, under WCAG's 3:1 minimum) but easily clears it
+          // against near-black in both themes.
+          backgroundColor: item.inCart ? SPACE_IDENTITY_COLORS.grocery : "transparent",
           borderWidth: item.inCart ? 0 : 1.5,
           borderColor: colors.border,
         }}
       >
-        {item.inCart ? <Ionicons name="checkmark" size={15} color={colors.surface} /> : null}
+        {item.inCart ? <Ionicons name="checkmark" size={15} color="#111111" /> : null}
       </View>
 
       <View style={{ flex: 1 }}>

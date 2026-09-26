@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, Pressable, ActivityIndicator, DeviceEventEmitter,
+  View, Text, ScrollView, Pressable, ActivityIndicator, DeviceEventEmitter, Modal, StyleSheet,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useTheme } from "@/lib/theme";
@@ -82,6 +81,11 @@ export default function Spaces() {
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const createFromTemplate = (t: typeof TEMPLATES[number]) => {
+    // Closes the picker unconditionally, whichever form/modal opens next
+    // -- called from both the empty-state pills and the "+ Add Space"
+    // picker below, but only the latter has anything to close.
+    setTemplatePickerVisible(false);
+
     // Car and Home get their own dedicated form (Make/Model/.../price;
     // County/City/ownership) -- see spaceProfile.ts for why. Every other
     // template (Grocery, Expenses, ...) gets the same "name it before
@@ -126,6 +130,11 @@ export default function Spaces() {
   const [deletingId, setDeletingId] = useState<string | number | null>(null);
   const [editingSpace, setEditingSpace] = useState<any>(null);
   const [editSpaceMode, setEditSpaceMode] = useState<"edit" | "create">("edit");
+  // Templates used to sit in an always-visible carousel above the grid --
+  // once every type already had a real space, that carousel just repeated
+  // the same 4 icons a second time right above the actual cards. Now
+  // behind one "+ Add Space" tile instead, opened on demand.
+  const [templatePickerVisible, setTemplatePickerVisible] = useState(false);
 
   const confirmDeleteSpace = async (spaceItem: any) => {
     const confirmed = await confirmAction(
@@ -186,52 +195,44 @@ export default function Spaces() {
           </View>
         ) : (
           <>
-            <View style={{ gap: spacing.md, marginBottom: spacing.md }}>
-              <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, fontWeight: "700", letterSpacing: 0.4 }}>
-                QUICK TEMPLATES
-              </Text>
-              {/* Horizontal carousel, not a wrapping row -- keeps this
-                  section to one fixed height regardless of how many
-                  templates exist, with a fade on the trailing edge as
-                  the only hint there's more to scroll to (no dots, no
-                  arrows -- the partially-cut-off last card already does
-                  that job). */}
-              <View style={{ position: "relative", marginHorizontal: -spacing.xl }}>
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: spacing.sm, paddingHorizontal: spacing.xl }}
-                >
-                  {TEMPLATES.map((t) => (
-                    <Pressable
-                      key={t.name}
-                      testID={`template-quick-${t.name.toLowerCase()}`}
-                      onPress={() => createFromTemplate(t)}
-                      style={{
-                        width: 84, height: 84,
-                        borderRadius: radius.sm,
-                        backgroundColor: "transparent",
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                        alignItems: "center", justifyContent: "center", gap: spacing.sm,
-                      }}
-                    >
-                      <Ionicons name={t.icon as any} size={20} color={t.color} />
-                      <Text style={{ color: colors.onSurface, fontSize: 12, fontWeight: "700" }}>{t.name}</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-                <LinearGradient
-                  colors={["transparent", colors.surface]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  pointerEvents="none"
-                  style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 32 }}
-                />
-              </View>
-            </View>
-
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.md }}>
+            {/* "+ Add Space" -- same dashed-border "add" affordance
+                already used elsewhere (e.g. Grocery's Invite pill), sized
+                to match the real space cards beside it instead of a
+                separate always-visible template carousel that repeated
+                the same 4 icons a second time once every type already
+                had a real space. */}
+            <Pressable
+              testID="space-add-tile"
+              onPress={() => setTemplatePickerVisible(true)}
+              style={{
+                width: "48%",
+                minHeight: 140,
+                borderWidth: 1.5,
+                borderStyle: "dashed",
+                borderColor: colors.border,
+                borderRadius: radius.sm,
+                padding: spacing.lg,
+                alignItems: "center",
+                justifyContent: "center",
+                gap: spacing.md,
+              }}
+            >
+              <View
+                style={{
+                  width: 48,
+                  height: 48,
+                  borderRadius: radius.md,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Ionicons name="add" size={26} color={colors.onSurfaceTertiary} />
+              </View>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurfaceTertiary }}>
+                Add Space
+              </Text>
+            </Pressable>
             {spaces.map((s) => {
               // Gray subtitle under the name, from the same per-space
               // profile the edit button already loads -- Model for Car,
@@ -402,6 +403,61 @@ export default function Spaces() {
         onClose={() => setHomeForm((f) => ({ ...f, visible: false }))}
         onSaved={() => load()}
       />
+
+      <Modal visible={templatePickerVisible} transparent animationType="fade" onRequestClose={() => setTemplatePickerVisible(false)}>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl }}>
+          <Pressable
+            onPress={() => setTemplatePickerVisible(false)}
+            style={{ ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.4)" }}
+          />
+
+          <View
+            style={{
+              width: "100%",
+              maxWidth: 380,
+              borderRadius: radius.lg,
+              backgroundColor: colors.surface,
+              padding: spacing.xl,
+            }}
+          >
+            <Text style={{ fontSize: 17, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.lg }}>
+              Add a Space
+            </Text>
+
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+              {TEMPLATES.map((t) => (
+                <Pressable
+                  key={t.name}
+                  testID={`template-quick-${t.name.toLowerCase()}`}
+                  onPress={() => createFromTemplate(t)}
+                  style={{
+                    flexGrow: 1,
+                    flexBasis: "46%",
+                    minHeight: 84,
+                    borderRadius: radius.sm,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: spacing.sm,
+                  }}
+                >
+                  <Ionicons name={t.icon as any} size={20} color={t.color} />
+                  <Text style={{ color: colors.onSurface, fontSize: 12, fontWeight: "700" }}>{t.name}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Pressable
+              testID="template-picker-cancel"
+              onPress={() => setTemplatePickerVisible(false)}
+              style={{ marginTop: spacing.lg, minHeight: 48, alignItems: "center", justifyContent: "center" }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

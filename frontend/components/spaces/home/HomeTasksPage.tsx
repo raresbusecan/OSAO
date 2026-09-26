@@ -9,6 +9,7 @@ import {
   getHomeTasksView,
   getRecurringTaskWarnings,
   type HomeTaskRow,
+  type RecurringWarningTier,
 } from "@/lib/spaces/home/calculations/dashboard.calculations";
 import { severityColor } from "@/lib/statusColors";
 
@@ -33,10 +34,20 @@ function formatDate(dateString: string): string {
   return date.toLocaleDateString("en-US", { day: "numeric", month: "short" });
 }
 
-function tierColor(tier: "critical" | "medium" | undefined, colors: any): string {
-  if (tier === "critical") return severityColor("critical", colors);
-  if (tier === "medium") return severityColor("warning", colors);
+// Same mapping as HomeRecurringWarningsPage's own tierStyle -- a task
+// reads the same color here as it would on the Restanțe page.
+function tierColor(tier: RecurringWarningTier | undefined, colors: any): string {
+  if (tier === "red") return severityColor("critical", colors);
+  if (tier === "orangeToday" || tier === "orangeDays") return severityColor("warning", colors);
+  if (tier === "yellow") return severityColor("caution", colors);
   return colors.onSurfaceTertiary;
+}
+
+function tierLabel(row: HomeTaskRow): string {
+  if (row.tier === "red") return "RESTANT";
+  if (row.tier === "orangeToday") return "Azi";
+  if (row.daysRemaining != null) return `${row.daysRemaining} zile`;
+  return "";
 }
 
 export function HomeTasksPage({
@@ -286,7 +297,12 @@ function Checkbox({ onPress, colors }: { onPress: () => void; colors: any }) {
         height: 22,
         borderRadius: 6,
         borderWidth: 2,
-        borderColor: colors.borderStrong,
+        // colors.success, not a neutral border -- the same "this
+        // resolves something" signal every other resolve-style checkbox
+        // in the app now uses (see HomeCategorySection.tsx's own resolve
+        // checkbox), so it reads as one consistent control before it's
+        // even tapped, not just once DoneRow below fills it in.
+        borderColor: colors.success,
         flexShrink: 0,
       }}
     />
@@ -320,7 +336,10 @@ function TaskRowCard({
         borderRadius: radius.sm,
         backgroundColor: "transparent",
         borderWidth: 1,
-        borderColor: row.overdue ? color : colors.border,
+        // Colored for any of the 4 urgency tiers now, not just overdue
+        // -- 4 days / 2 days / today / restant all get their own color,
+        // same as Restanțe.
+        borderColor: row.tier ? color : colors.border,
       }}
     >
       <Checkbox onPress={onToggle} colors={colors} />
@@ -330,15 +349,15 @@ function TaskRowCard({
         <Text style={{ flex: 1, fontSize: 14.5, fontWeight: "700", color: colors.onSurface }} numberOfLines={1}>
           {row.title}
         </Text>
-        {row.overdue ? (
+        {row.tier === "red" ? (
           <View style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: `${color}22` }}>
             <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: color, alignItems: "center", justifyContent: "center" }}>
               <Text style={{ fontSize: 9, fontWeight: "900", color: colors.surface, lineHeight: 11 }}>!</Text>
             </View>
-            <Text style={{ fontSize: 11, fontWeight: "800", color }}>RESTANT</Text>
+            <Text style={{ fontSize: 11, fontWeight: "800", color }}>{tierLabel(row)}</Text>
           </View>
         ) : (
-          <Text style={{ fontSize: 11.5, fontWeight: "800", color }}>Azi</Text>
+          <Text style={{ fontSize: 11.5, fontWeight: "800", color }}>{tierLabel(row)}</Text>
         )}
       </Pressable>
     </View>

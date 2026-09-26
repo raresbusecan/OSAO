@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import { confirmAction } from "@/lib/confirm";
 
 import type { HomeTaskEntry } from "@/lib/spaces/home/home.types";
@@ -127,12 +128,15 @@ export default function HomeTaskForm({
                   width: 36,
                   height: 36,
                   borderRadius: radius.md,
-                  backgroundColor: colors.surfaceSecondary,
+                  // Same tinted-chip identity signal as the Space header
+                  // avatar (HomeHeader.tsx) -- this form makes a Home
+                  // entry, same identity, not a state/nav element.
+                  backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
               >
-                <Ionicons name="checkmark-circle-outline" size={19} color={colors.onSurface} />
+                <Ionicons name="checkmark-circle-outline" size={19} color={SPACE_IDENTITY_COLORS.home} />
               </View>
 
               <Text
@@ -426,12 +430,12 @@ export default function HomeTaskForm({
             minHeight: 48,
             borderRadius: radius.md,
             borderWidth: 1,
-            borderColor: colors.border,
+            borderColor: colors.error,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurface }}>Cancel</Text>
+          <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>Cancel</Text>
         </Pressable>
 
         {isEditing && onDelete ? (
@@ -503,7 +507,12 @@ function FormField({
           borderWidth: isFocused ? 2 : 1,
           borderColor: isFocused ? colors.onSurface : colors.border,
           flexDirection: "row",
-          alignItems: multiline ? "flex-start" : "center",
+          // "flex-start" left the TextInput sized to its own single-line
+          // content (~20px) inside a visually 90px-tall box -- the rest
+          // of the box was just empty padding, untappable and
+          // untypeable. "stretch" makes the input actually fill the
+          // whole box's height, so tapping anywhere in it focuses it.
+          alignItems: multiline ? "stretch" : "center",
           paddingHorizontal: spacing.md,
           paddingVertical: multiline ? spacing.md : 0,
         }}

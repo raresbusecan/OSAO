@@ -3,7 +3,7 @@ import { ScrollView, View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/lib/theme";
-import { notifyAction } from "@/lib/confirm";
+import { confirmAction, notifyAction } from "@/lib/confirm";
 import { severityColor, type SeverityTier } from "@/lib/statusColors";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 
@@ -540,6 +540,42 @@ export default function HomeDashboard({
           saveHandlers[activeCategory](category.buildEntry(values, existing));
         }}
         onDelete={(id) => deleteHandlers[activeCategory](id)}
+        onResolve={
+          category.resolveEntry
+            ? async (id) => {
+                const existing = category.entries(homeData).find((e) => e.id === id);
+                if (!existing) return;
+
+                // Preview the outcome before asking -- a mis-tap here isn't
+                // recoverable afterward (a resolved non-recurring entry
+                // vanishes from the list; a recurring one's nextDueDate only
+                // ever advances via this same action, nothing lets you set
+                // it back by hand -- see homeCategoryConfig.ts's buildEntry).
+                const resolved = category.resolveEntry!(existing);
+                const isRecurring = !!(existing as { isRecurring?: boolean }).isRecurring;
+                const nextDueLabel = resolved.nextDueDate
+                  ? new Date(resolved.nextDueDate).toLocaleDateString("ro-RO", { day: "numeric", month: "short", year: "numeric" })
+                  : null;
+
+                const confirmed = await confirmAction(
+                  "Marchezi ca rezolvat?",
+                  isRecurring && nextDueLabel
+                    ? `Data următoare se mută la ${nextDueLabel} și rămâne activă.`
+                    : "Intrarea devine inactivă și dispare din listă.",
+                  { confirmLabel: "Rezolvă", destructive: !isRecurring },
+                );
+                if (!confirmed) return;
+
+                saveHandlers[activeCategory](resolved);
+                notifyAction(
+                  "Rezolvat",
+                  isRecurring && nextDueLabel
+                    ? `Rămâne activ — următoarea dată: ${nextDueLabel}.`
+                    : "Mutat la inactiv.",
+                );
+              }
+            : undefined
+        }
         getEditValues={(id) => {
           const existing = category.entries(homeData).find((e) => e.id === id);
           return existing ? category.valuesFromEntry(existing) : {};
@@ -584,54 +620,85 @@ export default function HomeDashboard({
       </Text>
 
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: spacing.xl }}>
-        {categoryTiles.map((tile) => (
-          <Pressable
-            key={tile.key}
-            testID={`home-category-tile-${tile.key}`}
-            onPress={() => selectCategory(tile.key)}
-            accessibilityRole="button"
-            accessibilityLabel={
-              tile.badge ? `${tile.label}, ${tile.badge.count}` : tile.label
-            }
-            style={{
-              position: "relative",
-              width: "31%",
-              backgroundColor: "transparent",
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: radius.sm,
-              paddingVertical: 14,
-              paddingHorizontal: 8,
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            {tile.badge ? (
+        {categoryTiles.map((tile, index) => {
+          // The last tile is alone on its own row only when the total
+          // count is odd (2-per-row wrapping) -- when that happens, the
+          // icon+label+badge group centers as a unit instead of hugging
+          // the left edge with dead space stretching out to the right.
+          const isAlone = index === categoryTiles.length - 1 && categoryTiles.length % 2 !== 0;
+
+          return (
+            <Pressable
+              key={tile.key}
+              testID={`home-category-tile-${tile.key}`}
+              onPress={() => selectCategory(tile.key)}
+              accessibilityRole="button"
+              accessibilityLabel={
+                tile.badge ? `${tile.label}, ${tile.badge.count}` : tile.label
+              }
+              style={{
+                // flexGrow (not a fixed width) so a lone tile wrapping onto
+                // its own row -- 5 tiles into 2 columns always leaves one
+                // odd one out -- stretches to fill that whole row instead
+                // of sitting stuck at half-width with empty space beside
+                // it. Same fix already applied at Car's QuickActions row.
+                flexGrow: 1,
+                flexBasis: "46%",
+                minHeight: 56,
+                paddingHorizontal: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: radius.md,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: isAlone ? "center" : "flex-start",
+                gap: 10,
+              }}
+            >
+              {/* Tinted chip (identity color at 1A alpha, matching the same
+                  recipe HomeHeader's own avatar already uses) instead of a
+                  bare colored icon on white -- one hue per Space, just given
+                  real visual weight instead of a thin outline. */}
               <View
                 style={{
-                  position: "absolute",
-                  top: 8,
-                  right: 8,
-                  minWidth: 18,
-                  height: 18,
-                  paddingHorizontal: 5,
-                  borderRadius: 9,
-                  backgroundColor: severityColor(tile.badge.severity, colors),
+                  width: 32,
+                  height: 32,
+                  borderRadius: radius.sm,
+                  backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
                   alignItems: "center",
                   justifyContent: "center",
+                  flexShrink: 0,
                 }}
               >
-                <Text style={{ fontSize: 10, fontWeight: "800", color: colors.onBrandPrimary }}>
-                  {tile.badge.count}
-                </Text>
+                <Ionicons name={tile.icon} size={16} color={SPACE_IDENTITY_COLORS.home!} />
               </View>
-            ) : null}
-            <Ionicons name={tile.icon} size={22} color={SPACE_IDENTITY_COLORS.home!} />
-            <Text style={{ fontSize: 11.5, fontWeight: "700", color: colors.onSurface, textAlign: "center" }}>
-              {tile.label}
-            </Text>
-          </Pressable>
-        ))}
+              <Text
+                style={{ fontSize: 12.5, fontWeight: "600", color: colors.onSurface, flexGrow: isAlone ? 0 : 1 }}
+                numberOfLines={1}
+              >
+                {tile.label}
+              </Text>
+              {tile.badge ? (
+                <View
+                  style={{
+                    minWidth: 18,
+                    height: 18,
+                    paddingHorizontal: 5,
+                    borderRadius: 9,
+                    backgroundColor: severityColor(tile.badge.severity, colors),
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                >
+                  <Text style={{ fontSize: 10, fontWeight: "800", color: colors.onBrandPrimary }}>
+                    {tile.badge.count}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
+          );
+        })}
       </View>
 
       <HomeNextSection items={upcomingItems.slice(0, 3)} />

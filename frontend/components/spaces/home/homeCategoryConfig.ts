@@ -78,6 +78,42 @@ export function parseLeadingNumber(raw: string): number | null {
   return Number(match[0]);
 }
 
+/** Maintenance's nextDueDate is fully derived, never typed by hand --
+ * "serviced on X, recurs every N months" implies "next due on X + N
+ * months" on its own, so asking the user to also pick that date would
+ * just be asking them to do this arithmetic themselves. Deliberately
+ * NOT built on dashboard.calculations.ts's nextTaskOccurrence (no
+ * `interval` support, no "yearly", and it has its own known
+ * month-rollover bug already logged in BACKLOG.md) -- clamps to the
+ * target month's real last day instead of letting e.g. Jan 31 + 1
+ * month silently roll into March. */
+export function addRecurrenceInterval(
+  baseDate: string,
+  frequency: "weekly" | "monthly" | "yearly",
+  interval: number,
+): string {
+  const base = new Date(baseDate);
+  const step = Math.max(1, interval);
+
+  if (frequency === "weekly") {
+    const next = new Date(base);
+    next.setDate(next.getDate() + step * 7);
+    return next.toISOString().slice(0, 10);
+  }
+
+  const day = base.getDate();
+  const next = new Date(base);
+  next.setDate(1); // parked on day 1 so setMonth/setFullYear can't overflow into the wrong month
+
+  if (frequency === "yearly") next.setFullYear(next.getFullYear() + step);
+  else next.setMonth(next.getMonth() + step);
+
+  const daysInTargetMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+  next.setDate(Math.min(day, daysInTargetMonth));
+
+  return next.toISOString().slice(0, 10);
+}
+
 export type HomeCategoryKey =
   | "documents"
   | "expenses"
@@ -105,6 +141,11 @@ export type HomeCategoryConfig = {
   valuesFromEntry: (entry: any) => Record<string, string>;
   /** Turns this category's entries into the shared row shape for display. */
   rows: (data: HomeData) => HomeCategoryRow[];
+  /** Only set for a category with a "Resolved" action (currently just
+   * Maintenance -- see its own entry below). Pure, like buildEntry: takes
+   * the full existing entry, returns the entry to save. HomeCategorySection
+   * only shows the resolve button on a category that provides this. */
+  resolveEntry?: (existing: any) => any;
 };
 
 function makeId(prefix: string): string {
@@ -217,23 +258,59 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
     ],
     submitLabel: "Add Maintenance",
     emptyLabel: "No maintenance entries yet.",
-    entries: (data) => data.maintenanceEntries,
+    // Resolved-and-inactive (a non-recurring entry, once resolved --
+    // see resolveEntry below) drops out of the active list entirely,
+    // rather than lingering marked "done".
+    entries: (data) => data.maintenanceEntries.filter((entry) => !entry.completed),
     buildEntry: (values, existing?: HomeMaintenanceEntry): HomeMaintenanceEntry => {
       const isRecurring = values.isRecurring === "true";
+      const date = values.date || existing?.date || today();
+      const frequency = (values.recurrenceFrequency as HomeMaintenanceEntry["recurrenceFrequency"]) || "monthly";
+      const interval = Math.max(1, Number(values.recurrenceInterval) || 1);
+
+      // nextDueDate is only ever SEEDED here (a brand-new entry, or an
+      // existing one that just had "Recurring" switched on) -- from
+      // then on, only the Resolved action (resolveEntry below) is
+      // allowed to advance it. Otherwise editing an unrelated field
+      // (price, service name) on an entry that's already been resolved
+      // a few times would silently reset its schedule back to date +
+      // one interval, wiping out every resolve since creation.
+      const wasAlreadyRecurring = !!existing?.isRecurring && !!existing?.nextDueDate;
+      const nextDueDate = isRecurring
+        ? wasAlreadyRecurring
+          ? existing!.nextDueDate
+          : addRecurrenceInterval(date, frequency, interval)
+        : undefined;
+
       return {
         id: existing?.id ?? makeId("maint"),
-        date: values.date || existing?.date || today(),
+        date,
         service: values.service,
         description: existing?.description ?? values.service,
         price: parseLeadingNumber(values.price) ?? 0,
         provider: existing?.provider,
-        nextDueDate: existing?.nextDueDate,
+        nextDueDate,
         isRecurring,
-        recurrenceFrequency: isRecurring
-          ? ((values.recurrenceFrequency as HomeMaintenanceEntry["recurrenceFrequency"]) || "monthly")
-          : undefined,
-        recurrenceInterval: isRecurring ? Math.max(1, Number(values.recurrenceInterval) || 1) : undefined,
+        recurrenceFrequency: isRecurring ? frequency : undefined,
+        recurrenceInterval: isRecurring ? interval : undefined,
+        completed: existing?.completed ?? false,
       };
+    },
+    /** The "Resolved" action -- recurring: advances nextDueDate one
+     * cycle forward from wherever it currently is (never from "today",
+     * same reasoning as Tasks' own resolveTask/nextTaskOccurrence: keeps
+     * a fixed schedule instead of drifting whenever it happens to get
+     * resolved a few days late) and stays active. Not recurring: this
+     * was a one-off, so resolving it just retires it. */
+    resolveEntry: (existing: HomeMaintenanceEntry): HomeMaintenanceEntry => {
+      if (existing.isRecurring) {
+        const base = existing.nextDueDate || existing.date;
+        return {
+          ...existing,
+          nextDueDate: addRecurrenceInterval(base, existing.recurrenceFrequency ?? "monthly", existing.recurrenceInterval ?? 1),
+        };
+      }
+      return { ...existing, completed: true };
     },
     valuesFromEntry: (entry: HomeMaintenanceEntry) => ({
       service: entry.service,
@@ -244,14 +321,19 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       recurrenceInterval: entry.recurrenceInterval != null ? String(entry.recurrenceInterval) : "1",
     }),
     rows: (data) =>
-      data.maintenanceEntries.map((entry) => ({
-        id: entry.id,
-        title: entry.service,
-        subtitle: entry.isRecurring
-          ? `${entry.description} · every ${entry.recurrenceInterval ?? 1} ${entry.recurrenceFrequency ?? "monthly"}`
-          : `${entry.description} · ${formatDate(entry.date)}`,
-        amount: entry.price.toLocaleString("en-US"),
-      })),
+      data.maintenanceEntries
+        .filter((entry) => !entry.completed)
+        .map((entry) => ({
+          id: entry.id,
+          title: entry.service,
+          subtitle: entry.isRecurring
+            ? entry.nextDueDate
+              ? `${entry.description} · next ${formatDate(entry.nextDueDate)}`
+              : `${entry.description} · every ${entry.recurrenceInterval ?? 1} ${entry.recurrenceFrequency ?? "monthly"}`
+            : `${entry.description} · ${formatDate(entry.date)}`,
+          amount: entry.price.toLocaleString("en-US"),
+          isRecurring: entry.isRecurring,
+        })),
   },
   {
     key: "recurring",
