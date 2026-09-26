@@ -251,17 +251,22 @@ export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: Home
         }}
       >
         <View style={{ flexDirection: "row" }}>
-          <View style={{ flex: 1 }}>
+          <View style={{ flex: 1, minWidth: 0 }}>
             <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurfaceTertiary, marginBottom: 4 }}>
               TOTAL CHELTUIT
             </Text>
-            <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-              <Text style={{ fontSize: 30, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 }}>
+            <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4 }}>
+              <Text
+                style={{ flexShrink: 1, fontSize: hasPurchasePrice ? 22 : 30, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 }}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.6}
+              >
                 {formatAmount(total)}
               </Text>
-              <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurfaceTertiary }}>RON</Text>
+              <Text style={{ flexShrink: 0, fontSize: 13, fontWeight: "600", color: colors.onSurfaceTertiary }}>RON</Text>
             </View>
-            <Text style={{ marginTop: 4, fontSize: 12, color: colors.onSurfaceTertiary }}>
+            <Text style={{ marginTop: 4, fontSize: 12, color: colors.onSurfaceTertiary }} numberOfLines={1}>
               {formatSpendPeriodLabel(period)}
               {activeCategories.size > 0 ? ` · ${categoryLabelsSelected}` : ""}
             </Text>
@@ -277,17 +282,22 @@ export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: Home
                 }}
               />
 
-              <View style={{ flex: 1 }} testID="home-overall-cost">
+              <View style={{ flex: 1, minWidth: 0 }} testID="home-overall-cost">
                 <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurfaceTertiary, marginBottom: 4 }}>
                   OVERALL
                 </Text>
-                <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-                  <Text style={{ fontSize: 30, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 }}>
+                <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4 }}>
+                  <Text
+                    style={{ flexShrink: 1, fontSize: 22, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 }}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.6}
+                  >
                     {formatAmount(overall)}
                   </Text>
-                  <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurfaceTertiary }}>RON</Text>
+                  <Text style={{ flexShrink: 0, fontSize: 13, fontWeight: "600", color: colors.onSurfaceTertiary }}>RON</Text>
                 </View>
-                <Text style={{ marginTop: 4, fontSize: 12, color: colors.onSurfaceTertiary }}>
+                <Text style={{ marginTop: 4, fontSize: 12, color: colors.onSurfaceTertiary }} numberOfLines={1}>
                   {formatAmount(purchasePrice)} RON purchase
                 </Text>
               </View>
