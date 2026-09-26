@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import type { HomeIcon } from "./home.ui.types";
@@ -8,12 +8,17 @@ export type HomeStatsProps = {
   thisMonthExpenses: number;
   upcomingCount: number;
   currency?: string;
+  /** Opens HomeSpendPage -- the whole space's spend, not just this
+   * month's total. Card stays a plain View (no chevron/tap) when
+   * omitted, same as "Upcoming" still is today. */
+  onSpendPress?: () => void;
 };
 
 export function HomeStats({
   thisMonthExpenses,
   upcomingCount,
   currency = "RON",
+  onSpendPress,
 }: HomeStatsProps) {
   const { colors, spacing, radius, typography } = useTheme();
 
@@ -30,6 +35,7 @@ export function HomeStats({
         value={thisMonthExpenses.toLocaleString("en-US")}
         label="This month"
         suffix={currency}
+        onPress={onSpendPress}
         colors={colors}
         radius={radius}
         spacing={spacing}
@@ -55,6 +61,7 @@ function StatCard({
   value,
   label,
   suffix,
+  onPress,
   colors,
   radius,
   spacing,
@@ -64,13 +71,17 @@ function StatCard({
   value: string;
   label: string;
   suffix: string;
+  onPress?: () => void;
   colors: any;
   radius: any;
   spacing: any;
   typography: any;
 }) {
   return (
-    <View
+    <Pressable
+      onPress={onPress}
+      disabled={!onPress}
+      accessibilityRole={onPress ? "button" : undefined}
       style={{
         flex: 1,
         minHeight: 110,
@@ -82,7 +93,10 @@ function StatCard({
         justifyContent: "space-between",
       }}
     >
-      <Ionicons name={icon} size={19} color={colors.onSurfaceTertiary} />
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Ionicons name={icon} size={19} color={colors.onSurfaceTertiary} />
+        {onPress ? <Ionicons name="chevron-forward" size={14} color={colors.onSurfaceTertiary} /> : null}
+      </View>
 
       <View>
         <View
@@ -105,6 +119,6 @@ function StatCard({
           {label}
         </Text>
       </View>
-    </View>
+    </Pressable>
   );
 }

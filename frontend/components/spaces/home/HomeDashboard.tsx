@@ -19,6 +19,7 @@ import type {
 } from "@/lib/spaces/home/home.types";
 import { HomeHeader } from "./HomeHeader";
 import { HomeStats } from "./HomeStats";
+import { HomeSpendPage } from "./HomeSpendPage";
 import { HomeNextSection } from "./HomeNextSection";
 import { HomeCategoryPage } from "./HomeCategoryPage";
 import { HomeTasksPage } from "./HomeTasksPage";
@@ -120,6 +121,10 @@ export default function HomeDashboard({
   const [editingTaskEntry, setEditingTaskEntry] = useState<HomeTaskEntry | null>(null);
   const [archivePageVisible, setArchivePageVisible] = useState(false);
   const [warningsPageVisible, setWarningsPageVisible] = useState(false);
+  // "This month" stat card tap -- HomeSpendPage, the whole space's
+  // spend (Expenses + Maintenance + resolved purchase Tasks) in one
+  // place, mirroring Car's own CarExpensesPage.
+  const [spendPageVisible, setSpendPageVisible] = useState(false);
   // Set only for a purchase-flagged task's checkbox tap -- renders
   // HomeTaskResolveSheet on top of HomeTasksPage asking for the price.
   const [resolveSheetEntry, setResolveSheetEntry] = useState<HomeTaskEntry | null>(null);
@@ -178,6 +183,7 @@ export default function HomeDashboard({
     setEditingTaskEntry(null);
     setArchivePageVisible(false);
     setWarningsPageVisible(false);
+    setSpendPageVisible(false);
     setResolveSheetEntry(null);
     setSuppliesPageVisible(false);
     setSupplyFormVisible(false);
@@ -526,6 +532,29 @@ export default function HomeDashboard({
     return <HomeTaskArchivePage homeData={homeData} onBack={() => setArchivePageVisible(false)} />;
   }
 
+  if (spendPageVisible) {
+    return (
+      <HomeSpendPage
+        homeData={homeData}
+        onBack={() => setSpendPageVisible(false)}
+        onRecordPress={(category, id) => {
+          setSpendPageVisible(false);
+          if (category === "task") {
+            const entry = homeData.taskEntries.find((t) => t.id === id);
+            if (!entry) return;
+            setTasksPageVisible(true);
+            setEditingTaskEntry(entry);
+            setTaskFormVisible(true);
+            return;
+          }
+          const categoryKey = category === "expense" ? "expenses" : "maintenance";
+          setActiveCategory(categoryKey);
+          setInitialCategoryEditId(id);
+        }}
+      />
+    );
+  }
+
   if (warningsPageVisible) {
     return (
       <>
@@ -640,6 +669,7 @@ export default function HomeDashboard({
       <HomeStats
         thisMonthExpenses={thisMonthExpenses}
         upcomingCount={upcomingItems.length}
+        onSpendPress={() => setSpendPageVisible(true)}
       />
 
       <Text

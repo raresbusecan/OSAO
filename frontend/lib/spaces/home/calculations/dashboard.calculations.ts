@@ -1,47 +1,19 @@
 import type { HomeData } from "@/components/spaces/home/home.data.types";
 import type { HomeNextItem } from "@/components/spaces/home/home.ui.types";
 import type { SupplyRestockEvent } from "@/lib/spaces/home/home.types";
+import { getThisMonthHomeSpend } from "./spend.calculations";
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const DOC_ALERT_DAYS = 45;
 const DUE_ALERT_DAYS = 14;
 
+/** Kept as the existing public name (used by HomeDashboard's stat card
+ * and lib/dashboard/monthlyExpenses.ts's cross-space aggregator) --
+ * the actual 3-source definition now lives in spend.calculations.ts's
+ * getHomeSpendRecords, shared with HomeSpendPage so the two can never
+ * quietly disagree on what counts as "this month's spend". */
 export function getThisMonthHomeExpenses(homeData: HomeData): number {
-  const now = new Date();
-  const currentMonth = now.getMonth();
-  const currentYear = now.getFullYear();
-
-  const isCurrentMonth = (dateString: string) => {
-    const d = new Date(dateString);
-    return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-  };
-
-  let total = 0;
-
-  homeData.expenseEntries.forEach((entry) => {
-    if (isCurrentMonth(entry.date)) {
-      total += entry.amount;
-    }
-  });
-
-  homeData.maintenanceEntries.forEach((entry) => {
-    if (isCurrentMonth(entry.date)) {
-      total += entry.price;
-    }
-  });
-
-  // A resolved purchase task -- keyed off completedAt (when it was
-  // actually paid), not dueDate. dueDate can't double as "payment date"
-  // anymore now that a recurring task repoints it to its NEXT
-  // occurrence on resolve (see nextTaskOccurrence/resolveTask) -- that's
-  // a future date, the opposite of what a spend total wants.
-  homeData.taskEntries.forEach((entry) => {
-    if (entry.isPurchase && entry.price && entry.completedAt && isCurrentMonth(entry.completedAt)) {
-      total += entry.price;
-    }
-  });
-
-  return total;
+  return getThisMonthHomeSpend(homeData);
 }
 
 function daysUntil(dateString: string, now: Date): number {
