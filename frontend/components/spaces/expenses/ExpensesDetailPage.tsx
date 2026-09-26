@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { View, Text, ScrollView, Pressable } from "react-native";
+import { View, Text, ScrollView, Pressable, Modal, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import type { ExpensesData } from "./expenses.data.types";
@@ -7,12 +7,10 @@ import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
 import { ExpensesListSection } from "./ExpensesListSection";
 import {
   getAllTimeExpensesTotal,
-  getMonthlyExpenseTotals,
-  getEntriesForMonth,
-  type MonthlyExpenseTotal,
+  filterExpensesByPeriod,
+  formatExpensesPeriodLabel,
+  type ExpensesPeriod,
 } from "@/lib/spaces/expenses/calculations/dashboard.calculations";
-
-const MONTHS_SHOWN = 4;
 
 export type ExpensesDetailPageProps = {
   expensesData: ExpensesData;
@@ -20,40 +18,46 @@ export type ExpensesDetailPageProps = {
   onEntryPress: (entry: ExpenseEntry) => void;
 };
 
+const PERIOD_PRESETS: { label: string; period: ExpensesPeriod }[] = [
+  { label: "All time", period: { kind: "all" } },
+  { label: "This month", period: { kind: "thisMonth" } },
+  { label: "Last 3 months", period: { kind: "months", count: 3 } },
+  { label: "Last 6 months", period: { kind: "months", count: 6 } },
+  { label: "Last year", period: { kind: "years", count: 1 } },
+];
+
+function periodsEqual(a: ExpensesPeriod, b: ExpensesPeriod): boolean {
+  if (a.kind !== b.kind) return false;
+  if (a.kind === "all" || a.kind === "thisMonth") return true;
+  return (a as { count: number }).count === (b as { count: number }).count;
+}
+
 /**
  * Opened by tapping the "All time" card on the space's own screen --
- * the trend chart lets you spot an expensive month at a glance and tap
- * straight into it, closer to how Car's own Expenses page works
- * (period filter + breakdown + list) but scaled to this space's single
- * flat category instead of Car's 4.
+ * the period filter here now uses the same trigger+modal model as
+ * Car's CarExpensesPage/CarHistoryPage and Home's HomeSpendPage
+ * (rolling window presets, not a specific calendar month), per
+ * explicit user request for consistency across every Space's own
+ * Expenses section. This space has only one flat category, unlike
+ * Car/Home's multi-category chip grids, so there's no category filter
+ * here -- period is the only axis.
  */
 export function ExpensesDetailPage({ expensesData, onBack, onEntryPress }: ExpensesDetailPageProps) {
   const { colors, spacing, radius } = useTheme();
 
-  // null = "All time" (the default); otherwise the tapped bar's
-  // {year, month}, and the toggle/list/total below all narrow to it.
-  const [selectedMonth, setSelectedMonth] = useState<{ year: number; month: number } | null>(null);
-
-  const months = useMemo(() => getMonthlyExpenseTotals(expensesData, MONTHS_SHOWN), [expensesData]);
-  const maxTotal = Math.max(1, ...months.map((m) => m.total));
+  const [period, setPeriod] = useState<ExpensesPeriod>({ kind: "all" });
+  const [periodPickerOpen, setPeriodPickerOpen] = useState(false);
 
   const allTimeTotal = useMemo(() => getAllTimeExpensesTotal(expensesData), [expensesData]);
 
-  const selectedEntries = useMemo(
-    () => (selectedMonth ? getEntriesForMonth(expensesData, selectedMonth.year, selectedMonth.month) : expensesData.entries),
-    [expensesData, selectedMonth],
+  const filteredEntries = useMemo(
+    () => filterExpensesByPeriod(expensesData.entries, period),
+    [expensesData, period],
   );
-  const selectedTotal = selectedMonth
-    ? selectedEntries.reduce((sum, e) => sum + e.price, 0)
-    : allTimeTotal;
-  const selectedLabel = selectedMonth
-    ? months.find((m) => m.year === selectedMonth.year && m.month === selectedMonth.month)?.label
-    : null;
-
-  const toggleMonth = (m: MonthlyExpenseTotal) => {
-    const isSame = selectedMonth?.year === m.year && selectedMonth?.month === m.month;
-    setSelectedMonth(isSame ? null : { year: m.year, month: m.month });
-  };
+  const filteredTotal = useMemo(
+    () => (period.kind === "all" ? allTimeTotal : filteredEntries.reduce((sum, e) => sum + e.price, 0)),
+    [period, allTimeTotal, filteredEntries],
+  );
 
   return (
     <ScrollView
@@ -100,16 +104,17 @@ export function ExpensesDetailPage({ expensesData, onBack, onEntryPress }: Expen
       <View style={{ marginBottom: spacing.xl }}>
         <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
           <Text style={{ fontSize: 30, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 }}>
-            {selectedTotal.toLocaleString("en-US")}
+            {filteredTotal.toLocaleString("en-US")}
           </Text>
           <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>RON</Text>
         </View>
         <Text style={{ marginTop: 2, fontSize: 12, color: colors.onSurfaceTertiary }}>
-          {selectedMonth ? `${selectedLabel} · ${selectedEntries.length} entries` : `All time · ${expensesData.entries.length} entries`}
+          {formatExpensesPeriodLabel(period)} · {filteredEntries.length} entries
         </Text>
       </View>
 
-      {/* TREND CHART */}
+      {/* PERIOD -- same modal bottom-sheet trigger as CarExpensesPage/
+          CarHistoryPage/HomeSpendPage's own "Period" row. */}
       <View
         style={{
           backgroundColor: "transparent",
@@ -117,91 +122,97 @@ export function ExpensesDetailPage({ expensesData, onBack, onEntryPress }: Expen
           borderColor: colors.border,
           borderRadius: radius.sm,
           padding: spacing.lg,
-          marginBottom: spacing.lg,
-        }}
-      >
-        <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", height: 100, gap: spacing.md }}>
-          {months.map((m) => {
-            const isSelected = selectedMonth?.year === m.year && selectedMonth?.month === m.month;
-            const barHeight = Math.max(6, (m.total / maxTotal) * 90);
-            return (
-              <Pressable
-                key={`${m.year}-${m.month}`}
-                testID={`expenses-chart-bar-${m.year}-${m.month}`}
-                onPress={() => toggleMonth(m)}
-                accessibilityRole="button"
-                accessibilityLabel={`${m.label}, ${m.total} RON`}
-                style={{ flex: 1, alignItems: "center", gap: 6 }}
-              >
-                <View
-                  style={{
-                    width: "100%",
-                    height: barHeight,
-                    borderRadius: 6,
-                    backgroundColor: isSelected ? colors.onSurface : colors.surfaceTertiary,
-                    alignItems: "center",
-                    justifyContent: "flex-start",
-                  }}
-                >
-                  {isSelected ? (
-                    <Text style={{ fontSize: 10, fontWeight: "800", color: colors.surface, marginTop: 6 }}>
-                      {m.total.toLocaleString("en-US")}
-                    </Text>
-                  ) : null}
-                </View>
-                <Text style={{ fontSize: 10.5, fontWeight: isSelected ? "800" : "600", color: isSelected ? colors.onSurface : colors.onSurfaceTertiary }}>
-                  {m.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      </View>
-
-      {/* TOGGLE */}
-      <View
-        style={{
-          flexDirection: "row",
-          backgroundColor: "transparent",
-          borderWidth: 1,
-          borderColor: colors.border,
-          borderRadius: radius.pill,
-          padding: 3,
           marginBottom: spacing.xl,
         }}
       >
         <Pressable
-          testID="expenses-toggle-alltime"
-          onPress={() => setSelectedMonth(null)}
-          style={{
-            flex: 1,
-            alignItems: "center",
-            paddingVertical: 9,
-            borderRadius: radius.pill,
-            backgroundColor: selectedMonth ? "transparent" : colors.onSurface,
-          }}
+          testID="expenses-detail-period-trigger"
+          onPress={() => setPeriodPickerOpen(true)}
+          accessibilityRole="button"
+          style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
         >
-          <Text style={{ fontSize: 12.5, fontWeight: "700", color: selectedMonth ? colors.onSurface : colors.surface }}>
-            All time
-          </Text>
+          <Text style={{ fontSize: 13, fontWeight: "600", color: colors.onSurface }}>Period</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurface }}>
+              {formatExpensesPeriodLabel(period)}
+            </Text>
+            <Ionicons name="chevron-down" size={16} color={colors.onSurfaceTertiary} />
+          </View>
         </Pressable>
-        <View
-          style={{
-            flex: 1,
-            alignItems: "center",
-            paddingVertical: 9,
-            borderRadius: radius.pill,
-            backgroundColor: selectedMonth ? colors.onSurface : "transparent",
-          }}
-        >
-          <Text style={{ fontSize: 12.5, fontWeight: "700", color: selectedMonth ? colors.surface : colors.onSurfaceTertiary }}>
-            {selectedMonth ? `Selected month (${selectedLabel})` : "Selected month"}
-          </Text>
-        </View>
       </View>
 
+      {/* PERIOD PICKER */}
+      <Modal
+        visible={periodPickerOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPeriodPickerOpen(false)}
+      >
+        <View style={{ flex: 1, justifyContent: "flex-end" }}>
+          <Pressable
+            onPress={() => setPeriodPickerOpen(false)}
+            style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }}
+          />
+
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              padding: spacing.xl,
+              borderTopLeftRadius: radius.lg,
+              borderTopRightRadius: radius.lg,
+            }}
+          >
+            <Text style={{ fontSize: 18, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.sm }}>
+              Period
+            </Text>
+
+            {PERIOD_PRESETS.map((preset) => {
+              const isActive = periodsEqual(period, preset.period);
+              return (
+                <Pressable
+                  key={preset.label}
+                  testID={`expenses-detail-period-option-${preset.label}`}
+                  onPress={() => {
+                    setPeriod(preset.period);
+                    setPeriodPickerOpen(false);
+                  }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingVertical: spacing.md,
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                    borderBottomColor: colors.border,
+                  }}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: isActive ? "700" : "500", color: colors.onSurface }}>
+                    {preset.label}
+                  </Text>
+                  {isActive ? <Ionicons name="checkmark" size={18} color={colors.onSurface} /> : null}
+                </Pressable>
+              );
+            })}
+
+            <Pressable
+              testID="expenses-detail-period-done"
+              onPress={() => setPeriodPickerOpen(false)}
+              style={{
+                marginTop: spacing.md,
+                minHeight: 48,
+                borderRadius: radius.md,
+                backgroundColor: colors.onSurface,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.surface }}>Done</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+
       {/* LIST */}
-      <ExpensesListSection entries={selectedEntries} onEntryPress={onEntryPress} />
+      <ExpensesListSection entries={filteredEntries} onEntryPress={onEntryPress} />
     </ScrollView>
   );
 }

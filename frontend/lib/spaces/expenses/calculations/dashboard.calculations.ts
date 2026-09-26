@@ -25,56 +25,45 @@ export function getAllTimeExpensesTotal(data: ExpensesData): number {
   return data.entries.reduce((total, entry) => total + entry.price, 0);
 }
 
-export type MonthlyExpenseTotal = {
-  year: number;
-  /** 0-11, same as Date#getMonth. */
-  month: number;
-  /** "Sep", "Aug", ... -- the trend chart's bar label. */
-  label: string;
-  total: number;
-};
+// -------------------------------------------------------------------
+// Period filter -- same rolling-window model as Car's CarExpensePeriod
+// (expenses.calculations.ts) and Home's HomeSpendPeriod
+// (spend.calculations.ts): a trigger row opening a modal with a fixed
+// preset list, not the old trend-chart's "pick one specific past
+// calendar month" -- replaced per explicit user request for
+// consistency across every Space's own Expenses section.
+// -------------------------------------------------------------------
 
-/** Oldest to newest, always `monthCount` entries ending on the current
- * month, even for a month with nothing spent (total: 0) -- a gap in the
- * chart would misread as a rendering bug, not "no expenses that month".
- */
-export function getMonthlyExpenseTotals(
-  data: ExpensesData,
-  monthCount: number,
+export type ExpensesPeriod =
+  | { kind: "all" }
+  | { kind: "thisMonth" }
+  | { kind: "months"; count: number }
+  | { kind: "years"; count: number };
+
+export function filterExpensesByPeriod(
+  entries: ExpenseEntry[],
+  period: ExpensesPeriod,
   referenceDate: Date = new Date(),
-): MonthlyExpenseTotal[] {
-  const months: MonthlyExpenseTotal[] = [];
+): ExpenseEntry[] {
+  if (period.kind === "all") return entries;
 
-  for (let i = monthCount - 1; i >= 0; i--) {
-    const d = new Date(referenceDate.getFullYear(), referenceDate.getMonth() - i, 1);
-    months.push({
-      year: d.getFullYear(),
-      month: d.getMonth(),
-      label: d.toLocaleDateString("en-US", { month: "short" }),
-      total: 0,
+  if (period.kind === "thisMonth") {
+    return entries.filter((entry) => {
+      const d = new Date(entry.date);
+      return d.getMonth() === referenceDate.getMonth() && d.getFullYear() === referenceDate.getFullYear();
     });
   }
 
-  data.entries.forEach((entry) => {
-    const entryDate = new Date(entry.date);
-    const bucket = months.find(
-      (m) => m.year === entryDate.getFullYear() && m.month === entryDate.getMonth(),
-    );
-    if (bucket) bucket.total += entry.price;
-  });
+  const cutoff = new Date(referenceDate);
+  if (period.kind === "months") cutoff.setMonth(cutoff.getMonth() - period.count);
+  else cutoff.setFullYear(cutoff.getFullYear() - period.count);
 
-  return months;
+  return entries.filter((entry) => new Date(entry.date).getTime() >= cutoff.getTime());
 }
 
-/** Every entry recorded in one specific {year, month} -- what the trend
- * chart's tapped bar filters the list down to. */
-export function getEntriesForMonth(
-  data: ExpensesData,
-  year: number,
-  month: number,
-): ExpenseEntry[] {
-  return data.entries.filter((entry) => {
-    const d = new Date(entry.date);
-    return d.getFullYear() === year && d.getMonth() === month;
-  });
+export function formatExpensesPeriodLabel(period: ExpensesPeriod): string {
+  if (period.kind === "all") return "All time";
+  if (period.kind === "thisMonth") return "This month";
+  if (period.kind === "months") return period.count === 1 ? "Last month" : `Last ${period.count} months`;
+  return period.count === 1 ? "Last year" : `Last ${period.count} years`;
 }
