@@ -279,10 +279,6 @@ export default function Spaces() {
                     left: 8,
                     width: 28,
                     height: 28,
-                    borderRadius: radius.pill,
-                    backgroundColor: "transparent",
-                    borderWidth: 1,
-                    borderColor: colors.caution,
                     alignItems: "center",
                     justifyContent: "center",
                   }}

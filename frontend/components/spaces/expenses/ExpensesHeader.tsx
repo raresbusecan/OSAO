@@ -61,10 +61,6 @@ export function ExpensesHeader({ space, onEdit }: ExpensesHeaderProps) {
           top: spacing.md + 10,
           width: 40,
           height: 40,
-          borderRadius: radius.pill,
-          backgroundColor: "transparent",
-          borderWidth: 1,
-          borderColor: colors.caution,
           alignItems: "center",
           justifyContent: "center",
         }}

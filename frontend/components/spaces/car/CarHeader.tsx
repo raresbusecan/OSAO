@@ -111,10 +111,6 @@ export function CarHeader({
             top: spacing.md + 10,
             width: 40,
             height: 40,
-            borderRadius: radius.pill,
-            backgroundColor: colors.surfaceSecondary,
-            borderWidth: 1,
-            borderColor: colors.caution,
             alignItems: "center",
             justifyContent: "center",
           }}
