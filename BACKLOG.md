@@ -310,25 +310,6 @@ invite-avatar Pressable. Low-risk, single-file changes each.
 
 **Found:** `[from: design-lead Phase 2 Grocery space audit, 2026-09-22]`.
 
-### Home's Maintenance "Recurring" toggle has no way to ever set a due date (functional defect, not just UX)
-
-**Where:** `frontend/components/spaces/home/homeCategoryConfig.ts` (the
-"maintenance" category's `fields`/`buildEntry` — no `nextDueDate` field
-exists; `buildEntry` only ever preserves `existing?.nextDueDate`) and
-`frontend/lib/spaces/home/calculations/dashboard.calculations.ts`'s
-`getUpcomingHomeItems` (filters Maintenance strictly on `nextDueDate`).
-
-**What:** A brand-new Maintenance entry's `nextDueDate` is permanently
-`undefined` — there's no UI field to set it — so no user-created
-Maintenance entry can ever surface in the dashboard's "Mentenanță" badge
-or NEXT section, defeating the point of a due-date-tracked maintenance
-log. Needs a `nextDueDate` field added to the form, or the recurrence to
-actually project one (worth checking why this doesn't already use the
-same `RecurrenceProjector` machinery `home_recurring`/`home_maintenance`
-use server-side, per `homeItems.ts`'s comments).
-
-**Found:** `[from: design-lead Phase 2 Home space audit, 2026-09-22]`.
-
 ### Home space mixes English and Romanian UI copy inconsistently, including a tile label vs. its own destination screen's title
 
 **Where:** `frontend/components/spaces/home/HomeDashboard.tsx`
@@ -870,3 +851,7 @@ gets migrated incrementally.
 ### `RecurringWarningRow`'s `tier` field typed `never` (2026-09-26)
 
 Fixed as a side effect of unifying Home Tasks' urgency coloring: `HomeTaskRow.tier` used to be its own unrelated `"critical" | "medium"` set; it's now the same `RecurringWarningTier` (`"yellow" | "orangeDays" | "orangeToday" | "red"`) Restanțe already used, via a shared `classifyTaskUrgencyTier()`. The intersection in `RecurringWarningRow` no longer collapses to `never` — confirmed via a full `npx tsc --noEmit` run, zero errors left in `dashboard.calculations.ts`/`HomeRecurringWarningsPage.tsx`.
+
+### Home's Maintenance "Recurring" toggle had no way to set a due date (2026-09-26)
+
+Also stale by the time it was re-checked — Home Maintenance's "Resolved" action work (built earlier this same session) already fixed this as a side effect: `homeCategoryConfig.ts`'s maintenance `buildEntry` now seeds `nextDueDate` via `addRecurrenceInterval(date, frequency, interval)` the moment "Recurent" is toggled on (or preserves it across later unrelated edits via the `wasAlreadyRecurring` check), instead of leaving it permanently `undefined`. Confirmed by reading the current `buildEntry` — removed from "Found along the way" rather than left describing a bug that no longer exists.
