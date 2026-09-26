@@ -1,11 +1,25 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView } from "react-native";
+import { View, Text, TextInput, Pressable, ScrollView, LayoutAnimation, Platform, UIManager } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { HomeCategorySection, type HomeCategoryRow } from "./HomeCategorySection";
 import { parseLeadingNumber, type HomeCategoryField } from "./homeCategoryConfig";
 import { HomeDatePickerSheet } from "./HomeDatePickerSheet";
 import { confirmAction } from "@/lib/confirm";
+
+// Old-architecture Android needs this opt-in for LayoutAnimation to do
+// anything at all; a no-op everywhere else (new architecture, iOS, web).
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+/** Animates the form growing/shrinking in place instead of just
+ * appearing/disappearing where the "+ Add X" row was -- called right
+ * before every setFormExpanded so the height change itself is what
+ * animates (LayoutAnimation reacts to the very next layout pass). */
+function animateFormToggle() {
+  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+}
 
 function formatFieldDate(iso: string): string {
   const d = new Date(iso);
@@ -99,6 +113,7 @@ export function HomeCategoryPage({
 
   const closeForm = () => {
     reset();
+    animateFormToggle();
     setFormExpanded(false);
   };
 
@@ -111,6 +126,7 @@ export function HomeCategoryPage({
   const startEdit = (id: string | number) => {
     setEditingId(String(id));
     setValues(getEditValues(String(id)));
+    animateFormToggle();
     setFormExpanded(true);
   };
 
@@ -186,7 +202,10 @@ export function HomeCategoryPage({
       {!formExpanded ? (
         <Pressable
           testID="category-add-row"
-          onPress={() => setFormExpanded(true)}
+          onPress={() => {
+            animateFormToggle();
+            setFormExpanded(true);
+          }}
           accessibilityRole="button"
           accessibilityLabel={submitLabel}
           style={{
