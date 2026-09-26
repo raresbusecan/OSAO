@@ -5,7 +5,6 @@ import { useTheme, type ThemeColors } from "@/lib/theme";
 import { severityColor, severityTint } from "@/lib/statusColors";
 
 import type { HomeData } from "./home.data.types";
-import type { HomeTaskEntry } from "@/lib/spaces/home/home.types";
 import {
   getRecurringTaskWarnings,
   type RecurringWarningRow,
@@ -15,10 +14,12 @@ import {
 export type HomeRecurringWarningsPageProps = {
   homeData: HomeData;
   onBack: () => void;
-  /** A row tap opens HomeTaskResolveSheet (price if it's a purchase,
-   * next-due-date always -- every row here is recurring by definition),
-   * not the full edit form. The task's other details stay unchanged. */
-  onResolvePress: (entry: HomeTaskEntry) => void;
+  /** A row tap resolves it -- a task row opens HomeTaskResolveSheet
+   * (price if it's a purchase, next-due-date always), a maintenance row
+   * goes through the same resolveEntry/confirmAction flow its own
+   * category checkbox already uses. See row.kind and HomeDashboard's
+   * wiring of this prop. */
+  onResolvePress: (row: RecurringWarningRow) => void;
 };
 
 // Built from `colors` (not a module-level constant) so it actually flips
@@ -42,7 +43,6 @@ export function HomeRecurringWarningsPage({ homeData, onBack, onResolvePress }: 
   const TIER_STYLE = tierStyle(colors);
 
   const { rows } = getRecurringTaskWarnings(homeData);
-  const findEntry = (id: string) => homeData.taskEntries.find((t) => t.id === id)!;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
@@ -81,7 +81,7 @@ export function HomeRecurringWarningsPage({ homeData, onBack, onResolvePress }: 
               return (
                 <Pressable
                   key={row.id}
-                  onPress={() => onResolvePress(findEntry(row.id))}
+                  onPress={() => onResolvePress(row)}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",

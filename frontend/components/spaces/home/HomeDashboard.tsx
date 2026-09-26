@@ -322,6 +322,46 @@ export default function HomeDashboard({
     setResolveSheetEntry(null);
   };
 
+  // Shared by the generic category page's own resolve checkbox/button
+  // (Maintenance today) AND a Restanțe row tap for a maintenance-kind
+  // row -- same preview-before-confirm behavior either way, instead of
+  // two copies of this dialog.
+  const resolveCategoryEntry = async (categoryKey: HomeCategoryKey, id: string) => {
+    const category = HOME_CATEGORIES.find((c) => c.key === categoryKey)!;
+    if (!category.resolveEntry) return;
+
+    const existing = category.entries(homeData).find((e) => e.id === id);
+    if (!existing) return;
+
+    // Preview the outcome before asking -- a mis-tap here isn't
+    // recoverable afterward (a resolved non-recurring entry vanishes
+    // from the list; a recurring one's nextDueDate only ever advances
+    // via this same action, nothing lets you set it back by hand -- see
+    // homeCategoryConfig.ts's buildEntry).
+    const resolved = category.resolveEntry(existing);
+    const isRecurring = !!(existing as { isRecurring?: boolean }).isRecurring;
+    const nextDueLabel = resolved.nextDueDate
+      ? new Date(resolved.nextDueDate).toLocaleDateString("ro-RO", { day: "numeric", month: "short", year: "numeric" })
+      : null;
+
+    const confirmed = await confirmAction(
+      "Marchezi ca rezolvat?",
+      isRecurring && nextDueLabel
+        ? `Data următoare se mută la ${nextDueLabel} și rămâne activă.`
+        : "Intrarea devine inactivă și dispare din listă.",
+      { confirmLabel: "Rezolvă", destructive: !isRecurring },
+    );
+    if (!confirmed) return;
+
+    saveHandlers[categoryKey](resolved);
+    notifyAction(
+      "Rezolvat",
+      isRecurring && nextDueLabel
+        ? `Rămâne activ — următoarea dată: ${nextDueLabel}.`
+        : "Mutat la inactiv.",
+    );
+  };
+
   // Runs the deep-link from TodoCarouselSheet's "Deschide" once homeData
   // has actually loaded -- guarded by a ref (not by clearing
   // initialOpenItem, which is owned by [id].tsx) so it only fires once
@@ -475,12 +515,19 @@ export default function HomeDashboard({
         <HomeRecurringWarningsPage
           homeData={homeData}
           onBack={() => setWarningsPageVisible(false)}
-          // Tapping a row here opens the resolve sheet directly (details
+          // A task row opens the resolve sheet directly (details
           // unchanged, only the price/next-date fields are editable) --
-          // not the full edit form. Every row on this page is already a
-          // recurring task nearing/past its due date, so the sheet
-          // always shows the next-date field.
-          onResolvePress={(entry) => setResolveSheetEntry(entry)}
+          // not the full edit form. A maintenance row goes through the
+          // exact same confirm-then-advance flow as its own category
+          // page's checkbox/button (resolveCategoryEntry).
+          onResolvePress={(row) => {
+            if (row.kind === "task") {
+              const entry = homeData.taskEntries.find((t) => t.id === row.id);
+              if (entry) setResolveSheetEntry(entry);
+              return;
+            }
+            resolveCategoryEntry("maintenance", row.id);
+          }}
         />
         {resolveSheetEntry ? (
           <HomeTaskResolveSheet
@@ -542,38 +589,7 @@ export default function HomeDashboard({
         onDelete={(id) => deleteHandlers[activeCategory](id)}
         onResolve={
           category.resolveEntry
-            ? async (id) => {
-                const existing = category.entries(homeData).find((e) => e.id === id);
-                if (!existing) return;
-
-                // Preview the outcome before asking -- a mis-tap here isn't
-                // recoverable afterward (a resolved non-recurring entry
-                // vanishes from the list; a recurring one's nextDueDate only
-                // ever advances via this same action, nothing lets you set
-                // it back by hand -- see homeCategoryConfig.ts's buildEntry).
-                const resolved = category.resolveEntry!(existing);
-                const isRecurring = !!(existing as { isRecurring?: boolean }).isRecurring;
-                const nextDueLabel = resolved.nextDueDate
-                  ? new Date(resolved.nextDueDate).toLocaleDateString("ro-RO", { day: "numeric", month: "short", year: "numeric" })
-                  : null;
-
-                const confirmed = await confirmAction(
-                  "Marchezi ca rezolvat?",
-                  isRecurring && nextDueLabel
-                    ? `Data următoare se mută la ${nextDueLabel} și rămâne activă.`
-                    : "Intrarea devine inactivă și dispare din listă.",
-                  { confirmLabel: "Rezolvă", destructive: !isRecurring },
-                );
-                if (!confirmed) return;
-
-                saveHandlers[activeCategory](resolved);
-                notifyAction(
-                  "Rezolvat",
-                  isRecurring && nextDueLabel
-                    ? `Rămâne activ — următoarea dată: ${nextDueLabel}.`
-                    : "Mutat la inactiv.",
-                );
-              }
+            ? (id) => resolveCategoryEntry(activeCategory, id)
             : undefined
         }
         getEditValues={(id) => {

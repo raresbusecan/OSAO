@@ -153,7 +153,17 @@ export function nextTaskOccurrence(
 
 export type RecurringWarningTier = "yellow" | "orangeDays" | "orangeToday" | "red";
 
-export type RecurringWarningRow = HomeTaskRow & { tier: RecurringWarningTier; daysRemaining: number };
+export type RecurringWarningRow = {
+  id: string;
+  title: string;
+  tier: RecurringWarningTier;
+  daysRemaining: number;
+  /** Which list this row actually resolves through -- a task opens
+   * HomeTaskResolveSheet (price + next-date), a maintenance entry goes
+   * through the same resolveEntry/confirmAction flow HomeCategoryPage's
+   * own checkbox already uses. See HomeDashboard's onResolvePress. */
+  kind: "task" | "maintenance";
+};
 
 /** The one place "how urgent is N days remaining" turns into a tier --
  * shared by getRecurringTaskWarnings (Restanțe) and getHomeTasksView
@@ -182,7 +192,22 @@ export function getRecurringTaskWarnings(homeData: HomeData): {
     const remaining = daysUntil(task.dueDate, now);
     const tier = classifyTaskUrgencyTier(remaining);
 
-    if (tier) rows.push({ ...task, tier, daysRemaining: remaining });
+    if (tier) rows.push({ id: task.id, title: task.title, tier, daysRemaining: remaining, kind: "task" });
+  });
+
+  // Maintenance -- same 4-day/overdue window, keyed off nextDueDate
+  // instead of dueDate. A resolved (completed:true) entry never has a
+  // meaningful nextDueDate left to warn about; a non-recurring one that
+  // hasn't been resolved yet has no nextDueDate at all (see
+  // homeCategoryConfig.ts's buildEntry), so both are naturally excluded
+  // by the `!entry.nextDueDate` guard.
+  homeData.maintenanceEntries.forEach((entry) => {
+    if (entry.completed || !entry.nextDueDate) return;
+
+    const remaining = daysUntil(entry.nextDueDate, now);
+    const tier = classifyTaskUrgencyTier(remaining);
+
+    if (tier) rows.push({ id: entry.id, title: entry.service, tier, daysRemaining: remaining, kind: "maintenance" });
   });
 
   // Ascending by daysRemaining -- most negative (furthest overdue, most
