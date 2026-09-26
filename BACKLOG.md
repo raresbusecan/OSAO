@@ -13,6 +13,42 @@ one up like any other "Open" item once nothing more pressing is ahead
 of it. Mark it `[from: <task>]` so there's a trail back to how it was
 found.
 
+### Every other save handler in [id].tsx has the same silent-failure bug just fixed for Home Tasks
+
+**Where:** [frontend/app/(tabs)/[id].tsx](<frontend/app/(tabs)/[id].tsx>) —
+every `handle*Save` function (10 of them: `handleFuelSave`,
+`handleMaintenanceSave`, `handleDocumentSave`, `handleExpenseSave` for
+Car; `handleHomeDocumentSave`, `handleHomeExpenseSave`,
+`handleHomeMaintenanceSave`, `handleHomeRecurringSave`,
+`handleHomeSupplySave` for Home; `handleExpenseEntrySave` for the
+Expenses space) follows the exact same pattern `handleHomeTaskSave`
+just got fixed for: optimistically apply the edit to local state, then
+on a failed `api.updateItem`/`api.createItem` call, the `catch` block
+only reverts a brand-NEW entry (removes it) — an EXISTING entry being
+edited/resolved has no revert at all (`isExisting ? current.X : ...`,
+where the `isExisting` branch is a no-op, keeping the never-actually-
+saved optimistic value).
+
+**What:** Confirmed as the real root cause of a user-reported bug: a
+plain, non-recurring Home Task checked off via its checkbox looked
+resolved immediately, but reappeared as unresolved in Restanțe later —
+the PUT to the backend silently failed (this session hit real
+Cloudflare tunnel flakiness more than once), the catch block's no-op
+revert left the UI showing "resolved" anyway, and the illusion held
+until the next full data reload pulled the server's still-unresolved
+truth back in. Only a toast (`notifyAction("Nu am putut salva...")`)
+ever signaled anything was wrong, easy to miss on a phone mid-tap.
+
+`handleHomeTaskSave` now snapshots the entry BEFORE the optimistic
+update and reverts to that exact snapshot on failure, instead of a
+no-op. The other 9 handlers still have the old, silent-failure
+behavior — same fix shape, just not applied yet (deliberately scoped
+to the one that had a concrete, confirmed bug report rather than
+sweeping all 10 unreviewed in the same pass).
+
+**Found:** `[from: fixing the Home Tasks Restanțe "still unresolved"
+bug report, 2026-09-26]`.
+
 ### Backend buckets Calendar days by UTC, with no user-timezone concept anywhere
 
 **Where:** `backend/app/Http/Controllers/Api/CalendarController.php`

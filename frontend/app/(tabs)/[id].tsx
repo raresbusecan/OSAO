@@ -722,7 +722,16 @@ export default function SpaceDetail() {
   };
 
   const handleHomeTaskSave = async (entry: HomeTaskEntry) => {
-    const isExisting = homeData.taskEntries.some((e) => e.id === entry.id);
+    // Snapshotted BEFORE the optimistic update -- on a failed save, an
+    // existing entry (e.g. a checkbox resolve) needs to revert to
+    // exactly this, not silently keep showing the optimistic (never
+    // actually persisted) version. A failure here was previously
+    // invisible beyond an easy-to-miss toast: the checkbox would look
+    // resolved for the rest of this session, then quietly go back to
+    // unresolved the next time this space's data reloads from the
+    // server, which still has the old value.
+    const previous = homeData.taskEntries.find((e) => e.id === entry.id);
+    const isExisting = !!previous;
     setHomeData((current) => ({
       ...current,
       taskEntries: isExisting
@@ -744,7 +753,7 @@ export default function SpaceDetail() {
       setHomeData((current) => ({
         ...current,
         taskEntries: isExisting
-          ? current.taskEntries
+          ? current.taskEntries.map((e) => (e.id === entry.id ? previous! : e))
           : current.taskEntries.filter((e) => e.id !== entry.id),
       }));
       notifyAction("Nu am putut salva task-ul", error?.message || "A apărut o eroare.");
