@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
+import { View, Text, ScrollView, Pressable, StyleSheet, Modal } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
@@ -66,6 +66,7 @@ export function HomeSpendPage({ homeData, onBack, onRecordPress }: HomeSpendPage
 
   const [activeCategories, setActiveCategories] = useState<Set<HomeSpendCategory>>(new Set());
   const [period, setPeriod] = useState<HomeSpendPeriod>({ kind: "thisMonth" });
+  const [periodPickerOpen, setPeriodPickerOpen] = useState(false);
   const [listExpanded, setListExpanded] = useState(false);
 
   const toggleCategory = (category: HomeSpendCategory) => {
@@ -301,38 +302,105 @@ export function HomeSpendPage({ homeData, onBack, onRecordPress }: HomeSpendPage
         ) : null}
       </View>
 
-      {/* PERIOD -- inline pills, not a modal (fewer presets than Car's,
-          no custom stepper needed for Home's smaller data volume). */}
+      {/* PERIOD -- same modal bottom-sheet trigger as CarExpensesPage/
+          CarHistoryPage's own "Period" row (the app's one established
+          period-filter model), just without their custom weeks/months
+          stepper -- Home's 5 fixed presets don't need one. */}
       <View
-        style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginBottom: spacing.lg }}
+        style={{
+          backgroundColor: "transparent",
+          borderWidth: 1,
+          borderColor: colors.border,
+          borderRadius: radius.sm,
+          padding: spacing.lg,
+          marginBottom: spacing.lg,
+        }}
       >
-        {PERIOD_PRESETS.map((preset) => {
-          const isActive = periodsEqual(period, preset.period);
-          return (
+        <Pressable
+          testID="home-spend-period-trigger"
+          onPress={() => setPeriodPickerOpen(true)}
+          accessibilityRole="button"
+          style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
+        >
+          <Text style={{ fontSize: 13, fontWeight: "600", color: colors.onSurface }}>Perioadă</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurface }}>
+              {formatSpendPeriodLabel(period)}
+            </Text>
+            <Ionicons name="chevron-down" size={16} color={colors.onSurfaceTertiary} />
+          </View>
+        </Pressable>
+      </View>
+
+      {/* PERIOD PICKER */}
+      <Modal
+        visible={periodPickerOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPeriodPickerOpen(false)}
+      >
+        <View style={{ flex: 1, justifyContent: "flex-end" }}>
+          <Pressable
+            onPress={() => setPeriodPickerOpen(false)}
+            style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }}
+          />
+
+          <View
+            style={{
+              backgroundColor: colors.surface,
+              padding: spacing.xl,
+              borderTopLeftRadius: radius.lg,
+              borderTopRightRadius: radius.lg,
+            }}
+          >
+            <Text style={{ fontSize: 18, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.sm }}>
+              Perioadă
+            </Text>
+
+            {PERIOD_PRESETS.map((preset) => {
+              const isActive = periodsEqual(period, preset.period);
+              return (
+                <Pressable
+                  key={preset.label}
+                  testID={`home-spend-period-option-${preset.label}`}
+                  onPress={() => {
+                    setPeriod(preset.period);
+                    setPeriodPickerOpen(false);
+                  }}
+                  style={{
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingVertical: spacing.md,
+                    borderBottomWidth: StyleSheet.hairlineWidth,
+                    borderBottomColor: colors.border,
+                  }}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: isActive ? "700" : "500", color: colors.onSurface }}>
+                    {preset.label}
+                  </Text>
+                  {isActive ? <Ionicons name="checkmark" size={18} color={colors.onSurface} /> : null}
+                </Pressable>
+              );
+            })}
+
             <Pressable
-              key={preset.label}
-              testID={`home-spend-period-${preset.label}`}
-              onPress={() => setPeriod(preset.period)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isActive }}
+              testID="home-spend-period-done"
+              onPress={() => setPeriodPickerOpen(false)}
               style={{
-                height: 32,
-                paddingHorizontal: 14,
-                borderRadius: radius.pill,
-                backgroundColor: isActive ? colors.onSurface : "transparent",
-                borderWidth: 1,
-                borderColor: isActive ? colors.onSurface : colors.border,
+                marginTop: spacing.md,
+                minHeight: 48,
+                borderRadius: radius.md,
+                backgroundColor: colors.onSurface,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
-              <Text style={{ fontSize: 12, fontWeight: "700", color: isActive ? colors.surface : colors.onSurface }}>
-                {preset.label}
-              </Text>
+              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.surface }}>Done</Text>
             </Pressable>
-          );
-        })}
-      </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* LIST */}
       {allRecords.length === 0 ? (
