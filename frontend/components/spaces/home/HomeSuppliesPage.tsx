@@ -67,6 +67,18 @@ export function HomeSuppliesPage({ homeData, onBack, onAdd, onEdit, onRestock }:
           >
             <Ionicons name="chevron-back" size={20} color={colors.onSurface} />
           </Pressable>
+          <View
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: radius.md,
+              backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons name="basket-outline" size={16} color={SPACE_IDENTITY_COLORS.home} />
+          </View>
           <Text style={{ fontSize: 26, fontWeight: "800", letterSpacing: -0.4, color: colors.onSurface }}>Supplies</Text>
         </View>
 

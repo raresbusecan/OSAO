@@ -259,6 +259,32 @@ export default function HomeDashboard({
     onSelect: selectCategory,
   });
 
+  // "NEXT" row tap (HomeNextSection) -- item.id is always
+  // "<prefix>-<entry id>" (see getUpcomingHomeItems), opens that entry
+  // for editing in its own category page, same deep-link mechanism the
+  // TodoCarousel/initialOpenItem effect below already uses.
+  const handleNextItemPress = (item: HomeNextItem) => {
+    const id = String(item.id);
+    let categoryKey: HomeCategoryKey | null = null;
+    let entryId = "";
+
+    if (id.startsWith("doc-")) {
+      categoryKey = "documents";
+      entryId = id.slice(4);
+    } else if (id.startsWith("maint-")) {
+      categoryKey = "maintenance";
+      entryId = id.slice(6);
+    } else if (id.startsWith("rec-")) {
+      categoryKey = "recurring";
+      entryId = id.slice(4);
+    }
+    if (!categoryKey) return;
+
+    closeAllSubViews();
+    setActiveCategory(categoryKey);
+    setInitialCategoryEditId(entryId);
+  };
+
   const handleTaskSave = (entry: HomeTaskEntry) => {
     onTaskSave(entry);
     setTaskFormVisible(false);
@@ -766,7 +792,7 @@ export default function HomeDashboard({
         })}
       </View>
 
-      <HomeNextSection items={upcomingItems.slice(0, 3)} />
+      <HomeNextSection items={upcomingItems.slice(0, 3)} onItemPress={handleNextItemPress} />
     </ScrollView>
   );
 }

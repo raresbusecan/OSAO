@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
@@ -7,9 +7,15 @@ import type { HomeNextItem } from "./home.ui.types";
 
 export type HomeNextSectionProps = {
   items: HomeNextItem[];
+  /** Opens the row's own entry for editing -- item.id is always
+   * "<prefix>-<entry id>" (doc-/maint-/rec-, see getUpcomingHomeItems),
+   * the caller (HomeDashboard) is the one that knows how to turn that
+   * back into a category+id. Rows render as plain Views (no tap,
+   * no chevron) when this is omitted. */
+  onItemPress?: (item: HomeNextItem) => void;
 };
 
-export function HomeNextSection({ items }: HomeNextSectionProps) {
+export function HomeNextSection({ items, onItemPress }: HomeNextSectionProps) {
   const { colors, spacing, radius } = useTheme();
 
   if (items.length === 0) {
@@ -32,8 +38,11 @@ export function HomeNextSection({ items }: HomeNextSectionProps) {
 
       <View style={{ gap: spacing.sm, marginBottom: spacing.xl }}>
         {items.map((item) => (
-          <View
+          <Pressable
             key={item.id}
+            testID={`home-next-item-${item.id}`}
+            onPress={onItemPress ? () => onItemPress(item) : undefined}
+            disabled={!onItemPress}
             style={{
               backgroundColor: "transparent",
               borderWidth: 1,
@@ -96,7 +105,11 @@ export function HomeNextSection({ items }: HomeNextSectionProps) {
                 {item.right}
               </Text>
             ) : null}
-          </View>
+
+            {onItemPress ? (
+              <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceTertiary} />
+            ) : null}
+          </Pressable>
         ))}
       </View>
     </>

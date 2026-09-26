@@ -12,6 +12,7 @@ import {
   type RecurringWarningTier,
 } from "@/lib/spaces/home/calculations/dashboard.calculations";
 import { severityColor } from "@/lib/statusColors";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 
 export type HomeTasksPageProps = {
   homeData: HomeData;
@@ -98,6 +99,18 @@ export function HomeTasksPage({
             >
               <Ionicons name="chevron-back" size={20} color={colors.onSurface} />
             </Pressable>
+            <View
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: radius.md,
+                backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Ionicons name="checkmark-circle-outline" size={16} color={SPACE_IDENTITY_COLORS.home} />
+            </View>
             <Text style={{ fontSize: 26, fontWeight: "800", letterSpacing: -0.4, color: colors.onSurface }}>
               Tasks
             </Text>
