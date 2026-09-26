@@ -101,10 +101,10 @@ export function HomeCategorySection({
             >
               {/* Left, like Tasks' own resolve checkbox (HomeTasksPage.tsx)
                   -- same concept, same place, instead of a second small icon
-                  crammed at the right next to delete. Kept alongside the
-                  labeled "Rezolvă" button below (not replaced by it) --
-                  the checkbox alone wasn't discoverable enough on its own,
-                  per explicit user feedback. */}
+                  crammed at the right next to delete. The more discoverable,
+                  explicitly-labeled twin of this lives in the edit form
+                  itself (HomeCategoryPage.tsx's "Rezolvă" button, shown once
+                  a row is opened for editing), not here on the row. */}
               {onRowResolve ? (
                 <Pressable
                   testID={`home-row-resolve-${row.id}`}
@@ -168,35 +168,6 @@ export function HomeCategorySection({
                   <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceTertiary} />
                 ) : null}
               </Pressable>
-
-              {/* Explicit, labeled twin of the checkbox above -- same
-                  action (onRowResolve), just impossible to miss for
-                  anyone who didn't realize the checkbox itself was
-                  tappable. Per explicit user feedback: keep the
-                  checkbox, but add a button too. */}
-              {onRowResolve ? (
-                <Pressable
-                  testID={`home-row-resolve-button-${row.id}`}
-                  onPress={() => onRowResolve(row.id)}
-                  hitSlop={6}
-                  accessibilityRole="button"
-                  accessibilityLabel="Rezolvă"
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 4,
-                    height: 28,
-                    paddingHorizontal: 10,
-                    borderRadius: radius.pill,
-                    borderWidth: 1,
-                    borderColor: colors.success,
-                    flexShrink: 0,
-                  }}
-                >
-                  <Ionicons name="checkmark" size={12} color={colors.success} />
-                  <Text style={{ fontSize: 11.5, fontWeight: "800", color: colors.success }}>Rezolvă</Text>
-                </Pressable>
-              ) : null}
 
               {onRowDelete ? (
                 <Pressable

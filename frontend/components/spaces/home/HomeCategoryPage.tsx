@@ -124,6 +124,16 @@ export function HomeCategoryPage({
     onDelete(String(id));
   };
 
+  // Only ever shown while editing an existing row (never on the "add
+  // new" form) of a category that actually has a resolve concept
+  // (currently just Maintenance) -- lives in the form itself, right
+  // next to Update/Cancel, instead of on the row in the list below.
+  const resolve = () => {
+    if (!editingId || !onResolve) return;
+    onResolve(editingId);
+    reset();
+  };
+
   return (
     <>
     <ScrollView
@@ -343,6 +353,33 @@ export function HomeCategoryPage({
             </Pressable>
           ) : null}
         </View>
+
+        {/* Only while editing an existing row, for a category that has a
+            resolve concept (Maintenance today) -- a separate, full-width
+            row below Update/Cancel rather than crammed into the same
+            row as a third button. */}
+        {editingId && onResolve ? (
+          <Pressable
+            testID="category-resolve"
+            onPress={resolve}
+            style={{
+              height: 46,
+              borderRadius: radius.sm,
+              borderWidth: 1,
+              borderColor: colors.success,
+              alignItems: "center",
+              justifyContent: "center",
+              flexDirection: "row",
+              gap: 6,
+              marginTop: 4,
+            }}
+          >
+            <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
+            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.success }}>
+              Rezolvă
+            </Text>
+          </Pressable>
+        ) : null}
       </View>
 
       <HomeCategorySection
