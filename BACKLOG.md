@@ -13,6 +13,35 @@ one up like any other "Open" item once nothing more pressing is ahead
 of it. Mark it `[from: <task>]` so there's a trail back to how it was
 found.
 
+### `lib/dashboard/monthlyExpenses.ts` is dead, and so is `DashboardController`'s own `monthlyExpenses` field
+
+**Where:** `frontend/lib/dashboard/monthlyExpenses.ts` — zero importers
+anywhere in the frontend (confirmed via grep). Its only reason to
+still exist was feeding `getThisMonthExpensesTotal`/
+`getThisMonthHomeExpenses`/a Car equivalent into one cross-space
+total, presumably for `app/(tabs)/home.tsx`'s own spend widget — but
+`home.tsx` doesn't import this file, and doesn't read
+`dashboard.monthlyExpenses` either (its local `dashboard` state type
+only declares `{today, upcoming, overdue}`, dropping the field
+entirely even though `backend/app/Http/Controllers/Api/
+DashboardController.php::index()` genuinely computes and returns a
+real `monthlyExpenses: {total, sources}` object). Home's own spend
+widget (the budget ring) sources its numbers from `budget.limits` (a
+separate `api.getBudget()` call) instead.
+
+**What:** Two dead things stacked on top of each other: a frontend
+file nobody imports, and a backend field nobody reads. Needs a
+decision, not a blind removal — either `home.tsx` should actually
+start rendering `dashboard.monthlyExpenses` somewhere (it's real,
+computed, cross-space data that currently goes nowhere), or both the
+frontend file and the backend field should be dropped as genuinely
+unwanted. Found while investigating a separate, narrower backlog item
+about `getThisMonthExpensesTotal` (Expenses space's own local
+function, a different one from Home's) being unused by
+`ExpensesStats.tsx`.
+
+**Found:** `[from: dead-code cleanup pass, 2026-09-27]`.
+
 ### Dead `search.tsx` stub left in the route tree instead of fully removed
 
 **Where:** `frontend/app/(tabs)/search.tsx` (a `@deprecated` stub that
