@@ -10,7 +10,7 @@ import { ExpensesAddBar, type ExpensesAddBarDraft } from "./ExpensesAddBar";
 import { ExpensesListSection } from "./ExpensesListSection";
 import { ExpenseEditModal } from "./ExpenseEditModal";
 import { ExpensesDetailPage } from "./ExpensesDetailPage";
-import { getAllTimeExpensesTotal } from "@/lib/spaces/expenses/calculations/dashboard.calculations";
+import { getAllTimeExpensesTotal, getThisMonthExpensesTotal } from "@/lib/spaces/expenses/calculations/dashboard.calculations";
 
 export type ExpensesDashboardProps = {
   space: any;
@@ -66,6 +66,10 @@ export default function ExpensesDashboard({
     () => getAllTimeExpensesTotal({ entries }),
     [entries],
   );
+  const thisMonthTotal = useMemo(
+    () => getThisMonthExpensesTotal({ entries }),
+    [entries],
+  );
 
   if (detailPageVisible) {
     return (
@@ -91,9 +95,6 @@ export default function ExpensesDashboard({
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{
         paddingHorizontal: spacing.xl,
-        // Clears the floating Quick Add FAB in the bottom-right corner.
-        // Same reasoning as Grocery's: one list, one category, so the FAB
-        // stays as Quick Add here (nothing to fan out into).
         paddingBottom: 100,
       }}
     >
@@ -101,7 +102,7 @@ export default function ExpensesDashboard({
 
       <ExpensesStats
         allTimeTotal={allTimeTotal}
-        itemCount={entries.length}
+        thisMonthTotal={thisMonthTotal}
         onTotalPress={() => setDetailPageVisible(true)}
       />
 

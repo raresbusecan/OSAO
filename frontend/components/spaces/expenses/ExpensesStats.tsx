@@ -5,16 +5,17 @@ import { useTheme } from "@/lib/theme";
 
 export type ExpensesStatsProps = {
   allTimeTotal: number;
-  itemCount: number;
+  thisMonthTotal: number;
   currency?: string;
   /** Opens ExpensesDetailPage -- the trend chart + filterable breakdown.
-   * Only the total card is pressable; Items is still just a count. */
+   * Only the total card is pressable; This Month is still just a
+   * read-only figure. */
   onTotalPress: () => void;
 };
 
 export function ExpensesStats({
   allTimeTotal,
-  itemCount,
+  thisMonthTotal,
   currency = "RON",
   onTotalPress,
 }: ExpensesStatsProps) {
@@ -40,10 +41,10 @@ export function ExpensesStats({
       />
 
       <StatCard
-        icon="receipt-outline"
-        value={itemCount.toLocaleString("en-US")}
-        label="Items"
-        suffix={itemCount === 1 ? "entry" : "entries"}
+        icon="calendar-outline"
+        value={thisMonthTotal.toLocaleString("en-US")}
+        label="This month"
+        suffix={currency}
         colors={colors}
         radius={radius}
         spacing={spacing}
