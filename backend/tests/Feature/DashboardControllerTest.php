@@ -15,108 +15,142 @@ class DashboardControllerTest extends TestCase
     public function test_dashboard_returns_correct_categories()
     {
         $user = User::factory()->create();
-        
-        // Create overdue item
+
+        // Overdue -- an ACTIONABLE_TYPES item past its due date, not completed.
         $overdueItem = Item::factory()->create([
             'user_id' => $user->id,
+            'type' => 'home_task',
             'due_at' => Carbon::now()->subDay(),
             'status' => 'pending',
         ]);
-        
-        // Create today item
+
+        // Today.
         $todayItem = Item::factory()->create([
             'user_id' => $user->id,
+            'type' => 'home_task',
             'due_at' => Carbon::now(),
             'status' => 'pending',
         ]);
-        
-        // Create upcoming item (within 7 days)
+
+        // Upcoming (within 7 days).
         $upcomingItem = Item::factory()->create([
             'user_id' => $user->id,
+            'type' => 'home_task',
             'due_at' => Carbon::now()->addDays(3),
             'status' => 'pending',
         ]);
-        
-        // Create payment item
-        $paymentItem = Item::factory()->create([
+
+        // Completed -- excluded from every bucket regardless of due_at.
+        Item::factory()->create([
             'user_id' => $user->id,
-            'type' => 'expense',
-            'due_at' => Carbon::now()->addDays(5),
-            'status' => 'pending',
-        ]);
-        
-        // Create completed item (should be excluded)
-        $completedItem = Item::factory()->create([
-            'user_id' => $user->id,
+            'type' => 'home_task',
             'due_at' => Carbon::now()->subDay(),
             'status' => 'completed',
         ]);
-        
-        // Create non-payment expense item (should be excluded)
-        $nonPaymentExpense = Item::factory()->create([
+
+        // A non-actionable type with a due_at (e.g. a fuel fill-up) --
+        // that's a log of something that already happened, not a
+        // deadline, so it must never show up here even though it's
+        // technically "overdue" by date alone (see DashboardController's
+        // own comment on this exact distinction).
+        Item::factory()->create([
             'user_id' => $user->id,
-            'type' => 'expense',
+            'type' => 'car_fuel',
             'due_at' => Carbon::now()->subDay(),
             'status' => 'pending',
         ]);
-        
-        // Create another item for the other user (should be excluded)
+
+        // Another user's item -- excluded.
         $otherUser = User::factory()->create();
-        $otherItem = Item::factory()->create([
+        Item::factory()->create([
             'user_id' => $otherUser->id,
+            'type' => 'home_task',
             'due_at' => Carbon::now()->subDay(),
             'status' => 'pending',
         ]);
-        
+
         $response = $this->actingAs($user)->getJson('/api/dashboard');
-        
+
         $response->assertStatus(200);
-        
+
         $data = $response->json();
-        
-        // Check that only items belonging to the current user are returned.
-        // `overdue` counts any item type past its due date (not just
-        // non-expenses) — the non-payment expense item is also legitimately
-        // overdue, it just isn't a `payment` (that requires a future due_at).
-        $this->assertCount(2, $data['overdue']);
-        $overdueIds = array_column($data['overdue'], 'id');
-        $this->assertContains($overdueItem->id, $overdueIds);
-        $this->assertContains($nonPaymentExpense->id, $overdueIds);
+
+        $this->assertCount(1, $data['overdue']);
+        $this->assertEquals($overdueItem->id, $data['overdue'][0]['id']);
 
         $this->assertCount(1, $data['today']);
         $this->assertEquals($todayItem->id, $data['today'][0]['id']);
-        
-        // `upcoming` and `payments` are not mutually exclusive — an expense
-        // due within the next 7 days legitimately appears in both.
-        $this->assertCount(2, $data['upcoming']);
-        $upcomingIds = array_column($data['upcoming'], 'id');
-        $this->assertContains($upcomingItem->id, $upcomingIds);
-        $this->assertContains($paymentItem->id, $upcomingIds);
 
-        $this->assertCount(1, $data['payments']);
-        $this->assertEquals($paymentItem->id, $data['payments'][0]['id']);
+        $this->assertCount(1, $data['upcoming']);
+        $this->assertEquals($upcomingItem->id, $data['upcoming'][0]['id']);
+
+        $this->assertArrayHasKey('monthlyExpenses', $data);
+        $this->assertArrayHasKey('total', $data['monthlyExpenses']);
+        $this->assertArrayHasKey('sources', $data['monthlyExpenses']);
     }
-    
+
+    public function test_dashboard_sums_monthly_expenses_by_space()
+    {
+        $user = User::factory()->create();
+
+        Item::factory()->create([
+            'user_id' => $user->id,
+            'type' => 'home_expense',
+            'due_at' => Carbon::now(),
+            'amount' => 150,
+            'status' => 'pending',
+        ]);
+
+        Item::factory()->create([
+            'user_id' => $user->id,
+            'type' => 'car_fuel',
+            'due_at' => Carbon::now(),
+            'amount' => 200,
+            'status' => 'pending',
+        ]);
+
+        // Last month's spend -- must not count toward this month's total.
+        Item::factory()->create([
+            'user_id' => $user->id,
+            'type' => 'home_expense',
+            'due_at' => Carbon::now()->subMonth(),
+            'amount' => 999,
+            'status' => 'pending',
+        ]);
+
+        $response = $this->actingAs($user)->getJson('/api/dashboard');
+
+        $response->assertStatus(200);
+
+        $data = $response->json();
+
+        $this->assertEquals(350, $data['monthlyExpenses']['total']);
+        $labels = array_column($data['monthlyExpenses']['sources'], 'spaceName');
+        $this->assertContains('Home', $labels);
+        $this->assertContains('Car', $labels);
+    }
+
     public function test_dashboard_returns_empty_arrays_when_no_items()
     {
         $user = User::factory()->create();
-        
+
         $response = $this->actingAs($user)->getJson('/api/dashboard');
-        
+
         $response->assertStatus(200);
-        
+
         $data = $response->json();
-        
+
         $this->assertCount(0, $data['overdue']);
         $this->assertCount(0, $data['today']);
         $this->assertCount(0, $data['upcoming']);
-        $this->assertCount(0, $data['payments']);
+        $this->assertEquals(0, $data['monthlyExpenses']['total']);
+        $this->assertCount(0, $data['monthlyExpenses']['sources']);
     }
-    
+
     public function test_dashboard_unauthorized_without_authentication()
     {
         $response = $this->getJson('/api/dashboard');
-        
+
         $response->assertStatus(401);
     }
 }
