@@ -84,32 +84,6 @@ consider a visible marker in code beyond the CLAUDE.md note.
 
 **Found:** `[from: design-lead Phase 1 nav audit, 2026-09-22]`.
 
-### `DashboardControllerTest` expects a `payments` bucket that `DashboardController` doesn't return
-
-**Where:** `backend/tests/Feature/DashboardControllerTest.php` (both
-`test_dashboard_returns_correct_categories` and
-`test_dashboard_returns_empty_arrays_when_no_items`) vs.
-`backend/app/Http/Controllers/Api/DashboardController.php::index()`'s
-actual response, which only ever has `today`/`upcoming`/`overdue`/
-`monthlyExpenses` — no `payments` key at all.
-
-**What:** The test also creates its item with `'type' => 'expense'`,
-which isn't a real type in this app's `items.type` vocabulary (real
-expense-shaped types are `expense_item`, `car_expense`,
-`home_expense`, ... — see `Item::SPENDING_TYPES`); it falls into none
-of `ACTIONABLE_TYPES`/`RECURRING_ACTIONABLE_TYPES`, so it's silently
-dropped from every bucket. Either the test predates a Dashboard
-refactor that intentionally dropped a separate "payments" grouping
-(and the test should be deleted/rewritten to match the real 3+1-bucket
-shape), or a "payments" bucket was meant to ship and never did — needs
-a product call, not a blind test edit. Until decided, these 2 tests
-fail (`test_dashboard_unauthorized_without_authentication` passes
-fine, unaffected).
-
-**Found:** `[from: Task #7 — fixing the SQLite-breaking migration
-syntax got the suite running again, which surfaced these as
-pre-existing failures unrelated to that fix, 2026-09-22]`.
-
 ### Stale `frontend/dist/` web export still bakes in the old "frontend" app identity
 
 **Where:** `frontend/dist/_expo/static/js/web/entry-<hash>.js` — a leftover
@@ -768,6 +742,10 @@ Fixed as a side effect of unifying Home Tasks' urgency coloring: `HomeTaskRow.ti
 ### Home's Maintenance "Recurring" toggle had no way to set a due date (2026-09-26)
 
 Also stale by the time it was re-checked — Home Maintenance's "Resolved" action work (built earlier this same session) already fixed this as a side effect: `homeCategoryConfig.ts`'s maintenance `buildEntry` now seeds `nextDueDate` via `addRecurrenceInterval(date, frequency, interval)` the moment "Recurent" is toggled on (or preserves it across later unrelated edits via the `wasAlreadyRecurring` check), instead of leaving it permanently `undefined`. Confirmed by reading the current `buildEntry` — removed from "Found along the way" rather than left describing a bug that no longer exists.
+
+### `DashboardControllerTest` expected a `payments` bucket that never shipped (2026-09-27)
+
+The test predated `Item::ACTIONABLE_TYPES`/`SPENDING_TYPES` — every item it created used `type='task'` (the factory default) or `'expense'`, neither a real type, so every test item was silently excluded from every bucket regardless of the `payments` question. Confirmed via grep that the frontend has never read `data.payments` — not a feature that shipped and regressed, just a test nobody updated. Rewrote both tests with real types (`home_task` for actionable items, `home_expense`/`car_fuel` for spend), dropped the payments assertions, and added a new test actually covering `monthlyExpenses` (previously untested). Full suite is 13/13 green with zero pre-existing failures for the first time this session.
 
 ### All 11 save handlers in [id].tsx had the same silent-failure-on-edit bug (2026-09-26)
 
