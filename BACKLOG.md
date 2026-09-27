@@ -510,34 +510,6 @@ call site.
 **Found:** `[from: qa-lead review of c90019f (Home category form
 collapse), 2026-09-26]`.
 
-### The shared "+" FAB's fan/Quick-Add rendering is now fully dead code
-
-**Where:** `frontend/app/(tabs)/_layout.tsx` -- the FAB `Pressable` itself
-is unreachable now (`hideFab` includes `"[id]"` unconditionally, see the
-comment right above it), which means everything downstream of tapping it
-is dead too: the category-fan `Animated.View`s (~lines 170-345), the
-backdrop, `fanOpen` state, `onFabPress`/`onPickCategory`, and
-`openQuickAdd`/`<QuickAddSheet>` at the bottom of the file. Also dead:
-every Space's own `useRegisterSpaceCategories(...)` call now just feeds
-a `config` object nothing reads anymore (Car's `handleCarAction`-wired
-categories, Home's `fabCategories`, Grocery's `fabCategories`,
-Expenses' single "add" category) -- each still runs, harmlessly, but
-none of it can ever surface in the UI.
-
-**What:** All 4 Spaces grew their own always-visible entry points
-(Car's QUICK ACTIONS row, Home's category grid + Tasks'/Supplies' own
-add rows, Grocery's Recipes button next to Invite, Expenses'
-always-on `ExpensesAddBar`), so the FAB was turned off everywhere
-rather than case-by-case. Worth an actual removal pass once nothing
-else is competing for attention: strip the fan/backdrop/animation code
-and `QuickAddSheet` wiring from `_layout.tsx`, and each Space's now-
-pointless `useRegisterSpaceCategories` call plus whatever
-`SpaceCategory[]`/`onSelect` plumbing only existed to feed it (e.g.
-Car's `carCategories`/`handleCarAction`'s FAB-only branch, if nothing
-else calls it directly).
-
-**Found:** `[from: removing the FAB from all 4 Spaces, 2026-09-22]`.
-
 ## Open
 
 ### 0. Real app icon (currently still Expo's default template icon)
@@ -764,3 +736,9 @@ Found and fixed a real Laravel/Carbon gotcha while verifying this live: the quer
 ### `league/commonmark` high-severity DoS advisory (2026-09-26)
 
 Bumped 2.9.1 → 2.10.3 via `composer update league/commonmark --with-all-dependencies` — Laravel's own `^2.8.1` requirement is satisfied by 2.10.x, so this was a same-major, in-range patch, not a breaking change. `composer audit` now reports zero advisories. Backend test suite re-run after the bump: only the 2 already-known, pre-existing `DashboardControllerTest` failures remain (the "payments" bucket issue, logged separately above) — nothing new broke.
+
+### The shared "+" FAB's fan/Quick-Add code removed (2026-09-27)
+
+Stripped the fully-dead FAB `Pressable`/category-fan `Animated.View`s/backdrop/`QuickAddSheet` wiring from `app/(tabs)/_layout.tsx` (403 lines → ~65, just the `Tabs` navigator now), plus the now-pointless `useRegisterSpaceCategories(...)` call from each of the 4 Space dashboards — keeping whatever each one was ALSO feeding to a still-live piece of UI (Car's `carCategories`/`handleCarAction`, still used by `CarQuickActions`; Home's `selectCategory`, still used by the category tile grid; Grocery's `canCreateList`). Confirmed via grep across the whole frontend that nothing else imports the removed hooks/component, and qa-lead independently verified each dashboard's "kept vs. removed" split by reading the current file state (not just the diff) plus a `tsc`/bundle-serve check.
+
+`lib/spaceCategoryFab.tsx` and `components/quick_add/quickAdd.tsx` are now fully orphaned (zero real importers) but couldn't be deleted -- file deletion is denied in this environment, same constraint `search.tsx`'s own entry already documents. `frontend/CLAUDE.md`'s file map updated to match (was still describing the FAB/fan as live).
