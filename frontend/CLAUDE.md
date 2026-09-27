@@ -28,9 +28,14 @@ instead of grepping the whole tree.
   `TodoCarouselSheet`'s "Deschide" deep-links (`?itemId=&itemType=`,
   read here and passed down as `initialOpenEntry`/`initialOpenItem`).
 - `app/(tabs)/search.tsx` — dead (`@deprecated` stub, unreachable).
-- `app/(tabs)/_layout.tsx` — tab bar + the one global "+" FAB (fans out
-  into a Space's categories via `lib/spaceCategoryFab.tsx`, or falls
-  back to Quick Add — which is itself dead code, see below).
+- `app/(tabs)/_layout.tsx` — just the tab bar now. Used to also host a
+  global "+" FAB (fanning out into a Space's categories via
+  `lib/spaceCategoryFab.tsx`, or falling back to a Quick Add sheet) —
+  removed once every Space grew its own always-visible entry points
+  that made the fan redundant. `lib/spaceCategoryFab.tsx` and
+  `components/quick_add/quickAdd.tsx` are now dead (orphaned, not
+  deleted — file deletion is denied in this environment, same as
+  search.tsx above).
 
 ## Per-Space file map
 
@@ -116,12 +121,12 @@ name + price + date + notes, no sub-categories.
   modal (`confirmAction`, `notifyAction`). Single shared `request`
   state — two calls fired back-to-back will drop/hang the first one
   (known issue, not yet fixed).
-- `lib/spaceCategoryFab.tsx` — the shared "+" FAB's category-fan
-  registration (`useRegisterSpaceCategories`). Every Space dashboard
-  calls this, which is *why* Quick Add
-  (`components/quick_add/quickAdd.tsx`) is unreachable: the FAB only
-  falls back to Quick Add when nothing has registered a fan, and all 4
-  dashboards always register one.
+- `lib/spaceCategoryFab.tsx` — dead (orphaned, not deleted -- see
+  `app/(tabs)/_layout.tsx` above). Used to be the shared "+" FAB's
+  category-fan registration (`useRegisterSpaceCategories`); the
+  `SpaceCategory` type it also exports is still live, reused by
+  `CarDashboard.tsx`/`CarQuickActions.tsx` for an unrelated purpose
+  (describing that row's own action buttons) -- only the hook is dead.
 - `lib/spaces/spaceProfile.ts` — `detectSpaceType()` (checks
   `space.type` first, then legacy fallbacks), `SPACE_IDENTITY_COLORS`
   (Car blue / Home purple / Grocery orange / Expenses teal —
