@@ -1,7 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { ScrollView, View } from "react-native";
 import { useTheme } from "@/lib/theme";
-import { useRegisterSpaceCategories } from "@/lib/spaceCategoryFab";
 
 import type { ExpensesData } from "./expenses.data.types";
 import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
@@ -67,20 +66,6 @@ export default function ExpensesDashboard({
     () => getAllTimeExpensesTotal({ entries }),
     [entries],
   );
-
-  // Registers this space's own FAB behavior -- without this, the shared
-  // "+" falls back to the generic, space-agnostic Quick Add sheet (AI
-  // free-text capture, not scoped to this space at all) on every screen
-  // of this space, detail page included. A single category is enough:
-  // this space only ever adds one kind of thing, via ExpensesAddBar's
-  // inline row -- so pressing it just makes sure that row is on screen
-  // (closes the detail page if that's where you are) instead of opening
-  // anything unrelated.
-  useRegisterSpaceCategories({
-    spaceLabel: "Expenses",
-    categories: [{ key: "add", label: "Add Expense", icon: "receipt-outline" }],
-    onSelect: () => setDetailPageVisible(false),
-  });
 
   if (detailPageVisible) {
     return (

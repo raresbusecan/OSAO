@@ -8,7 +8,6 @@ import { confirmAction, notifyAction } from "@/lib/confirm";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/auth";
 import { Avatar } from "@/components/Avatar";
-import { useRegisterSpaceCategories, type SpaceCategory } from "@/lib/spaceCategoryFab";
 import { REFRESH_EVENT } from "@/app/(tabs)/_layout";
 
 import { MAX_GROCERY_LISTS, type GroceryCategory, type GroceryItem, type GroceryList, type SpaceMember } from "@/lib/spaces/grocery/grocery.types";
@@ -54,12 +53,11 @@ export type GroceryDashboardProps = {
  * per-category grouping and "Made with recipes" section aren't
  * reachable from anywhere at the moment.
  *
- * No "smart" view anymore -- Smart List is paused (see smartListCategory
- * below): its FAB entry stays visible but dimmed/badge "soon", and
- * pressing it shows a "coming soon" notice instead of navigating
- * anywhere. GrocerySmartListPage.tsx itself is untouched and still
- * there, just not wired into this switch right now -- re-enabling the
- * feature later is picking the view back up, not rebuilding it.
+ * No "smart" view anymore -- Smart List is paused, and currently has
+ * no entry point anywhere in the UI (its old one was the now-removed
+ * shared "+" FAB). GrocerySmartListPage.tsx itself is untouched and
+ * still there, just not wired into this switch right now -- re-enabling
+ * the feature later is picking the view back up, not rebuilding it.
  */
 type GroceryView = "home" | "recipes";
 
@@ -729,16 +727,6 @@ export default function GroceryDashboard({
     if (confirmed) handleDeleteList(list.id);
   };
 
-  // Claims the shared "+" FAB for as long as this space is on screen --
-  // it's the one navigation *and* action menu for the whole space, so
-  // what it fans out into always covers both: getting to Home/Lists/
-  // Recipes from wherever you are (the header's own back arrow on each
-  // page still works too, this is just never the *only* way), plus
-  // whatever action actually makes sense on the current view (e.g. "Add
-  // Product" only once a specific list is open, since it needs a
-  // target). "New List" rides along on every view's fan (as long as the
-  // cap isn't hit) for the same reason -- creating a list is never
-  // something you should have to navigate to Home first to start.
   // Creating a list is strictly owner-only (see
   // ItemController::canCreateInSpace) -- a space is someone's "house";
   // being a guest on one list inside it never means you can add a
@@ -748,52 +736,6 @@ export default function GroceryDashboard({
   // (see effectiveActiveListId/index() filtering), never by merely
   // sharing a space with someone.
   const canCreateList = isOwner && lists.length < MAX_GROCERY_LISTS;
-  // MaterialCommunityIcons has an actual brain glyph; Ionicons doesn't
-  // -- see spaceCategoryFab.tsx's iconSet. badge: "soon" dims the
-  // circle and marks it with a clock -- see the onSelect handler below,
-  // which shows a "coming soon" notice for this key instead of
-  // navigating (Smart List is paused, see the GroceryView comment).
-  const smartListCategory: SpaceCategory = {
-    key: "smart",
-    label: "Smart List",
-    icon: "brain",
-    iconSet: "material-community",
-    badge: "soon",
-  };
-  const goHomeCategory: SpaceCategory = { key: "goHome", label: "Home", icon: "home-outline" };
-
-  // Home owns list navigation/creation now -- its own tab row (one per
-  // GroceryList, plus a "+") replaced the FAB's old "Lists" entry
-  // (which opened the now-deleted GroceryListsPage folder) and "New
-  // List" entry for Home. Recipes used to keep "New List" here (its
-  // "ADD TO" picker had nowhere else to open the same popup from) --
-  // now that ADD TO has its own "+ New list" pill, this fan no longer
-  // needs one either.
-  const fabCategories: SpaceCategory[] | null =
-    view === "home"
-      ? [{ key: "recipes", label: "Recipes", icon: "restaurant-outline" }, smartListCategory]
-      : view === "recipes"
-        ? [goHomeCategory, smartListCategory]
-        : null;
-
-  useRegisterSpaceCategories(
-    fabCategories
-      ? {
-          spaceLabel: "Grocery",
-          categories: fabCategories,
-          onSelect: (key) => {
-            // Paused -- see the GroceryView comment above. Just a
-            // notice, never a navigation.
-            if (key === "smart") notifyAction("Coming soon", "Smart List isn't ready yet -- check back soon.");
-            if (key === "recipes") setView("recipes");
-            if (key === "goHome") {
-              setCreatingList(false);
-              setView("home");
-            }
-          },
-        }
-      : null,
-  );
 
   if (view === "recipes") {
     return (

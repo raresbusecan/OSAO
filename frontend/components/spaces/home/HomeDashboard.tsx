@@ -31,7 +31,6 @@ import { HomeSupplyRestockSheet } from "./HomeSupplyRestockSheet";
 import HomeTaskForm from "./forms/HomeTaskForm";
 import HomeSupplyForm from "./forms/HomeSupplyForm";
 import { HOME_CATEGORIES, type HomeCategoryKey } from "./homeCategoryConfig";
-import { useRegisterSpaceCategories, type SpaceCategory } from "@/lib/spaceCategoryFab";
 import {
   getThisMonthHomeExpenses,
   getUpcomingHomeItems,
@@ -160,8 +159,8 @@ export default function HomeDashboard({
   const maintenanceBadge = categoryBadge(upcomingItems, "maint-");
   const recurringBadge = categoryBadge(upcomingItems, "rec-");
 
-  // Documents deliberately excluded here too (see fabCategories below) --
-  // no tile for it until it has real utility (file upload).
+  // Documents deliberately excluded here too -- no tile for it until it
+  // has real utility (file upload).
   const categoryTiles = [
     { key: "expenses" as const, label: "Cheltuieli", icon: HOME_CATEGORIES.find((c) => c.key === "expenses")!.icon, badge: null as CategoryBadge },
     { key: "maintenance" as const, label: "Mentenanță", icon: HOME_CATEGORIES.find((c) => c.key === "maintenance")!.icon, badge: maintenanceBadge },
@@ -191,39 +190,17 @@ export default function HomeDashboard({
     setRestockSheetEntry(null);
   };
 
-  // Claims the shared "+" FAB (app/(tabs)/_layout.tsx) for as long as this
-  // dashboard is on screen -- pressing it fans out Home's categories
-  // instead of opening Quick Add. Task/Supplies are appended after the
-  // generic HOME_CATEGORIES ones since they have their own dedicated
-  // views now, not the generic form+list. Documents is left out on
-  // purpose (2026-09-17): real utility there needs file upload, which
-  // needs stable hosting -- see PLAN.md's Home Space section. The
-  // category config itself isn't deleted, just not offered here yet.
-  const fabCategories: SpaceCategory[] = [
-    ...HOME_CATEGORIES.filter((c) => c.key !== "documents" && c.key !== "supplies").map((c) => ({
-      key: c.key,
-      label: c.label,
-      icon: c.icon,
-    })),
-    { key: "supplies", label: "Supplies", icon: "basket-outline" },
-    { key: "task", label: "Task", icon: "checkmark-circle-outline" },
-  ];
-
-  // Shared by the FAB fan below AND the on-screen category grid (see the
-  // "home" view's return block) -- both are just different ways to pick
-  // the same destination, so they go through one routing function
-  // instead of two copies of this Task/Supplies special-casing.
+  // The on-screen "CATEGORII" tile grid's own onPress (see the "home"
+  // view's return block) routes through this one function instead of
+  // duplicating the Task/Supplies special-casing per call site.
   const selectCategory = (key: string) => {
     if (key === "task") {
       // First tap opens the dedicated Tasks page (DUE SOON/RECENT/ALL).
-      // The shared FAB stays the only floating button on that page too
-      // (same as Car's CarExpensesPage) -- tapping "Task" again while
-      // already there opens the add form on top of it instead of
-      // no-op'ing back to the same page, so there's no second, local
-      // "+" button duplicating the shared one. Re-entering Tasks this
-      // way should still drop any leftover archive/warnings/resolve
-      // sub-view from a previous visit, so only tasksPageVisible (or
-      // taskFormVisible, on a second tap) ends up true.
+      // Tapping "Task" again while already there opens the add form on
+      // top of it instead of no-op'ing back to the same page. Re-entering
+      // Tasks this way should still drop any leftover archive/warnings/
+      // resolve sub-view from a previous visit, so only tasksPageVisible
+      // (or taskFormVisible, on a second tap) ends up true.
       const wasOnTasksPage = tasksPageVisible;
       setActiveCategory(null);
       closeAllSubViews();
@@ -252,12 +229,6 @@ export default function HomeDashboard({
     closeAllSubViews();
     setActiveCategory(key as HomeCategoryKey);
   };
-
-  useRegisterSpaceCategories({
-    spaceLabel: "Home",
-    categories: fabCategories,
-    onSelect: selectCategory,
-  });
 
   // "NEXT" row tap (HomeNextSection) -- item.id is always
   // "<prefix>-<entry id>" (see getUpcomingHomeItems), opens that entry

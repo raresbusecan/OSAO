@@ -15,7 +15,7 @@ import {
     StyleSheet,
 } from "react-native";
 
-import { useRegisterSpaceCategories, type SpaceCategory } from "@/lib/spaceCategoryFab";
+import type { SpaceCategory } from "@/lib/spaceCategoryFab";
 
 import { CarQuickActions } from "./CarQuickActions";
 import CarFuelForm from "./forms/CarFuelForm";
@@ -160,17 +160,17 @@ export default function CarDashboard({
             | null
         >(null);
 
-    // The 4 category forms are meant to be mutually exclusive -- but the
-    // shared "+" FAB (useRegisterSpaceCategories below) stays registered,
-    // and tappable, the whole time this dashboard is mounted, including
-    // while a form is already open on screen. Without this, picking a
-    // different category from the FAB (or tapping a RECENT/NEXT item)
-    // while e.g. Fuel is open set that category's own Visible flag true
-    // without ever clearing fuelFormVisible -- both stayed true, so
-    // closing Fuel immediately revealed the other form underneath
-    // instead of switching to it cleanly. Every entry point that opens a
-    // form (handleCarAction, openEntryForEdit, handleNextItemPress)
-    // calls this first so only one is ever visible at a time.
+    // The 4 category forms are meant to be mutually exclusive -- but
+    // CarQuickActions' own row stays visible and tappable the whole
+    // time this dashboard is mounted, including while a form is already
+    // open on screen. Without this, picking a different category (or
+    // tapping a RECENT/NEXT item) while e.g. Fuel is open set that
+    // category's own Visible flag true without ever clearing
+    // fuelFormVisible -- both stayed true, so closing Fuel immediately
+    // revealed the other form underneath instead of switching to it
+    // cleanly. Every entry point that opens a form (handleCarAction,
+    // openEntryForEdit, handleNextItemPress) calls this first so only
+    // one is ever visible at a time.
     const closeAllForms = () => {
         setFuelFormVisible(false);
         setEditingFuelEntry(null);
@@ -307,9 +307,8 @@ export default function CarDashboard({
         { key: "expense", label: "Expenses" },
     ];
 
-    // Reachable via the shared "+" FAB (registered below, see
-    // useRegisterSpaceCategories) rather than a "Quick Actions" row on the
-    // dashboard itself -- the row would just duplicate what the FAB offers.
+    // Feeds CarQuickActions' own row below (the shared "+" FAB was
+    // removed from this Space entirely -- see app/(tabs)/_layout.tsx).
     const carCategories: SpaceCategory[] = [
         {
             key: "fuel",
@@ -373,15 +372,6 @@ export default function CarDashboard({
          * mileage
          */
     };
-
-    // Claims the shared "+" FAB (app/(tabs)/_layout.tsx) for as long as
-    // this dashboard is on screen -- pressing it fans out these four
-    // categories instead of opening Quick Add.
-    useRegisterSpaceCategories({
-        spaceLabel: "Car",
-        categories: carCategories,
-        onSelect: handleCarAction,
-    });
 
     /*
      * =========================================================
