@@ -277,20 +277,6 @@ helper (e.g. `lib/spaces/expenses/formatExpenseDate.ts`), one locale
 
 **Found:** `[from: design-lead Phase 2 Expenses space audit, 2026-09-22]`.
 
-### `getThisMonthExpensesTotal()` is dead code — and a more useful stat than the one actually shown
-
-**Where:** `frontend/lib/spaces/expenses/calculations/dashboard.calculations.ts`'s
-`getThisMonthExpensesTotal` — defined, exported, never imported anywhere.
-`frontend/components/spaces/expenses/ExpensesStats.tsx` instead shows a
-bare "Items" entry-count card next to "All time".
-
-**What:** "Items: 14 entries" is low-signal filler; "This Month: X RON"
-(using the already-written, unused function) would be materially more
-actionable for a spending space. Product call on whether to make the
-swap, but the calculation already exists — implementation is nearly free.
-
-**Found:** `[from: design-lead Phase 2 Expenses space audit, 2026-09-22]`.
-
 ### `frontend/CLAUDE.md`'s Expenses file map is missing `ExpensesDetailPage.tsx`
 
 **Where:** `frontend/CLAUDE.md`'s "Per-Space file map" → Expenses
@@ -771,3 +757,7 @@ Bumped 2.9.1 → 2.10.3 via `composer update league/commonmark --with-all-depend
 Stripped the fully-dead FAB `Pressable`/category-fan `Animated.View`s/backdrop/`QuickAddSheet` wiring from `app/(tabs)/_layout.tsx` (403 lines → ~65, just the `Tabs` navigator now), plus the now-pointless `useRegisterSpaceCategories(...)` call from each of the 4 Space dashboards — keeping whatever each one was ALSO feeding to a still-live piece of UI (Car's `carCategories`/`handleCarAction`, still used by `CarQuickActions`; Home's `selectCategory`, still used by the category tile grid; Grocery's `canCreateList`). Confirmed via grep across the whole frontend that nothing else imports the removed hooks/component, and qa-lead independently verified each dashboard's "kept vs. removed" split by reading the current file state (not just the diff) plus a `tsc`/bundle-serve check.
 
 `lib/spaceCategoryFab.tsx` and `components/quick_add/quickAdd.tsx` are now fully orphaned (zero real importers) but couldn't be deleted -- file deletion is denied in this environment, same constraint `search.tsx`'s own entry already documents. `frontend/CLAUDE.md`'s file map updated to match (was still describing the FAB/fan as live).
+
+### `getThisMonthExpensesTotal()` was dead code, and now backs a more useful stat (2026-09-27)
+
+Per explicit user decision (option A of the 2 the original entry offered): `ExpensesStats.tsx`'s second card swapped from a bare "Items: N entries" count to "This Month: X RON", wired to the already-written `getThisMonthExpensesTotal`. While investigating this, found a separate, adjacent dead-code chain (`lib/dashboard/monthlyExpenses.ts` and `DashboardController`'s own `monthlyExpenses` field, both unused by the frontend) -- logged as its own new "Found along the way" entry above rather than touched here, since it needs an actual decision (wire it into `home.tsx`, or drop both) not a blind removal.
