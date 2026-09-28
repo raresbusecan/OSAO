@@ -22,9 +22,8 @@ import { HomeStats } from "./HomeStats";
 import { HomeSpendPage } from "./HomeSpendPage";
 import { HomeNextSection } from "./HomeNextSection";
 import { HomeCategoryPage } from "./HomeCategoryPage";
-import { HomeMaintenanceArchivePage } from "./HomeMaintenanceArchivePage";
+import { HomeArchivePage } from "./HomeArchivePage";
 import { HomeTasksPage } from "./HomeTasksPage";
-import { HomeTaskArchivePage } from "./HomeTaskArchivePage";
 import { HomeRecurringWarningsPage } from "./HomeRecurringWarningsPage";
 import { HomeTaskResolveSheet } from "./HomeTaskResolveSheet";
 import { HomeSuppliesPage } from "./HomeSuppliesPage";
@@ -119,13 +118,11 @@ export default function HomeDashboard({
   const [tasksPageVisible, setTasksPageVisible] = useState(false);
   const [taskFormVisible, setTaskFormVisible] = useState(false);
   const [editingTaskEntry, setEditingTaskEntry] = useState<HomeTaskEntry | null>(null);
-  const [archivePageVisible, setArchivePageVisible] = useState(false);
   const [warningsPageVisible, setWarningsPageVisible] = useState(false);
-  // Maintenance's own "Archive" pill (HomeCategoryPage's header, only
-  // for the maintenance category -- see the onArchivePress prop below)
-  // -- resolved (non-recurring) entries previously had nowhere to go
-  // once marked done.
-  const [maintenanceArchivePageVisible, setMaintenanceArchivePageVisible] = useState(false);
+  // One space-level archive (Tasks + Maintenance combined) reachable
+  // from a single always-visible pill on the main dashboard, mirroring
+  // Car's own Archive pattern -- see HomeArchivePage.tsx.
+  const [homeArchivePageVisible, setHomeArchivePageVisible] = useState(false);
   // "This month" stat card tap -- HomeSpendPage, the whole space's
   // spend (Expenses + Maintenance + resolved purchase Tasks) in one
   // place, mirroring Car's own CarExpensesPage.
@@ -186,9 +183,8 @@ export default function HomeDashboard({
     setTasksPageVisible(false);
     setTaskFormVisible(false);
     setEditingTaskEntry(null);
-    setArchivePageVisible(false);
     setWarningsPageVisible(false);
-    setMaintenanceArchivePageVisible(false);
+    setHomeArchivePageVisible(false);
     setSpendPageVisible(false);
     setResolveSheetEntry(null);
     setSuppliesPageVisible(false);
@@ -532,12 +528,8 @@ export default function HomeDashboard({
     );
   }
 
-  if (archivePageVisible) {
-    return <HomeTaskArchivePage homeData={homeData} onBack={() => setArchivePageVisible(false)} />;
-  }
-
-  if (maintenanceArchivePageVisible) {
-    return <HomeMaintenanceArchivePage homeData={homeData} onBack={() => setMaintenanceArchivePageVisible(false)} />;
+  if (homeArchivePageVisible) {
+    return <HomeArchivePage homeData={homeData} onBack={() => setHomeArchivePageVisible(false)} />;
   }
 
   if (spendPageVisible) {
@@ -601,7 +593,6 @@ export default function HomeDashboard({
         <HomeTasksPage
           homeData={homeData}
           onBack={() => setTasksPageVisible(false)}
-          onArchivePress={() => setArchivePageVisible(true)}
           onWarningsPress={() => setWarningsPageVisible(true)}
           onAdd={() => {
             setEditingTaskEntry(null);
@@ -649,9 +640,6 @@ export default function HomeDashboard({
             ? (id) => resolveCategoryEntry(activeCategory, id)
             : undefined
         }
-        onArchivePress={
-          activeCategory === "maintenance" ? () => setMaintenanceArchivePageVisible(true) : undefined
-        }
         getEditValues={(id) => {
           const existing = category.entries(homeData).find((e) => e.id === id);
           return existing ? category.valuesFromEntry(existing) : {};
@@ -683,6 +671,35 @@ export default function HomeDashboard({
         upcomingCount={upcomingItems.length}
         onSpendPress={() => setSpendPageVisible(true)}
       />
+
+      {/* Single, always-visible Archive entry point for the whole space
+          (Tasks + Maintenance resolved entries combined) -- mirrors
+          Car's own Docs/Archive/History pill row placement, right under
+          the header stats and before the category grid. */}
+      <Pressable
+        testID="home-archive-open"
+        onPress={() => setHomeArchivePageVisible(true)}
+        accessibilityRole="button"
+        accessibilityLabel="View archive"
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          alignSelf: "flex-start",
+          gap: 5,
+          marginBottom: spacing.xl,
+          paddingVertical: 7,
+          paddingHorizontal: spacing.md,
+          borderRadius: radius.pill,
+          backgroundColor: "transparent",
+          borderWidth: 1,
+          borderColor: colors.border,
+        }}
+      >
+        <Ionicons name="archive-outline" size={12} color={colors.onSurfaceTertiary} />
+        <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurface }}>
+          Archive
+        </Text>
+      </Pressable>
 
       <Text
         style={{

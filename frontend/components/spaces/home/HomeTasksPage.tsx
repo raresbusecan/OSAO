@@ -17,7 +17,6 @@ import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 export type HomeTasksPageProps = {
   homeData: HomeData;
   onBack: () => void;
-  onArchivePress: () => void;
   onAdd: () => void;
   onEdit: (entry: HomeTaskEntry) => void;
   /** Restanțe card tap -- opens HomeRecurringWarningsPage, the itemized
@@ -58,7 +57,6 @@ function tierLabel(row: HomeTaskRow): string {
 export function HomeTasksPage({
   homeData,
   onBack,
-  onArchivePress,
   onAdd,
   onEdit,
   onWarningsPress,
@@ -78,65 +76,44 @@ export function HomeTasksPage({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: 100 }}
       >
-        {/* Header */}
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.xl }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-            <Pressable
-              onPress={onBack}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel="Back"
-              style={{
-                width: 36,
-                height: 36,
-                borderRadius: radius.pill,
-                backgroundColor: "transparent",
-                borderWidth: 1,
-                borderColor: colors.border,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Ionicons name="chevron-back" size={20} color={colors.onSurface} />
-            </Pressable>
-            <View
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: radius.md,
-                backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Ionicons name="checkmark-circle-outline" size={16} color={SPACE_IDENTITY_COLORS.home} />
-            </View>
-            <Text style={{ fontSize: 26, fontWeight: "800", letterSpacing: -0.4, color: colors.onSurface }}>
-              Tasks
-            </Text>
-          </View>
-
-          {/* Archive -- every resolved task, not just today's (see RECENT
-              below), same split-pill idea as Car's Archive/History. */}
+        {/* Header -- no per-page Archive button anymore, see
+            HomeArchivePage: one space-level entry point on Home's own
+            main dashboard instead (matches Car's Archive/History
+            pattern, always visible there, not scattered per category). */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.xl }}>
           <Pressable
-            onPress={onArchivePress}
+            onPress={onBack}
+            hitSlop={10}
             accessibilityRole="button"
-            accessibilityLabel="View archive"
+            accessibilityLabel="Back"
             style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 6,
-              height: 32,
-              paddingHorizontal: 14,
+              width: 36,
+              height: 36,
               borderRadius: radius.pill,
               backgroundColor: "transparent",
               borderWidth: 1,
               borderColor: colors.border,
+              alignItems: "center",
+              justifyContent: "center",
             }}
           >
-            <Ionicons name="archive-outline" size={13} color={colors.onSurfaceTertiary} />
-            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurface }}>Archive</Text>
+            <Ionicons name="chevron-back" size={20} color={colors.onSurface} />
           </Pressable>
+          <View
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: radius.md,
+              backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons name="checkmark-circle-outline" size={16} color={SPACE_IDENTITY_COLORS.home} />
+          </View>
+          <Text style={{ fontSize: 26, fontWeight: "800", letterSpacing: -0.4, color: colors.onSurface }}>
+            Tasks
+          </Text>
         </View>
 
         {/* Restanțe -- recurring tasks only, broken down by the 4
