@@ -664,36 +664,8 @@ export default function HomeDashboard({
         subtitle={profile?.county}
         onBack={() => router.push("/spaces")}
         onEdit={onEdit}
+        onHistoryPress={() => setHomeArchivePageVisible(true)}
       />
-
-      {/* Single, always-visible History entry point for the whole space
-          (Tasks + Maintenance resolved entries combined) -- mirrors
-          Car's own Docs/Archive/History pill row placement: directly
-          under the header/subtitle, before any stats. */}
-      <Pressable
-        testID="home-history-open"
-        onPress={() => setHomeArchivePageVisible(true)}
-        accessibilityRole="button"
-        accessibilityLabel="View history"
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          alignSelf: "flex-start",
-          gap: 5,
-          marginBottom: spacing.lg,
-          paddingVertical: 7,
-          paddingHorizontal: spacing.md,
-          borderRadius: radius.pill,
-          backgroundColor: "transparent",
-          borderWidth: 1,
-          borderColor: colors.border,
-        }}
-      >
-        <Ionicons name="time-outline" size={12} color={colors.onSurfaceTertiary} />
-        <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurface }}>
-          History
-        </Text>
-      </Pressable>
 
       <HomeStats
         thisMonthExpenses={thisMonthExpenses}

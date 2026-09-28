@@ -10,9 +10,13 @@ export type HomeHeaderProps = {
   subtitle?: string;
   onBack: () => void;
   onEdit?: () => void;
+  /** Space-level History (Tasks + Maintenance resolved entries) --
+      mirrors Car's own Docs/Archive/History pill, centered directly
+      under the name/subtitle. */
+  onHistoryPress?: () => void;
 };
 
-export function HomeHeader({ space, subtitle, onBack, onEdit }: HomeHeaderProps) {
+export function HomeHeader({ space, subtitle, onBack, onEdit, onHistoryPress }: HomeHeaderProps) {
   const { colors, spacing, radius } = useTheme();
 
   return (
@@ -109,6 +113,32 @@ export function HomeHeader({ space, subtitle, onBack, onEdit }: HomeHeaderProps)
         >
           {subtitle}
         </Text>
+      ) : null}
+
+      {onHistoryPress ? (
+        <Pressable
+          testID="home-history-open"
+          onPress={onHistoryPress}
+          accessibilityRole="button"
+          accessibilityLabel="View history"
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 5,
+            marginTop: spacing.md,
+            paddingVertical: 7,
+            paddingHorizontal: spacing.md,
+            borderRadius: radius.pill,
+            backgroundColor: "transparent",
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <Ionicons name="time-outline" size={12} color={colors.onSurfaceTertiary} />
+          <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurface }}>
+            History
+          </Text>
+        </Pressable>
       ) : null}
     </View>
   );
