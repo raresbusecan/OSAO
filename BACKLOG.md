@@ -33,6 +33,20 @@ this screen.
 
 **Found:** `[from: design-lead Phase 1 nav audit, 2026-09-22]`.
 
+### `HomeTaskArchivePage.tsx` / `HomeMaintenanceArchivePage.tsx` orphaned by the unified archive
+
+**Where:** `frontend/components/spaces/home/HomeTaskArchivePage.tsx` and
+`HomeMaintenanceArchivePage.tsx`. Both fully superseded by the new
+`HomeArchivePage.tsx` (see "Done" below) — zero real importers left,
+confirmed by grep. Same file-deletion restriction as `search.tsx`'s
+own entry above; worth a real deletion pass whenever that's lifted.
+
+Also: `frontend/CLAUDE.md`'s file map still lists `HomeTaskArchivePage.tsx`
+as part of Home's live file map — one-line doc drift, worth fixing in
+the same pass as the deletion (or sooner, it's trivial).
+
+**Found:** `[from: qa-lead review of feat/home-unified-archive, 2026-09-28]`.
+
 ### Home tab and Spaces tab both surface "your spaces," with different jobs the tab bar doesn't explain
 
 **Where:** `frontend/app/(tabs)/home.tsx` renders a widget-grid
@@ -750,3 +764,9 @@ Mirrored Home Tasks' own already-shipped archive pattern instead of inventing so
 The confirm-before-resolve dialog was deliberately left untouched everywhere -- the user had already explicitly overridden the original entry's suggestion to drop it for the recurring case, in an earlier session.
 
 **New dormant risk found during review, not fixed:** Maintenance's `buildEntry` (in `homeCategoryConfig.ts`, untouched by this change) never carries `completedAt` forward on a save, unlike `completed` which it does preserve -- and `maintenanceEntryToItemBody` always sends `completed_at` explicitly (never omits the key), so if a future edit path ever runs an already-resolved entry back through `buildEntry`, it would silently null out `completed_at` on the server. Currently unreachable (`entries`/`rows` both filter out completed entries, so there's no live UI path back into `buildEntry` for one) -- worth remembering if/when undo or direct-editing of archived entries gets added.
+
+### Home's two separate archive entry points unified into one space-level page (2026-09-28)
+
+Per explicit user request for cross-space consistency ("Ideea e de consecvența / Pentru ca mai am zona de arhivare/istoric și în alte space-uri"): the just-shipped Tasks archive pill and Maintenance archive pill (both buried inside their own category screens) are replaced by one always-visible "Archive" pill on Home's main dashboard, mirroring Car's own already-shipped "Docs / Archive / History" pill row pattern. New `HomeArchivePage.tsx` combines `getHomeTaskArchive()` and `getHomeMaintenanceArchive()` (both pre-existing, unmodified) into one list with a `kind` discriminator, 3 filter tabs (Toate/Tasks/Mentenanță), and one combined "spent this month" total. `HomeTasksPage.tsx` and `HomeCategoryPage.tsx` both lost their own `onArchivePress` prop/pill entirely. qa-lead independently round-tripped real resolved Task + Maintenance entries against the live backend to confirm the underlying data shape, traced the merge/sort/sum logic by hand against both source functions, and confirmed via grep that no half-migrated prop or dead import was left behind.
+
+`HomeTaskArchivePage.tsx`/`HomeMaintenanceArchivePage.tsx` are now orphaned (logged above, same undeletable-file constraint as `search.tsx`).
