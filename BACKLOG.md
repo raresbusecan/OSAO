@@ -47,6 +47,31 @@ the same pass as the deletion (or sooner, it's trivial).
 
 **Found:** `[from: qa-lead review of feat/home-unified-archive, 2026-09-28]`.
 
+### An optional date field can't be cleared once set (Home's "date"/"nextDueDate"/"expiryDate" fields)
+
+**Where:** `homeCategoryConfig.ts`'s `buildEntry` for Maintenance's
+`date`, Recurring's `nextDueDate`, and (newly, since this pattern is
+now user-reachable) Documents' `expiryDate` — all three use the same
+`values.field || existing?.field` fallback shape.
+
+**What:** `HomeDatePickerSheet.tsx` has a "Fără dată" ("No date")
+button that calls `onSelect(undefined)`, which `HomeCategoryPage.tsx`
+turns into `values[field.key] = ""`. Since `""` is falsy, the
+`values.field || existing?.field` fallback in `buildEntry` silently
+falls back to the OLD value instead of clearing it — tapping "No date"
+on a field that already has a value is a silent no-op. Pre-existing in
+Maintenance/Recurring already, but only became practically reachable
+(and worth fixing) once Documents' `expiryDate` — the first genuinely
+optional date field a user would plausibly want to clear later, e.g. a
+document that no longer needs expiry tracking — shipped. Workaround
+today: delete and recreate the entry. Fix would need `buildEntry` to
+distinguish "field key present in `values` but empty" (explicit clear)
+from "field key absent" (untouched, keep existing) — e.g. checking
+`field.key in values` instead of truthiness — across all three
+call sites, not just Documents.
+
+**Found:** `[from: qa-lead review of feat/home-due-date-urgency-tiers, 2026-09-28]`.
+
 ### Home tab and Spaces tab both surface "your spaces," with different jobs the tab bar doesn't explain
 
 **Where:** `frontend/app/(tabs)/home.tsx` renders a widget-grid
@@ -770,3 +795,11 @@ The confirm-before-resolve dialog was deliberately left untouched everywhere -- 
 Per explicit user request for cross-space consistency ("Ideea e de consecvența / Pentru ca mai am zona de arhivare/istoric și în alte space-uri"): the just-shipped Tasks archive pill and Maintenance archive pill (both buried inside their own category screens) are replaced by one always-visible "Archive" pill on Home's main dashboard, mirroring Car's own already-shipped "Docs / Archive / History" pill row pattern. New `HomeArchivePage.tsx` combines `getHomeTaskArchive()` and `getHomeMaintenanceArchive()` (both pre-existing, unmodified) into one list with a `kind` discriminator, 3 filter tabs (Toate/Tasks/Mentenanță), and one combined "spent this month" total. `HomeTasksPage.tsx` and `HomeCategoryPage.tsx` both lost their own `onArchivePress` prop/pill entirely. qa-lead independently round-tripped real resolved Task + Maintenance entries against the live backend to confirm the underlying data shape, traced the merge/sort/sum logic by hand against both source functions, and confirmed via grep that no half-migrated prop or dead import was left behind.
 
 `HomeTaskArchivePage.tsx`/`HomeMaintenanceArchivePage.tsx` are now orphaned (logged above, same undeletable-file constraint as `search.tsx`).
+
+**Follow-up (same day, 2 small fixes per user feedback):** the pill was renamed "Archive" → "History" throughout (button + page title + icons) -- a time-based record of resolved entries reads more accurately as "History" than "Archive," which in Car's own vocabulary specifically means documents superseded by a renewal. It was also moved twice: first from after `HomeStats` to directly under `HomeHeader` (matching Car's own pill-row placement relative to its name/subtitle), then from a left-aligned sibling in `HomeDashboard.tsx` into `HomeHeader.tsx` itself (a new optional `onHistoryPress` prop), landing it centered directly under the space title/subtitle inside the header's own centered container -- exactly where Car's pill row sits.
+
+### Home Documents/Maintenance rows colored by days-until-due, matching Car's own document urgency system (2026-09-28)
+
+Per explicit user request ("un sistem asemănător cu cel din Car... cadran în funcție de zile"): Documents (`expiryDate`) and Maintenance (`nextDueDate`, recurring only) rows in the shared category list now color their subtitle red/orange/yellow the closer the date gets, mirroring Car's own `CarDocsPage` `statusColor`/`statusLabel` treatment. Documents got a new dedicated 3-band tier (`classifyDocumentUrgencyTier`: 45/30/15 days, the same thresholds Car's own document tiers use) since a document's alert window is much wider than a task's; Maintenance instead reuses the exact tier already computed for it in the Restanțe warnings widget (`classifyTaskUrgencyTier`, via a new `severityFromRecurringTier` mapping) rather than a second independent urgency definition, so a maintenance row and its Restanțe entry can never disagree (qa-lead confirmed this is structurally guaranteed, not just empirically matched -- both call sites run the identical function on the identical field). qa-lead live-tested all 3 severity bands plus boundary days (exactly 15/45/46 days, expired) against the real backend with zero off-by-one errors.
+
+qa-lead's first pass on this found the Documents half was correct but practically dead: the Documents form had no field to ever set `expiryDate` at all. Fixed in the same branch by adding a standard optional `type: "date"` field (Car's own `CarDocumentForm` precedent), reusing `HomeCategoryPage.tsx`'s existing date-field renderer/`HomeDatePickerSheet` with zero new UI code. qa-lead's second pass live-confirmed the full round-trip (create with/without an expiry, edit pre-fill, preserve-on-save) and found one pre-existing, low-severity, out-of-scope defect (logged above under "Found along the way": an optional date field can't be cleared back to blank via the "No date" button) rather than blocking on it.
