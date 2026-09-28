@@ -1,3 +1,19 @@
+/** One logged payment/purchase event -- when it happened and how much.
+ * Same idea as SupplyRestockEvent below, applied to money instead of
+ * quantity: a recurring entry's own `price`/`amount` field is just the
+ * LATEST value, overwritten on every resolve, so summing "this month's
+ * spend" off it alone silently undercounts a task/bill/service resolved
+ * more than once in the same month. `spendHistory` is what
+ * getHomeSpendRecords actually sums for an entry that has one; a legacy
+ * entry with none yet falls back to its single price/date snapshot
+ * (see spend.calculations.ts), so nothing already showing a total loses
+ * it -- entries just start accumulating properly from their next resolve
+ * onward. */
+export type HomeSpendEvent = {
+  date: string;
+  amount: number;
+};
+
 export type HomeDocumentEntry = {
   id: string;
   date: string;
@@ -47,6 +63,12 @@ export type HomeMaintenanceEntry = {
    * instead of just a bare list. Same idea as HomeTaskEntry's own
    * completedAt. */
   completedAt?: string;
+  /** Every resolve of a RECURRING entry that had a price confirmed
+   * (see HomeMaintenanceResolveSheet) -- see HomeSpendEvent above. A
+   * non-recurring entry never accumulates this; its one-off `price` is
+   * already fully captured by the legacy fallback, resolving it just
+   * retires it for good. */
+  spendHistory?: HomeSpendEvent[];
 };
 
 export type HomeRecurringEntry = {
@@ -57,6 +79,11 @@ export type HomeRecurringEntry = {
   frequency: "weekly" | "monthly" | "yearly";
   nextDueDate: string;
   notes?: string;
+  /** Every resolve ("paid this cycle") logs the entry's own `amount` as
+   * an event here -- see HomeSpendEvent above. Was never tracked as
+   * spend anywhere before this existed; an entry with none yet simply
+   * contributes nothing, same as always. */
+  spendHistory?: HomeSpendEvent[];
 };
 
 /** One logged restock event: when it happened and how much was bought.
@@ -115,4 +142,9 @@ export type HomeTaskEntry = {
   /** Required when isRecurring is true -- how far dueDate advances each
    * time the task is resolved (see resolveTask in HomeDashboard.tsx). */
   recurrenceFrequency?: "daily" | "weekly" | "monthly";
+  /** Every resolve that logged a real price -- see HomeSpendEvent above.
+   * A non-recurring task only ever resolves once (then archives), so
+   * this stays a single-entry array for it; a recurring one accumulates
+   * one event per resolve. */
+  spendHistory?: HomeSpendEvent[];
 };

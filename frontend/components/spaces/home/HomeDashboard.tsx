@@ -26,6 +26,7 @@ import { HomeArchivePage } from "./HomeArchivePage";
 import { HomeTasksPage } from "./HomeTasksPage";
 import { HomeRecurringWarningsPage } from "./HomeRecurringWarningsPage";
 import { HomeTaskResolveSheet } from "./HomeTaskResolveSheet";
+import { HomeMaintenanceResolveSheet } from "./HomeMaintenanceResolveSheet";
 import { HomeSuppliesPage } from "./HomeSuppliesPage";
 import { HomeSupplyRestockSheet } from "./HomeSupplyRestockSheet";
 import HomeTaskForm from "./forms/HomeTaskForm";
@@ -130,6 +131,11 @@ export default function HomeDashboard({
   // Set only for a purchase-flagged task's checkbox tap -- renders
   // HomeTaskResolveSheet on top of HomeTasksPage asking for the price.
   const [resolveSheetEntry, setResolveSheetEntry] = useState<HomeTaskEntry | null>(null);
+  // Set only when resolving a RECURRING Maintenance entry -- renders
+  // HomeMaintenanceResolveSheet asking for this cycle's price (see
+  // resolveCategoryEntry). A non-recurring one skips this entirely and
+  // goes straight through the generic confirm dialog below.
+  const [maintenanceResolveEntry, setMaintenanceResolveEntry] = useState<HomeMaintenanceEntry | null>(null);
 
   // Supplies has the same "dedicated view, not the generic HOME_CATEGORIES
   // form+list" treatment as Task, for the same reason -- the restock
@@ -187,6 +193,7 @@ export default function HomeDashboard({
     setHomeArchivePageVisible(false);
     setSpendPageVisible(false);
     setResolveSheetEntry(null);
+    setMaintenanceResolveEntry(null);
     setSuppliesPageVisible(false);
     setSupplyFormVisible(false);
     setEditingSupplyEntry(null);
@@ -311,6 +318,14 @@ export default function HomeDashboard({
       completedAt: now,
       dueDate: nextDue,
       price: price ?? entry.price,
+      // A real price logs a NEW spend event every time, instead of just
+      // overwriting the single `price` field above -- a recurring
+      // purchase task resolved 3 times this month should count 3 times,
+      // not 1 (see getHomeSpendRecords). Not touched at all when
+      // resolved with no price (undefined stays undefined).
+      spendHistory: price
+        ? [...(entry.spendHistory ?? []), { date: now, amount: price }]
+        : entry.spendHistory,
     });
 
     if (entry.isRecurring) {
@@ -352,6 +367,18 @@ export default function HomeDashboard({
     const existing = category.entries(homeData).find((e) => e.id === id);
     if (!existing) return;
 
+    // Recurring Maintenance is the one category that needs a price
+    // BEFORE resolving -- nothing else prompts for one at resolve time
+    // (Recurring bills reuse their own fixed `amount`; a one-off
+    // Maintenance entry's price was already set at creation/edit).
+    // HomeMaintenanceResolveSheet's own Confirm/Cancel doubles as this
+    // action's confirm step, so the generic dialog below is skipped
+    // entirely for this branch -- see handleMaintenanceResolveConfirm.
+    if (categoryKey === "maintenance" && (existing as HomeMaintenanceEntry).isRecurring) {
+      setMaintenanceResolveEntry(existing as HomeMaintenanceEntry);
+      return;
+    }
+
     // Preview the outcome before asking -- a mis-tap here isn't
     // recoverable afterward (a resolved non-recurring entry vanishes
     // from the list; a recurring one's nextDueDate only ever advances
@@ -376,13 +403,52 @@ export default function HomeDashboard({
     );
     if (!confirmed) return;
 
-    saveHandlers[categoryKey](resolved);
+    // Recurring bills' own fixed `amount` counts as this cycle's
+    // payment -- logs a new spend event every resolve instead of the
+    // total silently staying flat, same reasoning as Tasks' own
+    // resolveTask (see above). Every other category's resolveEntry
+    // doesn't touch money at resolve time.
+    const finalEntry =
+      categoryKey === "recurring"
+        ? {
+            ...resolved,
+            spendHistory: [
+              ...((existing as HomeRecurringEntry).spendHistory ?? []),
+              { date: new Date().toISOString(), amount: (existing as HomeRecurringEntry).amount },
+            ],
+          }
+        : resolved;
+
+    saveHandlers[categoryKey](finalEntry);
     notifyAction(
       "Rezolvat",
       staysActive && nextDueLabel
         ? `Rămâne activ — următoarea dată: ${nextDueLabel}.`
         : "Mutat la inactiv.",
     );
+  };
+
+  // Confirm step for HomeMaintenanceResolveSheet -- advances nextDueDate
+  // (same pure resolveEntry Maintenance always used) AND logs the
+  // confirmed price as a new spend event, mirroring resolveTask's own
+  // accumulation for Tasks.
+  const handleMaintenanceResolveConfirm = (price: number) => {
+    if (!maintenanceResolveEntry) return;
+    const category = HOME_CATEGORIES.find((c) => c.key === "maintenance")!;
+    const resolved = category.resolveEntry!(maintenanceResolveEntry) as HomeMaintenanceEntry;
+    const now = new Date().toISOString();
+
+    saveHandlers.maintenance({
+      ...resolved,
+      price,
+      spendHistory: [...(maintenanceResolveEntry.spendHistory ?? []), { date: now, amount: price }],
+    });
+
+    const label = resolved.nextDueDate
+      ? new Date(resolved.nextDueDate).toLocaleDateString("ro-RO", { day: "numeric", month: "short", year: "numeric" })
+      : null;
+    notifyAction("Rezolvat", label ? `Rămâne activ — următoarea dată: ${label}.` : "Rezolvat.");
+    setMaintenanceResolveEntry(null);
   };
 
   // Runs the deep-link from TodoCarouselSheet's "Deschide" once homeData
@@ -548,7 +614,8 @@ export default function HomeDashboard({
             setTaskFormVisible(true);
             return;
           }
-          const categoryKey = category === "expense" ? "expenses" : "maintenance";
+          const categoryKey =
+            category === "expense" ? "expenses" : category === "recurring" ? "recurring" : "maintenance";
           setActiveCategory(categoryKey);
           setInitialCategoryEditId(id);
         }}
@@ -581,6 +648,13 @@ export default function HomeDashboard({
             entry={resolveSheetEntry}
             onCancel={() => setResolveSheetEntry(null)}
             onResolve={handleResolveConfirm}
+          />
+        ) : null}
+        {maintenanceResolveEntry ? (
+          <HomeMaintenanceResolveSheet
+            entry={maintenanceResolveEntry}
+            onCancel={() => setMaintenanceResolveEntry(null)}
+            onResolve={handleMaintenanceResolveConfirm}
           />
         ) : null}
       </>
@@ -620,32 +694,41 @@ export default function HomeDashboard({
     const category = HOME_CATEGORIES.find((c) => c.key === activeCategory)!;
 
     return (
-      <HomeCategoryPage
-        title={category.label}
-        icon={category.icon}
-        fields={category.fields}
-        submitLabel={category.submitLabel}
-        emptyLabel={category.emptyLabel}
-        rows={category.rows(homeData)}
-        onBack={() => setActiveCategory(null)}
-        onSubmit={(values, editingId) => {
-          const existing = editingId
-            ? category.entries(homeData).find((e) => e.id === editingId)
-            : undefined;
-          saveHandlers[activeCategory](category.buildEntry(values, existing));
-        }}
-        onDelete={(id) => deleteHandlers[activeCategory](id)}
-        onResolve={
-          category.resolveEntry
-            ? (id) => resolveCategoryEntry(activeCategory, id)
-            : undefined
-        }
-        getEditValues={(id) => {
-          const existing = category.entries(homeData).find((e) => e.id === id);
-          return existing ? category.valuesFromEntry(existing) : {};
-        }}
-        initialEditId={initialCategoryEditId}
-      />
+      <>
+        <HomeCategoryPage
+          title={category.label}
+          icon={category.icon}
+          fields={category.fields}
+          submitLabel={category.submitLabel}
+          emptyLabel={category.emptyLabel}
+          rows={category.rows(homeData)}
+          onBack={() => setActiveCategory(null)}
+          onSubmit={(values, editingId) => {
+            const existing = editingId
+              ? category.entries(homeData).find((e) => e.id === editingId)
+              : undefined;
+            saveHandlers[activeCategory](category.buildEntry(values, existing));
+          }}
+          onDelete={(id) => deleteHandlers[activeCategory](id)}
+          onResolve={
+            category.resolveEntry
+              ? (id) => resolveCategoryEntry(activeCategory, id)
+              : undefined
+          }
+          getEditValues={(id) => {
+            const existing = category.entries(homeData).find((e) => e.id === id);
+            return existing ? category.valuesFromEntry(existing) : {};
+          }}
+          initialEditId={initialCategoryEditId}
+        />
+        {maintenanceResolveEntry ? (
+          <HomeMaintenanceResolveSheet
+            entry={maintenanceResolveEntry}
+            onCancel={() => setMaintenanceResolveEntry(null)}
+            onResolve={handleMaintenanceResolveConfirm}
+          />
+        ) : null}
+      </>
     );
   }
 

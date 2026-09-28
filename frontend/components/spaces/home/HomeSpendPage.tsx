@@ -32,7 +32,7 @@ export type HomeSpendPageProps = {
   onRecordPress?: (category: HomeSpendCategory, id: string) => void;
 };
 
-const CATEGORY_ORDER: HomeSpendCategory[] = ["expense", "maintenance", "task"];
+const CATEGORY_ORDER: HomeSpendCategory[] = ["expense", "maintenance", "task", "recurring"];
 
 const PERIOD_PRESETS: { label: string; period: HomeSpendPeriod }[] = [
   { label: "Luna aceasta", period: { kind: "thisMonth" } },
@@ -142,7 +142,7 @@ export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: Home
     <Pressable
       key={`${record.category}-${record.id}`}
       testID={`home-spend-record-${record.category}-${record.id}`}
-      onPress={() => onRecordPress?.(record.category, record.id)}
+      onPress={() => onRecordPress?.(record.category, record.entryId)}
       disabled={!onRecordPress}
       style={{
         flexDirection: "row",

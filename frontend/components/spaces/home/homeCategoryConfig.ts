@@ -317,6 +317,12 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
         recurrenceFrequency: isRecurring ? frequency : undefined,
         recurrenceInterval: isRecurring ? interval : undefined,
         completed: existing?.completed ?? false,
+        // Preserved, never derived from the form -- only
+        // HomeMaintenanceResolveSheet's own confirm (via
+        // handleMaintenanceResolveConfirm) is allowed to append to
+        // this. An unrelated edit (price, service name) must not wipe
+        // out every resolve logged so far.
+        spendHistory: existing?.spendHistory,
       };
     },
     /** The "Resolved" action -- recurring: advances nextDueDate one
@@ -406,6 +412,10 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       frequency: (values.frequency as HomeRecurringEntry["frequency"]) || existing?.frequency || "monthly",
       nextDueDate: values.nextDueDate || existing?.nextDueDate || today(),
       notes: existing?.notes,
+      // Preserved, never derived from the form -- only resolveCategoryEntry
+      // appends to this. An unrelated edit (amount, title) must not wipe
+      // out every payment logged so far.
+      spendHistory: existing?.spendHistory,
     }),
     // Every entry here recurs by definition (there's no on/off toggle
     // like Maintenance's "Recurent") -- Resolved always just advances

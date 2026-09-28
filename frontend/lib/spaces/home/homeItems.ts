@@ -123,6 +123,7 @@ export function maintenanceEntryToItemBody(spaceId: string | number, entry: Home
       provider: entry.provider ?? null,
       nextDueDate: entry.nextDueDate ?? null,
       recurrenceInterval: entry.isRecurring ? entry.recurrenceInterval ?? 1 : null,
+      spendHistory: entry.spendHistory ?? [],
     },
   };
 }
@@ -142,6 +143,7 @@ function itemToMaintenanceEntry(item: any): HomeMaintenanceEntry {
     recurrenceInterval: meta.recurrenceInterval != null ? Number(meta.recurrenceInterval) : undefined,
     completed: item.status === "done",
     completedAt: item.completed_at ?? undefined,
+    spendHistory: Array.isArray(meta.spendHistory) ? meta.spendHistory : undefined,
   };
 }
 
@@ -161,6 +163,7 @@ export function recurringEntryToItemBody(spaceId: string | number, entry: HomeRe
     due_at: entry.nextDueDate,
     metadata: {
       notes: entry.notes ?? null,
+      spendHistory: entry.spendHistory ?? [],
     },
   };
 }
@@ -175,6 +178,7 @@ function itemToRecurringEntry(item: any): HomeRecurringEntry {
     frequency: (item.recurrence as HomeRecurringEntry["frequency"]) ?? "monthly",
     nextDueDate: item.due_at ?? item.created_at,
     notes: meta.notes ?? undefined,
+    spendHistory: Array.isArray(meta.spendHistory) ? meta.spendHistory : undefined,
   };
 }
 
@@ -268,6 +272,7 @@ export function taskEntryToItemBody(spaceId: string | number, entry: HomeTaskEnt
       isPurchase: entry.isPurchase ?? false,
       isRecurring: entry.isRecurring ?? false,
       recurrenceFrequency: entry.recurrenceFrequency ?? null,
+      spendHistory: entry.spendHistory ?? [],
     },
   };
 }
@@ -285,6 +290,7 @@ function itemToTaskEntry(item: any): HomeTaskEntry {
     price: item.amount != null ? Number(item.amount) : undefined,
     isRecurring: meta.isRecurring ?? false,
     recurrenceFrequency: meta.recurrenceFrequency ?? undefined,
+    spendHistory: Array.isArray(meta.spendHistory) ? meta.spendHistory : undefined,
   };
 }
 

@@ -80,6 +80,10 @@ export default function HomeTaskForm({
       isRecurring,
       recurrenceFrequency: isRecurring ? recurrenceFrequency : undefined,
       notes: notes.trim() || undefined,
+      // Preserved, never derived from this form -- only resolveTask
+      // appends to this (see HomeDashboard.tsx). An unrelated edit
+      // (title, notes) must not wipe out every past resolve's price.
+      spendHistory: entry?.spendHistory,
     };
 
     onSave(entryToSave);
