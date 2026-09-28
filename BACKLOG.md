@@ -13,35 +13,6 @@ one up like any other "Open" item once nothing more pressing is ahead
 of it. Mark it `[from: <task>]` so there's a trail back to how it was
 found.
 
-### `lib/dashboard/monthlyExpenses.ts` is dead, and so is `DashboardController`'s own `monthlyExpenses` field
-
-**Where:** `frontend/lib/dashboard/monthlyExpenses.ts` — zero importers
-anywhere in the frontend (confirmed via grep). Its only reason to
-still exist was feeding `getThisMonthExpensesTotal`/
-`getThisMonthHomeExpenses`/a Car equivalent into one cross-space
-total, presumably for `app/(tabs)/home.tsx`'s own spend widget — but
-`home.tsx` doesn't import this file, and doesn't read
-`dashboard.monthlyExpenses` either (its local `dashboard` state type
-only declares `{today, upcoming, overdue}`, dropping the field
-entirely even though `backend/app/Http/Controllers/Api/
-DashboardController.php::index()` genuinely computes and returns a
-real `monthlyExpenses: {total, sources}` object). Home's own spend
-widget (the budget ring) sources its numbers from `budget.limits` (a
-separate `api.getBudget()` call) instead.
-
-**What:** Two dead things stacked on top of each other: a frontend
-file nobody imports, and a backend field nobody reads. Needs a
-decision, not a blind removal — either `home.tsx` should actually
-start rendering `dashboard.monthlyExpenses` somewhere (it's real,
-computed, cross-space data that currently goes nowhere), or both the
-frontend file and the backend field should be dropped as genuinely
-unwanted. Found while investigating a separate, narrower backlog item
-about `getThisMonthExpensesTotal` (Expenses space's own local
-function, a different one from Home's) being unused by
-`ExpensesStats.tsx`.
-
-**Found:** `[from: dead-code cleanup pass, 2026-09-27]`.
-
 ### Dead `search.tsx` stub left in the route tree instead of fully removed
 
 **Where:** `frontend/app/(tabs)/search.tsx` (a `@deprecated` stub that
@@ -761,3 +732,9 @@ Stripped the fully-dead FAB `Pressable`/category-fan `Animated.View`s/backdrop/`
 ### `getThisMonthExpensesTotal()` was dead code, and now backs a more useful stat (2026-09-27)
 
 Per explicit user decision (option A of the 2 the original entry offered): `ExpensesStats.tsx`'s second card swapped from a bare "Items: N entries" count to "This Month: X RON", wired to the already-written `getThisMonthExpensesTotal`. While investigating this, found a separate, adjacent dead-code chain (`lib/dashboard/monthlyExpenses.ts` and `DashboardController`'s own `monthlyExpenses` field, both unused by the frontend) -- logged as its own new "Found along the way" entry above rather than touched here, since it needs an actual decision (wire it into `home.tsx`, or drop both) not a blind removal.
+
+### `DashboardController`'s `monthlyExpenses` field wired into a new Home tab widget (2026-09-28)
+
+Per explicit user decision ("construiește" -- build it, not drop it): Home tab gained a new full-width "CHELTUIT LUNA ACEASTA" card reading `dashboard.monthlyExpenses` for the first time, right after the existing "BUGET TOTAL" card -- deliberately a different, more complete number (every `SPENDING_TYPES` item this month, not just categories with a budget limit set, which is all BUGET TOTAL's own `budget.limits`-sourced total covers). qa-lead live-tested all 4 spaces (not just Home, which is all the implementation session itself tested) end-to-end against the real backend and confirmed every `spaceName`/`icon` pair resolves a real `SPACE_IDENTITY_COLORS` entry and a real Ionicons glyph, with zero new `tsc` errors.
+
+`frontend/lib/dashboard/monthlyExpenses.ts` (the OLD, separate, never-imported client-side calculation this replaces the need for) is still genuinely orphaned -- confirmed via grep, zero importers, still self-marked `@deprecated` -- but can't be deleted, same file-deletion restriction as `search.tsx`'s own entry below.
