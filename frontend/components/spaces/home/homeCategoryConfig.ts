@@ -420,14 +420,29 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       nextDueDate: entry.nextDueDate,
       frequency: entry.frequency,
     }),
-    rows: (data) =>
-      data.recurringEntries.map((entry) => ({
-        id: entry.id,
-        title: entry.title,
-        subtitle: `${entry.frequency} · next ${formatDate(entry.nextDueDate)}`,
-        amount: entry.amount.toLocaleString("en-US"),
-        isRecurring: true,
-      })),
+    rows: (data) => {
+      const now = new Date();
+      return data.recurringEntries.map((entry) => {
+        // Same window/tier already computed for this entry in the
+        // Restanțe warnings widget (getRecurringTaskWarnings) -- every
+        // Recurring entry always has a nextDueDate (no isRecurring
+        // guard needed, unlike Maintenance), so this always runs.
+        const remaining = daysUntil(entry.nextDueDate, now);
+        const taskTier = classifyTaskUrgencyTier(remaining);
+        const tier = taskTier ? severityFromRecurringTier(taskTier) : undefined;
+
+        return {
+          id: entry.id,
+          title: entry.title,
+          subtitle: taskTier
+            ? `${entry.frequency} · ${dueSubtitle(remaining, "Due")}`
+            : `${entry.frequency} · next ${formatDate(entry.nextDueDate)}`,
+          amount: entry.amount.toLocaleString("en-US"),
+          isRecurring: true,
+          urgencyTier: tier,
+        };
+      });
+    },
   },
   {
     key: "supplies",
