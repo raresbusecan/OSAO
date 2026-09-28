@@ -436,34 +436,6 @@ screen.
 
 **Found:** `[from: design-lead Phase 3 Budget audit, 2026-09-22]`.
 
-### Home Maintenance has no archive/undo for a resolved non-recurring entry, which is the real reason its new "Resolved" action needed a confirm dialog
-
-**Where:** `frontend/components/spaces/home/homeCategoryConfig.ts`'s
-"maintenance" category (`entries` filters out `completed` rows with no
-other view that ever shows them again) vs. Tasks in the same Home space,
-which has a dedicated `HomeTaskArchivePage.tsx` plus an undo (tapping a
-done row's checkbox again flips `completed` back, see
-`HomeDashboard.tsx`'s `handleCheckboxPress`). `HomeDashboard.tsx`'s
-`onResolve` wiring (~line 543) has to show a `confirmAction` dialog before
-every non-recurring Maintenance resolve specifically because that action
-is otherwise silent and permanent — there's nowhere to see or undo it
-afterward.
-
-**What:** This is the underlying gap a confirm-dialog patched over instead
-of fixing. Recommended direction: give Maintenance the same lightweight
-archive + undo pattern Tasks already has (reuse `HomeTaskArchivePage`'s
-shape rather than inventing a new one). Once resolved entries are visible
-and reversible somewhere, the confirm-dialog friction on the (likely more
-common) recurring-resolve path can come back out, matching Tasks' own
-no-confirm precedent. This is a functional change (new view + toggle,
-not a visual tweak) and needs the user's separate sign-off before
-frontend-lead builds it — see the design review's full report for the
-accompanying visual/interaction spec (row layout, recurring badge) that
-doesn't depend on this.
-
-**Found:** `[from: design-lead review of Home Maintenance's new
-"Resolved" action, 2026-09-22]`.
-
 ### HomeCategoryPage's row-level "resolve" checkbox doesn't close/refresh the edit form if that same row is open for editing
 
 **Where:** `frontend/components/spaces/home/HomeCategorySection.tsx`'s
@@ -495,6 +467,38 @@ call site.
 
 **Found:** `[from: qa-lead review of c90019f (Home category form
 collapse), 2026-09-26]`.
+
+### Maintenance's `buildEntry` silently drops `completedAt` if a resolved entry is ever edited again
+
+**Where:** `frontend/components/spaces/home/homeCategoryConfig.ts`'s
+"maintenance" category `buildEntry` (~line 285-297) constructs its
+return object field-by-field instead of spreading `existing` — it
+carries `completed: existing?.completed ?? false` forward but has no
+`completedAt` field at all. `maintenanceEntryToItemBody`
+(`frontend/lib/spaces/home/homeItems.ts`) always sends
+`completed_at: entry.completedAt ?? null` on every save, and the
+backend's `ItemController::update` treats an explicit `null` as
+"clear it" (confirmed live: omitting the key entirely leaves the
+column untouched, but sending it as `null` overwrites it) — so any
+save that runs a completed entry through `buildEntry` would silently
+wipe `completed_at` back to `null` while leaving `completed`/`status`
+still `"done"`.
+
+**What:** Currently unreachable, not a live bug — a completed
+Maintenance entry is filtered out of both `entries` and `rows`
+(`!entry.completed`), so nothing in today's UI (the category page's
+edit-on-row-tap, or the deep-link from Home tab's "De făcut" widget,
+which only surfaces recurring actionable items) can call `buildEntry`
+with an already-completed entry as `existing`. Flagging because the
+new `HomeMaintenanceArchivePage` (commit 0ec6933) is exactly the kind
+of surface a future "tap to undo/edit" feature would naturally get
+added to (Tasks' own archive already has undo) — whoever adds that
+should spread `...existing` in `buildEntry` (or explicitly carry
+`completedAt` like `completed` already is) rather than rediscovering
+this by watching an archived entry's date silently disappear.
+
+**Found:** `[from: qa-lead review of 0ec6933 (Home Maintenance
+archive), 2026-09-28]`.
 
 ## Open
 
@@ -738,3 +742,11 @@ Per explicit user decision (option A of the 2 the original entry offered): `Expe
 Per explicit user decision ("construiește" -- build it, not drop it): Home tab gained a new full-width "CHELTUIT LUNA ACEASTA" card reading `dashboard.monthlyExpenses` for the first time, right after the existing "BUGET TOTAL" card -- deliberately a different, more complete number (every `SPENDING_TYPES` item this month, not just categories with a budget limit set, which is all BUGET TOTAL's own `budget.limits`-sourced total covers). qa-lead live-tested all 4 spaces (not just Home, which is all the implementation session itself tested) end-to-end against the real backend and confirmed every `spaceName`/`icon` pair resolves a real `SPACE_IDENTITY_COLORS` entry and a real Ionicons glyph, with zero new `tsc` errors.
 
 `frontend/lib/dashboard/monthlyExpenses.ts` (the OLD, separate, never-imported client-side calculation this replaces the need for) is still genuinely orphaned -- confirmed via grep, zero importers, still self-marked `@deprecated` -- but can't be deleted, same file-deletion restriction as `search.tsx`'s own entry below.
+
+### Home Maintenance resolved entries now have an archive, closing the gap the confirm dialog was papering over (2026-09-28)
+
+Mirrored Home Tasks' own already-shipped archive pattern instead of inventing something new: `HomeMaintenanceEntry` gained `completedAt` (mapped to/from the `items` table's existing, generic `completed_at` column -- no backend changes needed, Tasks already uses it), a new `getHomeMaintenanceArchive()` mirrors `getHomeTaskArchive()`'s exact shape, a new `HomeMaintenanceArchivePage.tsx` mirrors `HomeTaskArchivePage.tsx`'s exact layout, and `HomeCategoryPage.tsx` (shared by Documents/Expenses/Maintenance/Recurring) gained an optional `onArchivePress` header pill shown only for Maintenance. qa-lead independently live-tested the `completedAt` round-trip (including confirming an unrelated later field edit doesn't clear it) and traced the `spentThisMonth`/recurring-exclusion logic by hand.
+
+The confirm-before-resolve dialog was deliberately left untouched everywhere -- the user had already explicitly overridden the original entry's suggestion to drop it for the recurring case, in an earlier session.
+
+**New dormant risk found during review, not fixed:** Maintenance's `buildEntry` (in `homeCategoryConfig.ts`, untouched by this change) never carries `completedAt` forward on a save, unlike `completed` which it does preserve -- and `maintenanceEntryToItemBody` always sends `completed_at` explicitly (never omits the key), so if a future edit path ever runs an already-resolved entry back through `buildEntry`, it would silently null out `completed_at` on the server. Currently unreachable (`entries`/`rows` both filter out completed entries, so there's no live UI path back into `buildEntry` for one) -- worth remembering if/when undo or direct-editing of archived entries gets added.
