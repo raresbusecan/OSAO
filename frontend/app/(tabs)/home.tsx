@@ -43,6 +43,7 @@ export default function Home() {
 
   const [dashboard, setDashboard] = useState<{
     today: ActionableItem[]; upcoming: ActionableItem[]; overdue: ActionableItem[];
+    monthlyExpenses: { total: number; sources: { spaceName: string; icon: string; amount: number }[] };
   } | null>(null);
   const [budget, setBudget] = useState<{
     limits: { category: string; monthly_limit: number; spent: number }[];
@@ -90,6 +91,14 @@ export default function Home() {
   const budgetTone = budgetRatio >= 1 ? colors.error : budgetRatio >= 0.8 ? colors.warning : colors.success;
 
   const todoCount = dashboard ? dashboard.overdue.length + dashboard.today.length + dashboard.upcoming.length : 0;
+
+  // The TRUE cross-space total -- every SPENDING_TYPES item this month,
+  // regardless of whether that space/category even has a budget limit
+  // set (BUGET TOTAL above only sums categories with a limit -- a space
+  // with none set is invisible there, not "0 spent"). Same source data
+  // Budget's own per-category totals come from, just rolled up here
+  // instead of split by limit.
+  const monthlyExpenses = dashboard?.monthlyExpenses ?? { total: 0, sources: [] };
 
   // Per-space breakdown for the DE FĂCUT card: each space's count colored
   // by the worst (most urgent) item it has -- overdue beats today beats
@@ -226,6 +235,49 @@ export default function Home() {
                 </>
               )}
             </Pressable>
+
+            {/* CHELTUIT LUNA ACEASTA -- the true cross-space total, not
+                just what has a budget limit set (see monthlyExpenses'
+                own comment above). Tapping goes to Budget too, same as
+                BUGET TOTAL -- there's no single "everything, unfiltered"
+                detail page, and Budget's own per-category breakdown is
+                the closest real one. Omitted entirely at 0 -- nothing
+                spent yet this month reads as "nothing to show," not an
+                empty card worth a whole row. */}
+            {monthlyExpenses.total > 0 ? (
+              <Pressable
+                testID="home-widget-monthly-expenses"
+                onPress={() => router.push("/budget")}
+                accessibilityRole="button"
+                accessibilityLabel={`Cheltuit luna aceasta: ${monthlyExpenses.total} RON`}
+                style={{ width: "100%", backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.lg, gap: spacing.sm }}
+              >
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Ionicons name="card-outline" size={14} color={colors.onSurface} />
+                  <Text style={{ fontSize: 11, fontWeight: "800", color: colors.onSurfaceTertiary, letterSpacing: 0.3 }}>CHELTUIT LUNA ACEASTA</Text>
+                </View>
+                <Text style={{ fontSize: 17, fontWeight: "800", color: colors.onSurface }}>
+                  {monthlyExpenses.total.toLocaleString("en-US")} RON
+                </Text>
+                {monthlyExpenses.sources.length > 0 ? (
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.lg }}>
+                    {monthlyExpenses.sources.map((s) => {
+                      const kind = s.spaceName.toLowerCase() as SpaceKind;
+                      const identityColor = SPACE_IDENTITY_COLORS[kind] ?? colors.onSurfaceTertiary;
+                      return (
+                        <View key={s.spaceName} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Ionicons name={s.icon as keyof typeof Ionicons.glyphMap} size={14} color={identityColor} />
+                          <Text style={{ fontSize: 12, fontWeight: "600", color: colors.onSurface }}>{s.spaceName}</Text>
+                          <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurfaceTertiary }}>
+                            {s.amount.toLocaleString("en-US")}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </Pressable>
+            ) : null}
 
             {/* DE FĂCUT -- opens the carousel, doesn't jump straight to
                 Calendar: which screen actually resolves a to-do depends
