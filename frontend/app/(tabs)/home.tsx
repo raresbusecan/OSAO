@@ -360,30 +360,6 @@ export default function Home() {
                 ))}
               </View>
             ) : null}
-
-            {/* Per-space status cards */}
-            {spaceCards.map((s) => {
-              const limit = budget?.limits.find((l) => l.category === s.label);
-              const ratio = limit && limit.monthly_limit > 0 ? limit.spent / limit.monthly_limit : null;
-              const tone = ratio == null ? colors.onSurfaceTertiary : ratio >= 1 ? colors.error : ratio >= 0.8 ? colors.warning : colors.success;
-              const identityColor = SPACE_IDENTITY_COLORS[s.kind] ?? colors.onSurfaceTertiary;
-              return (
-                <Pressable
-                  key={s.kind}
-                  testID={`home-space-${s.kind}`}
-                  onPress={() => router.push(`/${s.spaceId}` as any)}
-                  accessibilityRole="button"
-                  accessibilityLabel={s.label}
-                  style={{ flex: 1, minWidth: "47%", backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.md, alignItems: "center", gap: 4 }}
-                >
-                  <Ionicons name={s.icon} size={18} color={identityColor} />
-                  <Text style={{ fontSize: 11, fontWeight: "700", color: colors.onSurface }}>{s.label}</Text>
-                  <Text style={{ fontSize: 10, color: tone, fontWeight: ratio != null ? "700" : "400" }}>
-                    {ratio == null ? "fără buget" : `${Math.round(ratio * 100)}% din buget`}
-                  </Text>
-                </Pressable>
-              );
-            })}
           </View>
         )}
       </ScrollView>
