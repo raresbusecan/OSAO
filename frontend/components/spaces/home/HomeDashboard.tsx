@@ -666,27 +666,21 @@ export default function HomeDashboard({
         onEdit={onEdit}
       />
 
-      <HomeStats
-        thisMonthExpenses={thisMonthExpenses}
-        upcomingCount={upcomingItems.length}
-        onSpendPress={() => setSpendPageVisible(true)}
-      />
-
-      {/* Single, always-visible Archive entry point for the whole space
+      {/* Single, always-visible History entry point for the whole space
           (Tasks + Maintenance resolved entries combined) -- mirrors
-          Car's own Docs/Archive/History pill row placement, right under
-          the header stats and before the category grid. */}
+          Car's own Docs/Archive/History pill row placement: directly
+          under the header/subtitle, before any stats. */}
       <Pressable
-        testID="home-archive-open"
+        testID="home-history-open"
         onPress={() => setHomeArchivePageVisible(true)}
         accessibilityRole="button"
-        accessibilityLabel="View archive"
+        accessibilityLabel="View history"
         style={{
           flexDirection: "row",
           alignItems: "center",
           alignSelf: "flex-start",
           gap: 5,
-          marginBottom: spacing.xl,
+          marginBottom: spacing.lg,
           paddingVertical: 7,
           paddingHorizontal: spacing.md,
           borderRadius: radius.pill,
@@ -695,11 +689,17 @@ export default function HomeDashboard({
           borderColor: colors.border,
         }}
       >
-        <Ionicons name="archive-outline" size={12} color={colors.onSurfaceTertiary} />
+        <Ionicons name="time-outline" size={12} color={colors.onSurfaceTertiary} />
         <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurface }}>
-          Archive
+          History
         </Text>
       </Pressable>
+
+      <HomeStats
+        thisMonthExpenses={thisMonthExpenses}
+        upcomingCount={upcomingItems.length}
+        onSpendPress={() => setSpendPageVisible(true)}
+      />
 
       <Text
         style={{

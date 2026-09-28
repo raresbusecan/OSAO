@@ -26,7 +26,7 @@ type ArchiveRowData = {
 };
 
 const TABS: { key: ArchiveKind | "all"; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { key: "all", label: "Toate", icon: "archive-outline" },
+  { key: "all", label: "Toate", icon: "time-outline" },
   { key: "task", label: "Tasks", icon: "checkmark-circle-outline" },
   { key: "maintenance", label: "Mentenanță", icon: "construct-outline" },
 ];
@@ -48,15 +48,17 @@ function formatResolvedAt(dateString: string): string {
 }
 
 /**
- * One archive for the whole Home space, not one per category --
- * matches Car's own Archive/History pattern (a single, always-visible
- * entry point on that space's main dashboard, not buried inside
- * individual category forms), per explicit user request for
- * cross-space consistency. Combines what used to be two separate pages
- * (HomeTaskArchivePage, HomeMaintenanceArchivePage -- both still exist
- * as files but are no longer reachable from anywhere, see BACKLOG.md)
- * into one tabbed list, reusing their exact same calculation functions
- * rather than re-deriving the data.
+ * One History page for the whole Home space, not one per category --
+ * matches Car's own Docs/Archive/History pattern (a single,
+ * always-visible entry point on that space's main dashboard, not
+ * buried inside individual category forms), per explicit user request
+ * for cross-space consistency. "History" rather than "Archive" since
+ * this is a time-based record of resolved entries, not (like Car's own
+ * Archive) documents superseded by a renewal. Combines what used to be
+ * two separate pages (HomeTaskArchivePage, HomeMaintenanceArchivePage
+ * -- both still exist as files but are no longer reachable from
+ * anywhere, see BACKLOG.md) into one tabbed list, reusing their exact
+ * same calculation functions rather than re-deriving the data.
  */
 export function HomeArchivePage({ homeData, onBack }: HomeArchivePageProps) {
   const { colors, spacing, radius } = useTheme();
@@ -102,7 +104,7 @@ export function HomeArchivePage({ homeData, onBack }: HomeArchivePageProps) {
             <Ionicons name="chevron-back" size={20} color={colors.onSurface} />
           </Pressable>
           <Text style={{ fontSize: 26, fontWeight: "800", letterSpacing: -0.4, color: colors.onSurface }}>
-            Archive
+            History
           </Text>
         </View>
 
@@ -141,7 +143,7 @@ export function HomeArchivePage({ homeData, onBack }: HomeArchivePageProps) {
                 justifyContent: "center",
               }}
             >
-              <Ionicons name="archive-outline" size={19} color={colors.onSurface} />
+              <Ionicons name="time-outline" size={19} color={colors.onSurface} />
             </View>
           </View>
         ) : null}
@@ -166,7 +168,7 @@ export function HomeArchivePage({ homeData, onBack }: HomeArchivePageProps) {
               <React.Fragment key={t.key}>
                 {index > 0 ? <View style={{ width: StyleSheet.hairlineWidth, backgroundColor: colors.border }} /> : null}
                 <Pressable
-                  testID={`home-archive-tab-${t.key}`}
+                  testID={`home-history-tab-${t.key}`}
                   onPress={() => setTab(t.key)}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
@@ -197,7 +199,7 @@ export function HomeArchivePage({ homeData, onBack }: HomeArchivePageProps) {
           </View>
         ) : (
           <View style={{ alignItems: "center", paddingVertical: spacing.xl, gap: spacing.sm }}>
-            <Ionicons name="archive-outline" size={26} color={colors.onSurfaceTertiary} />
+            <Ionicons name="time-outline" size={26} color={colors.onSurfaceTertiary} />
             <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Nimic rezolvat încă.</Text>
           </View>
         )}
