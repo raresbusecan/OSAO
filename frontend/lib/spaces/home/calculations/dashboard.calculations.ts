@@ -341,6 +341,44 @@ export function getHomeTaskArchive(homeData: HomeData): {
   return { rows, spentThisMonth };
 }
 
+export type HomeMaintenanceArchiveRow = {
+  id: string;
+  title: string;
+  completedAt?: string;
+  price: number;
+};
+
+/** Every resolved (non-recurring, completed:true) Maintenance entry,
+ * newest first -- HomeMaintenanceArchivePage's list. A recurring entry
+ * never appears here at all (it never sets `completed`, see
+ * homeCategoryConfig.ts's resolveEntry -- resolving one just advances
+ * nextDueDate and keeps it active). Mirrors getHomeTaskArchive's own
+ * shape so both archives read the same way. */
+export function getHomeMaintenanceArchive(homeData: HomeData): {
+  rows: HomeMaintenanceArchiveRow[];
+  spentThisMonth: number;
+} {
+  const now = new Date();
+  const currentMonth = now.getMonth();
+  const currentYear = now.getFullYear();
+
+  const rows: HomeMaintenanceArchiveRow[] = homeData.maintenanceEntries
+    .filter((entry) => entry.completed)
+    .map((entry) => ({ id: entry.id, title: entry.service, completedAt: entry.completedAt, price: entry.price }))
+    .sort((a, b) => new Date(b.completedAt ?? 0).getTime() - new Date(a.completedAt ?? 0).getTime());
+
+  let spentThisMonth = 0;
+  rows.forEach((row) => {
+    if (!row.price || !row.completedAt) return;
+    const d = new Date(row.completedAt);
+    if (d.getMonth() === currentMonth && d.getFullYear() === currentYear) {
+      spentThisMonth += row.price;
+    }
+  });
+
+  return { rows, spentThisMonth };
+}
+
 // -------------------------------------------------------------------
 // Supply restock pattern -- how fast a tracked supply actually gets
 // consumed. A raw day-gap between restocks isn't reliable on its own,

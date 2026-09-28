@@ -310,7 +310,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
           nextDueDate: addRecurrenceInterval(base, existing.recurrenceFrequency ?? "monthly", existing.recurrenceInterval ?? 1),
         };
       }
-      return { ...existing, completed: true };
+      return { ...existing, completed: true, completedAt: new Date().toISOString() };
     },
     valuesFromEntry: (entry: HomeMaintenanceEntry) => ({
       service: entry.service,

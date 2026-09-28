@@ -22,6 +22,7 @@ import { HomeStats } from "./HomeStats";
 import { HomeSpendPage } from "./HomeSpendPage";
 import { HomeNextSection } from "./HomeNextSection";
 import { HomeCategoryPage } from "./HomeCategoryPage";
+import { HomeMaintenanceArchivePage } from "./HomeMaintenanceArchivePage";
 import { HomeTasksPage } from "./HomeTasksPage";
 import { HomeTaskArchivePage } from "./HomeTaskArchivePage";
 import { HomeRecurringWarningsPage } from "./HomeRecurringWarningsPage";
@@ -120,6 +121,11 @@ export default function HomeDashboard({
   const [editingTaskEntry, setEditingTaskEntry] = useState<HomeTaskEntry | null>(null);
   const [archivePageVisible, setArchivePageVisible] = useState(false);
   const [warningsPageVisible, setWarningsPageVisible] = useState(false);
+  // Maintenance's own "Archive" pill (HomeCategoryPage's header, only
+  // for the maintenance category -- see the onArchivePress prop below)
+  // -- resolved (non-recurring) entries previously had nowhere to go
+  // once marked done.
+  const [maintenanceArchivePageVisible, setMaintenanceArchivePageVisible] = useState(false);
   // "This month" stat card tap -- HomeSpendPage, the whole space's
   // spend (Expenses + Maintenance + resolved purchase Tasks) in one
   // place, mirroring Car's own CarExpensesPage.
@@ -182,6 +188,7 @@ export default function HomeDashboard({
     setEditingTaskEntry(null);
     setArchivePageVisible(false);
     setWarningsPageVisible(false);
+    setMaintenanceArchivePageVisible(false);
     setSpendPageVisible(false);
     setResolveSheetEntry(null);
     setSuppliesPageVisible(false);
@@ -529,6 +536,10 @@ export default function HomeDashboard({
     return <HomeTaskArchivePage homeData={homeData} onBack={() => setArchivePageVisible(false)} />;
   }
 
+  if (maintenanceArchivePageVisible) {
+    return <HomeMaintenanceArchivePage homeData={homeData} onBack={() => setMaintenanceArchivePageVisible(false)} />;
+  }
+
   if (spendPageVisible) {
     return (
       <HomeSpendPage
@@ -637,6 +648,9 @@ export default function HomeDashboard({
           category.resolveEntry
             ? (id) => resolveCategoryEntry(activeCategory, id)
             : undefined
+        }
+        onArchivePress={
+          activeCategory === "maintenance" ? () => setMaintenanceArchivePageVisible(true) : undefined
         }
         getEditValues={(id) => {
           const existing = category.entries(homeData).find((e) => e.id === id);

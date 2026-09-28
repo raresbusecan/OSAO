@@ -50,6 +50,11 @@ export type HomeCategoryPageProps = {
    * that actually has one (see homeCategoryConfig.ts's resolveEntry).
    * Omitted entirely for every other category. */
   onResolve?: (id: string) => void;
+  /** Header "Archive" pill -- only passed for a category that actually
+   * has somewhere to send a resolved entry (currently just
+   * Maintenance, see HomeMaintenanceArchivePage). Omitted entirely for
+   * every other category, same as onResolve above. */
+  onArchivePress?: () => void;
   /** Prefills the form when a row is tapped, via the category's own
    * `valuesFromEntry`. */
   getEditValues: (id: string) => Record<string, string>;
@@ -77,6 +82,7 @@ export function HomeCategoryPage({
   onSubmit,
   onDelete,
   onResolve,
+  onArchivePress,
   getEditValues,
   initialEditId,
 }: HomeCategoryPageProps) {
@@ -215,9 +221,32 @@ export function HomeCategoryPage({
           <Ionicons name={icon} size={17} color={SPACE_IDENTITY_COLORS.home} />
         </View>
 
-        <Text style={{ ...typography.title, color: colors.onSurface }}>
+        <Text style={{ ...typography.title, color: colors.onSurface, flex: 1 }} numberOfLines={1}>
           {title}
         </Text>
+
+        {onArchivePress ? (
+          <Pressable
+            testID="category-archive"
+            onPress={onArchivePress}
+            accessibilityRole="button"
+            accessibilityLabel="View archive"
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 6,
+              height: 32,
+              paddingHorizontal: 14,
+              borderRadius: radius.pill,
+              backgroundColor: "transparent",
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <Ionicons name="archive-outline" size={13} color={colors.onSurfaceTertiary} />
+            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurface }}>Archive</Text>
+          </Pressable>
+        ) : null}
       </View>
 
       {!formExpanded ? (

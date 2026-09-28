@@ -116,6 +116,7 @@ export function maintenanceEntryToItemBody(spaceId: string | number, entry: Home
     currency: entry.price != null ? "RON" : null,
     due_at: entry.date,
     status: entry.completed ? "done" : "pending",
+    completed_at: entry.completedAt ?? null,
     recurrence: entry.isRecurring ? entry.recurrenceFrequency ?? "monthly" : null,
     metadata: {
       description: entry.description ?? null,
@@ -140,6 +141,7 @@ function itemToMaintenanceEntry(item: any): HomeMaintenanceEntry {
     recurrenceFrequency: (item.recurrence as HomeMaintenanceEntry["recurrenceFrequency"]) ?? undefined,
     recurrenceInterval: meta.recurrenceInterval != null ? Number(meta.recurrenceInterval) : undefined,
     completed: item.status === "done",
+    completedAt: item.completed_at ?? undefined,
   };
 }
 

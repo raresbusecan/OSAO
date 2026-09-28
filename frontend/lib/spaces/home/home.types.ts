@@ -42,6 +42,11 @@ export type HomeMaintenanceEntry = {
    * nextDueDate and stays active instead. See homeCategoryConfig.ts's
    * "maintenance" resolveEntry. */
   completed?: boolean;
+  /** Set alongside `completed` (non-recurring resolve only) -- when it
+   * actually happened, so the archive can show "Rezolvat acum 3 zile"
+   * instead of just a bare list. Same idea as HomeTaskEntry's own
+   * completedAt. */
+  completedAt?: string;
 };
 
 export type HomeRecurringEntry = {
