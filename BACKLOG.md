@@ -72,6 +72,29 @@ call sites, not just Documents.
 
 **Found:** `[from: qa-lead review of feat/home-due-date-urgency-tiers, 2026-09-28]`.
 
+### Home's per-resolve spend history isn't visible to the backend's own cross-space aggregates
+
+**Where:** `backend/app/Http/Controllers/Api/DashboardController.php`'s
+`monthlyExpenses` query and `BudgetController`'s Home-category total —
+both sum `Item::amount`/`due_at` directly off each row for
+`Item::SPENDING_TYPES` (`home_task`, `home_maintenance`, ...).
+
+**What:** Home's own "This month" spend (`HomeSpendPage`/the stat
+card, via `getHomeSpendRecords`) now sums every `spendHistory` event
+when a Task/Maintenance/Recurring entry has been resolved more than
+once this month (see the Done entry below). The backend's own
+cross-space Dashboard card and Budget's Home total have no visibility
+into `spendHistory` at all — they still read the item's single live
+`amount`/`due_at` column, so an entry resolved 3× this month still
+only contributes its LATEST resolve's amount there, not the sum. After
+this fix, Home's own stat card and the app-wide Dashboard/Budget
+"Home" total can now disagree for any entry resolved more than once in
+the same month. Needs a backend change (reading `metadata.spend_history`
+similarly, or a real spend-log table) to close — out of scope for a
+frontend-only diff.
+
+**Found:** `[from: qa-lead review of feat/home-spend-history, 2026-09-28]`.
+
 ### Home tab and Spaces tab both surface "your spaces," with different jobs the tab bar doesn't explain
 
 **Where:** `frontend/app/(tabs)/home.tsx` renders a widget-grid
@@ -809,3 +832,13 @@ qa-lead's first pass on this found the Documents half was correct but practicall
 User report: a real "Internet" Recurring entry looked resolved in its own category list but showed "Overdue by 10 days" on the Home tab's NEXT widget. Root-caused live: its `due_at` in the database was genuinely still 10 days stale (`updated_at` unchanged since 2026-09-18) -- its "Rezolvă" action had silently failed to persist on 2026-09-18, predating this session's own silent-failure-on-save fix (see "All 11 save handlers..." above), so the optimistic UI at the time never reverted and the user reasonably believed it had worked. Live-tested the real update endpoint just now and confirmed it works correctly today, then corrected the actual entry (advanced its `due_at` to the next monthly cycle, exactly what tapping Rezolvă produces) directly via the API on the user's behalf.
 
 The deeper, fixable gap: Recurring rows were the one category deliberately left out of the same-day urgency-tier coloring work above (Documents/Maintenance only) -- so a genuinely overdue bill's row looked identical to a fine one, silently hiding exactly this class of failure. Closed by extending the identical pattern (reusing `classifyTaskUrgencyTier`/`severityFromRecurringTier`, the same tier Restanțe already computes for the same entry) to Recurring's own `rows()`. qa-lead confirmed the Restanțe-agreement guarantee is structural (both call sites run the identical function on the identical field, not a coincidental match) and live-tested all 3 severity bands via the real backend.
+
+### A recurring entry resolved multiple times in one month only counted once in "this month" spend (2026-09-28)
+
+Real user report: resolving a recurring Task or Maintenance visit more than once in the same month never incremented "this month" spend, and Recurring bills didn't count toward it at all. Root cause: `HomeTaskEntry`/`HomeMaintenanceEntry`/`HomeRecurringEntry` each only ever stored a single mutable `price`/`amount` + `date`, overwritten on every resolve -- `getHomeSpendRecords` read that one snapshot, so N resolves in a month still summed to just the latest one. Recurring bills were excluded from spend entirely by a prior, separate, deliberate scope decision.
+
+Fixed per explicit user decision ("începe cu toate 3 itemele... să inclus și recurent în spend") by adding a `spendHistory: {date, amount}[]` array to all 3 entities (stored in `metadata`, same pattern Supplies' `restockHistory` already uses -- no backend migration). `getHomeSpendRecords` now produces one record per `spendHistory` event when an entry has any, falling back to the old single-snapshot record for a legacy entry that hasn't resolved since this shipped (nothing already showing a total silently drops to zero). Maintenance's resolve action never asked for a fresh price on a repeat visit at all -- new `HomeMaintenanceResolveSheet` closes that gap, prompting for it (pre-filled with the last known price) only for a recurring entry's resolve. Recurring bills now log their own fixed `amount` as a paid-this-cycle event on resolve, deliberately kept separate from Budget's own pre-existing monthly-equivalent recurring math (a forecast, not a transaction log -- both are correct, for different questions).
+
+Found and fixed 3 silent-wipe risks while wiring this up: `HomeTaskForm.tsx` and `homeCategoryConfig.ts`'s Maintenance/Recurring `buildEntry` functions none carried `spendHistory` forward on an unrelated edit (price, title, notes) -- would have silently erased accumulated history, same bug class as this session's earlier "All 11 save handlers..." fix. qa-lead live-tested all 3 entities resolved multiple times against the real backend (Task 3×, Maintenance 2×, Recurring 2×, all summing correctly), the legacy-fallback path (a real pre-existing item with no `spendHistory` key at all), and specifically re-tested the silent-wipe fix by editing an already-resolved-twice entry's price through the normal form and confirming both prior events survived.
+
+**New gap found during review, not fixed (needs backend work, out of scope for a frontend diff):** logged separately above under "Found along the way" -- Home's own spend total now correctly sums every resolve, but the backend's cross-space Dashboard card and Budget's Home total still read each item's single live `amount`/`due_at` column, with no visibility into `spendHistory` at all. The two totals can now disagree for an entry resolved more than once in a month.
