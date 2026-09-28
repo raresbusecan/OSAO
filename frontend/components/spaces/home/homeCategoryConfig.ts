@@ -175,6 +175,11 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
     fields: [
       { key: "title", label: "Title", placeholder: "e.g. Road Tax Certificate" },
       { key: "documentType", label: "Document type", placeholder: "e.g. RCA" },
+      // Optional -- a document with no expiry (e.g. a deed) just never
+      // enters classifyDocumentUrgencyTier's alert window (see rows()
+      // below), same as leaving it unset always did before urgency
+      // coloring existed.
+      { key: "expiryDate", label: "Expiry date", placeholder: "", type: "date", required: false },
     ],
     submitLabel: "Add Document",
     emptyLabel: "No documents yet.",
@@ -186,11 +191,12 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       title: values.title,
       issuer: existing?.issuer,
       issueDate: existing?.issueDate,
-      expiryDate: existing?.expiryDate,
+      expiryDate: values.expiryDate || existing?.expiryDate,
     }),
     valuesFromEntry: (entry: HomeDocumentEntry) => ({
       title: entry.title,
       documentType: entry.documentType,
+      expiryDate: entry.expiryDate ?? "",
     }),
     rows: (data) => {
       const now = new Date();
