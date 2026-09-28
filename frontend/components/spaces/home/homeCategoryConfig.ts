@@ -8,6 +8,13 @@ import type {
   HomeSupplyEntry,
 } from "@/lib/spaces/home/home.types";
 import type { HomeCategoryRow } from "./HomeCategorySection";
+import {
+  daysUntil,
+  dueSubtitle,
+  classifyDocumentUrgencyTier,
+  classifyTaskUrgencyTier,
+  severityFromRecurringTier,
+} from "@/lib/spaces/home/calculations/dashboard.calculations";
 
 export type HomeCategoryField = {
   key: string;
@@ -185,14 +192,24 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       title: entry.title,
       documentType: entry.documentType,
     }),
-    rows: (data) =>
-      data.documentEntries.map((entry) => ({
-        id: entry.id,
-        title: entry.title,
-        subtitle: entry.expiryDate
-          ? `${entry.documentType} · Expires ${formatDate(entry.expiryDate)}`
-          : entry.documentType,
-      })),
+    rows: (data) => {
+      const now = new Date();
+      return data.documentEntries.map((entry) => {
+        const remaining = entry.expiryDate ? daysUntil(entry.expiryDate, now) : null;
+        const tier = remaining !== null ? classifyDocumentUrgencyTier(remaining) : undefined;
+
+        return {
+          id: entry.id,
+          title: entry.title,
+          subtitle: entry.expiryDate
+            ? tier
+              ? `${entry.documentType} · ${dueSubtitle(remaining!, "Expires")}`
+              : `${entry.documentType} · Expires ${formatDate(entry.expiryDate)}`
+            : entry.documentType,
+          urgencyTier: tier,
+        };
+      });
+    },
   },
   {
     key: "expenses",
@@ -320,20 +337,35 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       recurrenceFrequency: entry.recurrenceFrequency ?? "monthly",
       recurrenceInterval: entry.recurrenceInterval != null ? String(entry.recurrenceInterval) : "1",
     }),
-    rows: (data) =>
-      data.maintenanceEntries
+    rows: (data) => {
+      const now = new Date();
+      return data.maintenanceEntries
         .filter((entry) => !entry.completed)
-        .map((entry) => ({
-          id: entry.id,
-          title: entry.service,
-          subtitle: entry.isRecurring
-            ? entry.nextDueDate
-              ? `${entry.description} · next ${formatDate(entry.nextDueDate)}`
-              : `${entry.description} · every ${entry.recurrenceInterval ?? 1} ${entry.recurrenceFrequency ?? "monthly"}`
-            : `${entry.description} · ${formatDate(entry.date)}`,
-          amount: entry.price.toLocaleString("en-US"),
-          isRecurring: entry.isRecurring,
-        })),
+        .map((entry) => {
+          // Same window/tier a recurring entry is already flagged with in
+          // the Restanțe warnings widget (getRecurringTaskWarnings) -- a
+          // row here shows exactly the urgency already computed there,
+          // not a second independent definition of "urgent".
+          const remaining = entry.isRecurring && entry.nextDueDate ? daysUntil(entry.nextDueDate, now) : null;
+          const taskTier = remaining !== null ? classifyTaskUrgencyTier(remaining) : undefined;
+          const tier = taskTier ? severityFromRecurringTier(taskTier) : undefined;
+
+          return {
+            id: entry.id,
+            title: entry.service,
+            subtitle: entry.isRecurring
+              ? entry.nextDueDate
+                ? taskTier
+                  ? `${entry.description} · ${dueSubtitle(remaining!, "Due")}`
+                  : `${entry.description} · next ${formatDate(entry.nextDueDate)}`
+                : `${entry.description} · every ${entry.recurrenceInterval ?? 1} ${entry.recurrenceFrequency ?? "monthly"}`
+              : `${entry.description} · ${formatDate(entry.date)}`,
+            amount: entry.price.toLocaleString("en-US"),
+            isRecurring: entry.isRecurring,
+            urgencyTier: tier,
+          };
+        });
+    },
   },
   {
     key: "recurring",

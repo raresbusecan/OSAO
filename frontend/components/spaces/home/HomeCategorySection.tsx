@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { severityColor, type SeverityTier } from "@/lib/statusColors";
 
 export type HomeCategoryRow = {
   id: string | number;
@@ -13,6 +14,12 @@ export type HomeCategoryRow = {
    * actually do (advance vs. retire) before you tap it, not just in the
    * confirm dialog afterward. Only Maintenance sets this today. */
   isRecurring?: boolean;
+  /** Set only when this row is within its own alert window (Documents'
+   * classifyDocumentUrgencyTier, Maintenance's severityFromRecurringTier
+   * -- see homeCategoryConfig.ts) -- colors the subtitle red/orange/
+   * yellow instead of the plain gray default, same escalation Car's own
+   * Documents list already shows via statusColor. */
+  urgencyTier?: SeverityTier;
 };
 
 export type HomeCategorySectionProps = {
@@ -147,7 +154,14 @@ export function HomeCategorySection({
                     </Text>
                   </View>
 
-                  <Text style={{ ...typography.caption, marginTop: 2, color: colors.onSurfaceTertiary }}>
+                  <Text
+                    style={{
+                      ...typography.caption,
+                      marginTop: 2,
+                      color: row.urgencyTier ? severityColor(row.urgencyTier, colors) : colors.onSurfaceTertiary,
+                      fontWeight: row.urgencyTier ? "700" : typography.caption.fontWeight,
+                    }}
+                  >
                     {row.subtitle}
                   </Text>
                 </View>

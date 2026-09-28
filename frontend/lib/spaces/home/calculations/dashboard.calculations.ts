@@ -1,6 +1,7 @@
 import type { HomeData } from "@/components/spaces/home/home.data.types";
 import type { HomeNextItem } from "@/components/spaces/home/home.ui.types";
 import type { SupplyRestockEvent } from "@/lib/spaces/home/home.types";
+import type { SeverityTier } from "@/lib/statusColors";
 import { getThisMonthHomeSpend } from "./spend.calculations";
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
@@ -16,13 +17,13 @@ export function getThisMonthHomeExpenses(homeData: HomeData): number {
   return getThisMonthHomeSpend(homeData);
 }
 
-function daysUntil(dateString: string, now: Date): number {
+export function daysUntil(dateString: string, now: Date): number {
   return Math.ceil(
     (new Date(dateString).getTime() - now.getTime()) / MS_PER_DAY,
   );
 }
 
-function dueSubtitle(daysRemaining: number, verb: "Expires" | "Due"): string {
+export function dueSubtitle(daysRemaining: number, verb: "Expires" | "Due"): string {
   if (daysRemaining < 0) {
     const overdueVerb = verb === "Expires" ? "Expired" : "Overdue by";
     const days = Math.abs(daysRemaining);
@@ -32,6 +33,38 @@ function dueSubtitle(daysRemaining: number, verb: "Expires" | "Due"): string {
   }
 
   return `${verb} in ${daysRemaining} day${daysRemaining !== 1 ? "s" : ""}`;
+}
+
+const DOC_TIER_WARNING_DAYS = 30;
+const DOC_TIER_CRITICAL_DAYS = 15;
+
+/**
+ * Documents' own 3-band urgency split -- same day thresholds as Car's
+ * own document tiers (its DOC_TIER_MEDIUM_DAYS/DOC_TIER_CRITICAL_DAYS),
+ * expressed directly in the shared SeverityTier language (lib/statusColors.ts)
+ * so a Documents row colors the same red/orange/yellow way everything
+ * else severity-based in the app does. A document's own alert window
+ * (DOC_ALERT_DAYS, 45 days -- already used by getUpcomingHomeItems above)
+ * is much wider than a task's 4-day one, so this can't just reuse
+ * classifyTaskUrgencyTier below. undefined outside the window --
+ * expired (negative days) still counts as "critical", never undefined.
+ */
+export function classifyDocumentUrgencyTier(remaining: number): SeverityTier | undefined {
+  if (remaining > DOC_ALERT_DAYS) return undefined;
+  if (remaining <= DOC_TIER_CRITICAL_DAYS) return "critical";
+  if (remaining <= DOC_TIER_WARNING_DAYS) return "warning";
+  return "caution";
+}
+
+/** Maps the task-specific 4-value tier (see classifyTaskUrgencyTier
+ * below) onto the shared 3-color SeverityTier scale -- same collapse
+ * HomeTasksPage.tsx's own local tierColor already does (red -> critical,
+ * both oranges -> warning, yellow -> caution), pulled out here so
+ * Maintenance rows can reuse it too instead of a second copy. */
+export function severityFromRecurringTier(tier: RecurringWarningTier): SeverityTier {
+  if (tier === "red") return "critical";
+  if (tier === "yellow") return "caution";
+  return "warning";
 }
 
 export function getUpcomingHomeItems(
