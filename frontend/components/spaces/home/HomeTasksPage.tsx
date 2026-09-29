@@ -304,10 +304,10 @@ function AddTaskRow({
 // necessary trade-off of a single auto-fire threshold: it can't both
 // "always stay open for a later tap" and "commit past a point," since
 // react-native-gesture-handler's Swipeable only has the one
-// open/closed snap threshold. 0.4 was picked as a reasonable middle
-// ground (deliberate, not a hair-trigger); tune SWIPE_TRIGGER_PERCENT
-// if that feels off in practice.
-const SWIPE_TRIGGER_PERCENT = 0.4;
+// open/closed snap threshold. 0.25 was picked after the user found
+// an earlier 0.4 too far to drag; tune SWIPE_TRIGGER_PERCENT further
+// if that still feels off in practice.
+const SWIPE_TRIGGER_PERCENT = 0.25;
 const SWIPE_TRIGGER_DISTANCE = Dimensions.get("window").width * SWIPE_TRIGGER_PERCENT;
 
 function TaskSwipeRow({
