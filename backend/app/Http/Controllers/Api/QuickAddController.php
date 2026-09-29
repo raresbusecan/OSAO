@@ -20,6 +20,16 @@ class QuickAddController extends Controller
             'text' => ['required', 'string'],
         ]);
 
+        // Same timezone this route's own SyncUserTimezone middleware
+        // (see routes/api.php) already persists from every request's
+        // X-Timezone header -- "today"/"tomorrow" below need the
+        // user's own local calendar day, not the server's (UTC).
+        // Untagged Carbon::now() found alongside the sibling Calendar/
+        // Budget/Dashboard timezone fixes, same session -- same root
+        // cause, a write-side date-resolution bug this time rather
+        // than a read-side SQL one.
+        $userTz = $request->user()->timezone ?? 'UTC';
+
         $working = trim($validated['text']);
         $original = $working;
 
@@ -56,13 +66,13 @@ class QuickAddController extends Controller
         $dueAt = null;
 
         if (preg_match('/\btoday\b/i', $working, $m)) {
-            $dueAt = Carbon::now();
+            $dueAt = Carbon::now($userTz);
         } elseif (preg_match('/\btomorrow\b/i', $working, $m)) {
-            $dueAt = Carbon::now()->addDay();
+            $dueAt = Carbon::now($userTz)->addDay();
         } elseif (preg_match('/\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i', $working, $m)) {
-            $dueAt = Carbon::parse($m[1]);
+            $dueAt = Carbon::parse($m[1], $userTz);
         } elseif (preg_match('/\bon\s+([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?)\b/i', $working, $m)) {
-            $parsed = Carbon::parse($m[1] . ' ' . Carbon::now()->year);
+            $parsed = Carbon::parse($m[1] . ' ' . Carbon::now($userTz)->year, $userTz);
             $dueAt = $parsed->isPast() ? $parsed->addYear() : $parsed;
         }
 

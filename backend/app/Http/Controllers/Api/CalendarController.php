@@ -151,7 +151,12 @@ class CalendarController extends Controller
         // Always "next due", never month-scoped -- the whole point is a
         // stable list of what's coming up that doesn't change as the
         // user pages the day grid backward/forward through months.
-        $now = Carbon::now();
+        // Tagged with $userTz (already computed above), not the
+        // server's default -- an untagged Carbon::now() here could
+        // misclassify "next occurrence" near the user's own local
+        // midnight in a non-UTC zone (found alongside the sibling
+        // Budget/Dashboard timezone fixes, same session).
+        $now = Carbon::now($userTz);
         $recurring = $recurringItems
             ->map(function (Item $item) use ($now) {
                 $next = RecurrenceProjector::nextOccurrence($item, $now);
