@@ -13,6 +13,22 @@ one up like any other "Open" item once nothing more pressing is ahead
 of it. Mark it `[from: <task>]` so there's a trail back to how it was
 found.
 
+### Stray leftover test user in the live `lifeos` DB, not from this session
+
+**Where:** `users` table, id 38, `qa-home-widget-test@example.com` (no
+password known, presumably from an earlier QA/dev session). Found while
+verifying a Home-space QA sweep's own two throwaway users
+(`qa-home-sweep-*`/`qa-home-attacker-*`) had been fully cleaned up —
+this third one predates the sweep and wasn't created by it, so it was
+left alone rather than deleted without knowing whose test data it is.
+
+**What:** Someone should confirm it's disposable (matches the
+`qa-home-*` naming pattern used for throwaway test accounts) and either
+delete it or document why it's meant to stick around. Low priority,
+just DB hygiene — not a functional bug.
+
+**Found:** `[from: Home space full-coverage QA/seeding sweep, 2026-09-29]`.
+
 ### Dead `search.tsx` stub left in the route tree instead of fully removed
 
 **Where:** `frontend/app/(tabs)/search.tsx` (a `@deprecated` stub that
@@ -94,6 +110,20 @@ similarly, or a real spend-log table) to close — out of scope for a
 frontend-only diff.
 
 **Found:** `[from: qa-lead review of feat/home-spend-history, 2026-09-28]`.
+
+### Full-app QA sweep (2026-09-29): remaining confirmed findings, not yet fixed
+
+Being worked one at a time per the user's own explicit request ("le reparăm câte unu") -- each gets its own branch/qa-lead pass and moves to "Done" individually as it ships. Listed together here just as the master tracking entry; don't duplicate-log these individually as they're picked up, just move this section's relevant bullet.
+
+- **Space deletion orphans its items instead of cleaning them up** (`SpaceController::destroy` just calls `$space->delete()`; `items.space_id` is `nullOnDelete`, not `cascadeOnDelete`, unlike `car_profiles`/`home_profiles`/`space_members` which already correctly cascade). Confirmed real impact by the Grocery agent: a deleted space's `grocery_trip` spend kept counting in Budget forever (no space-existence check in `monthlySumForLabel`), with zero UI path to ever see or remove it again. A second, rarer compounding bug: if a shared list member was removed with `remove_items=false` (their items kept, untagged) AND the list's space is later deleted, the resulting item (`user_id: null` AND `space_id: null`) becomes unreachable by anyone, including the original owner -- confirmed via direct DB query, had to delete it at the DB level during cleanup.
+- **`type` has no server-side whitelist** (`ItemController` validates `required|string|max:30` only) -- a typo'd/invalid type is silently accepted and becomes a permanently invisible orphan row (every space's own load query filters on known `TYPE_*` constants). Needs a full inventory of every legitimate type across all 4 spaces + `custom_event` before whitelisting, to avoid blocking something real.
+- **`PUT /api/items/{id}` with a partial `metadata` object overwrites the whole column instead of merging** -- not hit today (every real `*EntryToItemBody` mapper always sends the full object), but a live landmine for any future partial-update call.
+- **`APP_DEBUG=true` leaks full stack traces (with server file paths) on every error response** -- and since `main` is literally what's live on the phone via the Cloudflare tunnel (no staging), this is plausibly reachable from outside right now, not just in a safe local dev context. This is a deliberate config/deployment decision (dev convenience vs. disclosure), not a code bug -- needs the user's own call, not an autonomous fix.
+- **Two `CLAUDE.md` claims are stale** and should be corrected: `backend/CLAUDE.md`'s "login/register have no throttle middleware" is false (a working `throttle:auth`, 5/min/IP, is wired on both routes -- confirmed live, hit a real 429); root `CLAUDE.md`'s "known IDOR on `ItemController::update`" (retyping an item across the grocery/non-grocery boundary to bypass ownership rules) is also already fixed -- the current code explicitly rejects any such boundary crossing, confirmed live across 3 different retype attempts.
+- **PLAUSIBLE, not fully reproduced (needs a second look, not a confirmed bug):** a user who is only a *member of one shared Grocery list* (not a member of its space) might be able to retype one of that list's own `grocery_item` rows into a new `grocery_list` inside the list-owner's space -- the boundary guard blocks grocery↔non-grocery crossing but doesn't re-validate `grocery_item → grocery_list` within the grocery side. Low severity (can't move the item to a different space, only spawn an extra list row somewhere the user already has legitimate list access).
+- **PLAUSIBLE, untested:** a shared-list member finishing a shopping trip on an item linked to a Home supply living in a space they don't belong to -- `logSupplyRestock`'s write goes through the plain space-level `canAccessItem` check, which a list-member-only user wouldn't satisfy; the frontend only `console.error`s a failure here rather than surfacing it, so this could silently fail. Not reproduced, worth a follow-up look.
+
+**Found:** `[from: full-app QA sweep, 2026-09-29 — Car/Home/Grocery/Expenses+Calendar/Budget+HomeTab+Spaces+Auth agents]`.
 
 ### Home tab and Spaces tab both surface "your spaces," with different jobs the tab bar doesn't explain
 
@@ -811,6 +841,10 @@ Mirrored Home Tasks' own already-shipped archive pattern instead of inventing so
 
 The confirm-before-resolve dialog was deliberately left untouched everywhere -- the user had already explicitly overridden the original entry's suggestion to drop it for the recurring case, in an earlier session.
 
+### `backend/CLAUDE.md`'s "login/register have no throttle" note is stale (2026-09-29) [from: Expenses+Calendar QA sweep]
+
+While registering a throwaway QA user, `/api/register` returned a real 429 ("Too Many Attempts") after a handful of requests. `routes/api.php` wraps both `/register` and `/login` in `Route::middleware('throttle:auth')`, and `AppServiceProvider::boot()` defines that limiter as `Limit::perMinute(5)->by($request->ip())` -- a real, working IP-keyed lockout, not the "no throttle middleware (known issue, not yet fixed)" `backend/CLAUDE.md` currently describes. Didn't touch the doc (out of scope for this task) -- just flagging that whoever picks up that "known issue" next should re-verify it's still true before doing any work, since it looks fixed already.
+
 **New dormant risk found during review, not fixed:** Maintenance's `buildEntry` (in `homeCategoryConfig.ts`, untouched by this change) never carries `completedAt` forward on a save, unlike `completed` which it does preserve -- and `maintenanceEntryToItemBody` always sends `completed_at` explicitly (never omits the key), so if a future edit path ever runs an already-resolved entry back through `buildEntry`, it would silently null out `completed_at` on the server. Currently unreachable (`entries`/`rows` both filter out completed entries, so there's no live UI path back into `buildEntry` for one) -- worth remembering if/when undo or direct-editing of archived entries gets added.
 
 ### Home's two separate archive entry points unified into one space-level page (2026-09-28)
@@ -870,3 +904,21 @@ Extracted the swipe-row logic out of `HomeTasksPage.tsx` into a shared `frontend
 2. That fix's own follow-up qa pass found a second, related defect: with `overshootLeft`/`overshootRight` still enabled (needed by the very first commit in this arc, back when the panel was a small fixed 80px), nothing clamped the drag past the new (larger) fixed-width panel either -- an ordinary swipe could outrun it, showing a gap of the row's own background. Fixed by disabling overshoot now that the panel's width IS the trigger distance -- `Swipeable` clamps the drag flat at exactly that point. A 4th, skeptical qa pass independently re-derived from source that this clamp only affects the *rendered* position, not the raw gesture value `handleRelease`'s threshold check reads from -- confirming the auto-fire is still fully reachable, not accidentally broken by the same fix that closed the gap.
 
 Next: Home Supplies, Grocery's shopping-list items, then Car -- per the user's own stated priority order, not yet started.
+
+### Full-app QA sweep (2026-09-29): 5 parallel agents, every space + Calendar/Budget/Home tab/Spaces/Auth
+
+Per explicit user request ("vreau pe toata aplicatia, toate sectiunile, toate functionalitatile") -- 5 agents in parallel, each seeding real data via the live API (happy path + negative/edge cases + plausible extra user behavior) and hand-verifying computed values, covering: Car, Home, Grocery, Expenses+Calendar, Budget+Home-tab+Spaces+Auth. Full findings list (fixed and not-yet-fixed) tracked below and in "Found along the way"; this entry covers the sweep itself and the 2 fixes shipped same-day. Rest of the confirmed findings (space-delete orphaning, `type` whitelist, partial-metadata-PUT overwrite, `APP_DEBUG` production exposure) are being worked one at a time per the user's own request -- see their own "Found along the way" entries below, updated to "Done" as each ships.
+
+### Calendar custom-event creation landed on the wrong day/month for non-UTC users (2026-09-29)
+
+Found by the sweep above (Expenses+Calendar agent), HIGH severity, real and reproducible: `calendar.tsx`'s `saveCustomEvent` built `due_at` as a naive `"YYYY-MM-DDTHH:mm:00"` string (no offset); Laravel's `datetime` cast parsed it in `config('app.timezone')` (UTC), never the user's own stored timezone -- a 23:00 Bucharest (UTC+3) event silently landed 3 hours later, sometimes crossing into the next day AND next month. A different, write-side bug from the earlier-fixed read-side `$startUtc`/`$endUtc` `CalendarController` issue -- qa-lead confirmed that fix is still correct and unaffected.
+
+Fixed by building a real `Date` via the multi-arg constructor (interprets its numbers as the device's own local time) + `.toISOString()`, matching the pattern `ExpenseDatePickerSheet`/`ExpensesAddBar` already used correctly. qa-lead live-reproduced the exact original bug scenario against the real backend, confirmed it's fixed, confirmed the no-timezone-header fallback and recurring-event projection are both unaffected.
+
+**New, out-of-scope observation qa-lead flagged, not fixed:** a Bucharest-anchored recurring event's displayed local time drifts by an hour across a DST transition (stored UTC instant stays pinned, so the same wall-clock pick reads as 23:00 before DST and 22:00 after) -- does NOT cause a day-bucket shift (`CalendarController` re-converts fresh each time), just a display-time drift worth knowing about if it ever comes up.
+
+### No server-side floor on `Item.amount` -- negative values silently corrupted spend totals (2026-09-29)
+
+Found independently by 3 of the sweep's 5 agents (Car, Home, Expenses), all reproducing the identical gap: `ItemController`'s `amount` validator was `nullable|numeric` with no `min:0`, for every item type app-wide. A negative amount posted directly to the API (bypassing every form's own client-side check) was silently accepted and flowed straight into every "this month spend" sum -- Home and Expenses' own agents each demonstrated an exact RON-for-RON match between an injected negative amount and the resulting gap in the computed total.
+
+Verified first that no feature anywhere has a legitimate negative-amount concept (no refund/credit, grepped both halves of the app) before adding `min:0` to both `store()` and `update()`. qa-lead live-confirmed: negative rejected (422) on 2 item types across create and update, `0` still accepted (inclusive floor), normal positive amounts and `null`/omitted amounts both completely unaffected, full backend suite still 13/13, and confirmed no other validation path double-validates or conflicts (`BudgetGoal.current_amount` is a different, legitimately-unbounded field on a different model, untouched).
