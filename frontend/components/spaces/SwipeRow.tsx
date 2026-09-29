@@ -53,8 +53,20 @@ export function SwipeRow({ onResolve, onDelete, cornerRadius, colors, children }
     <Swipeable
       ref={ref}
       friction={2}
-      overshootLeft={!!onResolve}
-      overshootRight
+      // Overshoot OFF, now that the action panel's own width IS
+      // TRIGGER_DISTANCE (see the panel width comment above) -- with
+      // overshoot disabled, Swipeable clamps the drag flat at
+      // leftWidth/rightWidth (which now equals TRIGGER_DISTANCE), so
+      // the row physically cannot be dragged past where the colored
+      // panel ends. qa-lead caught this: with overshoot left ON, nothing
+      // clamped the drag at all (overshootFriction defaults to 1, i.e.
+      // no resistance), so an ordinary swipe past ~100px outran the
+      // fixed-width panel and showed a gap of the row's own background
+      // -- a scaled-down repeat of the bug the fixed-width panel itself
+      // was meant to fix. Clamping the drag at the panel's edge removes
+      // the gap entirely instead of just narrowing it.
+      overshootLeft={false}
+      overshootRight={false}
       leftThreshold={TRIGGER_DISTANCE}
       rightThreshold={TRIGGER_DISTANCE}
       onSwipeableOpen={(direction) => {
