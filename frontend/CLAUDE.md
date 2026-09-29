@@ -4,7 +4,10 @@
 
 See `../CLAUDE.md` first for the cross-cutting model. This file is the
 frontend-only file map — use it to jump straight to the right file
-instead of grepping the whole tree.
+instead of grepping the whole tree. For visual/design-polish work
+specifically, read `DESIGN.md` first — a calibration reference against
+real modern apps, and what orgOS's current theme already gets right
+vs. the one concrete gap (type weight) worth fixing.
 
 ## Routing (Expo Router, file = route)
 
