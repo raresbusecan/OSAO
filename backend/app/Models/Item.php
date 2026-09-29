@@ -13,6 +13,36 @@ class Item extends Model
 {
     use HasFactory;
 
+    /** Every real, currently-supported `type` string -- whitelisted at
+     * ItemController::store/update so a typo'd or invalid type can no
+     * longer be silently accepted (previously `required|string|max:30`
+     * only). A permanently-invisible orphan row was a real, confirmed
+     * finding: every space's own load query filters strictly on its
+     * own known type constants, so a bad type just vanished from every
+     * screen while still occupying a row. One space's own set of types
+     * (see each space's own carItems.ts/homeItems.ts/etc. on the
+     * frontend) plus custom_event (Calendar, not tied to any one
+     * space). Add a new type here the moment a space gains one --
+     * nothing else enforces this list.
+     */
+    public const VALID_TYPES = [
+        'car_fuel',
+        'car_maintenance',
+        'car_document',
+        'car_expense',
+        'home_document',
+        'home_expense',
+        'home_maintenance',
+        'home_recurring',
+        'home_supply',
+        'home_task',
+        'grocery_list',
+        'grocery_item',
+        'grocery_trip',
+        'expense_item',
+        'custom_event',
+    ];
+
     /** Item types whose `amount` counts as real spending -- used to
      * compute Budget's per-category `spent` and the dashboard's Monthly
      * Expenses total from the same list, so they can never drift apart.

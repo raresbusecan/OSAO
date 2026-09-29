@@ -8,6 +8,7 @@ use App\Models\Space;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Validation\Rule;
 
 class ItemController extends Controller
 {
@@ -189,7 +190,11 @@ class ItemController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'space_id'      => 'nullable|exists:spaces,id',
-            'type'          => 'required|string|max:30',
+            // Whitelisted against Item::VALID_TYPES -- a typo'd/invalid
+            // type used to be silently accepted and become a
+            // permanently-invisible orphan row (every space's own load
+            // query filters on its own known type constants).
+            'type'          => ['required', 'string', 'max:30', Rule::in(Item::VALID_TYPES)],
             'title'         => 'required|string|max:255',
             'notes'         => 'nullable|string',
             'status'        => 'nullable|string|max:30',
@@ -295,7 +300,8 @@ class ItemController extends Controller
 
         $validator = Validator::make($request->all(), [
             'space_id'      => 'nullable|exists:spaces,id',
-            'type'          => 'sometimes|required|string|max:30',
+            // Same whitelist as store() above.
+            'type'          => ['sometimes', 'required', 'string', 'max:30', Rule::in(Item::VALID_TYPES)],
             'title'         => 'sometimes|required|string|max:255',
             'notes'         => 'nullable|string',
             'status'        => 'nullable|string|max:30',
