@@ -795,6 +795,7 @@ export default function HomeDashboard({
                 flexBasis: "46%",
                 minHeight: 56,
                 paddingHorizontal: 12,
+                backgroundColor: colors.surfaceSecondary,
                 borderWidth: 1,
                 borderColor: colors.border,
                 borderRadius: radius.md,

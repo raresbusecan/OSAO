@@ -212,7 +212,7 @@ export default function HomeTaskForm({
             style={{
               minHeight: 52,
               borderRadius: radius.sm,
-              backgroundColor: "transparent",
+              backgroundColor: colors.surfaceSecondary,
               borderWidth: 1,
               borderColor: colors.border,
               flexDirection: "row",
@@ -248,7 +248,7 @@ export default function HomeTaskForm({
         <View
           style={{
             borderRadius: radius.sm,
-            backgroundColor: "transparent",
+            backgroundColor: colors.surfaceSecondary,
             borderWidth: 1.5,
             borderColor: isPurchase ? colors.onSurface : colors.border,
             padding: spacing.md,
@@ -291,7 +291,7 @@ export default function HomeTaskForm({
         <View
           style={{
             borderRadius: radius.sm,
-            backgroundColor: "transparent",
+            backgroundColor: colors.surfaceSecondary,
             borderWidth: 1.5,
             borderColor: isRecurring ? colors.onSurface : colors.border,
             padding: spacing.md,
@@ -394,7 +394,7 @@ export default function HomeTaskForm({
               marginTop: spacing.sm,
               padding: spacing.md,
               borderRadius: radius.sm,
-              backgroundColor: "transparent",
+              backgroundColor: colors.surfaceSecondary,
               borderWidth: 1,
               borderColor: colors.border,
             }}
@@ -507,7 +507,7 @@ function FormField({
         style={{
           minHeight: multiline ? 90 : 52,
           borderRadius: radius.sm,
-          backgroundColor: "transparent",
+          backgroundColor: colors.surfaceSecondary,
           borderWidth: isFocused ? 2 : 1,
           borderColor: isFocused ? colors.onSurface : colors.border,
           flexDirection: "row",

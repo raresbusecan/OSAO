@@ -242,7 +242,7 @@ export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: Home
       {/* TOTAL */}
       <View
         style={{
-          backgroundColor: "transparent",
+          backgroundColor: colors.surfaceSecondary,
           borderWidth: 1,
           borderColor: colors.border,
           borderRadius: radius.sm,
@@ -373,7 +373,7 @@ export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: Home
           stepper -- Home's 5 fixed presets don't need one. */}
       <View
         style={{
-          backgroundColor: "transparent",
+          backgroundColor: colors.surfaceSecondary,
           borderWidth: 1,
           borderColor: colors.border,
           borderRadius: radius.sm,
@@ -486,7 +486,7 @@ export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: Home
         <>
           <View
             style={{
-              backgroundColor: "transparent",
+              backgroundColor: colors.surfaceSecondary,
               borderWidth: 1,
               borderColor: colors.border,
               borderRadius: radius.sm,

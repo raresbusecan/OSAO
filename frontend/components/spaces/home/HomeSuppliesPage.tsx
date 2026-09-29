@@ -114,7 +114,7 @@ export function HomeSuppliesPage({ homeData, onBack, onAdd, onEdit, onRestock }:
                     gap: spacing.md,
                     padding: spacing.md,
                     borderRadius: radius.sm,
-                    backgroundColor: "transparent",
+                    backgroundColor: colors.surfaceSecondary,
                     borderWidth: 1,
                     borderColor: colors.border,
                   }}

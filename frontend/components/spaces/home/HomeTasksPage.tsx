@@ -128,7 +128,7 @@ export function HomeTasksPage({
             marginBottom: spacing.xl,
             padding: spacing.lg,
             borderRadius: radius.sm,
-            backgroundColor: "transparent",
+            backgroundColor: colors.surfaceSecondary,
             borderWidth: 1,
             borderColor: colors.border,
           }}
@@ -176,7 +176,7 @@ export function HomeTasksPage({
         {recentDone.length > 0 ? (
           <View style={{ marginBottom: spacing.xl }}>
             <SectionTitle title="RECENT (Azi)" colors={colors} />
-            <View style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, overflow: "hidden" }}>
+            <View style={{ backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, overflow: "hidden" }}>
               {recentDone.map((row, index) => (
                 <DoneRow
                   key={row.id}
@@ -196,7 +196,7 @@ export function HomeTasksPage({
         <View>
           <SectionTitle title="ALL" colors={colors} />
           {upcoming.length > 0 ? (
-            <View style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, overflow: "hidden" }}>
+            <View style={{ backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, overflow: "hidden" }}>
               {upcoming.map((row, index) => (
                 <UpcomingRow
                   key={row.id}
@@ -333,7 +333,7 @@ function TaskRowCard({
         gap: spacing.md,
         padding: spacing.md,
         borderRadius: radius.sm,
-        backgroundColor: "transparent",
+        backgroundColor: colors.surfaceSecondary,
         borderWidth: 1,
         // Colored for any of the 4 urgency tiers now, not just overdue
         // -- 4 days / 2 days / today / restant all get their own color,

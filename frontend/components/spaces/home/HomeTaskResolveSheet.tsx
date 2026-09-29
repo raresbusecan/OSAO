@@ -143,7 +143,7 @@ export function HomeTaskResolveSheet({ entry, onCancel, onResolve }: HomeTaskRes
                   style={{
                     height: 56,
                     borderRadius: radius.sm,
-                    backgroundColor: "transparent",
+                    backgroundColor: colors.surfaceSecondary,
                     borderWidth: 2,
                     borderColor: colors.onSurface,
                     flexDirection: "row",
@@ -189,7 +189,7 @@ export function HomeTaskResolveSheet({ entry, onCancel, onResolve }: HomeTaskRes
                   style={{
                     minHeight: 52,
                     borderRadius: radius.sm,
-                    backgroundColor: "transparent",
+                    backgroundColor: colors.surfaceSecondary,
                     borderWidth: 1,
                     borderColor: colors.border,
                     flexDirection: "row",

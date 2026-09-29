@@ -247,7 +247,7 @@ function Field({
           height: 44,
           paddingHorizontal: spacing.md,
           borderRadius: radius.sm,
-          backgroundColor: "transparent",
+          backgroundColor: colors.surfaceSecondary,
           borderWidth: 1,
           borderColor: colors.border,
           color: colors.onSurface,

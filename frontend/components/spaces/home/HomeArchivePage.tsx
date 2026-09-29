@@ -116,7 +116,7 @@ export function HomeArchivePage({ homeData, onBack }: HomeArchivePageProps) {
               justifyContent: "space-between",
               padding: spacing.lg,
               borderRadius: radius.sm,
-              backgroundColor: "transparent",
+              backgroundColor: colors.surfaceSecondary,
               borderWidth: 1,
               borderColor: colors.border,
               marginBottom: spacing.lg,
@@ -192,7 +192,7 @@ export function HomeArchivePage({ homeData, onBack }: HomeArchivePageProps) {
         </View>
 
         {visibleRows.length > 0 ? (
-          <View style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, overflow: "hidden" }}>
+          <View style={{ backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, overflow: "hidden" }}>
             {visibleRows.map((row, index) => (
               <ArchiveRow key={`${row.kind}-${row.id}`} row={row} colors={colors} spacing={spacing} radius={radius} last={index === visibleRows.length - 1} />
             ))}

@@ -215,7 +215,7 @@ export default function HomeSupplyForm({ onCancel, onSave, entry, onDelete }: Ho
         />
 
         {error ? (
-          <View style={{ marginTop: spacing.sm, padding: spacing.md, borderRadius: radius.sm, backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border }}>
+          <View style={{ marginTop: spacing.sm, padding: spacing.md, borderRadius: radius.sm, backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border }}>
             <Text style={{ fontSize: 13, color: colors.onSurface }}>{error}</Text>
           </View>
         ) : null}
@@ -316,7 +316,7 @@ function FormField({
         style={{
           minHeight: multiline ? 90 : 52,
           borderRadius: radius.sm,
-          backgroundColor: "transparent",
+          backgroundColor: colors.surfaceSecondary,
           borderWidth: isFocused ? 2 : 1,
           borderColor: isFocused ? colors.onSurface : colors.border,
           flexDirection: "row",

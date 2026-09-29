@@ -44,7 +44,7 @@ export function HomeNextSection({ items, onItemPress }: HomeNextSectionProps) {
             onPress={onItemPress ? () => onItemPress(item) : undefined}
             disabled={!onItemPress}
             style={{
-              backgroundColor: "transparent",
+              backgroundColor: colors.surfaceSecondary,
               borderWidth: 1,
               borderColor: colors.border,
               borderRadius: radius.sm,

@@ -83,7 +83,7 @@ export function HomeSupplyRestockSheet({ entry, onCancel, onConfirm }: HomeSuppl
               style={{
                 height: 56,
                 borderRadius: radius.sm,
-                backgroundColor: "transparent",
+                backgroundColor: colors.surfaceSecondary,
                 borderWidth: 2,
                 borderColor: colors.onSurface,
                 flexDirection: "row",

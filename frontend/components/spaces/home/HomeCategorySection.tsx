@@ -69,7 +69,7 @@ export function HomeCategorySection({
       {rows.length === 0 ? (
         <View
           style={{
-            backgroundColor: "transparent",
+            backgroundColor: colors.surfaceSecondary,
             borderWidth: 1,
             borderColor: colors.border,
             borderRadius: radius.sm,
@@ -84,7 +84,7 @@ export function HomeCategorySection({
       ) : (
         <View
           style={{
-            backgroundColor: "transparent",
+            backgroundColor: colors.surfaceSecondary,
             borderWidth: 1,
             borderColor: colors.border,
             borderRadius: radius.sm,

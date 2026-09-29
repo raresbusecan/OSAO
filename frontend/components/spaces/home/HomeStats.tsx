@@ -86,7 +86,7 @@ function StatCard({
         flex: 1,
         minHeight: 110,
         padding: spacing.lg,
-        backgroundColor: "transparent",
+        backgroundColor: colors.surfaceSecondary,
         borderWidth: 1,
         borderColor: colors.border,
         borderRadius: radius.sm,
