@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { severityColor, type SeverityTier } from "@/lib/statusColors";
+import { SwipeRow } from "@/components/spaces/SwipeRow";
 
 export type HomeCategoryRow = {
   id: string | number;
@@ -92,9 +93,9 @@ export function HomeCategorySection({
             marginBottom: spacing.xl,
           }}
         >
-          {rows.map((row, index) => (
+          {rows.map((row, index) => {
+            const rowContent = (
             <View
-              key={row.id}
               style={{
                 flexDirection: "row",
                 alignItems: "center",
@@ -104,6 +105,11 @@ export function HomeCategorySection({
                 borderBottomWidth:
                   index === rows.length - 1 ? 0 : StyleSheet.hairlineWidth,
                 borderBottomColor: colors.border,
+                // Explicit fill (not just inherited from the parent
+                // list container behind it) so the row stays visually
+                // opaque while SwipeRow drags it away from its own
+                // revealed action panel, below.
+                backgroundColor: colors.surfaceSecondary,
               }}
             >
               {/* Left, like Tasks' own resolve checkbox (HomeTasksPage.tsx)
@@ -194,7 +200,29 @@ export function HomeCategorySection({
                 </Pressable>
               ) : null}
             </View>
-          ))}
+            );
+
+            // Swipe is a shortcut on top of the icons above, not a
+            // replacement -- only added when there's a real onDelete
+            // to wire it to (every live caller today always provides
+            // one, but the prop itself stays optional). No onResolve
+            // means no left-swipe reveal at all (Documents/Expenses
+            // have no "Resolved" concept), same as the checkbox above
+            // being omitted for them.
+            return onRowDelete ? (
+              <SwipeRow
+                key={row.id}
+                onResolve={onRowResolve ? () => onRowResolve(row.id) : undefined}
+                onDelete={() => onRowDelete(row.id)}
+                cornerRadius={0}
+                colors={colors}
+              >
+                {rowContent}
+              </SwipeRow>
+            ) : (
+              <React.Fragment key={row.id}>{rowContent}</React.Fragment>
+            );
+          })}
         </View>
       )}
     </>
