@@ -363,6 +363,21 @@ class ItemController extends Controller
             }
         }
 
+        // A partial `metadata` object used to be a whole-column
+        // overwrite via the mass-update below -- silently dropping
+        // every sibling key the caller didn't happen to send. Not hit
+        // by the app today (every real *EntryToItemBody mapper always
+        // sends the FULL metadata object on every save, never a
+        // partial one -- confirmed by this session's own full-app QA
+        // sweep), but a live landmine for any future partial-update
+        // call. Merging is strictly safer than overwriting: a caller
+        // that already sends the full object gets the identical result
+        // either way (merge of "everything" over "everything" IS the
+        // new object), so this can't regress the current behavior.
+        if (array_key_exists('metadata', $data) && is_array($data['metadata'])) {
+            $data['metadata'] = array_merge($item->metadata ?? [], $data['metadata']);
+        }
+
         $item->update($data);
 
         return response()->json($item->load('user:id,name,email'));
