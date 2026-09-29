@@ -68,12 +68,70 @@ already match current best practice:
   (success/caution/warning/error) matches Cal.com's "monochrome
   actions" rule and Revolut's "accent colors for illustrations/status
   only, never buttons" rule almost exactly.
+- **Where color gets placed.** Checked by grep, not impression: only 2
+  places in the whole `components/spaces/` tree fill a card's entire
+  background with a semantic color; the actual pattern used 28 times
+  across 26 files is a small tinted icon chip (`${SPACE_IDENTITY_COLORS.x}1A`
+  — the color at ~10% opacity, behind a 32-42px icon only). That's
+  functionally identical to Notion's own pastel feature-card tints and
+  Revolut's "accent colors for illustrations only" rule — color marks
+  *what something is*, on a small contained shape, never *how big a
+  surface it covers*. Don't lose this discipline chasing "more color."
+- **Button shape.** A primary/CTA button is consistently a rounded
+  rectangle (`radius.md`/`radius.lg`, filled); pills (`radius.pill`)
+  are consistently reserved for tabs, filter chips, badges, and
+  circular icon-only buttons (back arrows, close buttons) — never a
+  primary action. This is exactly Notion's own explicit rule ("8px
+  rectangular buttons, not pills — a sober editorial choice") and
+  Cal.com/Revolut's split (pill for nav-pills/badges, rounded-rect for
+  real buttons). Already correct; don't introduce pill-shaped primary
+  buttons anywhere.
 
-## The one concrete, measurable gap: type weight is heavy everywhere
+## Two concrete, measurable gaps
 
-This is the actual, specific, fixable difference — not a vague
-"needs more polish" feeling. orgOS's `typography` scale in
-`theme.tsx`:
+Not vague "needs more polish" impressions — both counted directly
+against the actual component code, both fixable without touching the
+overall direction.
+
+### 1. Cards have no fill — only a border, on the SAME color as the page
+
+Checked by grep across `components/spaces/`: `backgroundColor:
+"transparent"` appears **135 times** on what are otherwise styled as
+cards (1px `borderColor: colors.border` alongside it, 157 times) —
+`colors.surfaceSecondary`/`surfaceTertiary` (the tokens that exist
+specifically for this) are used only **58 times combined**. In
+practice, most "cards" in the app are the exact same color as the
+page behind them, told apart only by a 1px outline — closer to a
+wireframe than a real surface.
+
+Every single reference app does the opposite: page background and
+card background are always two distinct tones, with the card reading
+as its own layer, THEN a hairline border on top of that (not instead
+of it):
+
+| App | Page background | Card background |
+|---|---|---|
+| Linear | `#010102` (canvas) | `#0f1011` (surface-1) + hairline |
+| Notion | `#f6f5f4` (surface) | `#ffffff` (card) + hairline |
+| Cal.com | `#ffffff` (canvas) | `#f5f5f5` (abstract) / `#ffffff` (product UI) + hairline |
+| Revolut | `#f4f4f4` (surface soft) | `#ffffff` (card) + hairline |
+| **orgOS (current)** | `colors.surface` | **same `colors.surface`** (transparent) + hairline |
+
+**Concrete, bounded suggestion for a future pass:** orgOS already has
+the right tokens sitting unused for this (`colors.surfaceSecondary`/
+`surfaceTertiary`) — swap a card's `backgroundColor: "transparent"` to
+`colors.surfaceSecondary` (keep the existing hairline border, don't
+remove it) wherever a card currently floats on the identical page
+color. This is the single change most likely to make the app read as
+"designed" rather than "outlined," bigger than the type-weight gap
+below. Same caveat as everything else here: touches nearly every
+screen, needs the user's go-ahead and a proper branch/qa pass, not a
+blind find-and-replace (a nested card-inside-a-card may legitimately
+want `surfaceTertiary` one step further, not the same token twice).
+
+### 2. Type weight is heavy everywhere
+
+orgOS's `typography` scale in `theme.tsx`:
 
 ```
 display:  26px / 800 / -0.5    title:   22px / 800 / -0.4
