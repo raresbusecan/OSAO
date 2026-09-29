@@ -214,7 +214,19 @@ export default function CalendarScreen() {
     const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(newTime.trim());
     const hh = timeMatch ? Math.min(23, Number(timeMatch[1])) : 9;
     const mm = timeMatch ? Math.min(59, Number(timeMatch[2])) : 0;
-    const dueAt = `${selected}T${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}:00`;
+    // `selected` + hh:mm is meant as the device's own LOCAL wall-clock
+    // time -- building it as a naive "YYYY-MM-DDTHH:mm:00" string (no
+    // offset) used to send that straight to the server, which parsed it
+    // as if it were ALREADY UTC (Laravel's datetime cast falls back to
+    // config('app.timezone')=UTC, never the user's own stored timezone).
+    // A 23:00 Bucharest (UTC+3) event landed 3 hours later, sometimes on
+    // the wrong day and even the wrong month. The multi-arg Date
+    // constructor below treats its numbers as LOCAL time (matching what
+    // the user actually meant), so .toISOString() now produces the
+    // correct UTC instant regardless of device timezone -- same pattern
+    // ExpenseDatePickerSheet/ExpensesAddBar already use correctly.
+    const [selectedYear, selectedMonth, selectedDay] = selected.split("-").map(Number);
+    const dueAt = new Date(selectedYear, selectedMonth - 1, selectedDay, hh, mm, 0).toISOString();
     const amount = involvesPurchase ? Number(newAmount.replace(",", ".")) : NaN;
 
     setSavingEvent(true);
