@@ -17,7 +17,16 @@ class DashboardController extends Controller
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        $now = now();
+        // Tagged with the user's own stored timezone (same pattern
+        // CalendarController/BudgetController already use), not the
+        // server's default (UTC) -- both the overdue/today/upcoming
+        // classification below (isToday(), the 7-day window) and the
+        // Monthly Expenses whereYear/whereMonth further down read off
+        // this SAME $now, so tagging it here fixes both at once. Found
+        // by qa-lead while verifying the sibling Budget fix: this
+        // controller had the identical timezone-blind pattern, its own
+        // comment even calling out it's meant to match Budget's rule.
+        $now = now($user->timezone ?? 'UTC');
 
         // Only Item::ACTIONABLE_TYPES -- everything else with a due_at
         // (car_fuel, car_maintenance, grocery_trip, home_expense,
@@ -100,10 +109,19 @@ class DashboardController extends Controller
         // (frontend/lib/dashboard/monthlyExpenses.ts). A space with
         // nothing this month is simply absent from `sources`, not listed
         // at 0. One query, bucketed in PHP by Item::SPENDING_TYPE_SPACE.
+        // whereYear/whereMonth would extract the month from due_at's
+        // raw STORED value (effectively UTC), ignoring $now's own
+        // timezone tag entirely -- same gotcha BudgetController's own
+        // monthWindowUtc() already works around. Converting $now's
+        // month boundaries to UTC first, then a whereBetween, keeps
+        // this in agreement with Budget's own per-category totals for
+        // the identical data (that's this query's own stated goal).
+        $monthStartUtc = $now->copy()->startOfMonth()->setTimezone('UTC');
+        $monthEndUtc = $now->copy()->endOfMonth()->setTimezone('UTC');
+
         $monthItems = Item::where('user_id', $user->id)
             ->whereIn('type', Item::SPENDING_TYPES)
-            ->whereYear('due_at', $now->year)
-            ->whereMonth('due_at', $now->month)
+            ->whereBetween('due_at', [$monthStartUtc, $monthEndUtc])
             ->get(['type', 'amount']);
 
         $totals = [];
