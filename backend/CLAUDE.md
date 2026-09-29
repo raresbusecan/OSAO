@@ -7,23 +7,34 @@ related, they're extensive and current.
 
 ## Controllers (`app/Http/Controllers/Api/`)
 
-- `AuthController.php` — register/login/logout/user. **Login/register
-  have no throttle middleware** (known issue, not yet fixed).
+- `AuthController.php` — register/login/logout/user. `/register` and
+  `/login` are both wrapped in a `throttle:auth` middleware group
+  (5/min/IP, defined in `AppServiceProvider::boot()`) — confirmed live
+  during the 2026-09-29 full-app QA sweep (hit a real 429 after 5 rapid
+  attempts). Was previously mis-documented here as missing.
 - `SpaceController.php` — CRUD on `spaces`, car-profile/home-profile
   sub-updates, space membership (`members`/`addMember`/`removeMember`).
+  `destroy` cascade-deletes the space's own items too (as of the
+  2026-09-29 QA-sweep fix) — `items.space_id` is `cascadeOnDelete`,
+  matching `car_profiles`/`home_profiles`/`space_members`.
 - `ItemController.php` — the workhorse. `index`/`store`/`show`/
   `update`/`destroy` (apiResource) + `myGrocery` (cross-space grocery
-  lists visible to the user) + item-level `members`. **Known issues:**
-  `update`'s grocery-list ownership check reads the item's *pre-update*
-  type, not the incoming one — lets a space member retype someone
-  else's item into `grocery_list`/`grocery_item`, bypassing `store()`'s
-  owner-only creation rule (IDOR, not yet fixed). `index` without
-  `space_id` filters by `user_id` only, unlike `show`/`update`/
+  lists visible to the user) + item-level `members`. `update` already
+  explicitly rejects any type change that crosses the grocery/non-
+  grocery boundary (checked BEFORE the pre-update-type ownership
+  check even runs) — confirmed live during the 2026-09-29 QA sweep
+  across 3 different retype attempts; this file used to document that
+  as a known, unfixed IDOR, but it no longer reproduces. `index`
+  without `space_id` filters by `user_id` only, unlike `show`/`update`/
   `destroy` (space-accessible) — a shared space's other-member items
-  don't show up in the generic list. `type` is validated as
-  `required|string|max:30` only, no enum — nothing stops a value
-  outside `Item::ACTIONABLE_TYPES`/`SPENDING_TYPES` or colliding with a
-  reserved type string.
+  don't show up in the generic list (still a real, open inconsistency,
+  unrelated to the two fixed items above). `type` is now whitelisted
+  against `Item::VALID_TYPES` (added 2026-09-29) — a value outside the
+  known set is rejected with a 422, not silently accepted. `amount`
+  now has a server-side `min:0` floor (added 2026-09-29) on both
+  `store`/`update`. A partial `metadata` object on `update` is now
+  merged over the item's existing metadata instead of overwriting the
+  whole column (added 2026-09-29).
 - `DashboardController.php` — "De făcut" (overdue/today/upcoming),
   scoped by `Item::ACTIONABLE_TYPES`/`RECURRING_ACTIONABLE_TYPES`.
   Filters strictly by `user_id` — unlike `CalendarController`'s

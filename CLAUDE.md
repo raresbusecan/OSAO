@@ -48,8 +48,15 @@ style (fill→border, see `frontend/CLAUDE.md`) applied across every
 screen. A full functional + dead-code audit was run 2026-09 — see the
 "Audit orgOS" artifact from that session, or re-derive: most findings
 haven't been fixed yet (e.g. `nextTaskOccurrence`'s month-rollover
-bug, `calendar.tsx`'s UTC/local date mismatch, the IDOR on
-`ItemController::update`).
+bug — still open). Two findings that WERE listed here as unfixed no
+longer reproduce, confirmed live during the 2026-09-29 full-app QA
+sweep: the IDOR on `ItemController::update` (now explicitly rejects
+any grocery/non-grocery type-boundary crossing) and Calendar's read-
+side UTC/local date mismatch (`CalendarController`'s own
+`$startUtc`/`$endUtc` fix) — that same sweep also found and fixed a
+DIFFERENT, write-side timezone bug in `calendar.tsx`'s custom-event
+creation (see `BACKLOG.md`'s Done section), so "Calendar timezone" as
+a topic isn't fully closed out, just these two specific instances.
 
 ## Dev environment
 
