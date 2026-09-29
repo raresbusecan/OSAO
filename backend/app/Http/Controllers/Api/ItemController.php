@@ -196,7 +196,14 @@ class ItemController extends Controller
             'priority'      => 'nullable|string|max:20',
             'due_at'        => 'nullable|date',
             'completed_at'  => 'nullable|date',
-            'amount'        => 'nullable|numeric',
+            // No type in the app has a real negative-amount concept
+            // (no refund/credit feature anywhere) -- every form already
+            // blocks it client-side, but nothing enforced it server-side.
+            // A full-app QA sweep demonstrated the gap silently corrupts
+            // "this month" spend totals (Budget, Dashboard, every
+            // Space's own stat card) when hit directly, bypassing the
+            // form.
+            'amount'        => 'nullable|numeric|min:0',
             'currency'      => 'nullable|string|max:3',
             'category'      => 'nullable|string|max:100',
             'recurrence'    => 'nullable|string|max:100',
@@ -295,7 +302,9 @@ class ItemController extends Controller
             'priority'      => 'nullable|string|max:20',
             'due_at'        => 'nullable|date',
             'completed_at'  => 'nullable|date',
-            'amount'        => 'nullable|numeric',
+            // Same reasoning as store() above -- no negative-amount
+            // concept exists anywhere in the app.
+            'amount'        => 'nullable|numeric|min:0',
             'currency'      => 'nullable|string|max:3',
             'category'      => 'nullable|string|max:100',
             'recurrence'    => 'nullable|string|max:100',
