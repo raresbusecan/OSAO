@@ -1,5 +1,5 @@
 import React, { useRef } from "react";
-import { View, Text, Pressable, ScrollView, StyleSheet, Animated } from "react-native";
+import { View, Text, Pressable, ScrollView, StyleSheet, Animated, Dimensions } from "react-native";
 import { Swipeable } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
@@ -295,6 +295,21 @@ function AddTaskRow({
 // (TaskRowCard's independent radius.sm card, or 0 for UpcomingRow's
 // flat divided-list rows) so the action panel's outer edge lines up
 // with the row instead of showing a mismatched square corner.
+// A swipe that clears this fraction of the screen width auto-fires
+// the action on release (no extra tap needed) -- same "commit swipe"
+// convention Mail/Gmail use for archive/delete. A shorter swipe still
+// reveals the colored panel (and it's still tappable, e.g. for anyone
+// who prefers a deliberate two-step tap) but SPRINGS BACK without
+// firing anything if released before this point -- that's the
+// necessary trade-off of a single auto-fire threshold: it can't both
+// "always stay open for a later tap" and "commit past a point," since
+// react-native-gesture-handler's Swipeable only has the one
+// open/closed snap threshold. 0.4 was picked as a reasonable middle
+// ground (deliberate, not a hair-trigger); tune SWIPE_TRIGGER_PERCENT
+// if that feels off in practice.
+const SWIPE_TRIGGER_PERCENT = 0.4;
+const SWIPE_TRIGGER_DISTANCE = Dimensions.get("window").width * SWIPE_TRIGGER_PERCENT;
+
 function TaskSwipeRow({
   onResolve,
   onDelete,
@@ -314,8 +329,21 @@ function TaskSwipeRow({
     <Swipeable
       ref={ref}
       friction={2}
-      overshootLeft={false}
-      overshootRight={false}
+      overshootLeft
+      overshootRight
+      leftThreshold={SWIPE_TRIGGER_DISTANCE}
+      rightThreshold={SWIPE_TRIGGER_DISTANCE}
+      // Fires once a swipe actually clears the threshold and is
+      // released (Swipeable snaps "open") -- direction 'left' means
+      // the LEFT action panel opened, i.e. the user swiped RIGHT
+      // (resolve); 'right' means the RIGHT panel opened, swiped LEFT
+      // (delete). Closes immediately after so the row doesn't sit
+      // stuck open once the action's already fired.
+      onSwipeableOpen={(direction) => {
+        ref.current?.close();
+        if (direction === "left") onResolve();
+        else onDelete();
+      }}
       renderLeftActions={(_progress: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>) => (
         <Pressable
           onPress={() => {
@@ -325,7 +353,7 @@ function TaskSwipeRow({
           accessibilityRole="button"
           accessibilityLabel="Swipe to resolve"
           style={{
-            width: 80,
+            flex: 1,
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: colors.success,
@@ -333,7 +361,13 @@ function TaskSwipeRow({
             borderBottomLeftRadius: cornerRadius,
           }}
         >
-          <Animated.View style={{ transform: [{ scale: dragX.interpolate({ inputRange: [0, 80], outputRange: [0.6, 1], extrapolate: "clamp" }) }] }}>
+          <Animated.View
+            style={{
+              transform: [
+                { scale: dragX.interpolate({ inputRange: [0, SWIPE_TRIGGER_DISTANCE], outputRange: [0.6, 1.15], extrapolate: "clamp" }) },
+              ],
+            }}
+          >
             <Ionicons name="checkmark" size={20} color="#fff" />
           </Animated.View>
         </Pressable>
@@ -347,7 +381,7 @@ function TaskSwipeRow({
           accessibilityRole="button"
           accessibilityLabel="Swipe to delete"
           style={{
-            width: 80,
+            flex: 1,
             alignItems: "center",
             justifyContent: "center",
             backgroundColor: colors.error,
@@ -355,7 +389,13 @@ function TaskSwipeRow({
             borderBottomRightRadius: cornerRadius,
           }}
         >
-          <Animated.View style={{ transform: [{ scale: dragX.interpolate({ inputRange: [-80, 0], outputRange: [1, 0.6], extrapolate: "clamp" }) }] }}>
+          <Animated.View
+            style={{
+              transform: [
+                { scale: dragX.interpolate({ inputRange: [-SWIPE_TRIGGER_DISTANCE, 0], outputRange: [1.15, 0.6], extrapolate: "clamp" }) },
+              ],
+            }}
+          >
             <Ionicons name="trash" size={20} color="#fff" />
           </Animated.View>
         </Pressable>
