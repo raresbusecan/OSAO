@@ -100,6 +100,21 @@ export default function SpaceDetail() {
   const [space, setSpace] = useState<any>(null);
   const [profile, setProfile] = useState<SpaceProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  // Bumped every time this screen regains focus (see the existing
+  // "RELOAD WHEN SCREEN GETS FOCUS" useFocusEffect below) -- folded
+  // into each Dashboard's own `key` prop further down so navigating
+  // away (Spaces tab, another tab, anywhere) and back always remounts
+  // it fresh. Without this, re-selecting the SAME space from Spaces
+  // left every internal "which sub-view am I on" flag (activeCategory,
+  // tasksPageVisible, ...) exactly as the user left it instead of
+  // resetting to the main dashboard -- this screen never unmounts
+  // between visits, so nothing else ever cleared that state. Also
+  // fixes the same gap for switching between two DIFFERENT spaces of
+  // the same kind (two Car spaces, ...): only GroceryDashboard had any
+  // remount protection before (`key={space.id}`), and even that alone
+  // doesn't help re-entering the identical space, since `space.id`
+  // doesn't change then.
+  const [visitId, setVisitId] = useState(0);
 
   // Reset synchronously, during render, the moment the route's `id`
   // changes to a DIFFERENT space -- not in an effect, which would still
@@ -916,6 +931,9 @@ export default function SpaceDetail() {
   useFocusEffect(
     useCallback(() => {
       load();
+      // See visitId's own declaration above -- forces every Dashboard
+      // below to remount on each fresh visit to this screen.
+      setVisitId((v) => v + 1);
     }, [load]),
   );
 
@@ -1163,6 +1181,7 @@ export default function SpaceDetail() {
         testID="space-detail-screen"
       >
         <CarDashboard
+          key={`${space.id}-${visitId}`}
           space={space}
           carData={carData}
           profile={profile as CarProfile | null}
@@ -1210,6 +1229,7 @@ export default function SpaceDetail() {
         testID="space-detail-screen"
       >
         <HomeDashboard
+          key={`${space.id}-${visitId}`}
           space={space}
           homeData={homeData}
           profile={profile as HomeProfile | null}
@@ -1264,14 +1284,15 @@ export default function SpaceDetail() {
         }}
         testID="space-detail-screen"
       >
-        {/* key={space.id} forces a full remount on every space switch --
-            GroceryDashboard keeps its own lists/items in local state, and
-            without this it kept the PREVIOUS Grocery space's data on
-            screen (a real re-render, not a fresh mount) for as long as
-            its own data fetch took to resolve, which read as "the new
-            space inherited the old one's list" while switching. */}
+        {/* key includes visitId (see its own declaration above), not just
+            space.id -- space.id alone forces a remount on switching
+            BETWEEN spaces (originally added so GroceryDashboard's own
+            local-state lists/items didn't briefly show the PREVIOUS
+            Grocery space's data while switching), but does nothing when
+            re-entering the SAME space, since space.id never changes
+            then. visitId covers that case too, for all 4 dashboards. */}
         <GroceryDashboard
-          key={space.id}
+          key={`${space.id}-${visitId}`}
           space={space}
           onEdit={handleEdit}
         />
@@ -1303,6 +1324,7 @@ export default function SpaceDetail() {
         testID="space-detail-screen"
       >
         <ExpensesDashboard
+          key={`${space.id}-${visitId}`}
           space={space}
           expensesData={expensesData}
           onEdit={handleEdit}
