@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SwipeRow } from "@/components/spaces/SwipeRow";
+import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 
 import type { HomeData } from "./home.data.types";
 import type { HomeTaskEntry } from "@/lib/spaces/home/home.types";
@@ -72,7 +73,7 @@ export function HomeTasksPage({
   const findEntry = (id: string) => homeData.taskEntries.find((t) => t.id === id)!;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+    <SwipeBackView onBack={onBack} style={{ backgroundColor: colors.surface }}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: 100 }}
@@ -219,7 +220,7 @@ export function HomeTasksPage({
           )}
         </View>
       </ScrollView>
-    </View>
+    </SwipeBackView>
   );
 }
 
