@@ -1,5 +1,6 @@
-import React from "react";
-import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
+import React, { useRef } from "react";
+import { View, Text, Pressable, ScrollView, StyleSheet, Animated } from "react-native";
+import { Swipeable } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 
@@ -282,6 +283,89 @@ function AddTaskRow({
   );
 }
 
+// Swipe right (drag rightward, uncovering the LEFT side) resolves;
+// swipe left (uncovering the RIGHT side) deletes -- the same
+// convention iOS Mail/Reminders use, and the same two actions the
+// checkbox/trash icon already offer on every row. This is a shortcut
+// on top of those, not a replacement -- both icons stay visible, and
+// the swipe fires the EXACT SAME onToggle/onDelete callback a tap on
+// them already would (same confirm-before-delete flow, same
+// purchase-price-prompt flow), never a second parallel action path.
+// `cornerRadius` matches whatever the wrapped row's own corners are
+// (TaskRowCard's independent radius.sm card, or 0 for UpcomingRow's
+// flat divided-list rows) so the action panel's outer edge lines up
+// with the row instead of showing a mismatched square corner.
+function TaskSwipeRow({
+  onResolve,
+  onDelete,
+  cornerRadius,
+  colors,
+  children,
+}: {
+  onResolve: () => void;
+  onDelete: () => void;
+  cornerRadius: number;
+  colors: any;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<Swipeable>(null);
+
+  return (
+    <Swipeable
+      ref={ref}
+      friction={2}
+      overshootLeft={false}
+      overshootRight={false}
+      renderLeftActions={(_progress: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>) => (
+        <Pressable
+          onPress={() => {
+            ref.current?.close();
+            onResolve();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Swipe to resolve"
+          style={{
+            width: 80,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: colors.success,
+            borderTopLeftRadius: cornerRadius,
+            borderBottomLeftRadius: cornerRadius,
+          }}
+        >
+          <Animated.View style={{ transform: [{ scale: dragX.interpolate({ inputRange: [0, 80], outputRange: [0.6, 1], extrapolate: "clamp" }) }] }}>
+            <Ionicons name="checkmark" size={20} color="#fff" />
+          </Animated.View>
+        </Pressable>
+      )}
+      renderRightActions={(_progress: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>) => (
+        <Pressable
+          onPress={() => {
+            ref.current?.close();
+            onDelete();
+          }}
+          accessibilityRole="button"
+          accessibilityLabel="Swipe to delete"
+          style={{
+            width: 80,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: colors.error,
+            borderTopRightRadius: cornerRadius,
+            borderBottomRightRadius: cornerRadius,
+          }}
+        >
+          <Animated.View style={{ transform: [{ scale: dragX.interpolate({ inputRange: [-80, 0], outputRange: [1, 0.6], extrapolate: "clamp" }) }] }}>
+            <Ionicons name="trash" size={20} color="#fff" />
+          </Animated.View>
+        </Pressable>
+      )}
+    >
+      {children}
+    </Swipeable>
+  );
+}
+
 function Checkbox({ onPress, colors }: { onPress: () => void; colors: any }) {
   return (
     <Pressable
@@ -326,6 +410,7 @@ function TaskRowCard({
   const color = tierColor(row.tier, colors);
 
   return (
+    <TaskSwipeRow onResolve={onToggle} onDelete={onDelete} cornerRadius={radius.sm} colors={colors}>
     <View
       style={{
         flexDirection: "row",
@@ -365,6 +450,7 @@ function TaskRowCard({
         <Ionicons name="trash-outline" size={16} color={colors.error} />
       </Pressable>
     </View>
+    </TaskSwipeRow>
   );
 }
 
@@ -430,6 +516,7 @@ function UpcomingRow({
   onDelete: () => void;
 }) {
   return (
+    <TaskSwipeRow onResolve={onToggle} onDelete={onDelete} cornerRadius={0} colors={colors}>
     <View
       style={{
         flexDirection: "row",
@@ -439,6 +526,7 @@ function UpcomingRow({
         paddingVertical: spacing.md,
         borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
         borderBottomColor: colors.border,
+        backgroundColor: colors.surfaceSecondary,
       }}
     >
       <Checkbox onPress={onToggle} colors={colors} />
@@ -455,5 +543,6 @@ function UpcomingRow({
         <Ionicons name="trash-outline" size={16} color={colors.error} />
       </Pressable>
     </View>
+    </TaskSwipeRow>
   );
 }
