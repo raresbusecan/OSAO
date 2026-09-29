@@ -90,13 +90,34 @@ class BudgetController extends Controller
     // recurring commitments (see recurringMonthlyForLabel above) on top
     // of the real dated transactions, so "spent" is never missing a
     // standing bill just because nothing was logged with today's date.
+    // $month is expected to already carry the user's OWN timezone (see
+    // index()/spaceDetail()'s own $now = Carbon::now($userTz)) -- start/
+    // end of month computed in THAT timezone, then converted to UTC for
+    // the raw SQL comparison below. whereYear()/whereMonth() (the
+    // previous approach) run directly against due_at's stored value
+    // with zero timezone awareness -- the exact same gotcha
+    // CalendarController's own $startUtc/$endUtc already works around
+    // for its whereBetween query. Found by this session's full-app QA
+    // sweep, live-reproduced: a purchase the user picked as "next
+    // month" (e.g. just past midnight, Bucharest) silently counted
+    // toward the CURRENT month's spend here, while Calendar (already
+    // timezone-aware) correctly showed it in the month the user meant.
+    private function monthWindowUtc(Carbon $month): array
+    {
+        return [
+            $month->copy()->startOfMonth()->setTimezone('UTC'),
+            $month->copy()->endOfMonth()->setTimezone('UTC'),
+        ];
+    }
+
     private function monthlySumForLabel(int $userId, array $types, Carbon $month, string $label): float
     {
+        [$startUtc, $endUtc] = $this->monthWindowUtc($month);
+
         $dated = $types
             ? (float) Item::where('user_id', $userId)
                 ->whereIn('type', $types)
-                ->whereYear('due_at', $month->year)
-                ->whereMonth('due_at', $month->month)
+                ->whereBetween('due_at', [$startUtc, $endUtc])
                 ->sum('amount')
             : 0.0;
 
@@ -223,7 +244,8 @@ class BudgetController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $now = Carbon::now();
+        $userTz = $user->timezone ?? 'UTC';
+        $now = Carbon::now($userTz);
         $lastMonth = $now->copy()->subMonthNoOverflow();
 
         $this->archiveCompletedMonths($user->id, $lastMonth);
@@ -274,23 +296,23 @@ class BudgetController extends Controller
             // everyone early on. Whichever month it came from is labeled
             // in the UI (BudgetSpaceDetailPage/budget.tsx) so it's never
             // ambiguous which one is shown.
+            [$thisMonthStartUtc, $thisMonthEndUtc] = $this->monthWindowUtc($now);
             $topItem = $types
                 ? Item::where('user_id', $user->id)
                     ->whereIn('type', $types)
                     ->whereNotNull('amount')
-                    ->whereYear('due_at', $now->year)
-                    ->whereMonth('due_at', $now->month)
+                    ->whereBetween('due_at', [$thisMonthStartUtc, $thisMonthEndUtc])
                     ->orderByDesc('amount')
                     ->first(['title', 'amount'])
                 : null;
             $biggestFromLastMonth = false;
 
             if (!$topItem && $types) {
+                [$lastMonthStartUtc, $lastMonthEndUtc] = $this->monthWindowUtc($lastMonth);
                 $topItem = Item::where('user_id', $user->id)
                     ->whereIn('type', $types)
                     ->whereNotNull('amount')
-                    ->whereYear('due_at', $lastMonth->year)
-                    ->whereMonth('due_at', $lastMonth->month)
+                    ->whereBetween('due_at', [$lastMonthStartUtc, $lastMonthEndUtc])
                     ->orderByDesc('amount')
                     ->first(['title', 'amount']);
                 $biggestFromLastMonth = (bool) $topItem;
@@ -390,7 +412,7 @@ class BudgetController extends Controller
     public function spaceDetail(Request $request, string $category)
     {
         $user = $request->user();
-        $now = Carbon::now();
+        $now = Carbon::now($user->timezone ?? 'UTC');
         $types = $this->typesForLabel($category);
 
         if (!$types) {
