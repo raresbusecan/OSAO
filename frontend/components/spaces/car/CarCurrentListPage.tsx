@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import { buildCarRecentItems } from "./utils/carEntries";
 import type { CarRecentItem } from "./utils/carEntries.types";
 import type { CarData } from "./car.data.types";
@@ -89,6 +90,7 @@ export function CarCurrentListPage({
   }, [activeEntries, activeTab]);
 
   return (
+    <SwipeBackView onBack={onBack}>
     <ScrollView
       testID="car-current-list-page"
       showsVerticalScrollIndicator={false}
@@ -278,5 +280,6 @@ export function CarCurrentListPage({
         </View>
       )}
     </ScrollView>
+    </SwipeBackView>
   );
 }

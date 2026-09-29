@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { View, Text, ScrollView, Pressable, Modal, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import type { ExpensesData } from "./expenses.data.types";
 import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
 import { ExpensesListSection } from "./ExpensesListSection";
@@ -60,6 +61,7 @@ export function ExpensesDetailPage({ expensesData, onBack, onEntryPress }: Expen
   );
 
   return (
+    <SwipeBackView onBack={onBack}>
     <ScrollView
       testID="expenses-detail-page"
       showsVerticalScrollIndicator={false}
@@ -214,5 +216,6 @@ export function ExpensesDetailPage({ expensesData, onBack, onEntryPress }: Expen
       {/* LIST */}
       <ExpensesListSection entries={filteredEntries} onEntryPress={onEntryPress} />
     </ScrollView>
+    </SwipeBackView>
   );
 }

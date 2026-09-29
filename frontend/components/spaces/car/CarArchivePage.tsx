@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import type { CarData } from "./car.data.types";
 import { getArchivedCarRecords } from "@/lib/spaces/car/calculations/expenses.calculations";
 import { formatCarDate, formatCarNumber } from "./utils/carFormatters";
@@ -33,6 +34,7 @@ export function CarArchivePage({ carData, onBack, onRecordPress }: CarArchivePag
   const records = useMemo(() => getArchivedCarRecords(carData), [carData]);
 
   return (
+    <SwipeBackView onBack={onBack}>
     <ScrollView
       testID="car-archive-page"
       showsVerticalScrollIndicator={false}
@@ -200,5 +202,6 @@ export function CarArchivePage({ carData, onBack, onRecordPress }: CarArchivePag
         </View>
       )}
     </ScrollView>
+    </SwipeBackView>
   );
 }

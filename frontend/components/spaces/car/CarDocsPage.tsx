@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import type { CarData } from "./car.data.types";
 import { getDocumentStatus, type DocumentStatus } from "@/lib/spaces/car/calculations/dashboard.calculations";
 import { formatCarDate, formatCarNumber } from "./utils/carFormatters";
@@ -55,6 +56,7 @@ export function CarDocsPage({ carData, onBack, onRecordPress }: CarDocsPageProps
   }, [carData.documentEntries]);
 
   return (
+    <SwipeBackView onBack={onBack}>
     <ScrollView
       testID="car-docs-page"
       showsVerticalScrollIndicator={false}
@@ -173,5 +175,6 @@ export function CarDocsPage({ carData, onBack, onRecordPress }: CarDocsPageProps
         </View>
       )}
     </ScrollView>
+    </SwipeBackView>
   );
 }

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, ScrollView, Pressable, Modal } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import { notifyAction } from "@/lib/confirm";
 import type { GroceryItem, GroceryList } from "@/lib/spaces/grocery/grocery.types";
 import { findGroceryItemByName, getItemsForList } from "@/lib/spaces/grocery/grocery.calculations";
@@ -365,6 +366,7 @@ export function GroceryRecipesPage({
 
   return (
     <>
+    <SwipeBackView onBack={onBack} style={{ backgroundColor: colors.surface }}>
     <ScrollView
       style={{ backgroundColor: colors.surface }}
       showsVerticalScrollIndicator={false}
@@ -877,6 +879,7 @@ export function GroceryRecipesPage({
         )
       ) : null}
     </ScrollView>
+    </SwipeBackView>
 
     <GroceryNewListModal
       visible={creatingList}

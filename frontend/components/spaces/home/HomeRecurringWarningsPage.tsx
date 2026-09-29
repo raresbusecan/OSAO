@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme, type ThemeColors } from "@/lib/theme";
 import { severityColor, severityTint } from "@/lib/statusColors";
+import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 
 import type { HomeData } from "./home.data.types";
 import {
@@ -45,7 +46,7 @@ export function HomeRecurringWarningsPage({ homeData, onBack, onResolvePress }: 
   const { rows } = getRecurringTaskWarnings(homeData);
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+    <SwipeBackView onBack={onBack} style={{ backgroundColor: colors.surface }}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: 100 }}
@@ -132,6 +133,6 @@ export function HomeRecurringWarningsPage({ homeData, onBack, onResolvePress }: 
           </View>
         )}
       </ScrollView>
-    </View>
+    </SwipeBackView>
   );
 }

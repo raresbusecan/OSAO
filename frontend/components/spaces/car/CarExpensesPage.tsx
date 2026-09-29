@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, Switch, Modal, StyleSheet } from "re
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import type { CarData } from "./car.data.types";
 import {
   getCarExpenseRecords,
@@ -331,6 +332,7 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
   );
 
   return (
+    <SwipeBackView onBack={onBack}>
     <ScrollView
       testID="car-expenses-page"
       showsVerticalScrollIndicator={false}
@@ -1048,5 +1050,6 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
         </>
       )}
     </ScrollView>
+    </SwipeBackView>
   );
 }

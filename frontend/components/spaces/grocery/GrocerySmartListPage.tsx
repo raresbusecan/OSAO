@@ -2,6 +2,7 @@ import React, { useMemo, useState } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import { notifyAction } from "@/lib/confirm";
 import type { GroceryItem, GroceryList } from "@/lib/spaces/grocery/grocery.types";
 import { findGroceryItemByName, getItemsForList, groupByCategory } from "@/lib/spaces/grocery/grocery.calculations";
@@ -242,6 +243,7 @@ export function GrocerySmartListPage({
 
   return (
     <>
+    <SwipeBackView onBack={onBack} style={{ backgroundColor: colors.surface }}>
     <ScrollView
       style={{ backgroundColor: colors.surface }}
       showsVerticalScrollIndicator={false}
@@ -639,6 +641,7 @@ export function GrocerySmartListPage({
         </>
       )}
     </ScrollView>
+    </SwipeBackView>
 
     <GroceryNewListModal
       visible={creatingList}

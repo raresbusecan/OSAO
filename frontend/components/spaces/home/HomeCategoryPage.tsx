@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { View, Text, TextInput, Pressable, ScrollView, LayoutAnimation, Platform, UIManager } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import { HomeCategorySection, type HomeCategoryRow } from "./HomeCategorySection";
 import { parseLeadingNumber, type HomeCategoryField } from "./homeCategoryConfig";
 import { HomeDatePickerSheet } from "./HomeDatePickerSheet";
@@ -171,6 +172,7 @@ export function HomeCategoryPage({
 
   return (
     <>
+    <SwipeBackView onBack={onBack}>
     <ScrollView
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 150 }}
@@ -468,6 +470,7 @@ export function HomeCategoryPage({
         onRowResolve={onResolve ? (id) => onResolve(String(id)) : undefined}
       />
     </ScrollView>
+    </SwipeBackView>
 
     {datePickerFor ? (
       <HomeDatePickerSheet

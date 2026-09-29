@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import type { GroceryItem, GroceryCategory } from "@/lib/spaces/grocery/grocery.types";
 import { getGroceryProgress, groupGroceryItemsByCategory } from "@/lib/spaces/grocery/grocery.calculations";
 import { useRecipes } from "@/lib/spaces/grocery/recipeMatching";
@@ -100,7 +101,7 @@ export function GroceryShoppingListPage({
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+    <SwipeBackView onBack={onBack} style={{ backgroundColor: colors.surface }}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
@@ -338,6 +339,6 @@ export function GroceryShoppingListPage({
         onSave={handleSave}
         onDelete={handleDelete}
       />
-    </View>
+    </SwipeBackView>
   );
 }

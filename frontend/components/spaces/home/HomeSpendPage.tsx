@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, StyleSheet, Modal } from "react-nati
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import type { HomeData } from "./home.data.types";
 import type { HomeProfile } from "@/lib/spaces/spaceProfile";
 import {
@@ -186,6 +187,7 @@ export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: Home
   );
 
   return (
+    <SwipeBackView onBack={onBack}>
     <ScrollView
       testID="home-spend-page"
       showsVerticalScrollIndicator={false}
@@ -518,5 +520,6 @@ export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: Home
         </>
       )}
     </ScrollView>
+    </SwipeBackView>
   );
 }

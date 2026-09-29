@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme, type ThemeColors } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import { severityColor, severityTint } from "@/lib/statusColors";
+import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 
 import type { HomeData } from "./home.data.types";
 import type { HomeSupplyEntry } from "@/lib/spaces/home/home.types";
@@ -52,7 +53,7 @@ export function HomeSuppliesPage({ homeData, onBack, onAdd, onEdit, onRestock }:
   const entries = homeData.supplyEntries;
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+    <SwipeBackView onBack={onBack} style={{ backgroundColor: colors.surface }}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: 100 }}
@@ -161,6 +162,6 @@ export function HomeSuppliesPage({ homeData, onBack, onAdd, onEdit, onRestock }:
           </View>
         )}
       </ScrollView>
-    </View>
+    </SwipeBackView>
   );
 }

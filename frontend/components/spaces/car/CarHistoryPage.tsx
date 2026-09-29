@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, Modal, StyleSheet } from "react-nati
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import { buildCarRecentItems } from "./utils/carEntries";
 import type { CarRecentItem } from "./utils/carEntries.types";
 import type { CarData } from "./car.data.types";
@@ -166,6 +167,7 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
   }, [pastDashboardEntries, activeTab, period]);
 
   return (
+    <SwipeBackView onBack={onBack}>
     <ScrollView
       testID="car-history-page"
       showsVerticalScrollIndicator={false}
@@ -620,5 +622,6 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
         </View>
       )}
     </ScrollView>
+    </SwipeBackView>
   );
 }
