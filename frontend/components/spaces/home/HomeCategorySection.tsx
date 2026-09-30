@@ -193,7 +193,7 @@ export function HomeCategorySection({
                 <Pressable
                   testID={`home-row-delete-${row.id}`}
                   onPress={() => onRowDelete(row.id)}
-                  hitSlop={14}
+                  hitSlop={{ top: 14, bottom: 14, left: 8, right: 14 }}
                   style={{ padding: 2 }}
                 >
                   <Ionicons name="trash-outline" size={16} color={colors.error} />

@@ -364,7 +364,7 @@ function TaskRowCard({
       </Pressable>
       {/* Direct delete, same trash icon/color as HomeCategorySection's
           own row delete -- no longer only reachable via the edit form. */}
-      <Pressable onPress={onDelete} hitSlop={14} accessibilityRole="button" accessibilityLabel="Delete task" style={{ padding: 2 }}>
+      <Pressable onPress={onDelete} hitSlop={{ top: 14, bottom: 14, left: 8, right: 14 }} accessibilityRole="button" accessibilityLabel="Delete task" style={{ padding: 2 }}>
         <Ionicons name="trash-outline" size={16} color={colors.error} />
       </Pressable>
     </View>
@@ -457,7 +457,7 @@ function UpcomingRow({
         <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>{row.dueDate ? formatDate(row.dueDate) : "Fără dată"}</Text>
         <Ionicons name="chevron-forward" size={15} color={colors.onSurfaceTertiary} />
       </Pressable>
-      <Pressable onPress={onDelete} hitSlop={14} accessibilityRole="button" accessibilityLabel="Delete task" style={{ padding: 2 }}>
+      <Pressable onPress={onDelete} hitSlop={{ top: 14, bottom: 14, left: 8, right: 14 }} accessibilityRole="button" accessibilityLabel="Delete task" style={{ padding: 2 }}>
         <Ionicons name="trash-outline" size={16} color={colors.error} />
       </Pressable>
     </View>
