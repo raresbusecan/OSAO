@@ -53,6 +53,20 @@ export function SwipeRow({ onResolve, onDelete, cornerRadius, colors, children }
     <Swipeable
       ref={ref}
       friction={2}
+      // Default is 10px each side (react-native-gesture-handler's own
+      // Swipeable.js maps this straight to activeOffsetX: [-10, 10] on
+      // its internal PanGestureHandler) -- comfortably inside normal
+      // hand jitter during a long-press hold. Rows wrapped in this now
+      // also carry a drag-to-reorder long-press (see HomeTasksPage's
+      // UpcomingRow, the pilot for that feature) on the same nested
+      // Pressable; qa-lead flagged that jitter crossing this row's own
+      // swipe-activation threshold mid-hold would let the Swipeable
+      // steal the gesture and silently cancel the pending long-press.
+      // Widened well past normal jitter -- a real intentional swipe
+      // moves far more than 20px before its own trigger point anyway
+      // (see TRIGGER_DISTANCE below), so this costs nothing there.
+      dragOffsetFromLeftEdge={20}
+      dragOffsetFromRightEdge={20}
       // Overshoot OFF, now that the action panel's own width IS
       // TRIGGER_DISTANCE (see the panel width comment above) -- with
       // overshoot disabled, Swipeable clamps the drag flat at
