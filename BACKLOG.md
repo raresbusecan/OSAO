@@ -13,6 +13,28 @@ one up like any other "Open" item once nothing more pressing is ahead
 of it. Mark it `[from: <task>]` so there's a trail back to how it was
 found.
 
+### `spaces.created_at` has only 1-second precision, so `->latest()`'s tie order is undefined for same-second rows
+
+**Where:** `spaces` migration (`created_at`/`updated_at` are a plain
+Laravel `timestamp()` column, not `timestamp(3)`/`timestamp(6)`), read
+by `SpaceController::index()`'s `->latest()` (the fallback order for
+any space with `sort_order` still NULL, i.e. never manually reordered).
+Confirmed live: querying `spaces` directly showed 3 real rows (ids
+61/62/63) sharing the exact same `created_at` value
+(`2026-09-28 16:32:22`) down to the second. When two or more spaces
+are created within the same second, MySQL's ORDER BY tie-break among
+equal `created_at` values isn't guaranteed newest-first (or any
+particular order) — so the "everything else falls back to newest-first"
+default a user would expect can visibly misorder same-second creates.
+Pre-existing behavior (the `->latest()` call isn't new, `sort_order`
+just got appended before it), not a regression from the drag-reorder
+work, and doesn't affect manually-ordered spaces at all (those sort by
+the new integer `sort_order` column, unaffected by timestamp
+precision). Low real-world impact — creating two spaces in the same
+UI action within the same second is rare — but a one-line fix
+(`timestamp(3)` or an explicit `->orderBy('id', 'desc')` tiebreaker)
+would close it if it's ever worth doing. [from: drag-reorder-spaces qa]
+
 ### Stray leftover test user in the live `lifeos` DB, not from this session
 
 **Where:** `users` table, id 38, `qa-home-widget-test@example.com` (no
