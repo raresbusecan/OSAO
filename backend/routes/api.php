@@ -47,6 +47,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', SyncUserTimezone::class])->gr
 
     Route::get('/spaces', [SpaceController::class, 'index']);
     Route::post('/spaces', [SpaceController::class, 'store']);
+    Route::patch('/spaces/reorder', [SpaceController::class, 'reorder']);
     Route::get('/spaces/{id}', [SpaceController::class, 'show']);
     Route::put('/spaces/{id}', [SpaceController::class, 'update']);
     Route::delete('/spaces/{id}', [SpaceController::class, 'destroy']);

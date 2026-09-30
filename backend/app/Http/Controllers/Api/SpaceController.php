@@ -22,8 +22,16 @@ class SpaceController extends Controller
         // and `fn ($s) => $s->is_owner = ...` returns the assignment's own
         // value, silently truncating the list right after the first
         // not-owned space.
+        // Manually-ordered spaces (sort_order set via reorder() below) come
+        // first, in that order; anything never dragged falls back to the
+        // pre-existing newest-first behavior -- MySQL sorts NULL before 0 in
+        // ASC order, so `sort_order IS NULL` (0/1) has to lead the ORDER BY
+        // to push the untouched spaces after the manually-ordered ones
+        // instead of before them.
         $spaces = Space::accessibleBy($request->user())
             ->with(['carProfile', 'homeProfile'])
+            ->orderByRaw('sort_order IS NULL')
+            ->orderBy('sort_order')
             ->latest()
             ->get()
             ->each(function (Space $space) use ($request) {
@@ -101,6 +109,41 @@ class SpaceController extends Controller
         return response()->json([
             'message' => 'Space deleted successfully.',
         ]);
+    }
+
+    /**
+     * Persists the drag-to-reorder result from the Spaces tab's card grid.
+     * `order` is the full list of space ids in their new display order --
+     * anything in it that isn't actually accessibleBy this user is silently
+     * dropped rather than erroring the whole request (a stale client-side
+     * list -- e.g. a space someone else just removed them from -- shouldn't
+     * block reordering the rest). Ids the user can see but that were left
+     * OUT of `order` keep whatever sort_order they already had; the
+     * frontend always sends its full visible list, so in practice this
+     * only matters if a client sends a partial one.
+     */
+    public function reorder(Request $request) {
+        $validated = $request->validate([
+            'order' => ['required', 'array', 'min:1'],
+            'order.*' => ['integer'],
+        ]);
+
+        $accessibleIds = Space::accessibleBy($request->user())
+            ->whereIn('id', $validated['order'])
+            ->pluck('id')
+            ->all();
+        $accessibleIds = array_flip($accessibleIds);
+
+        $position = 0;
+        foreach ($validated['order'] as $id) {
+            if (!isset($accessibleIds[$id])) {
+                continue;
+            }
+            Space::where('id', $id)->update(['sort_order' => $position]);
+            $position++;
+        }
+
+        return response()->json(['message' => 'Order updated.']);
     }
 
     /**

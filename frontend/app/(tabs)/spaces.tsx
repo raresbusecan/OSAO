@@ -5,6 +5,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, useFocusEffect } from "expo-router";
+import DraggableFlatList, { ScaleDecorator, type RenderItemParams } from "react-native-draggable-flatlist";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { REFRESH_EVENT } from "./_layout";
@@ -159,16 +160,169 @@ export default function Spaces() {
     }
   };
 
+  // Long-press-to-drag (see renderSpaceCard's onLongPress={drag}) reorders
+  // the grid immediately, on-screen -- DraggableFlatList already gives us
+  // the final array in the callback, so this is applied optimistically
+  // (setSpaces first) and only rolled back if the server call fails, same
+  // pattern every other save-then-revert flow in this app uses.
+  const handleReorderSpaces = async (newOrder: any[]) => {
+    const previous = spaces;
+    setSpaces(newOrder);
+    try {
+      await api.reorderSpaces(newOrder.map((s) => s.id));
+    } catch (error: any) {
+      setSpaces(previous);
+      notifyAction("Nu am putut salva ordinea", error?.message || "A apărut o eroare.");
+    }
+  };
+
+  const renderSpaceCard = ({ item: s, drag, isActive }: RenderItemParams<any>) => {
+    // Gray subtitle under the name, from the same per-space profile the
+    // edit button already loads -- Model for Car, County for Home.
+    // Nothing for a type with no profile.
+    const profile = profiles[s.id] ?? null;
+    const kind = detectSpaceType(s, profile);
+    const identityColor = SPACE_IDENTITY_COLORS[kind] ?? colors.onSurface;
+    const cardSubtitle =
+      kind === "car"
+        ? (profile as CarProfile | null)?.model
+        : kind === "home"
+          ? (profile as HomeProfile | null)?.county
+          : undefined;
+
+    return (
+      <ScaleDecorator>
+        <Pressable
+          key={s.id}
+          testID={`space-card-${s.id}`}
+          onPress={() => router.push(`/${s.id}` as any)}
+          onLongPress={drag}
+          disabled={isActive}
+          style={{
+            width: "48%",
+            minHeight: 140,
+            backgroundColor: "transparent",
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: radius.sm,
+            padding: spacing.lg,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: spacing.md,
+            position: "relative",
+          }}
+        >
+          <Pressable
+            testID={`space-card-edit-${s.id}`}
+            onPress={(event) => {
+              event.stopPropagation();
+              openEditForSpace(s);
+            }}
+            hitSlop={10}
+            style={{
+              position: "absolute",
+              top: 8,
+              left: 8,
+              width: 28,
+              height: 28,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons
+              name="create-outline"
+              size={14}
+              color={colors.caution}
+            />
+          </Pressable>
+
+          <Pressable
+            testID={`space-card-delete-${s.id}`}
+            onPress={(event) => {
+              event.stopPropagation();
+              confirmDeleteSpace(s);
+            }}
+            hitSlop={10}
+            disabled={deletingId === s.id}
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              width: 28,
+              height: 28,
+              alignItems: "center",
+              justifyContent: "center",
+              opacity: deletingId === s.id ? 0.5 : 1,
+            }}
+          >
+            {deletingId === s.id ? (
+              <ActivityIndicator size="small" color={colors.onSurfaceTertiary} />
+            ) : (
+              <Ionicons
+                name="trash-outline"
+                size={14}
+                color={colors.error}
+              />
+            )}
+          </Pressable>
+
+          <View
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: radius.md,
+              backgroundColor: `${identityColor}1A`,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <Ionicons
+              name={(s.icon || "folder-outline") as any}
+              size={22}
+              color={identityColor}
+            />
+          </View>
+
+          <Text
+            style={{
+              fontSize: 16,
+              fontWeight: "700",
+              color: colors.onSurface,
+              textAlign: "center",
+            }}
+            numberOfLines={1}
+          >
+            {s.name}
+          </Text>
+
+          {cardSubtitle ? (
+            <Text
+              style={{
+                marginTop: -8,
+                fontSize: 12,
+                color: colors.onSurfaceTertiary,
+                textAlign: "center",
+              }}
+              numberOfLines={1}
+            >
+              {cardSubtitle}
+            </Text>
+          ) : null}
+        </Pressable>
+      </ScaleDecorator>
+    );
+  };
+
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="spaces-screen">
       <View style={{ padding: spacing.xl, paddingBottom: spacing.md }}>
         <Text style={{ fontSize: 30, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 }}>Spaces</Text>
       </View>
 
-      <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 140, gap: spacing.md }}>
-        {loading ? (
-          <ActivityIndicator color={colors.onSurfaceTertiary} />
-        ) : spaces.length === 0 ? (
+      {loading ? (
+        <ActivityIndicator color={colors.onSurfaceTertiary} style={{ marginTop: spacing.xl }} />
+      ) : spaces.length === 0 ? (
+        <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 140 }}>
           <View style={{ paddingVertical: spacing["3xl"], alignItems: "center", gap: spacing.lg }}>
             <Ionicons name="grid-outline" size={36} color={colors.onSurfaceTertiary} />
             <Text style={{ fontSize: 18, fontWeight: "600", color: colors.onSurface }}>Create your first Space</Text>
@@ -194,15 +348,23 @@ export default function Spaces() {
               ))}
             </View>
           </View>
-        ) : (
-          <>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.md }}>
-            {/* "+ Add Space" -- same dashed-border "add" affordance
-                already used elsewhere (e.g. Grocery's Invite pill), sized
-                to match the real space cards beside it instead of a
-                separate always-visible template carousel that repeated
-                the same 4 icons a second time once every type already
-                had a real space. */}
+        </ScrollView>
+      ) : (
+        <DraggableFlatList
+          testID="space-card-list"
+          data={spaces}
+          keyExtractor={(item) => String(item.id)}
+          numColumns={2}
+          onDragEnd={({ data }) => handleReorderSpaces(data)}
+          columnWrapperStyle={{ gap: spacing.md }}
+          contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 140, gap: spacing.md }}
+          renderItem={renderSpaceCard}
+          ListHeaderComponent={
+            // Same dashed-border "add" affordance already used elsewhere
+            // (e.g. Grocery's Invite pill), sized to match the real space
+            // cards below -- rendered as the grid's own header row (not a
+            // draggable cell) so it's never reachable by drag and always
+            // stays first, above the reorderable cards.
             <Pressable
               testID="space-add-tile"
               onPress={() => setTemplatePickerVisible(true)}
@@ -234,142 +396,9 @@ export default function Spaces() {
                 Add Space
               </Text>
             </Pressable>
-            {spaces.map((s) => {
-              // Gray subtitle under the name, from the same per-space
-              // profile the edit button already loads -- Model for Car,
-              // County for Home. Nothing for a type with no profile.
-              const profile = profiles[s.id] ?? null;
-              const kind = detectSpaceType(s, profile);
-              const identityColor = SPACE_IDENTITY_COLORS[kind] ?? colors.onSurface;
-              const cardSubtitle =
-                kind === "car"
-                  ? (profile as CarProfile | null)?.model
-                  : kind === "home"
-                    ? (profile as HomeProfile | null)?.county
-                    : undefined;
-
-              return (
-              <Pressable
-                key={s.id}
-                testID={`space-card-${s.id}`}
-                onPress={() => router.push(`/${s.id}` as any)}
-                style={{
-                  width: "48%",
-                  minHeight: 140,
-                  backgroundColor: "transparent",
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: radius.sm,
-                  padding: spacing.lg,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: spacing.md,
-                  position: "relative",
-                }}
-              >
-                <Pressable
-                  testID={`space-card-edit-${s.id}`}
-                  onPress={(event) => {
-                    event.stopPropagation();
-                    openEditForSpace(s);
-                  }}
-                  hitSlop={10}
-                  style={{
-                    position: "absolute",
-                    top: 8,
-                    left: 8,
-                    width: 28,
-                    height: 28,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Ionicons
-                    name="create-outline"
-                    size={14}
-                    color={colors.caution}
-                  />
-                </Pressable>
-
-                <Pressable
-                  testID={`space-card-delete-${s.id}`}
-                  onPress={(event) => {
-                    event.stopPropagation();
-                    confirmDeleteSpace(s);
-                  }}
-                  hitSlop={10}
-                  disabled={deletingId === s.id}
-                  style={{
-                    position: "absolute",
-                    top: 8,
-                    right: 8,
-                    width: 28,
-                    height: 28,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    opacity: deletingId === s.id ? 0.5 : 1,
-                  }}
-                >
-                  {deletingId === s.id ? (
-                    <ActivityIndicator size="small" color={colors.onSurfaceTertiary} />
-                  ) : (
-                    <Ionicons
-                      name="trash-outline"
-                      size={14}
-                      color={colors.error}
-                    />
-                  )}
-                </Pressable>
-
-                <View
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: radius.md,
-                    backgroundColor: `${identityColor}1A`,
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Ionicons
-                    name={(s.icon || "folder-outline") as any}
-                    size={22}
-                    color={identityColor}
-                  />
-                </View>
-
-                <Text
-                  style={{
-                    fontSize: 16,
-                    fontWeight: "700",
-                    color: colors.onSurface,
-                    textAlign: "center",
-                  }}
-                  numberOfLines={1}
-                >
-                  {s.name}
-                </Text>
-
-                {cardSubtitle ? (
-                  <Text
-                    style={{
-                      marginTop: -8,
-                      fontSize: 12,
-                      color: colors.onSurfaceTertiary,
-                      textAlign: "center",
-                    }}
-                    numberOfLines={1}
-                  >
-                    {cardSubtitle}
-                  </Text>
-                ) : null}
-              </Pressable>
-              );
-            })}
-            </View>
-          </>
-        )}
-      </ScrollView>
+          }
+        />
+      )}
 
       <EditSpaceModal
         visible={!!editingSpace}

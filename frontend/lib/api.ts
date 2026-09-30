@@ -301,11 +301,16 @@ export const api = {
 
  listSpaces: async () => {
   const result = await request<{ spaces: any[] }>("/spaces");
-
-  console.log("[SPACES TEST]", result);
-
   return result;
 },
+
+/** Persists a drag-to-reorder on the Spaces tab -- `order` is the full
+ * list of visible space ids in their new display order. */
+reorderSpaces: (order: (string | number)[]) =>
+  request("/spaces/reorder", {
+    method: "PATCH",
+    body: JSON.stringify({ order }),
+  }),
 
 createSpace: (body: {
   name: string;
