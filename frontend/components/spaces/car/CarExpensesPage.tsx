@@ -719,7 +719,7 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
                         key={unit}
                         testID={`expense-period-custom-unit-${unit}`}
                         onPress={() => selectCustomUnit(unit)}
-                        hitSlop={6}
+                        hitSlop={{ top: 8, bottom: 8 }}
                         style={{
                           paddingHorizontal: spacing.md,
                           minHeight: 30,

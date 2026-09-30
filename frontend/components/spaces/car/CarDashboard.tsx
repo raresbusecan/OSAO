@@ -922,7 +922,7 @@ export default function CarDashboard({
                         <Pressable
                             testID="car-docs-open"
                             onPress={() => setDocsPageVisible(true)}
-                            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                            hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
                             accessibilityRole="button"
                             accessibilityLabel="View documents"
                             style={{
@@ -944,7 +944,7 @@ export default function CarDashboard({
                         <Pressable
                             testID="car-archive-open"
                             onPress={() => setArchivePageVisible(true)}
-                            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                            hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
                             accessibilityRole="button"
                             accessibilityLabel="View archive"
                             style={{
@@ -969,7 +969,7 @@ export default function CarDashboard({
                                 setHistoryInitialTab("all");
                                 setHistoryPageVisible(true);
                             }}
-                            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
+                            hitSlop={{ top: 8, bottom: 8, left: 0, right: 0 }}
                             accessibilityRole="button"
                             accessibilityLabel="View history"
                             style={{
@@ -1038,7 +1038,7 @@ export default function CarDashboard({
                                 key={tab.key}
                                 testID={`car-tab-${tab.key}`}
                                 onPress={() => setActiveTab(tab.key)}
-                                hitSlop={6}
+                                hitSlop={{ top: 6, bottom: 6 }}
                                 accessibilityRole="button"
                                 accessibilityState={{ selected: isActive }}
                                 style={{
