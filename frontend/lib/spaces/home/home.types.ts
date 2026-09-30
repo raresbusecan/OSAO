@@ -126,6 +126,10 @@ export type HomeTaskEntry = {
   completed: boolean;
   completedAt?: string;
   notes?: string;
+  /** Set by dragging a row in ALL (HomeTasksPage) -- null/undefined for
+   * a task never manually reordered, which keeps sorting by dueDate
+   * instead (see getHomeTasksView's `upcoming` sort). */
+  sortOrder?: number | null;
   /** Set at creation (HomeTaskForm's "Implică o cumpărare" toggle) --
    * drives whether resolving this task prompts for a price instead of
    * completing instantly. */

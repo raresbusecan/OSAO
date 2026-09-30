@@ -507,6 +507,15 @@ saveHomeProfile: (
       method: "DELETE",
     }),
 
+  /** Persists a drag-to-reorder for one list's items (a category list
+   * within a space, or one grocery list's products) -- `order` is the
+   * full set of ids in that one list, in their new display order. */
+  reorderItems: (order: (string | number)[]) =>
+    request("/items/reorder", {
+      method: "PATCH",
+      body: JSON.stringify({ order }),
+    }),
+
   // -------------------------
   // BUDGET -- category spending limits, recurring bills, savings goal.
   // See BudgetController.

@@ -63,6 +63,11 @@ Route::middleware(['auth:sanctum', 'throttle:api', SyncUserTimezone::class])->gr
     // ItemController::myGrocery.
     Route::get('/grocery/mine', [ItemController::class, 'myGrocery']);
 
+    // Registered before apiResource() -- that macro's own PATCH
+    // /items/{item} would otherwise swallow "reorder" as the {item}
+    // route parameter (Laravel matches route registration order, not
+    // specificity) and hand it to update() instead of this method.
+    Route::patch('/items/reorder', [ItemController::class, 'reorder']);
     Route::apiResource('items', ItemController::class);
     Route::get('/items/{id}/members', [ItemController::class, 'members']);
     Route::post('/items/{id}/members', [ItemController::class, 'addMember']);

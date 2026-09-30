@@ -402,6 +402,45 @@ class ItemController extends Controller
     }
 
     /**
+     * Persists a drag-to-reorder result for any one list of items --
+     * a space's own category list (e.g. Home Tasks), or one grocery
+     * list's products. `order` is the full set of item ids in their new
+     * display order; there's no separate "list id" parameter because
+     * none is needed -- each id is checked individually via
+     * canAccessItem() (the same per-type rule every other item endpoint
+     * already uses, including grocery's list-membership case), and
+     * anything that doesn't pass is silently dropped rather than
+     * erroring the whole request, same as SpaceController::reorder().
+     * A client is expected to send exactly one list's own ids; mixing
+     * ids from two different lists/categories in one call would just
+     * apply sequential positions across all of them combined, which is
+     * harmless (each list's own read path only ever looks at its own
+     * items in that order) but not something any current UI does.
+     */
+    public function reorder(Request $request)
+    {
+        $validated = $request->validate([
+            'order' => ['required', 'array', 'min:1'],
+            'order.*' => ['integer'],
+        ]);
+
+        $items = Item::whereIn('id', $validated['order'])->get()->keyBy('id');
+
+        $position = 0;
+        foreach ($validated['order'] as $id) {
+            $item = $items->get($id);
+            if (!$item || !$this->canAccessItem($request, $item)) {
+                continue;
+            }
+            $item->sort_order = $position;
+            $item->save();
+            $position++;
+        }
+
+        return response()->json(['message' => 'Order updated.']);
+    }
+
+    /**
      * List who has access to one grocery list -- the space owner
      * (always) plus its own members. Either can call this: seeing who
      * else is on a list you're already in is fine even if you're not

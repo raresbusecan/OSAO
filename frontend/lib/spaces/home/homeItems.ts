@@ -291,6 +291,7 @@ function itemToTaskEntry(item: any): HomeTaskEntry {
     isRecurring: meta.isRecurring ?? false,
     recurrenceFrequency: meta.recurrenceFrequency ?? undefined,
     spendHistory: Array.isArray(meta.spendHistory) ? meta.spendHistory : undefined,
+    sortOrder: item.sort_order ?? null,
   };
 }
 

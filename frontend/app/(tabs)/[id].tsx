@@ -804,6 +804,28 @@ export default function SpaceDetail() {
     }
   };
 
+  // Drag-reorder on HomeTasksPage's ALL section -- orderedIds is that
+  // section's full set of ids in their new display order (see
+  // getHomeTasksView's own manuallyOrdered/dateOrdered split, which
+  // reads this same sortOrder back). Same snapshot-then-revert shape as
+  // every other save/delete handler here.
+  const handleHomeTaskReorder = async (orderedIds: string[]) => {
+    const previous = homeData.taskEntries;
+    const position = new Map(orderedIds.map((id, index) => [id, index]));
+    setHomeData((current) => ({
+      ...current,
+      taskEntries: current.taskEntries.map((e) =>
+        position.has(e.id) ? { ...e, sortOrder: position.get(e.id)! } : e,
+      ),
+    }));
+    try {
+      await api.reorderItems(orderedIds);
+    } catch (error: any) {
+      setHomeData((current) => ({ ...current, taskEntries: previous }));
+      notifyAction("Nu am putut salva ordinea", error?.message || "A apărut o eroare.");
+    }
+  };
+
   /*
    * ==========================================================
    * LOAD SPACE
@@ -1246,6 +1268,7 @@ export default function SpaceDetail() {
           onSupplyDelete={handleHomeSupplyDelete}
           onTaskSave={handleHomeTaskSave}
           onTaskDelete={handleHomeTaskDelete}
+          onTaskReorder={handleHomeTaskReorder}
           initialOpenItem={
             (itemType === "home_task" || itemType === "home_recurring" || itemType === "home_maintenance") && itemId
               ? { type: itemType, id: itemId }

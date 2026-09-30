@@ -269,6 +269,10 @@ export type HomeTaskRow = {
   /** Only meaningful alongside `tier` -- negative once past due. */
   daysRemaining?: number;
   overdue?: boolean;
+  /** See HomeTaskEntry.sortOrder -- carried through via the `{...task}`
+   * spread below, declared here too so getHomeTasksView's `upcoming`
+   * sort (and HomeTasksPage's drag-reorder) can read it. */
+  sortOrder?: number | null;
 };
 
 function isToday(dateString: string, now: Date): boolean {
@@ -336,13 +340,24 @@ export function getHomeTasksView(homeData: HomeData): {
   });
 
   dueSoon.sort((a, b) => new Date(a.dueDate!).getTime() - new Date(b.dueDate!).getTime());
-  upcoming.sort((a, b) => {
-    if (!a.dueDate) return 1;
-    if (!b.dueDate) return -1;
-    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-  });
 
-  return { dueSoon, upcoming, recentDone };
+  // Manually dragged rows (HomeTasksPage's own drag-reorder) come
+  // first, in the order they were dropped -- everything never touched
+  // falls back to the pre-existing due-date sort, same "manual order
+  // first, then the old fallback" split SpaceController::index() uses
+  // server-side for Spaces.
+  const manuallyOrdered = upcoming
+    .filter((t) => t.sortOrder != null)
+    .sort((a, b) => (a.sortOrder as number) - (b.sortOrder as number));
+  const dateOrdered = upcoming
+    .filter((t) => t.sortOrder == null)
+    .sort((a, b) => {
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+    });
+
+  return { dueSoon, upcoming: [...manuallyOrdered, ...dateOrdered], recentDone };
 }
 
 /** Every resolved task, newest first -- HomeTaskArchivePage's list.

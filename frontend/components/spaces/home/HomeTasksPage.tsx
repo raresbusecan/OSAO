@@ -1,6 +1,11 @@
 import React from "react";
 import { View, Text, Pressable, ScrollView, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  NestableScrollContainer,
+  NestableDraggableFlatList,
+  type RenderItemParams,
+} from "react-native-draggable-flatlist";
 import { useTheme } from "@/lib/theme";
 import { SwipeRow } from "@/components/spaces/SwipeRow";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
@@ -32,6 +37,10 @@ export type HomeTasksPageProps = {
    * through the edit form first. Caller is expected to confirm before
    * actually deleting (see HomeDashboard's handleTaskRowDelete). */
   onDelete: (entry: HomeTaskEntry) => void;
+  /** Drag-reorder in ALL -- fires with that section's full id list in
+   * its new order every time a drag ends (not just the one row that
+   * moved), same as Spaces' own drag-reorder on the Spaces tab. */
+  onReorder: (orderedIds: string[]) => void;
 };
 
 function formatDate(dateString: string): string {
@@ -64,6 +73,7 @@ export function HomeTasksPage({
   onWarningsPress,
   onCheckboxPress,
   onDelete,
+  onReorder,
 }: HomeTasksPageProps) {
   const { colors, spacing, radius } = useTheme();
 
@@ -74,7 +84,7 @@ export function HomeTasksPage({
 
   return (
     <SwipeBackView onBack={onBack} style={{ backgroundColor: colors.surface }}>
-      <ScrollView
+      <NestableScrollContainer
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: 100 }}
       >
@@ -194,23 +204,35 @@ export function HomeTasksPage({
           </View>
         ) : null}
 
-        {/* ALL -- everything else not yet done */}
+        {/* ALL -- everything else not yet done. Long-press a row (see
+            UpcomingRow's own onLongPress={drag}) to pick it up and drag
+            it anywhere in this list -- NestableDraggableFlatList instead
+            of the plain DraggableFlatList used on the Spaces tab, since
+            this list lives inside the page's own outer scroll (the
+            "Nestable" pair is the library's own answer to exactly that:
+            one draggable section among otherwise-static page content). */}
         <View>
           <SectionTitle title="ALL" colors={colors} />
           {upcoming.length > 0 ? (
             <View style={{ backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, overflow: "hidden" }}>
-              {upcoming.map((row, index) => (
-                <UpcomingRow
-                  key={row.id}
-                  row={row}
-                  colors={colors}
-                  spacing={spacing}
-                  last={index === upcoming.length - 1}
-                  onToggle={() => onCheckboxPress(findEntry(row.id))}
-                  onPress={() => onEdit(findEntry(row.id))}
-                  onDelete={() => onDelete(findEntry(row.id))}
-                />
-              ))}
+              <NestableDraggableFlatList
+                data={upcoming}
+                keyExtractor={(row) => row.id}
+                onDragEnd={({ data }) => onReorder(data.map((row) => row.id))}
+                renderItem={({ item: row, drag, isActive, getIndex }: RenderItemParams<HomeTaskRow>) => (
+                  <UpcomingRow
+                    row={row}
+                    colors={colors}
+                    spacing={spacing}
+                    last={getIndex() === upcoming.length - 1}
+                    onToggle={() => onCheckboxPress(findEntry(row.id))}
+                    onPress={() => onEdit(findEntry(row.id))}
+                    onDelete={() => onDelete(findEntry(row.id))}
+                    onDrag={drag}
+                    isActive={isActive}
+                  />
+                )}
+              />
             </View>
           ) : (
             <View style={{ alignItems: "center", paddingVertical: spacing.xl, gap: spacing.sm }}>
@@ -219,7 +241,7 @@ export function HomeTasksPage({
             </View>
           )}
         </View>
-      </ScrollView>
+      </NestableScrollContainer>
     </SwipeBackView>
   );
 }
@@ -424,6 +446,8 @@ function UpcomingRow({
   onToggle,
   onPress,
   onDelete,
+  onDrag,
+  isActive,
 }: {
   row: HomeTaskRow;
   colors: any;
@@ -432,6 +456,11 @@ function UpcomingRow({
   onToggle: () => void;
   onPress: () => void;
   onDelete: () => void;
+  /** Long-press-to-drag, from NestableDraggableFlatList's own
+   * renderItem params -- same onLongPress={drag} pattern the Spaces
+   * tab's card grid already uses. */
+  onDrag: () => void;
+  isActive: boolean;
 }) {
   return (
     <SwipeRow onResolve={onToggle} onDelete={onDelete} cornerRadius={0} colors={colors}>
@@ -444,11 +473,16 @@ function UpcomingRow({
         paddingVertical: spacing.md,
         borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
         borderBottomColor: colors.border,
-        backgroundColor: colors.surfaceSecondary,
+        backgroundColor: isActive ? colors.surfaceTertiary : colors.surfaceSecondary,
       }}
     >
       <Checkbox onPress={onToggle} colors={colors} />
-      <Pressable onPress={onPress} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+      <Pressable
+        onPress={onPress}
+        onLongPress={onDrag}
+        disabled={isActive}
+        style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm }}
+      >
         {row.isPurchase ? <Ionicons name="cart-outline" size={14} color={colors.onSurfaceTertiary} /> : null}
         {row.isRecurring ? <Ionicons name="repeat-outline" size={14} color={colors.onSurfaceTertiary} /> : null}
         <Text style={{ flex: 1, fontSize: 14.5, fontWeight: "600", color: colors.onSurface }} numberOfLines={1}>

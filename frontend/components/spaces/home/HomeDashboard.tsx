@@ -79,6 +79,9 @@ export type HomeDashboardProps = {
   onSupplyDelete: (id: string) => void;
   onTaskSave: (entry: HomeTaskEntry) => void;
   onTaskDelete: (id: string) => void;
+  /** Drag-reorder on HomeTasksPage's ALL section -- see its own
+   * onReorder prop for what `orderedIds` represents. */
+  onTaskReorder: (orderedIds: string[]) => void;
   /** Deep-link from TodoCarouselSheet's "Deschide" -- jumps straight
    * into the sub-view where that specific to-do actually gets resolved
    * instead of just landing on this dashboard's own category grid. */
@@ -102,6 +105,7 @@ export default function HomeDashboard({
   onSupplyDelete,
   onTaskSave,
   onTaskDelete,
+  onTaskReorder,
   initialOpenItem,
 }: HomeDashboardProps) {
   const { colors, spacing, radius } = useTheme();
@@ -678,6 +682,7 @@ export default function HomeDashboard({
           }}
           onCheckboxPress={handleCheckboxPress}
           onDelete={handleTaskRowDelete}
+          onReorder={onTaskReorder}
         />
         {resolveSheetEntry ? (
           <HomeTaskResolveSheet
