@@ -134,6 +134,7 @@ export function HomeSuppliesPage({ homeData, onBack, onAdd, onEdit, onRestock }:
 
                   <Pressable
                     onPress={() => onRestock(entry)}
+                    hitSlop={6}
                     accessibilityRole="button"
                     accessibilityLabel={`Mark ${entry.name} as restocked`}
                     style={{

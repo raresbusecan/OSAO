@@ -502,6 +502,7 @@ export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: Home
             <Pressable
               testID="home-spend-show-more"
               onPress={() => setListExpanded((v) => !v)}
+              hitSlop={8}
               style={{
                 flexDirection: "row",
                 alignItems: "center",

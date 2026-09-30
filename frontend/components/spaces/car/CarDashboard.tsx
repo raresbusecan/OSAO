@@ -922,6 +922,7 @@ export default function CarDashboard({
                         <Pressable
                             testID="car-docs-open"
                             onPress={() => setDocsPageVisible(true)}
+                            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                             accessibilityRole="button"
                             accessibilityLabel="View documents"
                             style={{
@@ -943,6 +944,7 @@ export default function CarDashboard({
                         <Pressable
                             testID="car-archive-open"
                             onPress={() => setArchivePageVisible(true)}
+                            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                             accessibilityRole="button"
                             accessibilityLabel="View archive"
                             style={{
@@ -967,6 +969,7 @@ export default function CarDashboard({
                                 setHistoryInitialTab("all");
                                 setHistoryPageVisible(true);
                             }}
+                            hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                             accessibilityRole="button"
                             accessibilityLabel="View history"
                             style={{
@@ -1035,6 +1038,7 @@ export default function CarDashboard({
                                 key={tab.key}
                                 testID={`car-tab-${tab.key}`}
                                 onPress={() => setActiveTab(tab.key)}
+                                hitSlop={6}
                                 accessibilityRole="button"
                                 accessibilityState={{ selected: isActive }}
                                 style={{
@@ -1142,6 +1146,7 @@ export default function CarDashboard({
                             <Pressable
                                 testID="car-recent-show-more"
                                 onPress={() => setRecentExpanded((v) => !v)}
+                                hitSlop={8}
                                 style={{
                                     flexDirection: "row",
                                     alignItems: "center",
@@ -1216,6 +1221,7 @@ export default function CarDashboard({
                             <Pressable
                                 testID="car-all-show-more"
                                 onPress={() => setAllExpanded((v) => !v)}
+                                hitSlop={8}
                                 style={{
                                     flexDirection: "row",
                                     alignItems: "center",

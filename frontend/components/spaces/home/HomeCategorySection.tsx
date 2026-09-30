@@ -122,7 +122,7 @@ export function HomeCategorySection({
                 <Pressable
                   testID={`home-row-resolve-${row.id}`}
                   onPress={() => onRowResolve(row.id)}
-                  hitSlop={8}
+                  hitSlop={12}
                   accessibilityRole="button"
                   accessibilityLabel="Resolved"
                   style={{

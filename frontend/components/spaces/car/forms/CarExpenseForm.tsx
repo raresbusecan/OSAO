@@ -257,6 +257,7 @@ export default function CarExpenseForm({
               <Pressable
                 key={item}
                 onPress={() => handleCategorySelect(item)}
+                hitSlop={4}
                 style={{
                   paddingHorizontal: spacing.md,
                   minHeight: 40,

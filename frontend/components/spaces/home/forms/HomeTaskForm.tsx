@@ -342,6 +342,7 @@ export default function HomeTaskForm({
                   <Pressable
                     key={option.key}
                     onPress={() => setRecurrenceFrequency(option.key)}
+                    hitSlop={{ top: 4, bottom: 4 }}
                     style={{
                       flex: 1,
                       minHeight: 40,

@@ -155,6 +155,7 @@ export function GroceryRecipeDetailModal({
               <Pressable
                 testID={`recipe-detail-add-missing-${snapshot.recipe.id}`}
                 onPress={onAddMissing}
+                hitSlop={6}
                 style={{
                   alignSelf: "flex-start",
                   paddingHorizontal: spacing.md,

@@ -431,6 +431,7 @@ export default function CalendarScreen() {
               <Pressable
                 testID="new-event-toggle-purchase"
                 onPress={() => setInvolvesPurchase((v) => !v)}
+                hitSlop={{ top: 5, bottom: 5, left: 3, right: 3 }}
                 accessibilityRole="button"
                 accessibilityState={{ selected: involvesPurchase }}
                 style={{
@@ -449,6 +450,7 @@ export default function CalendarScreen() {
               <Pressable
                 testID="new-event-toggle-recurring"
                 onPress={() => setIsRecurring((v) => !v)}
+                hitSlop={{ top: 5, bottom: 5, left: 3, right: 3 }}
                 accessibilityRole="button"
                 accessibilityState={{ selected: isRecurring }}
                 style={{
@@ -490,6 +492,7 @@ export default function CalendarScreen() {
                     key={freq}
                     testID={`new-event-recurrence-${freq}`}
                     onPress={() => setNewRecurrence(freq)}
+                    hitSlop={{ top: 7, bottom: 7 }}
                     style={{
                       flex: 1, alignItems: "center", paddingVertical: 8, borderRadius: radius.sm,
                       backgroundColor: newRecurrence === freq ? colors.onSurface : "transparent",

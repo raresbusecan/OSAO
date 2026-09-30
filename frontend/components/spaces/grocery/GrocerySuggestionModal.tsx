@@ -178,6 +178,7 @@ function SuggestionRow({
 
       <Pressable
         onPress={handleAdd}
+        hitSlop={4}
         accessibilityRole="button"
         accessibilityLabel={`Add ${suggestion.name}`}
         style={{

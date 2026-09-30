@@ -343,6 +343,7 @@ export function HomeCategoryPage({
                       key={option.value}
                       testID={`category-field-${field.key}-${option.value}`}
                       onPress={() => setValues((current) => ({ ...current, [field.key]: option.value }))}
+                      hitSlop={{ top: 4, bottom: 4 }}
                       style={{
                         flex: 1,
                         height: 40,

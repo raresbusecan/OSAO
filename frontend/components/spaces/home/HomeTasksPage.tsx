@@ -288,7 +288,7 @@ function Checkbox({ onPress, colors }: { onPress: () => void; colors: any }) {
   return (
     <Pressable
       onPress={onPress}
-      hitSlop={8}
+      hitSlop={12}
       accessibilityRole="button"
       accessibilityLabel="Mark done"
       style={{
@@ -399,7 +399,7 @@ function DoneRow({
         borderBottomColor: colors.border,
       }}
     >
-      <Pressable onPress={onToggle} hitSlop={8} accessibilityRole="button" accessibilityLabel="Undo" style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: colors.success, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+      <Pressable onPress={onToggle} hitSlop={12} accessibilityRole="button" accessibilityLabel="Undo" style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: colors.success, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         <Ionicons name="checkmark" size={13} color={colors.surface} />
       </Pressable>
       <Pressable onPress={onPress} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm }}>

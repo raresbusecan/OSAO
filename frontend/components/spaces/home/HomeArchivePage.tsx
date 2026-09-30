@@ -171,6 +171,7 @@ export function HomeArchivePage({ homeData, onBack }: HomeArchivePageProps) {
                 <Pressable
                   testID={`home-history-tab-${t.key}`}
                   onPress={() => setTab(t.key)}
+                  hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
                   style={{

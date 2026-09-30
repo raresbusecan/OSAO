@@ -181,6 +181,7 @@ export default function Spaces() {
                   key={t.name}
                   testID={`template-${t.name.toLowerCase()}`}
                   onPress={() => createFromTemplate(t)}
+                  hitSlop={4}
                   style={{
                     paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
                     borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border,

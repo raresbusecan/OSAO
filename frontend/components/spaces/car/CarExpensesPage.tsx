@@ -719,6 +719,7 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
                         key={unit}
                         testID={`expense-period-custom-unit-${unit}`}
                         onPress={() => selectCustomUnit(unit)}
+                        hitSlop={6}
                         style={{
                           paddingHorizontal: spacing.md,
                           minHeight: 30,
@@ -944,6 +945,7 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
                 <Pressable
                   testID="expenses-recent-show-more"
                   onPress={() => setRecentExpanded((v) => !v)}
+                  hitSlop={8}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
@@ -1027,6 +1029,7 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
                 <Pressable
                   testID="expenses-all-show-more"
                   onPress={() => setAllExpanded((v) => !v)}
+                  hitSlop={8}
                   style={{
                     flexDirection: "row",
                     alignItems: "center",

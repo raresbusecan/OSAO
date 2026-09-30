@@ -944,6 +944,7 @@ export default function GroceryDashboard({
             <Pressable
               testID="grocery-recipes-button"
               onPress={() => setView("recipes")}
+              hitSlop={4}
               accessibilityRole="button"
               accessibilityLabel="Recipes"
               style={{

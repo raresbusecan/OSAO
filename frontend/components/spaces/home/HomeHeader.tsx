@@ -119,6 +119,7 @@ export function HomeHeader({ space, subtitle, onBack, onEdit, onHistoryPress }: 
         <Pressable
           testID="home-history-open"
           onPress={onHistoryPress}
+          hitSlop={10}
           accessibilityRole="button"
           accessibilityLabel="View history"
           style={{

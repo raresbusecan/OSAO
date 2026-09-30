@@ -146,6 +146,7 @@ export function CarCurrentListPage({
               key={tab.key}
               testID={`current-list-tab-${tab.key}`}
               onPress={() => setActiveTab(tab.key)}
+              hitSlop={6}
               accessibilityRole="button"
               accessibilityState={{ selected: isActive }}
               style={{

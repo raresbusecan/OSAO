@@ -429,6 +429,7 @@ export function GroceryRecipesPage({
         <Pressable
           testID="grocery-recipes-tab-cuisine"
           onPress={() => setFilterTab("cuisine")}
+          hitSlop={{ top: 6, bottom: 6, left: 0, right: 0 }}
           style={{
             flex: 1,
             flexDirection: "row",
@@ -459,6 +460,7 @@ export function GroceryRecipesPage({
         <Pressable
           testID="grocery-recipes-tab-meal"
           onPress={() => setFilterTab("meal")}
+          hitSlop={{ top: 6, bottom: 6, left: 0, right: 0 }}
           style={{
             flex: 1,
             flexDirection: "row",
@@ -501,6 +503,7 @@ export function GroceryRecipesPage({
                 key={cuisine}
                 testID={`grocery-recipes-cuisine-${cuisine}`}
                 onPress={() => handleToggleCuisine(cuisine)}
+                hitSlop={4}
                 style={{
                   paddingHorizontal: spacing.md,
                   minHeight: 36,
@@ -530,6 +533,7 @@ export function GroceryRecipesPage({
                 key={type}
                 testID={`grocery-recipes-meal-${type}`}
                 onPress={() => handleToggleMealType(type)}
+                hitSlop={4}
                 style={{
                   paddingHorizontal: spacing.md,
                   minHeight: 36,
@@ -600,6 +604,7 @@ export function GroceryRecipesPage({
           <Pressable
             testID="grocery-recipes-new-list"
             onPress={onCreatingListOpen}
+            hitSlop={4}
             style={{
               flexDirection: "row",
               alignItems: "center",
@@ -630,6 +635,7 @@ export function GroceryRecipesPage({
                 key={list.id}
                 testID={`grocery-recipes-target-${list.id}`}
                 onPress={() => setTargetListId(list.id)}
+                hitSlop={4}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
@@ -825,7 +831,7 @@ export function GroceryRecipesPage({
                     <Pressable
                       testID={`grocery-recipe-check-${recipe.id}`}
                       onPress={() => handleToggleRecipeSelection(recipe.id)}
-                      hitSlop={8}
+                      hitSlop={12}
                       accessibilityRole="checkbox"
                       accessibilityState={{ checked }}
                       style={{

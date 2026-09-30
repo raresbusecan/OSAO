@@ -337,6 +337,7 @@ export function GrocerySmartListPage({
                 key={list.id}
                 testID={`smart-list-target-${list.id}`}
                 onPress={() => setTargetListId(list.id)}
+                hitSlop={4}
                 style={{
                   paddingHorizontal: spacing.md,
                   minHeight: 38,
@@ -403,7 +404,7 @@ export function GrocerySmartListPage({
                   <Pressable
                     testID={`smart-list-recipe-check-${match.recipe.id}`}
                     onPress={() => handleToggleRecipeSelection(match.recipe.id)}
-                    hitSlop={8}
+                    hitSlop={12}
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked }}
                     style={{
@@ -454,6 +455,7 @@ export function GrocerySmartListPage({
                         <Pressable
                           testID={`smart-list-recipe-add-missing-${match.recipe.id}`}
                           onPress={() => handleAddMissingIngredients(match)}
+                          hitSlop={6}
                           style={{
                             alignSelf: "flex-start",
                             paddingHorizontal: spacing.md,
@@ -581,7 +583,7 @@ export function GrocerySmartListPage({
                         <Pressable
                           testID={`smart-list-replace-${item.id}`}
                           onPress={() => handleReplace(item)}
-                          hitSlop={8}
+                          hitSlop={{ top: 10, bottom: 10, left: 8, right: 3 }}
                           style={{ paddingHorizontal: spacing.sm, paddingVertical: 4 }}
                         >
                           <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurface }}>Replace</Text>
@@ -591,7 +593,7 @@ export function GrocerySmartListPage({
                       <Pressable
                         testID={`smart-list-remove-${item.id}`}
                         onPress={() => handleRemove(item.id)}
-                        hitSlop={8}
+                        hitSlop={{ top: 10, bottom: 10, left: 3, right: 8 }}
                       >
                         <Ionicons name="close" size={16} color={colors.onSurfaceTertiary} />
                       </Pressable>
@@ -608,6 +610,7 @@ export function GrocerySmartListPage({
               setDraft(null);
               setDraftRecipeIds([]);
             }}
+            hitSlop={4}
             style={{
               flexDirection: "row",
               alignItems: "center",

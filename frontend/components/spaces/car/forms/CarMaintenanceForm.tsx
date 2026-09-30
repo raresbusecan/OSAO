@@ -488,6 +488,7 @@ export default function CarMaintenanceForm({
               <Pressable
                 key={type}
                 onPress={() => (isBatchMode ? handleTypePress(type) : setService(type))}
+                hitSlop={4}
                 style={{
                   paddingHorizontal: spacing.md,
                   minHeight: 40,

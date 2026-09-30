@@ -222,6 +222,7 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
               key={tab.key}
               testID={`history-tab-${tab.key}`}
               onPress={() => setActiveTab(tab.key)}
+              hitSlop={6}
               accessibilityRole="button"
               accessibilityState={{ selected: isActive }}
               style={{
@@ -365,6 +366,7 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
                         key={unit}
                         testID={`history-period-custom-unit-${unit}`}
                         onPress={() => selectCustomUnit(unit)}
+                        hitSlop={6}
                         style={{
                           paddingHorizontal: spacing.md,
                           minHeight: 30,
