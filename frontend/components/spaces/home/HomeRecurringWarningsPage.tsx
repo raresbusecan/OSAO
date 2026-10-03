@@ -65,7 +65,7 @@ function tierStyle(colors: ThemeColors): Record<RecurringWarningTier, { color: s
   };
 }
 
-/** Opened from the Restanțe card on HomeTasksPage -- every task/
+/** Opened from the Restanțe card on HomeDashboard -- every task/
  * maintenance/recurring entry within 4 days of (or past) its due date,
  * grouped into one section per tier (RESTANT/AZI/2 ZILE/4 ZILE), each
  * independently collapsible via its own "Show more"/"Show less" next

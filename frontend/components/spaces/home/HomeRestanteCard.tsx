@@ -21,8 +21,8 @@ const COLUMNS: { tier: RecurringWarningTier; label: string }[] = [
   { tier: "red", label: "Restant" },
 ];
 
-/** Shared by HomeTasksPage's own Restanțe card and HomeDashboard's main
- * page -- one column per tier (task/maintenance/recurring combined, see
+/** Rendered on HomeDashboard's main page (HomeTasksPage's old inline
+ * copy was removed) -- one column per tier (task/maintenance/recurring combined, see
  * getRecurringTaskWarnings), but per explicit user request a tier with
  * 0 count doesn't render a "0" column at all, it's just skipped (same
  * rule for every tier). The whole card hides itself the same way when

@@ -77,6 +77,8 @@ file storage yet).
   for edit (used by the deep-link).
 - `HomeTasksPage.tsx`, `HomeTaskResolveSheet.tsx`,
   `HomeTaskArchivePage.tsx`, `HomeRecurringWarningsPage.tsx`,
+  `HomeRestanteCard.tsx` (main-page Restanțe summary, opens the
+  warnings page),
   `HomeSuppliesPage.tsx`, `HomeSupplyRestockSheet.tsx`,
   `HomeCategorySection.tsx`, `HomeHeader.tsx`, `HomeStats.tsx`,
   `HomeNextSection.tsx`, `HomeProfileForm.tsx`.

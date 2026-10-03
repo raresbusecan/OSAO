@@ -13,6 +13,10 @@ one up like any other "Open" item once nothing more pressing is ahead
 of it. Mark it `[from: <task>]` so there's a trail back to how it was
 found.
 
+### Device checks still owed for the Home Restanțe/swipe-back branch (2026-10-04)
+
+Not confirmable from source, need real touch input: (1) `SwipeBackView`'s 32px edge strip is an absolute overlay -- the leftmost ~8px of rows underneath can't be tapped, and a drag starting at the very edge of Grocery's list-card scroller (`GroceryDashboard.tsx` ~:984) or Car's category tabs (`CarDashboard.tsx` ~:1031) becomes swipe-back instead of a scroll; (2) drag-to-dismiss on the 4 new sheets (task form, category form, expense edit, restock); (3) iOS: `HomeCategoryPage`'s `HomeDatePickerSheet` is a *sibling* Modal of the open form sheet (HomeTaskForm/ExpenseEditModal nest theirs) -- a second sibling Modal can fail to appear on iOS. Also pre-existing: unused `StyleSheet` import in `HomeSuppliesPage.tsx:2`. `[from: qa-lead verification of feat/home-restante-urgency]`
+
 ### `spaces.created_at` has only 1-second precision, so `->latest()`'s tie order is undefined for same-second rows
 
 **Where:** `spaces` migration (`created_at`/`updated_at` are a plain

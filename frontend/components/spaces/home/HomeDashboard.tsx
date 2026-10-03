@@ -60,6 +60,18 @@ type CategoryBadge = { count: number; severity: SeverityTier } | null;
  * identical either. */
 type TierDots = { tier: RecurringWarningTier; count: number }[];
 
+/** Black or white, whichever contrasts more with a dot's hex background --
+ * a fixed white failed on caution yellow (#FFD600, ~1.4:1) and on dark
+ * mode's light-gray "yellow" tier. WCAG relative-luminance formula. */
+function readableTextOn(hex: string): string {
+  const channel = (i: number) => {
+    const c = parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const lum = 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2);
+  return 1.05 / (lum + 0.05) >= (lum + 0.05) / 0.05 ? "#FFFFFF" : "#000000";
+}
+
 export type HomeDashboardProps = {
   space: any;
   homeData: HomeData;
@@ -817,7 +829,10 @@ export default function HomeDashboard({
 
       <HomeRestanteCard
         counts={restanteCounts}
-        onPress={() => setWarningsPageVisible(true)}
+        onPress={() => {
+          closeAllSubViews();
+          setWarningsPageVisible(true);
+        }}
         colors={colors}
         spacing={spacing}
         radius={radius}
@@ -962,7 +977,7 @@ export default function HomeDashboard({
                         justifyContent: "center",
                       }}
                     >
-                      <Text style={{ fontSize: 9, fontWeight: "800", color: colors.onBrandPrimary }}>
+                      <Text style={{ fontSize: 9, fontWeight: "800", color: readableTextOn(recurringWarningTierColor(tier, colors)) }}>
                         {count}
                       </Text>
                     </View>
@@ -981,6 +996,16 @@ export default function HomeDashboard({
         onItemDelete={handleNextItemDelete}
       />
     </ScrollView>
+    {/* NEXT's swipe-resolve on a recurring maintenance row lands here
+        (handleNextItemResolve -> resolveCategoryEntry -> price prompt),
+        so the main dashboard needs its own copy of this sheet too. */}
+    {maintenanceResolveEntry ? (
+      <HomeMaintenanceResolveSheet
+        entry={maintenanceResolveEntry}
+        onCancel={() => setMaintenanceResolveEntry(null)}
+        onResolve={handleMaintenanceResolveConfirm}
+      />
+    ) : null}
     </SwipeBackView>
   );
 }
