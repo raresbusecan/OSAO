@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, Pressable, TextInput, type TextInputProps, type StyleProp, type ViewStyle } from "react-native";
+import { View, Text, Pressable, TextInput, ActivityIndicator, type TextInputProps, type StyleProp, type ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { PressableScale } from "./PressableScale";
@@ -374,6 +374,7 @@ export function Button({
   disabled,
   testID,
   compact,
+  loading,
 }: {
   label: string;
   onPress?: () => void;
@@ -383,6 +384,8 @@ export function Button({
   disabled?: boolean;
   testID?: string;
   compact?: boolean;
+  /** Shows a spinner in place of the label and blocks presses. */
+  loading?: boolean;
 }) {
   const { colors, radius } = useTheme();
   const fill =
@@ -399,10 +402,10 @@ export function Button({
     <PressableScale
       testID={testID}
       onPress={onPress}
-      disabled={disabled}
+      disabled={disabled || loading}
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ disabled: !!disabled }}
+      accessibilityState={{ disabled: !!disabled, busy: !!loading }}
       style={{
         height: compact ? 44 : 52,
         borderRadius: radius.control,
@@ -415,8 +418,14 @@ export function Button({
         opacity: disabled ? 0.4 : 1,
       }}
     >
-      {icon ? <Ionicons name={icon} size={18} color={fg} /> : null}
-      <Text style={{ fontSize: 15, fontWeight: "600", color: fg }} numberOfLines={1}>{label}</Text>
+      {loading ? (
+        <ActivityIndicator color={fg} />
+      ) : (
+        <>
+          {icon ? <Ionicons name={icon} size={18} color={fg} /> : null}
+          <Text style={{ fontSize: 15, fontWeight: "600", color: fg }} numberOfLines={1}>{label}</Text>
+        </>
+      )}
     </PressableScale>
   );
 }

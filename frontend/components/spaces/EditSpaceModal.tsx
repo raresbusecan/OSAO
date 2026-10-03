@@ -1,15 +1,6 @@
 import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-} from "react-native";
-import { useTheme } from "@/lib/theme";
+import { Sheet } from "@/components/ui/Sheet";
+import { Button, Field } from "@/components/ui/primitives";
 import { api } from "@/lib/api";
 import { notifyAction } from "@/lib/confirm";
 
@@ -42,7 +33,6 @@ export type EditSpaceModalProps = {
  * afterward); the user names it before it's created at all.
  */
 export function EditSpaceModal({ visible, mode = "edit", space, onClose, onSaved }: EditSpaceModalProps) {
-  const { colors, spacing, radius } = useTheme();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -81,83 +71,34 @@ export function EditSpaceModal({ visible, mode = "edit", space, onClose, onSaved
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1, justifyContent: "flex-end" }}
-      >
-        <Pressable
-          onPress={onClose}
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }}
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title={mode === "create" ? `${space?.name ?? "Spațiu"} nou` : "Redenumește spațiul"}
+      subtitle={mode === "create" ? "Dă-i un nume, ca să-l recunoști ușor" : undefined}
+      icon={(space?.icon as any) ?? "grid-outline"}
+      tone={space?.color}
+      footer={
+        <Button
+          testID="edit-space-save-button"
+          label={mode === "create" ? "Creează spațiul" : "Salvează"}
+          onPress={save}
+          loading={busy}
+          disabled={!name.trim()}
         />
-
-        <View
-          style={{
-            backgroundColor: colors.surface,
-            padding: spacing.xl,
-            gap: spacing.lg,
-            borderTopLeftRadius: radius.lg,
-            borderTopRightRadius: radius.lg,
-          }}
-        >
-          <Text style={{ fontSize: 20, fontWeight: "700", color: colors.onSurface }}>
-            {mode === "create" ? "New Space" : "Rename Space"}
-          </Text>
-
-          <Text
-            style={{
-              fontSize: 11,
-              fontWeight: "700",
-              letterSpacing: 0.4,
-              color: colors.onSurfaceTertiary,
-              marginBottom: -8,
-              textTransform: "uppercase",
-            }}
-          >
-            Name<Text style={{ color: colors.error }}> *</Text>
-          </Text>
-
-          <TextInput
-            testID="edit-space-name"
-            value={name}
-            onChangeText={setName}
-            placeholder="Space name"
-            placeholderTextColor={colors.onSurfaceTertiary}
-            autoFocus
-            style={{
-              backgroundColor: "transparent",
-              borderWidth: 1,
-              borderColor: colors.border,
-              color: colors.onSurface,
-              borderRadius: radius.sm,
-              paddingHorizontal: spacing.lg,
-              paddingVertical: 14,
-              fontSize: 16,
-            }}
-          />
-
-          <Pressable
-            testID="edit-space-save-button"
-            onPress={save}
-            disabled={busy || !name.trim()}
-            style={{
-              backgroundColor: colors.brandPrimary,
-              opacity: busy || !name.trim() ? 0.5 : 1,
-              paddingVertical: 14,
-              borderRadius: radius.sm,
-              alignItems: "center",
-            }}
-          >
-            {busy ? (
-              <ActivityIndicator color={colors.onBrandPrimary} />
-            ) : (
-              <Text style={{ color: colors.onBrandPrimary, fontWeight: "700", fontSize: 15 }}>
-                {mode === "create" ? "Create" : "Save Changes"}
-              </Text>
-            )}
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+      }
+    >
+      <Field
+        testID="edit-space-name"
+        label="Nume"
+        value={name}
+        onChangeText={setName}
+        placeholder="ex. Cumpărături de familie"
+        autoFocus
+        returnKeyType="done"
+        onSubmitEditing={save}
+        tone={space?.color}
+      />
+    </Sheet>
   );
 }

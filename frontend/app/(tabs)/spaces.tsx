@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, Pressable, ActivityIndicator, DeviceEventEmitter, Modal, StyleSheet, Dimensions,
+  View, Text, ScrollView, ActivityIndicator, DeviceEventEmitter, Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,10 +13,17 @@ import { confirmAction, notifyAction } from "@/lib/confirm";
 import { EditSpaceModal } from "@/components/spaces/EditSpaceModal";
 import { CarProfileForm } from "@/components/spaces/car/CarProfileForm";
 import { HomeProfileForm } from "@/components/spaces/home/HomeProfileForm";
+import { PressableScale } from "@/components/ui/PressableScale";
+import { Sheet } from "@/components/ui/Sheet";
+import { PageTitle, CircleButton, Group, Row, IconWell, Button, EmptyState } from "@/components/ui/primitives";
+import { motion } from "@/lib/motion";
 import {
   profileFromSpace,
   detectSpaceType,
   SPACE_IDENTITY_COLORS,
+  SPACE_KIND_LABEL,
+  spaceTextColor,
+  type SpaceKind,
   type SpaceProfile,
   type CarProfile,
   type HomeProfile,
@@ -32,10 +39,10 @@ import {
 // Rares" is still recognized as an Expenses space forever, the same way
 // Car/Home already were via their profile row's existence.
 const TEMPLATES = [
-  { name: "Car", icon: "car-outline", color: SPACE_IDENTITY_COLORS.car!, kind: "car" },
-  { name: "Home", icon: "home-outline", color: SPACE_IDENTITY_COLORS.home!, kind: "home" },
-  { name: "Grocery", icon: "cart-outline", color: SPACE_IDENTITY_COLORS.grocery!, kind: "grocery" },
-  { name: "Expenses", icon: "receipt-outline", color: SPACE_IDENTITY_COLORS.expenses!, kind: "expenses" },
+  { name: "Mașină", icon: "car-outline", color: SPACE_IDENTITY_COLORS.car!, kind: "car", hint: "Alimentări, service, documente" },
+  { name: "Casă", icon: "home-outline", color: SPACE_IDENTITY_COLORS.home!, kind: "home", hint: "Task-uri, facturi, provizii" },
+  { name: "Cumpărături", icon: "cart-outline", color: SPACE_IDENTITY_COLORS.grocery!, kind: "grocery", hint: "Liste, rețete, împărțite" },
+  { name: "Cheltuieli", icon: "receipt-outline", color: SPACE_IDENTITY_COLORS.expenses!, kind: "expenses", hint: "Orice cumperi, pe luni" },
   // { name: "Study", icon: "school-outline", color: "#4B5563" },
   // { name: "Travel", icon: "airplane-outline", color: "#6B7280" },
   // "Finance" hidden deliberately (2026-09-20) -- real accounts/investments
@@ -49,7 +56,7 @@ const TEMPLATES = [
 ] as const;
 
 export default function Spaces() {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing, radius, isDark } = useTheme();
   const router = useRouter();
   // A fixed pixel width, not "48%" -- DraggableFlatList's ScaleDecorator
   // wraps every cell (and the ListHeaderComponent sits in that same grid
@@ -58,11 +65,18 @@ export default function Spaces() {
   // ancestor to resolve against and collapses to something far smaller
   // than intended -- confirmed on a real device (severely truncated card
   // titles). Two cards per row, minus the page's own side padding
-  // (spacing.xl each side) and the gap between them (spacing.md).
-  const cardWidth = (Dimensions.get("window").width - spacing.xl * 2 - spacing.md) / 2;
+  // (spacing.gutter each side) and the gap between them (spacing.md).
+  const cardWidth = (Dimensions.get("window").width - spacing.gutter * 2 - spacing.md) / 2;
   const [spaces, setSpaces] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<Record<string, SpaceProfile | null>>({});
+  // Per-space to-do counts (from the same dashboard endpoint Home uses)
+  // -- the tile's one status line.
+  const [todoCounts, setTodoCounts] = useState<Record<string, number>>({});
+  // Long-press opens this space's action sheet (edit / reorder / delete);
+  // "Reordonează" switches the grid into drag mode until "Gata".
+  const [actionSpace, setActionSpace] = useState<any | null>(null);
+  const [reordering, setReordering] = useState(false);
 
   type CarFormState = { visible: boolean; mode: "create" | "edit"; space: any | null; profile: CarProfile | null };
   type HomeFormState = { visible: boolean; mode: "create" | "edit"; space: any | null; profile: HomeProfile | null };
@@ -72,8 +86,15 @@ export default function Spaces() {
 
   const load = useCallback(async () => {
     try {
-      const r = await api.listSpaces();
+      const [r, d] = await Promise.all([api.listSpaces(), api.dashboard().catch(() => null)]);
       setSpaces(r.spaces);
+      if (d) {
+        const counts: Record<string, number> = {};
+        [...(d.overdue || []), ...(d.today || []), ...(d.upcoming || [])].forEach((it: any) => {
+          if (it.space) counts[String(it.space.id)] = (counts[String(it.space.id)] ?? 0) + 1;
+        });
+        setTodoCounts(counts);
+      }
 
       // api.listSpaces eager-loads car_profile/home_profile on every
       // space now -- one request, no more per-space async reads.
@@ -102,12 +123,12 @@ export default function Spaces() {
     // it's created" step via EditSpaceModal's create mode instead of the
     // old instant, generically-named creation -- that's what let two
     // Grocery spaces both end up just called "Grocery".
-    if (t.name === "Car") {
+    if (t.kind === "car") {
       setCarForm({ visible: true, mode: "create", space: null, profile: null });
       return;
     }
 
-    if (t.name === "Home") {
+    if (t.kind === "home") {
       setHomeForm({ visible: true, mode: "create", space: null, profile: null });
       return;
     }
@@ -148,8 +169,8 @@ export default function Spaces() {
 
   const confirmDeleteSpace = async (spaceItem: any) => {
     const confirmed = await confirmAction(
-      "Ștergere spațiu",
-      "Sunteți sigur că vreți să ștergeți acest spațiu? Toate datele vor fi pierdute definitiv.",
+      `Ștergi „${spaceItem.name}"?`,
+      "Tot ce e în el se șterge definitiv și nu se poate anula.",
       { confirmLabel: "Șterge", destructive: true },
     );
 
@@ -186,177 +207,85 @@ export default function Spaces() {
   };
 
   const renderSpaceCard = ({ item: s, drag, isActive }: RenderItemParams<any>) => {
-    // Gray subtitle under the name, from the same per-space profile the
-    // edit button already loads -- Model for Car, County for Home.
-    // Nothing for a type with no profile.
+    // Status line under the name: what needs doing here, else the
+    // profile detail (Model for Car, County for Home), else the kind.
     const profile = profiles[s.id] ?? null;
-    const kind = detectSpaceType(s, profile);
-    const identityColor = SPACE_IDENTITY_COLORS[kind] ?? colors.onSurface;
-    const cardSubtitle =
+    const kind = detectSpaceType(s, profile) as SpaceKind;
+    const fill = SPACE_IDENTITY_COLORS[kind] ?? colors.onSurfaceTertiary;
+    const tint = spaceTextColor(kind, isDark) ?? colors.onSurface;
+    const todos = todoCounts[String(s.id)] ?? 0;
+    const detail =
       kind === "car"
         ? (profile as CarProfile | null)?.model
         : kind === "home"
-          ? (profile as HomeProfile | null)?.county
+          ? (profile as HomeProfile | null)?.city || (profile as HomeProfile | null)?.county
           : undefined;
+    const status = todos > 0 ? `${todos} de făcut` : detail || "La zi";
 
     return (
-      <ScaleDecorator>
-        <Pressable
+      <ScaleDecorator activeScale={1.04}>
+        <PressableScale
           key={s.id}
           testID={`space-card-${s.id}`}
-          onPress={() => router.push(`/${s.id}` as any)}
-          onLongPress={drag}
+          onPress={() => (reordering ? undefined : router.push(`/${s.id}` as any))}
+          onLongPress={reordering ? drag : () => setActionSpace(s)}
+          delayLongPress={reordering ? 120 : 400}
           disabled={isActive}
+          accessibilityRole="button"
+          accessibilityLabel={`${s.name}, ${status}`}
+          accessibilityHint={reordering ? "Ține apăsat și trage ca să muți" : "Ține apăsat pentru opțiuni"}
           style={{
             width: cardWidth,
-            minHeight: 140,
-            backgroundColor: "transparent",
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: radius.sm,
+            minHeight: 150,
+            backgroundColor: colors.surfaceSecondary,
+            borderRadius: radius.lg,
             padding: spacing.lg,
-            alignItems: "center",
-            justifyContent: "center",
             gap: spacing.md,
-            position: "relative",
+            borderWidth: reordering ? 1.5 : 0,
+            borderStyle: "dashed",
+            borderColor: colors.borderStrong,
           }}
         >
-          <Pressable
-            testID={`space-card-edit-${s.id}`}
-            onPress={(event) => {
-              event.stopPropagation();
-              openEditForSpace(s);
-            }}
-            hitSlop={10}
-            style={{
-              position: "absolute",
-              top: 8,
-              left: 8,
-              width: 28,
-              height: 28,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Ionicons
-              name="create-outline"
-              size={14}
-              color={colors.caution}
-            />
-          </Pressable>
-
-          <Pressable
-            testID={`space-card-delete-${s.id}`}
-            onPress={(event) => {
-              event.stopPropagation();
-              confirmDeleteSpace(s);
-            }}
-            hitSlop={10}
-            disabled={deletingId === s.id}
-            style={{
-              position: "absolute",
-              top: 8,
-              right: 8,
-              width: 28,
-              height: 28,
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: deletingId === s.id ? 0.5 : 1,
-            }}
-          >
-            {deletingId === s.id ? (
-              <ActivityIndicator size="small" color={colors.onSurfaceTertiary} />
-            ) : (
-              <Ionicons
-                name="trash-outline"
-                size={14}
-                color={colors.error}
-              />
-            )}
-          </Pressable>
-
-          <View
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: radius.md,
-              backgroundColor: `${identityColor}1A`,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Ionicons
-              name={(s.icon || "folder-outline") as any}
-              size={22}
-              color={identityColor}
-            />
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+            <IconWell icon={(s.icon || "folder-outline") as any} color={fill} tint={tint} size={44} />
+            {reordering ? <Ionicons name="reorder-two" size={20} color={colors.onSurfaceTertiary} /> : null}
           </View>
-
-          <Text
-            style={{
-              fontSize: 16,
-              fontWeight: "700",
-              color: colors.onSurface,
-              textAlign: "center",
-            }}
-            numberOfLines={1}
-          >
-            {s.name}
-          </Text>
-
-          {cardSubtitle ? (
-            <Text
-              style={{
-                marginTop: -8,
-                fontSize: 12,
-                color: colors.onSurfaceTertiary,
-                textAlign: "center",
-              }}
-              numberOfLines={1}
-            >
-              {cardSubtitle}
-            </Text>
-          ) : null}
-        </Pressable>
+          <View style={{ marginTop: "auto", gap: 2 }}>
+            <Text style={{ fontSize: 17, fontWeight: "600", color: colors.onSurface }} numberOfLines={1}>{s.name}</Text>
+            <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }} numberOfLines={1}>{SPACE_KIND_LABEL[kind] ?? "Spațiu"}</Text>
+            <Text style={{ fontSize: 13, color: todos > 0 ? tint : colors.onSurfaceTertiary, marginTop: 4 }} numberOfLines={1}>{status}</Text>
+          </View>
+        </PressableScale>
       </ScaleDecorator>
     );
   };
 
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="spaces-screen">
-      <View style={{ padding: spacing.xl, paddingBottom: spacing.md }}>
-        <Text style={{ fontSize: 30, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 }}>Spaces</Text>
+      <View style={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.lg, paddingBottom: spacing.md }}>
+        <PageTitle
+          right={
+            reordering ? (
+              <Button compact label="Gata" onPress={() => setReordering(false)} testID="spaces-reorder-done" />
+            ) : (
+              <CircleButton testID="space-add-tile" icon="add" label="Spațiu nou" tone={colors.onSurface} onPress={() => setTemplatePickerVisible(true)} />
+            )
+          }
+        >
+          {reordering ? "Mută spațiile" : "Spații"}
+        </PageTitle>
       </View>
 
       {loading ? (
         <ActivityIndicator color={colors.onSurfaceTertiary} style={{ marginTop: spacing.xl }} />
       ) : spaces.length === 0 ? (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 140 }}>
-          <View style={{ paddingVertical: spacing["3xl"], alignItems: "center", gap: spacing.lg }}>
-            <Ionicons name="grid-outline" size={36} color={colors.onSurfaceTertiary} />
-            <Text style={{ fontSize: 18, fontWeight: "600", color: colors.onSurface }}>Create your first Space</Text>
-            <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, textAlign: "center", maxWidth: 300 }}>
-              A Space is any part of your life you want to keep organized — Car, Home, Study, Travel or anything you invent.
-            </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, justifyContent: "center" }}>
-              {TEMPLATES.slice(0, 6).map((t) => (
-                <Pressable
-                  key={t.name}
-                  testID={`template-${t.name.toLowerCase()}`}
-                  onPress={() => createFromTemplate(t)}
-                  hitSlop={4}
-                  style={{
-                    paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
-                    borderRadius: radius.pill, borderWidth: 1, borderColor: colors.border,
-                    flexDirection: "row", alignItems: "center", gap: 6,
-                  }}
-                >
-                  <Ionicons name={t.icon as any} size={14} color={t.color} />
-                  <Text style={{ color: colors.onSurface, fontSize: 13, fontWeight: "600" }}>{t.name}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingBottom: 140, gap: spacing.lg }}>
+          <EmptyState
+            icon="grid-outline"
+            title="Creează primul tău spațiu"
+            message="Un spațiu e o parte din viața ta pe care vrei s-o ții în ordine: mașina, casa, cumpărăturile sau cheltuielile."
+          />
+          <TemplateList onPick={createFromTemplate} />
         </ScrollView>
       ) : (
         <DraggableFlatList
@@ -366,45 +295,12 @@ export default function Spaces() {
           numColumns={2}
           onDragEnd={({ data }) => handleReorderSpaces(data)}
           columnWrapperStyle={{ gap: spacing.md }}
-          contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 140, gap: spacing.md }}
+          contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingBottom: 140, gap: spacing.md }}
           renderItem={renderSpaceCard}
-          ListHeaderComponent={
-            // Same dashed-border "add" affordance already used elsewhere
-            // (e.g. Grocery's Invite pill), sized to match the real space
-            // cards below -- rendered as the grid's own header row (not a
-            // draggable cell) so it's never reachable by drag and always
-            // stays first, above the reorderable cards.
-            <Pressable
-              testID="space-add-tile"
-              onPress={() => setTemplatePickerVisible(true)}
-              style={{
-                width: cardWidth,
-                minHeight: 140,
-                borderWidth: 1.5,
-                borderStyle: "dashed",
-                borderColor: colors.border,
-                borderRadius: radius.sm,
-                padding: spacing.lg,
-                alignItems: "center",
-                justifyContent: "center",
-                gap: spacing.md,
-              }}
-            >
-              <View
-                style={{
-                  width: 48,
-                  height: 48,
-                  borderRadius: radius.md,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons name="add" size={26} color={colors.onSurfaceTertiary} />
-              </View>
-              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurfaceTertiary }}>
-                Add Space
-              </Text>
-            </Pressable>
+          ListFooterComponent={
+            <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, textAlign: "center", marginTop: spacing.md }}>
+              {reordering ? "Ține apăsat un spațiu și trage-l unde vrei." : "Ține apăsat un spațiu ca să-l muți, editezi sau ștergi."}
+            </Text>
           }
         />
       )}
@@ -435,60 +331,84 @@ export default function Spaces() {
         onSaved={() => load()}
       />
 
-      <Modal visible={templatePickerVisible} transparent animationType="fade" onRequestClose={() => setTemplatePickerVisible(false)}>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl }}>
-          <Pressable
-            onPress={() => setTemplatePickerVisible(false)}
-            style={{ ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.4)" }}
-          />
+      <Sheet
+        visible={templatePickerVisible}
+        onClose={() => setTemplatePickerVisible(false)}
+        title="Spațiu nou"
+        subtitle="Alege ce vrei să organizezi"
+        testID="template-picker"
+      >
+        <TemplateList onPick={createFromTemplate} />
+      </Sheet>
 
-          <View
-            style={{
-              width: "100%",
-              maxWidth: 380,
-              borderRadius: radius.lg,
-              backgroundColor: colors.surface,
-              padding: spacing.xl,
+      {/* Long-press actions for one space. */}
+      <Sheet
+        visible={!!actionSpace}
+        onClose={() => setActionSpace(null)}
+        title={actionSpace?.name}
+        subtitle={actionSpace ? SPACE_KIND_LABEL[detectSpaceType(actionSpace, profiles[actionSpace.id] ?? null) as SpaceKind] : undefined}
+      >
+        <Group inset={62}>
+          <Row
+            testID={actionSpace ? `space-card-edit-${actionSpace.id}` : undefined}
+            leading={<IconWell icon="create-outline" color={colors.onSurfaceTertiary} tint={colors.onSurfaceSecondary} size={34} />}
+            title="Editează"
+            onPress={() => {
+              const target = actionSpace;
+              setActionSpace(null);
+              if (target) openEditForSpace(target);
             }}
-          >
-            <Text style={{ fontSize: 17, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.lg }}>
-              Add a Space
-            </Text>
-
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
-              {TEMPLATES.map((t) => (
-                <Pressable
-                  key={t.name}
-                  testID={`template-quick-${t.name.toLowerCase()}`}
-                  onPress={() => createFromTemplate(t)}
-                  style={{
-                    flexGrow: 1,
-                    flexBasis: "46%",
-                    minHeight: 84,
-                    borderRadius: radius.sm,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: spacing.sm,
-                  }}
-                >
-                  <Ionicons name={t.icon as any} size={20} color={t.color} />
-                  <Text style={{ color: colors.onSurface, fontSize: 12, fontWeight: "700" }}>{t.name}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <Pressable
-              testID="template-picker-cancel"
-              onPress={() => setTemplatePickerVisible(false)}
-              style={{ marginTop: spacing.lg, minHeight: 48, alignItems: "center", justifyContent: "center" }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
+          />
+          <Row
+            leading={<IconWell icon="reorder-three-outline" color={colors.onSurfaceTertiary} tint={colors.onSurfaceSecondary} size={34} />}
+            title="Mută spațiile"
+            subtitle="Schimbă ordinea în grilă"
+            onPress={() => {
+              setActionSpace(null);
+              setReordering(true);
+            }}
+          />
+          <Row
+            testID={actionSpace ? `space-card-delete-${actionSpace.id}` : undefined}
+            leading={<IconWell icon="trash-outline" color={colors.error} size={34} />}
+            title="Șterge spațiul"
+            onPress={() => {
+              const target = actionSpace;
+              setActionSpace(null);
+              if (target) confirmDeleteSpace(target);
+            }}
+            trailing={deletingId === actionSpace?.id ? <ActivityIndicator size="small" color={colors.onSurfaceTertiary} /> : null}
+          />
+        </Group>
+      </Sheet>
     </SafeAreaView>
+  );
+}
+
+/** The 4 space types as large rows -- used by the "+" sheet and the
+ * empty state. */
+function TemplateList({ onPick }: { onPick: (t: (typeof TEMPLATES)[number]) => void }) {
+  const { colors, spacing, isDark } = useTheme();
+  return (
+    <View style={{ gap: spacing.sm }}>
+      {TEMPLATES.map((t) => (
+        <PressableScale
+          key={t.kind}
+          testID={`template-quick-${t.kind}`}
+          onPress={() => onPick(t)}
+          scaleTo={motion.scale.card}
+          accessibilityRole="button"
+          accessibilityLabel={t.name}
+          style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, padding: spacing.md + 2, borderRadius: 16, backgroundColor: colors.surfaceTertiary }}
+        >
+          <IconWell icon={t.icon as any} color={t.color} tint={spaceTextColor(t.kind as SpaceKind, isDark)} size={44} />
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 16, fontWeight: "600", color: colors.onSurface }}>{t.name}</Text>
+            <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{t.hint}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.onSurfaceTertiary} />
+        </PressableScale>
+      ))}
+    </View>
   );
 }

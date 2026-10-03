@@ -1,21 +1,16 @@
 import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-} from "react-native";
+import { View } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { notifyAction } from "@/lib/confirm";
+import { Sheet } from "@/components/ui/Sheet";
+import { Button, Field } from "@/components/ui/primitives";
 import {
   carProfileName,
   carProfileToApiBody,
   carProfileFromApi,
+  SPACE_IDENTITY_COLORS,
+  SPACE_BUTTON_FILL,
   type CarProfile,
 } from "@/lib/spaces/spaceProfile";
 
@@ -44,7 +39,7 @@ export function CarProfileForm({
   onClose,
   onSaved,
 }: CarProfileFormProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { spacing } = useTheme();
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
   const [color, setColor] = useState("");
@@ -141,142 +136,63 @@ export function CarProfileForm({
     }
   };
 
+  const two = { flexDirection: "row" as const, gap: spacing.md };
+  const half = { flex: 1 };
+
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1, justifyContent: "flex-end" }}
-      >
-        <Pressable onPress={onClose} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }} />
-
-        <View
-          style={{
-            backgroundColor: colors.surface,
-            padding: spacing.xl,
-            gap: spacing.md,
-            borderTopLeftRadius: radius.lg,
-            borderTopRightRadius: radius.lg,
-          }}
-        >
-          <Text style={{ fontSize: 20, fontWeight: "700", color: colors.onSurface }}>
-            {mode === "create" ? "New Car" : "Edit Car"}
-          </Text>
-
-          <Field label="Make" value={make} onChangeText={setMake} placeholder="e.g. BMW" required colors={colors} spacing={spacing} radius={radius} />
-          <Field label="Model" value={model} onChangeText={setModel} placeholder="e.g. 340D" required colors={colors} spacing={spacing} radius={radius} />
-          <Field label="Color (optional)" value={color} onChangeText={setColor} placeholder="e.g. Black" colors={colors} spacing={spacing} radius={radius} />
-          <Field label="Year" value={year} onChangeText={setYear} placeholder="e.g. 2020" keyboardType="number-pad" colors={colors} spacing={spacing} radius={radius} />
-          <Field label="Purchase price (RON)" value={purchasePrice} onChangeText={setPurchasePrice} placeholder="0" keyboardType="decimal-pad" colors={colors} spacing={spacing} radius={radius} />
-          <Field
-            label="Tank capacity (L)"
-            value={tankCapacity}
-            onChangeText={setTankCapacity}
-            placeholder="e.g. 57"
-            keyboardType="decimal-pad"
-            required
-            warning={
-              submitAttempted && tankCapacityMissing
-                ? "We are calculating based on tank capacity!"
-                : undefined
-            }
-            colors={colors}
-            spacing={spacing}
-            radius={radius}
-          />
-
-          <Pressable
-            testID="car-profile-save"
-            onPress={submit}
-            disabled={busy}
-            style={{
-              marginTop: spacing.sm,
-              backgroundColor: colors.brandPrimary,
-              opacity: busy ? 0.5 : 1,
-              paddingVertical: 14,
-              borderRadius: radius.md,
-              alignItems: "center",
-            }}
-          >
-            {busy ? (
-              <ActivityIndicator color={colors.onBrandPrimary} />
-            ) : (
-              <Text style={{ color: colors.onBrandPrimary, fontWeight: "700", fontSize: 15 }}>
-                {mode === "create" ? "Create Car" : "Save Changes"}
-              </Text>
-            )}
-          </Pressable>
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title={mode === "create" ? "Mașină nouă" : "Editează mașina"}
+      subtitle="Marca devine numele spațiului"
+      icon="car-outline"
+      tone={SPACE_IDENTITY_COLORS.car}
+      footer={
+        <Button
+          testID="car-profile-save"
+          label={mode === "create" ? "Adaugă mașina" : "Salvează"}
+          tone={SPACE_BUTTON_FILL.car}
+          onPress={submit}
+          loading={busy}
+        />
+      }
+    >
+      <View style={two}>
+        <View style={half}>
+          <Field label="Marcă" value={make} onChangeText={setMake} placeholder="ex. BMW" tone={SPACE_IDENTITY_COLORS.car} error={submitAttempted && !make.trim() ? "Obligatoriu" : null} />
         </View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  keyboardType,
-  required,
-  warning,
-  colors,
-  spacing,
-  radius,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (text: string) => void;
-  placeholder: string;
-  keyboardType?: "default" | "number-pad" | "decimal-pad";
-  /** Shows a red "*" next to the label. */
-  required?: boolean;
-  /** Red text shown next to the label -- only while the field is actually
-   * empty; disappears the moment the user enters a valid value. */
-  warning?: string;
-  colors: any;
-  spacing: any;
-  radius: any;
-}) {
-  return (
-    <View>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
-        <Text
-          style={{
-            fontSize: 11,
-            fontWeight: "700",
-            letterSpacing: 0.4,
-            color: colors.onSurfaceTertiary,
-            textTransform: "uppercase",
-          }}
-        >
-          {label}
-          {required ? <Text style={{ color: colors.error }}> *</Text> : null}
-        </Text>
-
-        {warning ? (
-          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.error }}>
-            {warning}
-          </Text>
-        ) : null}
+        <View style={half}>
+          <Field label="Model" value={model} onChangeText={setModel} placeholder="ex. 340d" tone={SPACE_IDENTITY_COLORS.car} error={submitAttempted && !model.trim() ? "Obligatoriu" : null} />
+        </View>
       </View>
-
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.onSurfaceTertiary}
-        keyboardType={keyboardType}
-        style={{
-          height: 44,
-          paddingHorizontal: spacing.md,
-          borderRadius: radius.sm,
-          backgroundColor: "transparent",
-          borderWidth: 1,
-          borderColor: colors.border,
-          color: colors.onSurface,
-          fontSize: 14,
-        }}
+      <View style={two}>
+        <View style={half}>
+          <Field label="An" value={year} onChangeText={setYear} placeholder="ex. 2020" keyboardType="number-pad" tone={SPACE_IDENTITY_COLORS.car} />
+        </View>
+        <View style={half}>
+          <Field label="Culoare (opțional)" value={color} onChangeText={setColor} placeholder="ex. Negru" tone={SPACE_IDENTITY_COLORS.car} />
+        </View>
+      </View>
+      <Field
+        label="Capacitate rezervor"
+        value={tankCapacity}
+        onChangeText={setTankCapacity}
+        placeholder="ex. 57"
+        keyboardType="decimal-pad"
+        suffix="l"
+        tone={SPACE_IDENTITY_COLORS.car}
+        error={submitAttempted && tankCapacityMissing ? "Obligatoriu: consumul se calculează pe baza ei." : null}
+        hint="Folosită la calculul consumului."
       />
-    </View>
+      <Field
+        label="Preț de cumpărare (opțional)"
+        value={purchasePrice}
+        onChangeText={setPurchasePrice}
+        placeholder="0"
+        keyboardType="decimal-pad"
+        suffix="lei"
+        tone={SPACE_IDENTITY_COLORS.car}
+      />
+    </Sheet>
   );
 }

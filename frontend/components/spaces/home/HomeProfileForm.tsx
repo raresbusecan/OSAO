@@ -1,22 +1,16 @@
 import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  Modal,
-  Switch,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-} from "react-native";
+import { View, Text } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { notifyAction } from "@/lib/confirm";
+import { Sheet } from "@/components/ui/Sheet";
+import { Button, Field, Segmented } from "@/components/ui/primitives";
 import {
   homeProfileName,
   homeProfileToApiBody,
   homeProfileFromApi,
+  SPACE_IDENTITY_COLORS,
+  SPACE_BUTTON_FILL,
   type HomeProfile,
 } from "@/lib/spaces/spaceProfile";
 
@@ -43,7 +37,7 @@ export function HomeProfileForm({
   onClose,
   onSaved,
 }: HomeProfileFormProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { colors } = useTheme();
   const [county, setCounty] = useState("");
   const [city, setCity] = useState("");
   const [bought, setBought] = useState(true);
@@ -115,145 +109,52 @@ export function HomeProfileForm({
     }
   };
 
+  const tone = SPACE_IDENTITY_COLORS.home;
+
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-        style={{ flex: 1, justifyContent: "flex-end" }}
-      >
-        <Pressable onPress={onClose} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }} />
-
-        <View
-          style={{
-            backgroundColor: colors.surface,
-            padding: spacing.xl,
-            gap: spacing.md,
-            borderTopLeftRadius: radius.lg,
-            borderTopRightRadius: radius.lg,
-          }}
-        >
-          <Text style={{ fontSize: 20, fontWeight: "700", color: colors.onSurface }}>
-            {mode === "create" ? "New Home" : "Edit Home"}
-          </Text>
-
-          <Field label="County (Județ)" value={county} onChangeText={setCounty} placeholder="e.g. Maramureș" required colors={colors} spacing={spacing} radius={radius} />
-          <Field label="City / Village" value={city} onChangeText={setCity} placeholder="e.g. Băiuț" required colors={colors} spacing={spacing} radius={radius} />
-
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingVertical: spacing.sm,
-            }}
-          >
-            <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurface }}>
-              Bought
-            </Text>
-
-            <Switch
-              testID="home-profile-bought-toggle"
-              value={bought}
-              onValueChange={setBought}
-              trackColor={{ false: colors.surfaceTertiary, true: colors.brandPrimary }}
-            />
-          </View>
-
-          {bought ? (
-            <Field
-              label="Purchase price (RON)"
-              value={purchasePrice}
-              onChangeText={setPurchasePrice}
-              placeholder="0"
-              keyboardType="decimal-pad"
-              colors={colors}
-              spacing={spacing}
-              radius={radius}
-            />
-          ) : null}
-
-          <Pressable
-            testID="home-profile-save"
-            onPress={submit}
-            disabled={busy || !canSubmit}
-            style={{
-              marginTop: spacing.sm,
-              backgroundColor: colors.brandPrimary,
-              opacity: busy || !canSubmit ? 0.5 : 1,
-              paddingVertical: 14,
-              borderRadius: radius.md,
-              alignItems: "center",
-            }}
-          >
-            {busy ? (
-              <ActivityIndicator color={colors.onBrandPrimary} />
-            ) : (
-              <Text style={{ color: colors.onBrandPrimary, fontWeight: "700", fontSize: 15 }}>
-                {mode === "create" ? "Create Home" : "Save Changes"}
-              </Text>
-            )}
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  keyboardType,
-  required,
-  colors,
-  spacing,
-  radius,
-}: {
-  label: string;
-  value: string;
-  onChangeText: (text: string) => void;
-  placeholder: string;
-  keyboardType?: "default" | "number-pad" | "decimal-pad";
-  /** Shows a red "*" next to the label. */
-  required?: boolean;
-  colors: any;
-  spacing: any;
-  radius: any;
-}) {
-  return (
-    <View>
-      <Text
-        style={{
-          fontSize: 11,
-          fontWeight: "700",
-          letterSpacing: 0.4,
-          color: colors.onSurfaceTertiary,
-          marginBottom: 4,
-          textTransform: "uppercase",
-        }}
-      >
-        {label}
-        {required ? <Text style={{ color: colors.error }}> *</Text> : null}
-      </Text>
-
-      <TextInput
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.onSurfaceTertiary}
-        keyboardType={keyboardType}
-        style={{
-          height: 44,
-          paddingHorizontal: spacing.md,
-          borderRadius: radius.sm,
-          backgroundColor: colors.surfaceSecondary,
-          borderWidth: 1,
-          borderColor: colors.border,
-          color: colors.onSurface,
-          fontSize: 14,
-        }}
-      />
-    </View>
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title={mode === "create" ? "Casă nouă" : "Editează casa"}
+      subtitle="Localitatea devine numele spațiului"
+      icon="home-outline"
+      tone={tone}
+      footer={
+        <Button
+          testID="home-profile-save"
+          label={mode === "create" ? "Adaugă casa" : "Salvează"}
+          tone={SPACE_BUTTON_FILL.home}
+          onPress={submit}
+          loading={busy}
+          disabled={!canSubmit}
+        />
+      }
+    >
+      <Field label="Județ" value={county} onChangeText={setCounty} placeholder="ex. Maramureș" tone={tone} />
+      <Field label="Localitate" value={city} onChangeText={setCity} placeholder="ex. Băiuț" tone={tone} />
+      <View style={{ gap: 6 }}>
+        <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Cum ai obținut-o</Text>
+        <Segmented
+          testIDPrefix="home-profile-ownership"
+          options={[
+            { key: "bought", label: "Cumpărată" },
+            { key: "inherited", label: "Moștenită" },
+          ]}
+          value={bought ? "bought" : "inherited"}
+          onChange={(k) => setBought(k === "bought")}
+        />
+      </View>
+      {bought ? (
+        <Field
+          label="Preț de cumpărare (opțional)"
+          value={purchasePrice}
+          onChangeText={setPurchasePrice}
+          placeholder="0"
+          keyboardType="decimal-pad"
+          suffix="lei"
+          tone={tone}
+        />
+      ) : null}
+    </Sheet>
   );
 }
