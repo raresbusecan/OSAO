@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useContext } from "react";
 import { StyleSheet, type TextStyle } from "react-native";
 import { fw } from "./theme";
 
@@ -19,16 +19,25 @@ import { fw } from "./theme";
  * before the first render (top of app/_layout.tsx).
  */
 
-function withPlex(style: any) {
+// RN's own "am I inside another <Text>?" context. A nested Text with no
+// fontWeight of its own must INHERIT its parent's family (a colored
+// span inside a 600-weight line), not be forced back to Regular.
+const TextAncestorContext = require("react-native/Libraries/Text/TextAncestorContext").default;
+
+function withPlex(style: any, nested: boolean) {
   const flat = (StyleSheet.flatten(style) || {}) as TextStyle;
   if (flat.fontFamily) return style;
+  if (nested && flat.fontWeight == null) return style;
   return [style, { ...fw(flat.fontWeight ?? "400"), fontWeight: "normal" as const }];
 }
 
 function patch(mod: { default: any }, name: string) {
   const Original = mod.default;
   if (!Original || Original.__plexPatched) return;
-  const Patched = (props: any) => React.createElement(Original, { ...props, style: withPlex(props.style) });
+  const Patched = (props: any) => {
+    const nested = !!useContext(TextAncestorContext);
+    return React.createElement(Original, { ...props, style: withPlex(props.style, nested) });
+  };
   Object.assign(Patched, { displayName: name, __plexPatched: true });
   // A transpiled ESM module can expose `default` as a getter-only
   // property; redefine it when that's allowed, and otherwise leave the

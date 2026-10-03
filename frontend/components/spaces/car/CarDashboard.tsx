@@ -9,6 +9,8 @@ import { severityColor } from "@/lib/statusColors";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+import { CircleButton, Pill, Segmented, SectionHeader, Group, Chip, IconWell, TopBar, Identity } from "@/components/ui/primitives";
+import { formatCarDate } from "./utils/carFormatters";
 
 import {
     View,
@@ -94,7 +96,7 @@ export default function CarDashboard({
     onExpenseDelete,
     initialOpenEntry,
 }: CarDashboardProps) {
-    const { colors, spacing, radius, isDark } = useTheme();
+    const { colors, spacing, radius, isDark, typography } = useTheme();
     const router = useRouter();
 
     // Make is the space's actual name (big title, above); Model sits here
@@ -376,8 +378,8 @@ export default function CarDashboard({
 
         if (wasRenewal) {
             notifyAction(
-                "Logged",
-                `${entry.service} recorded. The reminder for your previous one is cleared -- it stays in your history.`,
+                "Salvat",
+                `${entry.service} a fost salvat. Mementoul pentru cel anterior a dispărut și rămâne în istoric.`,
             );
         }
     };
@@ -394,10 +396,10 @@ export default function CarDashboard({
 
         if (wasRenewal) {
             notifyAction(
-                "Renewed",
+                "Reînnoit",
                 entry.expiryDate
-                    ? `${entry.title} now valid until ${entry.expiryDate}. The expiring ${previousType || "document"} is cleared and stays in your history.`
-                    : `${entry.title} saved. The expiring ${previousType || "document"} is cleared and stays in your history.`,
+                    ? `${entry.title} e valabil până la ${formatCarDate(entry.expiryDate)}. ${previousType || "Documentul"} vechi rămâne în istoric.`
+                    : `${entry.title} a fost salvat. ${previousType || "Documentul"} vechi rămâne în istoric.`,
             );
         }
     };
@@ -751,94 +753,46 @@ export default function CarDashboard({
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{
-                    paddingHorizontal: spacing.lg + 4,
+                    paddingHorizontal: spacing.gutter,
                     paddingTop: spacing.md,
                     paddingBottom: 100,
-                    gap: spacing.xl,
+                    gap: spacing.section,
                 }}
             >
                 {/* TOP BAR -- back to Spaces, edit this car. */}
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                    <CircleButton
-                        testID="space-back"
-                        icon="chevron-back"
-                        label="Înapoi la spații"
-                        onPress={() => router.push("/spaces")}
-                    />
-                    <CircleButton
-                        testID="space-edit"
-                        icon="create-outline"
-                        label="Editează mașina"
-                        onPress={handleEdit}
-                    />
-                </View>
+                <TopBar onBack={() => router.push("/spaces")}>
+                    <CircleButton testID="space-edit" icon="create-outline" label="Editează mașina" onPress={handleEdit} />
+                </TopBar>
 
                 {/* IDENTITY -- kind dot + label, the car's own name, then
                     its model from the saved profile (never a hardcoded
                     example car). Docs/Archive/History sit right under it:
                     one destination each, always visible. */}
                 <View style={{ gap: spacing.md }}>
-                    <View style={{ gap: 2 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: carFill }} />
-                            <Text style={{ fontSize: 14, color: muted }}>Mașină</Text>
-                        </View>
-                        <Text style={{ fontSize: 28, fontWeight: "600", letterSpacing: -0.6, color: colors.onSurface }} numberOfLines={1}>
-                            {space?.name || "Mașina mea"}
-                        </Text>
-                        {vehicleSubtitle ? (
-                            <Text style={{ fontSize: 14, color: muted }}>{vehicleSubtitle}</Text>
-                        ) : null}
-                    </View>
-
+                    <Identity color={carFill} kicker="Mașină" title={space?.name || "Mașina mea"} subtitle={vehicleSubtitle || null} />
                     <View style={{ flexDirection: "row", gap: spacing.sm }}>
-                        {[
-                            { testID: "car-docs-open", icon: "document-text-outline", label: "Documente", onPress: () => setDocsPageVisible(true) },
-                            { testID: "car-archive-open", icon: "archive-outline", label: "Arhivă", onPress: () => setArchivePageVisible(true) },
-                            {
-                                testID: "car-history-open",
-                                icon: "time-outline",
-                                label: "Istoric",
-                                onPress: () => {
-                                    setHistoryInitialTab("all");
-                                    setHistoryPageVisible(true);
-                                },
-                            },
-                        ].map((link) => (
-                            <PressableScale
-                                key={link.testID}
-                                testID={link.testID}
-                                onPress={link.onPress}
-                                accessibilityRole="button"
-                                accessibilityLabel={link.label}
-                                style={{
-                                    flexDirection: "row",
-                                    alignItems: "center",
-                                    gap: 6,
-                                    height: 38,
-                                    paddingHorizontal: spacing.md + 2,
-                                    borderRadius: radius.pill,
-                                    backgroundColor: colors.surfaceSecondary,
-                                }}
-                            >
-                                <Ionicons name={link.icon as any} size={15} color={muted} />
-                                <Text style={{ fontSize: 13, fontWeight: "500", color: colors.onSurface }}>{link.label}</Text>
-                            </PressableScale>
-                        ))}
+                        <Pill testID="car-docs-open" icon="document-text-outline" label="Documente" onPress={() => setDocsPageVisible(true)} />
+                        <Pill testID="car-archive-open" icon="archive-outline" label="Arhivă" onPress={() => setArchivePageVisible(true)} />
+                        <Pill
+                            testID="car-history-open"
+                            icon="time-outline"
+                            label="Istoric"
+                            onPress={() => {
+                                setHistoryInitialTab("all");
+                                setHistoryPageVisible(true);
+                            }}
+                        />
                     </View>
                 </View>
 
                 {/* HERO -- odometer as the headline number; this month's
                     spend (tap -> Expenses page, the one place for "what
                     this car has cost") and average consumption under it. */}
-                <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.lg + 4, gap: spacing.lg }}>
+                <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.lg }}>
                     <View style={{ gap: 2 }}>
                         <Text style={{ fontSize: 13, color: muted }}>Kilometraj</Text>
                         <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-                            <AnimatedNumber
-                                value={currentOdometer}
-                                style={{ fontSize: 36, fontWeight: "600", letterSpacing: -1, color: colors.onSurface }}
-                            />
+                            <AnimatedNumber value={currentOdometer} style={{ ...typography.display, color: colors.onSurface }} />
                             <Text style={{ fontSize: 16, color: muted }}>km</Text>
                         </View>
                     </View>
@@ -875,54 +829,20 @@ export default function CarDashboard({
                 {/* DUE SOON -- documents/maintenance coming up, each with
                     its urgency chip (see InfoRow / getDocumentUrgencyTier). */}
                 {nextItems.length > 0 && (
-                    <View style={{ gap: spacing.md }}>
-                        <SectionTitle title="Urmează" colors={colors} />
-                        <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg - 4, overflow: "hidden" }}>
-                            {nextItems.map((item, index) => (
-                                <InfoRow
-                                    key={item.id}
-                                    {...item}
-                                    first={index === 0}
-                                    tint={carTint}
-                                    onPress={() => handleNextItemPress(item)}
-                                />
+                    <View style={{ gap: spacing.sm }}>
+                        <SectionHeader title="Urmează" />
+                        <Group inset={68}>
+                            {nextItems.map((item) => (
+                                <InfoRow key={item.id} {...item} tint={carTint} onPress={() => handleNextItemPress(item)} />
                             ))}
-                        </View>
+                        </Group>
                     </View>
                 )}
 
                 {/* CATEGORY FILTER + RECENT (today) / last 7 days. Older
                     entries aren't gone -- they're in History. */}
                 <View style={{ gap: spacing.md }}>
-                    <View style={{ flexDirection: "row", gap: 4, backgroundColor: colors.surfaceSecondary, borderRadius: radius.md, padding: 4 }}>
-                        {CATEGORY_TABS.map((tab) => {
-                            const isActive = activeTab === tab.key;
-                            return (
-                                <Pressable
-                                    key={tab.key}
-                                    testID={`car-tab-${tab.key}`}
-                                    onPress={() => setActiveTab(tab.key)}
-                                    accessibilityRole="button"
-                                    accessibilityState={{ selected: isActive }}
-                                    style={{
-                                        flex: 1,
-                                        height: 36,
-                                        borderRadius: radius.md - 3,
-                                        backgroundColor: isActive ? colors.surfaceTertiary : "transparent",
-                                        alignItems: "center",
-                                        justifyContent: "center",
-                                    }}
-                                >
-                                    <Text
-                                        numberOfLines={1}
-                                        style={{ fontSize: 13, fontWeight: isActive ? "600" : "400", color: isActive ? colors.onSurface : muted }}
-                                    >
-                                        {tab.label}
-                                    </Text>
-                                </Pressable>
-                            );
-                        })}
-                    </View>
+                    <Segmented options={CATEGORY_TABS} value={activeTab} onChange={setActiveTab} testIDPrefix="car-tab" />
 
                     {recentItems.length > 0 && (
                         <EntryGroup
@@ -959,7 +879,7 @@ export default function CarDashboard({
                                     testID="car-empty-see-history"
                                     onPress={() => openHistoryFor(activeTab)}
                                     accessibilityRole="button"
-                                    style={{ paddingVertical: 10, paddingHorizontal: spacing.lg }}
+                                    style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: spacing.lg }}
                                 >
                                     <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurface }}>Vezi istoricul</Text>
                                 </PressableScale>
@@ -977,47 +897,7 @@ export default function CarDashboard({
    SMALL PIECES
    ============================================================ */
 
-/** 44px round icon button on the card layer -- back, edit. */
-function CircleButton({ icon, label, onPress, testID }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress: () => void; testID?: string }) {
-    const { colors } = useTheme();
-    return (
-        <PressableScale
-            testID={testID}
-            onPress={onPress}
-            accessibilityRole="button"
-            accessibilityLabel={label}
-            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
-        >
-            <Ionicons name={icon} size={icon === "chevron-back" ? 22 : 18} color={icon === "chevron-back" ? colors.onSurface : colors.onSurfaceTertiary} />
-        </PressableScale>
-    );
-}
-
-function SectionTitle({
-    title,
-    colors,
-    action,
-}: {
-    title: string;
-    colors: any;
-    /** Optional shortcut on the opposite side of the title (e.g. "Arată
-     * mai mult"/"Arată mai puțin") -- stays put regardless of expanded
-     * state, so collapsing never requires scrolling down to find it. */
-    action?: { label: string; onPress: () => void; testID?: string };
-}) {
-    return (
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{title}</Text>
-            {action ? (
-                <Pressable testID={action.testID} onPress={action.onPress} hitSlop={10} accessibilityRole="button">
-                    <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{action.label}</Text>
-                </Pressable>
-            ) : null}
-        </View>
-    );
-}
-
-/** A titled group of entry rows on one card, collapsed to 5. */
+/** A date-labelled group of entry rows on one card, collapsed to 5. */
 function EntryGroup({
     title,
     items,
@@ -1033,27 +913,20 @@ function EntryGroup({
     onItemPress: (item: CarRecentItem) => void;
     testID?: string;
 }) {
-    const { colors, spacing, radius } = useTheme();
+    const { colors, spacing } = useTheme();
     const visible = expanded ? items : items.slice(0, 5);
     return (
-        <View style={{ gap: spacing.sm }}>
-            <SectionTitle
+        <View style={{ gap: spacing.xs }}>
+            <SectionHeader
                 title={title}
-                colors={colors}
+                muted
                 action={items.length > 5 ? { label: expanded ? "Arată mai puțin" : `Arată tot (${items.length})`, onPress: onToggle, testID } : undefined}
             />
-            <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg - 4, overflow: "hidden" }}>
-                {visible.map((item, index) => (
-                    <RecentRow
-                        key={item.id}
-                        {...item}
-                        colors={colors}
-                        spacing={spacing}
-                        last={index === visible.length - 1}
-                        onPress={() => onItemPress(item)}
-                    />
+            <Group inset={68}>
+                {visible.map((item) => (
+                    <RecentRow key={item.id} {...item} colors={colors} spacing={spacing} onPress={() => onItemPress(item)} />
                 ))}
-            </View>
+            </Group>
         </View>
     );
 }
@@ -1086,11 +959,9 @@ function InfoRow({
     right,
     urgencyTier,
     overdue,
-    first,
     tint,
     onPress,
 }: CarNextItem & {
-    first: boolean;
     tint: string;
     onPress?: () => void;
 }) {
@@ -1099,7 +970,8 @@ function InfoRow({
     return (
         <PressableScale
             onPress={onPress}
-            scaleTo={0.99}
+            scaleTo={1}
+            pressedStyle={{ backgroundColor: colors.surfaceTertiary }}
             accessibilityRole="button"
             accessibilityLabel={`${title}, ${right}`}
             style={{
@@ -1109,24 +981,18 @@ function InfoRow({
                 paddingHorizontal: spacing.lg,
                 paddingVertical: spacing.md,
                 minHeight: 64,
-                borderTopWidth: first ? 0 : 1,
-                borderTopColor: colors.border,
+                backgroundColor: colors.surfaceSecondary,
             }}
         >
-            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${SPACE_IDENTITY_COLORS.car}29`, alignItems: "center", justifyContent: "center" }}>
-                <Ionicons name={icon} size={18} color={tint} />
-            </View>
+            <IconWell icon={icon} color={SPACE_IDENTITY_COLORS.car!} tint={tint} />
             <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>{title}</Text>
                 <Text style={{ marginTop: 2, fontSize: 13, color: colors.onSurfaceTertiary }} numberOfLines={1}>{subtitle}</Text>
             </View>
             {tone ? (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, backgroundColor: `${tone}1F` }}>
-                    {overdue ? <Ionicons name="alert-circle" size={13} color={tone} /> : null}
-                    <Text style={{ fontSize: 12, fontWeight: "600", color: tone }}>{right}</Text>
-                </View>
+                <Chip label={right ?? ""} color={tone} icon={overdue ? "alert-circle" : undefined} />
             ) : (
-                <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{right}</Text>
+                <Chip label={right ?? ""} color={colors.onSurfaceTertiary} filled={false} />
             )}
         </PressableScale>
     );
@@ -1146,7 +1012,7 @@ export function RecentRow({
     overdue,
     colors,
     spacing,
-    last = false,
+    last,
     onPress,
 }: CarRecentItem & {
     colors: any;
@@ -1160,7 +1026,8 @@ export function RecentRow({
     return (
         <PressableScale
             onPress={onPress}
-            scaleTo={0.99}
+            scaleTo={1}
+            pressedStyle={{ backgroundColor: colors.surfaceTertiary }}
             accessibilityRole="button"
             accessibilityLabel={`${title}${amount ? `, ${amount}` : ""}`}
             style={{
@@ -1170,14 +1037,17 @@ export function RecentRow({
                 paddingVertical: spacing.md,
                 minHeight: 64,
                 gap: spacing.md,
-                borderBottomWidth: last ? 0 : 1,
+                backgroundColor: colors.surfaceSecondary,
+                // Callers that stack rows without a Group pass `last` and
+                // get a full-width hairline; Group callers omit it.
+                borderBottomWidth: last === undefined || last ? 0 : 1,
                 borderBottomColor: colors.border,
             }}
         >
             {/* Icon well = which entry type; the small dot on its corner =
                 document/maintenance status (see statusDotColor). */}
-            <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: `${SPACE_IDENTITY_COLORS.car}29`, alignItems: "center", justifyContent: "center" }}>
-                <Ionicons name={icon} size={18} color={tint} />
+            <View>
+                <IconWell icon={icon} color={SPACE_IDENTITY_COLORS.car!} tint={tint} />
                 {statusDot ? (
                     <View
                         style={{

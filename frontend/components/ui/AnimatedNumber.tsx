@@ -8,18 +8,23 @@ export type AnimatedNumberProps = {
    * Romanian-grouped integer ("2.340"). */
   format?: (n: number) => string;
   style?: StyleProp<TextStyle>;
+  /** Count up from 0 on first mount. Reserved for the app's ONE
+   * unprompted reveal (Home's month total); everywhere else the number
+   * appears as-is and only glides when the value later changes. */
+  countUpOnMount?: boolean;
 };
 
 const defaultFormat = (n: number) => Math.round(n).toLocaleString("ro-RO");
 
-/** A number that counts up to its value on first mount, then glides
- * between values when it changes -- so a total visibly reacts to an
- * entry being added instead of silently swapping digits. JS-driven
- * (text can't use the native driver); cheap for a handful of numbers. */
-export function AnimatedNumber({ value, format = defaultFormat, style }: AnimatedNumberProps) {
+/** A number that glides between values when it changes -- so a total
+ * visibly reacts to an entry being added instead of silently swapping
+ * digits. JS-driven (text can't use the native driver); cheap for a
+ * handful of numbers. */
+export function AnimatedNumber({ value, format = defaultFormat, style, countUpOnMount = false }: AnimatedNumberProps) {
   const reduced = useReducedMotion();
-  const anim = useRef(new Animated.Value(0)).current;
-  const [shown, setShown] = useState(reduced ? value : 0);
+  const start = countUpOnMount && !reduced ? 0 : value;
+  const anim = useRef(new Animated.Value(start)).current;
+  const [shown, setShown] = useState(start);
 
   useEffect(() => {
     const id = anim.addListener(({ value: v }) => setShown(v));

@@ -27,6 +27,13 @@ export type ThemeColors = {
   info: string;
   border: string;
   borderStrong: string;
+  /** Unchecked checkbox rings / radio outlines -- a control boundary,
+   * so it must clear WCAG 1.4.11's 3:1 against the card layer, which
+   * `borderStrong` (a decorative hairline) doesn't. */
+  control: string;
+  /** Segmented filter: the track, and the selected segment on it. */
+  segmentTrack: string;
+  segmentActive: string;
 };
 
 /* 2026-10 redesign (see DESIGN.md): three distinct surface layers instead
@@ -35,13 +42,16 @@ export type ThemeColors = {
  * from each Space's identity color (SPACE_IDENTITY_COLORS), not from a
  * single app-wide accent; the semantic gain/loss pair is the green/red
  * convention from finance apps. Every value stays 6-digit hex: several
- * call sites append a 2-digit alpha suffix (`${color}1A`). */
+ * call sites append a 2-digit alpha suffix (`${color}1A`). Light-mode
+ * semantic colors are the deeper shades that still pass 4.5:1 as text
+ * on white (and on their own 12% chip tint). Rules: frontend/CLAUDE.md
+ * "Theme (2026-10 redesign)"; mockup: the "orgOS redesign" canvas. */
 
 const light: ThemeColors = {
   surface: "#F3F5F8",
   onSurface: "#12161D",
   surfaceSecondary: "#FFFFFF",
-  onSurfaceSecondary: "#12161D",
+  onSurfaceSecondary: "#3D4553",
   surfaceTertiary: "#E9EDF2",
   onSurfaceTertiary: "#5B6474",
   surfaceInverse: "#12161D",
@@ -50,20 +60,23 @@ const light: ThemeColors = {
   onBrandPrimary: "#FFFFFF",
   brandSecondary: "#5B6474",
   brandTertiary: "#E9EDF2",
-  success: "#0E9F6E",
-  caution: "#D4A20A",
-  warning: "#E8730C",
-  error: "#E02D47",
+  success: "#047857",
+  caution: "#A16207",
+  warning: "#C2410C",
+  error: "#C81E3A",
   info: "#5B6474",
   border: "#E1E5EB",
   borderStrong: "#C9CFD8",
+  control: "#8B93A3",
+  segmentTrack: "#E9EDF2",
+  segmentActive: "#FFFFFF",
 };
 
 const dark: ThemeColors = {
   surface: "#0F1218",
   onSurface: "#EDF0F5",
   surfaceSecondary: "#171B23",
-  onSurfaceSecondary: "#EDF0F5",
+  onSurfaceSecondary: "#B9C0CD",
   surfaceTertiary: "#20252F",
   onSurfaceTertiary: "#8B93A3",
   surfaceInverse: "#EDF0F5",
@@ -79,10 +92,17 @@ const dark: ThemeColors = {
   info: "#8B93A3",
   border: "#232834",
   borderStrong: "#2F3542",
+  control: "#646C7D",
+  segmentTrack: "#171B23",
+  segmentActive: "#262C38",
 };
 
-export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24, "2xl": 32, "3xl": 48 };
-export const radius = { sm: 6, md: 12, lg: 20, pill: 999 };
+/** `gutter` = page side padding, `section` = gap between a page's
+ * sections (the redesign's two layout constants). */
+export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, gutter: 20, section: 20, xl: 24, "2xl": 32, "3xl": 48 };
+/** `card` = list groups/tiles, `control` = inputs and buttons, `inner` =
+ * a segment inside a 12-radius track (concentric with 4px padding). */
+export const radius = { sm: 6, inner: 8, md: 12, control: 14, card: 16, lg: 20, pill: 999 };
 
 /** IBM Plex Sans, one file per weight (loaded in app/_layout.tsx). A
  * custom font on native doesn't pick a weight from `fontWeight` -- each
@@ -94,17 +114,17 @@ export const fonts = {
   "400": "IBMPlexSans_400Regular",
   "500": "IBMPlexSans_500Medium",
   "600": "IBMPlexSans_600SemiBold",
-  "700": "IBMPlexSans_700Bold",
 } as const;
 
 export type FontWeight = keyof typeof fonts;
 
 /** `{ fontFamily }` for a weight -- spread into a Text style:
- * `style={{ fontSize: 15, ...fw("600") }}`. Heavier legacy weights
- * ("800"/"900") map to Bold, lighter ones to Regular. */
+ * `style={{ fontSize: 15, ...fw("600") }}`. The redesign uses only
+ * 400/500/600, so every heavier legacy weight ("700"/"800"/"900") lands
+ * on SemiBold -- older screens get the lighter hierarchy for free. */
 export function fw(weight: string | number = "400"): { fontFamily: string } {
   const w = Number(weight);
-  const key: FontWeight = w >= 700 ? "700" : w >= 600 ? "600" : w >= 500 ? "500" : "400";
+  const key: FontWeight = w >= 600 ? "600" : w >= 500 ? "500" : "400";
   return { fontFamily: fonts[key] };
 }
 
@@ -120,11 +140,15 @@ export function fw(weight: string | number = "400"): { fontFamily: string } {
  * SemiBold, row text Medium, everything secondary Regular.
  */
 export const typography = {
-  /** Big numeric readouts -- a stat card's value, a total. */
-  display: { fontSize: 30, fontWeight: "600" as const, letterSpacing: -0.8 },
-  /** Page/space headers (e.g. "Documents", "Add Supply"). */
+  /** The one headline number on a page (Home's month total). */
+  hero: { fontSize: 40, fontWeight: "600" as const, letterSpacing: -1.2 },
+  /** Big numeric readouts -- a hero card's value (odometer, a total). */
+  display: { fontSize: 36, fontWeight: "600" as const, letterSpacing: -1 },
+  /** Page titles and Space names. */
+  largeTitle: { fontSize: 28, fontWeight: "600" as const, letterSpacing: -0.6 },
+  /** Greeting / sub-page headers. */
   title: { fontSize: 24, fontWeight: "600" as const, letterSpacing: -0.4 },
-  /** Modal/sheet headers -- one size down from a full page title. */
+  /** Section headers, sheet titles one size down. */
   subtitle: { fontSize: 17, fontWeight: "600" as const },
   /** Primary row/list content -- a product name, a task title. */
   body: { fontSize: 15, fontWeight: "500" as const },
@@ -132,6 +156,8 @@ export const typography = {
   label: { fontSize: 13, fontWeight: "500" as const },
   /** Secondary/muted text under a body line -- a subtitle, a date. */
   caption: { fontSize: 13, fontWeight: "400" as const },
+  /** Urgency/status chips. */
+  chip: { fontSize: 12, fontWeight: "600" as const },
   /** Smallest text -- badge counts, tiny inline hints. */
   micro: { fontSize: 11, fontWeight: "500" as const },
 };

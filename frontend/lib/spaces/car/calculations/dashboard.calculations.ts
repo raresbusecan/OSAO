@@ -1,4 +1,5 @@
 import type { CarData } from "@/components/spaces/car/car.data.types";
+import { roCount, roDate, roNumber } from "@/lib/format";
 import type { CarNextItem } from "@/components/spaces/car/car.ui.types";
 import type {
   CarDocumentEntry,
@@ -430,19 +431,23 @@ export function getUpcomingItems(
     const expiry = parseDateString(entry.expiryDate!);
     if (!expiry) return;
 
-    const subtitle =
+    // Subtitle = the absolute date, chip (`right`) = how far away it is
+    // -- same split Home's "De făcut" rows use.
+    const days = entry.daysUntilExpiry;
+    const subtitle = entry.status === "expired" ? `a expirat pe ${roDate(expiry)}` : `expiră pe ${roDate(expiry)}`;
+    const right =
       entry.status === "expired"
-        ? `Expired ${Math.abs(entry.daysUntilExpiry)} day${Math.abs(entry.daysUntilExpiry) !== 1 ? 's' : ''} ago`
-        : entry.daysUntilExpiry === 0
-          ? "Expires today"
-          : `Expires in ${entry.daysUntilExpiry} day${entry.daysUntilExpiry !== 1 ? 's' : ''}`;
+        ? `Expirat de ${roCount(Math.max(1, Math.abs(days)), "zi", "zile")}`
+        : days === 0
+          ? "Azi"
+          : `în ${roCount(days, "zi", "zile")}`;
 
     items.push({
       id: `doc-${entry.id}`,
       icon: "document-text-outline",
       title: entry.title,
       subtitle,
-      right: `${expiry.getDate()} ${expiry.toLocaleString('default', { month: 'short' })}`,
+      right,
       urgency: entry.daysUntilExpiry, // Lower (more negative once expired) is more urgent
       urgencyTier: urgencyTierFromDays(entry.daysUntilExpiry),
       overdue: entry.status === "expired",
@@ -481,20 +486,17 @@ export function getUpcomingItems(
 
     if (urgency.decidedBy === "date") {
       const days = urgency.daysUntilService!;
-      subtitle = urgency.overdue
-        ? `Overdue by ${Math.abs(days)} day${Math.abs(days) !== 1 ? 's' : ''}`
-        : days === 0
-          ? "Due today"
-          : `Due in ${days} day${days !== 1 ? 's' : ''}`;
-
       const target = parseDateString(entry.nextServiceDate!)!;
-      right = `${target.getDate()} ${target.toLocaleString('default', { month: 'short' })}`;
+      subtitle = urgency.overdue ? `trebuia pe ${roDate(target)}` : `programat pe ${roDate(target)}`;
+      right = urgency.overdue
+        ? `Depășit cu ${roCount(Math.max(1, Math.abs(days)), "zi", "zile")}`
+        : days === 0
+          ? "Azi"
+          : `în ${roCount(days, "zi", "zile")}`;
     } else {
       const km = urgency.remainingKm!;
-      subtitle = urgency.overdue
-        ? `Overdue by ${Math.abs(km).toLocaleString()} km`
-        : `Due in ${km.toLocaleString()} km`;
-      right = `${km.toLocaleString()} km`;
+      subtitle = "după kilometraj";
+      right = urgency.overdue ? `Depășit cu ${roNumber(Math.abs(km))} km` : `în ${roNumber(km)} km`;
     }
 
     items.push({

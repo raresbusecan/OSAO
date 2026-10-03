@@ -7,7 +7,8 @@ frontend-only file map — use it to jump straight to the right file
 instead of grepping the whole tree. For visual/design-polish work
 specifically, read `DESIGN.md` first — a calibration reference against
 real modern apps, and what orgOS's current theme already gets right
-vs. the one concrete gap (type weight) worth fixing.
+vs. the one concrete gap (type weight) worth fixing -- NOTE: superseded
+by the 2026-10 redesign, see "Theme" at the bottom of this file.
 
 ## Routing (Expo Router, file = route)
 
@@ -50,6 +51,7 @@ stacked `<Modal>`s, just early-return branches. `closeAllForms()` /
 **Car** (`components/spaces/car/`) — the reference-quality Space.
 - `CarDashboard.tsx` — orchestrator: stats, RECENT/ALL, category tabs,
   `openEntryForEdit(type, id)` (the shared deep-link/edit entry point).
+  `CarQuickActions.tsx` is its live quick-action row.
 - `CarDocsPage.tsx`, `CarArchivePage.tsx`, `CarHistoryPage.tsx`,
   `CarExpensesPage.tsx`, `CarProfileForm.tsx`.
 - `forms/CarFuelForm.tsx`, `CarMaintenanceForm.tsx`,
@@ -58,7 +60,7 @@ stacked `<Modal>`s, just early-return branches. `closeAllForms()` /
   mapping), `lib/spaces/car/calculations/`.
 - Dead in this tree: `CarHeader.tsx`, `CarStats.tsx`,
   `CarNextSection.tsx`, `CarRecentSection.tsx`, `CarDetails.tsx`,
-  `CarCurrentListPage.tsx`, `CarQuickActions.tsx`, `index.ts` (barrel),
+  `CarCurrentListPage.tsx`, `index.ts` (barrel),
   the whole `documents/expenses/fuel/maintenance/mileage/overview/`
   stub subfolders (all `return null`). Also: two files are both named
   `car.mock.ts` — `lib/spaces/car/car.mock.ts` is dead,
@@ -159,24 +161,48 @@ name + price + date + notes, no sub-categories.
   `components/ui/collapsible.tsx`, `components/ui/icon-symbol*.tsx`,
   `components/themed-text.tsx`, `components/themed-view.tsx`.
 
-## Theme ("Theme E" / hairline)
+## Theme (2026-10 redesign -- dark-first, layered)
 
-Applied screen-by-screen across the whole app in 2026-09. The pattern,
-if extending or adding a new screen:
-- Card/container fill (`colors.surfaceSecondary` + `radius.lg`/`md`) →
-  `backgroundColor: "transparent", borderWidth: 1, borderColor:
-  colors.border` + `radius.sm`.
-- Toggle/selected chips: keep the fill only while active; unselected
-  state gets the same fill→border treatment, border color becomes
-  `condition ? colors.onSurface : colors.border`.
-- Primary filled CTA buttons (black/white inverse) stay filled — only
-  reduce their radius to `radius.sm`.
-- Small icon-avatar circles (32–42px, paired with a title) are the one
-  deliberate exception — left filled, never converted.
-- Modal/bottom-sheet top-corner radius (`borderTopLeftRadius`/
-  `borderTopRightRadius: radius.lg`) is also a deliberate exception,
-  everywhere.
-- Identity colors (`SPACE_IDENTITY_COLORS`) and severity/alert colors
-  (`lib/statusColors.ts`) are never touched by this pass.
-- All delete-action buttons/icons use `colors.error`, consistently,
-  everywhere (audited and applied 2026-09).
+Replaces the old flat "hairline" style (fill->border). `DESIGN.md` is the
+superseded calibration doc for that old style -- don't apply its "no
+fills" rules. Approved mockup: the "orgOS redesign" canvas artifact
+(Acasă, Mașină, Cumpărături, Spații, Casă, Cheltuieli, Calendar, Buget,
+sub-pages, sheets, dialogs, login, settings). Rules:
+
+- **Three surface layers**: `colors.surface` (page) -> `surfaceSecondary`
+  (cards, list groups) -> `surfaceTertiary` (inputs, chips, icon wells,
+  pressed rows). Cards are FILLED; no outlines as the only depth cue.
+- **Color comes from the Space**: `SPACE_IDENTITY_COLORS` for fills
+  (bars, filled buttons, dots), `spaceTextColor(kind, isDark)` for text
+  and stroke icons, `SPACE_ON_FILL` for ink on a filled identity color,
+  `SPACE_BUTTON_FILL` for a filled button with a text label. No single
+  app-wide accent; outside a Space the primary button is `onSurface`.
+- **Semantic**: `success`/`error` = finance green/red, `warning` = "Azi",
+  `caution` = a step earlier. Light-theme values are the deeper shades
+  that pass 4.5:1 -- don't lighten them.
+- **Type**: IBM Plex Sans only (lib/globalFont.*.ts maps fontWeight to
+  the right file automatically). Weights 400/500/600 only -- anything
+  heavier renders as 600. Use `typography` tokens (hero/display/
+  largeTitle/title/subtitle/body/label/caption/chip/micro).
+- **Romanian only, sentence case** -- no ALL-CAPS labels, no English UI
+  strings. Plurals through `roCount()` (lib/format.ts: "5 zile",
+  "20 de zile"); money `lei()`, dates `roDate()` ("1 octombrie").
+- **Touch targets >= 44px** (rows 56+, buttons 52, circle buttons 44).
+- **Layout tokens**: `spacing.gutter` (page side padding, 20),
+  `spacing.section` (gap between sections, 20), `radius.card` (groups/
+  tiles 16), `radius.control` (inputs/buttons 14), `radius.lg` (hero
+  cards 20), `radius.inner` (segment inside a track).
+- **Motion** (lib/motion.ts, RN `Animated` only -- reanimated worklets
+  don't run in this Expo Go): press squeeze via `PressableScale` with
+  `motion.scale.control/tile/card`; rows INSIDE a grouped card don't
+  scale, they highlight (`scaleTo={1} pressedStyle={{ backgroundColor:
+  colors.surfaceTertiary }}`). Number count-up (`countUpOnMount`) only
+  on Home's month total. Everything respects `useReducedMotion()`.
+- **Building blocks** -- use these instead of hand-rolling:
+  `components/ui/primitives.tsx` (TopBar, CircleButton, Identity,
+  PageTitle, SectionHeader, Card, Group + Row with inset separators,
+  IconWell, Chip, Pill, Segmented, Button, Field, FieldButton,
+  EmptyState), `components/ui/Sheet.tsx` (the one bottom sheet:
+  spring in, drag handle to dismiss), `PressableScale`,
+  `AnimatedNumber`. Confirmations always go through `confirmAction`
+  (now ConfirmHost on native too -- no system Alert anywhere).

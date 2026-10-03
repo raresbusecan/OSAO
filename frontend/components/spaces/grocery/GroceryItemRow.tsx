@@ -3,7 +3,7 @@ import { View, Text, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { confirmAction } from "@/lib/confirm";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL } from "@/lib/spaces/spaceProfile";
 import type { GroceryItem } from "@/lib/spaces/grocery/grocery.types";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { SwipeRow } from "@/components/spaces/SwipeRow";
@@ -75,7 +75,8 @@ export function GroceryItemRow({ item, onToggle, onOpenMenu, onDelete, trailing 
         onPress={() => onToggle(item.id)}
         onLongPress={() => onOpenMenu(item)}
         delayLongPress={350}
-        scaleTo={0.99}
+        scaleTo={1}
+        pressedStyle={{ backgroundColor: colors.surfaceTertiary }}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: !!item.inCart }}
         accessibilityLabel={item.name}
@@ -100,11 +101,11 @@ export function GroceryItemRow({ item, onToggle, onOpenMenu, onDelete, trailing 
             // is ~2.2:1, under the 3:1 minimum for a graphic.
             backgroundColor: item.inCart ? fill : "transparent",
             borderWidth: item.inCart ? 0 : 2,
-            borderColor: colors.borderStrong,
+            borderColor: colors.control,
             transform: [{ scale: pop }],
           }}
         >
-          {item.inCart ? <Ionicons name="checkmark" size={16} color="#1A1206" /> : null}
+          {item.inCart ? <Ionicons name="checkmark" size={16} color={SPACE_ON_FILL.grocery} /> : null}
         </Animated.View>
 
         <Animated.View style={{ flex: 1, opacity: fade, paddingVertical: spacing.sm + 2 }}>
@@ -123,7 +124,9 @@ export function GroceryItemRow({ item, onToggle, onOpenMenu, onDelete, trailing 
         </Animated.View>
 
         {item.quantity ? (
-          <Animated.Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, opacity: fade }}>{item.quantity}</Animated.Text>
+          <Animated.View style={{ opacity: fade }}>
+            <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>{item.quantity}</Text>
+          </Animated.View>
         ) : null}
         {trailing ? <View>{trailing}</View> : null}
       </PressableScale>

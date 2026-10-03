@@ -27,6 +27,26 @@ export type BuiltinGroceryCategory =
  */
 export type GroceryCategory = BuiltinGroceryCategory | (string & {});
 
+/** Romanian display names for the built-in categories. Stored values
+ * stay English (they're keys the Smart List formula and existing items
+ * use); only what's SHOWN goes through groceryCategoryLabel(). A custom
+ * category a user typed passes through unchanged. */
+const GROCERY_CATEGORY_LABEL: Record<BuiltinGroceryCategory, string> = {
+  Vegetables: "Legume",
+  Fruits: "Fructe",
+  Protein: "Proteine",
+  "Grains / Starches": "Cereale și făinoase",
+  "Healthy Fats": "Grăsimi sănătoase",
+  Dairy: "Lactate",
+  Bakery: "Panificație",
+  Household: "Casă și curățenie",
+  Other: "Altele",
+};
+
+export function groceryCategoryLabel(category: GroceryCategory): string {
+  return (GROCERY_CATEGORY_LABEL as Record<string, string>)[category] ?? category;
+}
+
 export const GROCERY_CATEGORY_ORDER: BuiltinGroceryCategory[] = [
   "Vegetables",
   "Fruits",

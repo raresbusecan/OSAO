@@ -13,6 +13,10 @@ one up like any other "Open" item once nothing more pressing is ahead
 of it. Mark it `[from: <task>]` so there's a trail back to how it was
 found.
 
+### Redesign follow-ups needing a decision or a device (2026-10-04)
+
+From design-lead's verification of the redesign (phase 0-1), not done because they change behavior or need a real phone: (C) pin Grocery's quick-add bar above the tab bar with keyboard avoidance -- on a 20-item list it's off-screen today (departs from the mockup); (D) `Haptics.selectionAsync()` on ticking a grocery item (expo-haptics is installed, works in Expo Go) -- a new feedback channel; (E) Home tab's space tiles say "La zi" when there are no to-dos/spend -- per-type figures (km, restanțe, "de luat") need backend summary fields. Device checks: the native font shim (lib/globalFont.native.ts) -- Plex actually applied, nested `<Text>` inheriting its parent's weight; the tab bar keeping "Spații" lit inside a Space. Done in the same pass (no decision needed): sign-out moved from Home's header into Settings behind a confirmation (matches the approved Settings mockup), Grocery "Golește" relabelled "Debifează tot". `[from: design verify of feat/redesign phase 0-1]`
+
 ### Device checks still owed for the Home Restanțe/swipe-back branch (2026-10-04)
 
 Not confirmable from source, need real touch input: (1) `SwipeBackView`'s 32px edge strip is an absolute overlay -- the leftmost ~8px of rows underneath can't be tapped, and a drag starting at the very edge of Grocery's list-card scroller (`GroceryDashboard.tsx` ~:984) or Car's category tabs (`CarDashboard.tsx` ~:1031) becomes swipe-back instead of a scroll; (2) drag-to-dismiss on the 4 new sheets (task form, category form, expense edit, restock); (3) iOS: `HomeCategoryPage`'s `HomeDatePickerSheet` is a *sibling* Modal of the open form sheet (HomeTaskForm/ExpenseEditModal nest theirs) -- a second sibling Modal can fail to appear on iOS. Also pre-existing: unused `StyleSheet` import in `HomeSuppliesPage.tsx:2`. `[from: qa-lead verification of feat/home-restante-urgency]`

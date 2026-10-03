@@ -10,7 +10,9 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { TodoCarouselSheet } from "@/components/dashboard/TodoCarouselSheet";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+import { Card, Chip, Group, Row, SectionHeader, IconWell } from "@/components/ui/primitives";
 import { motion, useReducedMotion } from "@/lib/motion";
+import { capitalize, lei, roCount, roDate } from "@/lib/format";
 import {
   detectSpaceType,
   profileFromSpace,
@@ -26,9 +28,6 @@ function greeting(name?: string) {
   const t = h < 5 ? "Noapte bună" : h < 12 ? "Bună dimineața" : h < 18 ? "Bună ziua" : "Bună seara";
   return name ? `${t}, ${name.split(" ")[0]}` : t;
 }
-
-const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-const lei = (n: number) => `${Math.round(n).toLocaleString("ro-RO")} lei`;
 
 const KIND_ICON: Partial<Record<SpaceKind, keyof typeof Ionicons.glyphMap>> = {
   car: "car-outline",
@@ -58,8 +57,8 @@ const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDat
  * motion; everything else only moves when touched.
  */
 export default function Home() {
-  const { colors, spacing, radius, isDark } = useTheme();
-  const { user, signOut } = useAuth();
+  const { colors, spacing, radius, isDark, typography } = useTheme();
+  const { user } = useAuth();
   const router = useRouter();
 
   const [dashboard, setDashboard] = useState<{
@@ -106,6 +105,7 @@ export default function Home() {
   const monthly = dashboard?.monthlyExpenses ?? { total: 0, sources: [] };
   const daysLeft = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate() + 1;
   const monthName = now.toLocaleDateString("ro-RO", { month: "long" });
+  const muted = colors.onSurfaceTertiary;
 
   // Bar segments: each space kind's share of the month, against the
   // budget when there is one (so the empty track IS what's left), else
@@ -121,11 +121,11 @@ export default function Home() {
           label: SPACE_KIND_LABEL[kind] ?? s.spaceName,
           amount: s.amount,
           share: s.amount / scale,
-          color: SPACE_IDENTITY_COLORS[kind] ?? colors.onSurfaceTertiary,
+          color: SPACE_IDENTITY_COLORS[kind] ?? muted,
         };
       })
       .sort((a, b) => b.amount - a.amount);
-  }, [monthly, totalBudget, colors.onSurfaceTertiary]);
+  }, [monthly, totalBudget, muted]);
 
   const todoRows = useMemo<TodoRow[]>(() => {
     if (!dashboard) return [];
@@ -151,43 +151,33 @@ export default function Home() {
   const goal = budget?.savingsGoal ?? null;
   const goalRatio = goal && goal.target_amount > 0 ? Math.max(0, Math.min(1, goal.current_amount / goal.target_amount)) : 0;
   const nextBills = (budget?.recurringBills || []).slice(0, 3);
-
-  const card = { backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.lg + 4 } as const;
-  const sectionTitle = { fontSize: 17, fontWeight: "600" as const, color: colors.onSurface };
-  const muted = colors.onSurfaceTertiary;
-
   const remaining = totalBudget - monthly.total;
+  const initial = (user?.name ?? "?").trim().charAt(0).toUpperCase();
 
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="home-screen">
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: spacing.lg + 4, paddingTop: spacing.lg, paddingBottom: 120, gap: spacing.xl }}
+        contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.lg, paddingBottom: 120, gap: spacing.section }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={muted} />}
       >
-        {/* Header -- the greeting and the avatar both open Settings. */}
+        {/* Header -- date + greeting; the avatar opens Settings (where
+            sign-out now lives, behind a confirmation). */}
         <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ fontSize: 13, color: muted }}>
+              {capitalize(now.toLocaleDateString("ro-RO", { weekday: "long", day: "numeric", month: "long" }))}
+            </Text>
+            <Text style={{ ...typography.title, color: colors.onSurface }}>{greeting(user?.name)}</Text>
+          </View>
           <PressableScale
             onPress={() => router.push("/settings")}
             testID="home-greeting-settings-link"
             accessibilityRole="button"
-            accessibilityLabel="Deschide setările"
-            style={{ flex: 1, gap: 2 }}
-          >
-            <Text style={{ fontSize: 13, color: muted }}>
-              {capitalize(now.toLocaleDateString("ro-RO", { weekday: "long", day: "numeric", month: "long" }))}
-            </Text>
-            <Text style={{ fontSize: 24, fontWeight: "600", color: colors.onSurface, letterSpacing: -0.4 }}>
-              {greeting(user?.name)}
-            </Text>
-          </PressableScale>
-          <PressableScale
-            onPress={signOut}
-            testID="home-signout-button"
-            accessibilityRole="button"
-            accessibilityLabel="Ieși din cont"
+            accessibilityLabel="Profil și setări"
+            scaleTo={motion.scale.control}
             style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
           >
-            <Ionicons name="log-out-outline" size={20} color={muted} />
+            <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{initial}</Text>
           </PressableScale>
         </View>
 
@@ -200,16 +190,16 @@ export default function Home() {
               testID="home-widget-budget"
               onPress={() => router.push("/budget")}
               accessibilityRole="button"
-              accessibilityLabel={`Cheltuit în ${monthName}: ${lei(monthly.total)}`}
-              scaleTo={0.985}
-              style={{ ...card, gap: spacing.md + 2 }}
+              accessibilityLabel={`Cheltuit în ${monthName}: ${lei(Math.round(monthly.total))}`}
+              scaleTo={motion.scale.card}
+              style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md + 2 }}
             >
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
                 <Text style={{ fontSize: 13, color: muted }}>Cheltuit în {monthName}</Text>
                 {totalBudget > 0 ? <Text style={{ fontSize: 13, color: muted }}>buget {lei(totalBudget)}</Text> : null}
               </View>
               <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-                <AnimatedNumber value={monthly.total} style={{ fontSize: 40, fontWeight: "600", letterSpacing: -1.2, color: colors.onSurface }} />
+                <AnimatedNumber countUpOnMount value={monthly.total} style={{ ...typography.hero, color: colors.onSurface }} />
                 <Text style={{ fontSize: 17, fontWeight: "500", color: muted }}>lei</Text>
               </View>
 
@@ -220,7 +210,7 @@ export default function Home() {
                   {segments.map((s) => (
                     <View key={s.key} style={{ width: "46%", flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
                       <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: s.color }} />
-                      <Text style={{ flex: 1, fontSize: 14, color: colors.onSurfaceSecondary, opacity: 0.8 }} numberOfLines={1}>{s.label}</Text>
+                      <Text style={{ flex: 1, fontSize: 14, color: colors.onSurfaceSecondary }} numberOfLines={1}>{s.label}</Text>
                       <Text style={{ fontSize: 14, fontWeight: "500", color: colors.onSurface, fontVariant: ["tabular-nums"] }}>
                         {Math.round(s.amount).toLocaleString("ro-RO")}
                       </Text>
@@ -234,8 +224,8 @@ export default function Home() {
               {totalBudget > 0 ? (
                 <Text style={{ fontSize: 13, fontWeight: "500", color: remaining >= 0 ? colors.success : colors.error }}>
                   {remaining >= 0
-                    ? `Mai ai ${lei(remaining)} pentru ${daysLeft} ${daysLeft === 1 ? "zi" : "de zile"}`
-                    : `Ai depășit bugetul cu ${lei(-remaining)}`}
+                    ? `Mai ai ${lei(Math.round(remaining))} pentru ${roCount(daysLeft, "zi", "zile")}`
+                    : `Ai depășit bugetul cu ${lei(Math.round(-remaining))}`}
                 </Text>
               ) : (
                 <Text style={{ fontSize: 13, fontWeight: "500", color: colors.onSurface }}>Setează un buget lunar</Text>
@@ -244,76 +234,75 @@ export default function Home() {
 
             {/* De făcut -- the most urgent few; "Vezi tot" opens the
                 carousel, which knows where each item resolves. */}
-            <View style={{ gap: spacing.md }}>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <Text style={sectionTitle}>De făcut{todoRows.length > 0 ? ` (${todoRows.length})` : ""}</Text>
-                {todoRows.length > 0 ? (
-                  <PressableScale
-                    onPress={() => setTodoSheetVisible(true)}
-                    testID="home-widget-todo"
-                    accessibilityRole="button"
-                    style={{ paddingVertical: 10, paddingLeft: spacing.md }}
-                  >
-                    <Text style={{ fontSize: 14, color: muted }}>Vezi tot</Text>
-                  </PressableScale>
-                ) : null}
-              </View>
-              <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg - 4, overflow: "hidden" }}>
-                {todoRows.length === 0 ? (
-                  <View style={{ padding: spacing.lg, flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-                    <Ionicons name="checkmark-circle-outline" size={22} color={colors.success} />
-                    <Text style={{ fontSize: 15, color: colors.onSurface }}>Ești la zi. Nimic de făcut.</Text>
-                  </View>
-                ) : (
-                  todoRows.slice(0, 4).map((row, i) => (
-                    <TodoRowView
-                      key={`${row.type}-${row.id}`}
-                      row={row}
-                      first={i === 0}
-                      space={row.space ? spaceById.get(String(row.space.id)) : undefined}
-                      onPress={() => setTodoSheetVisible(true)}
-                    />
-                  ))
-                )}
-              </View>
+            <View style={{ gap: spacing.sm }}>
+              <SectionHeader
+                title={`De făcut${todoRows.length > 0 ? ` (${todoRows.length})` : ""}`}
+                action={todoRows.length > 0 ? { label: "Vezi tot", onPress: () => setTodoSheetVisible(true), testID: "home-widget-todo" } : undefined}
+              />
+              {todoRows.length === 0 ? (
+                <Card style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.lg }}>
+                  <Ionicons name="checkmark-circle-outline" size={22} color={colors.success} />
+                  <Text style={{ fontSize: 15, color: colors.onSurface }}>Ești la zi. Nimic de făcut.</Text>
+                </Card>
+              ) : (
+                <Group inset={36}>
+                  {todoRows.slice(0, 4).map((row) => {
+                    const space = row.space ? spaceById.get(String(row.space.id)) : undefined;
+                    const kind = space?.kind;
+                    const dotColor = kind ? SPACE_IDENTITY_COLORS[kind] ?? muted : CUSTOM_EVENT_COLOR;
+                    const subColor = kind ? spaceTextColor(kind, isDark) ?? muted : row.space ? muted : spaceTextColor("custom", isDark);
+                    const chip =
+                      row.urgency === "overdue"
+                        ? <Chip label={`Restant ${roCount(Math.max(1, -row.days), "zi", "zile")}`} color={colors.error} />
+                        : row.urgency === "today"
+                          ? <Chip label="Azi" color={colors.warning} />
+                          : <Chip label={row.days === 1 ? "Mâine" : `în ${roCount(row.days, "zi", "zile")}`} color={muted} filled={false} />;
+                    return (
+                      <Row
+                        key={`${row.type}-${row.id}`}
+                        onPress={() => setTodoSheetVisible(true)}
+                        leading={<View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dotColor }} />}
+                        title={row.title}
+                        subtitle={space?.name ?? row.space?.name ?? "Personal"}
+                        subtitleColor={subColor}
+                        trailing={chip}
+                      />
+                    );
+                  })}
+                </Group>
+              )}
             </View>
 
             {/* Spațiile tale */}
-            <View style={{ gap: spacing.md }}>
-              <Text style={sectionTitle}>Spațiile tale</Text>
+            <View style={{ gap: spacing.sm }}>
+              <SectionHeader title="Spațiile tale" />
               {spaces.length === 0 ? (
-                <PressableScale
-                  onPress={() => router.push("/spaces")}
-                  accessibilityRole="button"
-                  style={{ ...card, flexDirection: "row", alignItems: "center", gap: spacing.md }}
-                >
-                  <Ionicons name="add-circle-outline" size={22} color={colors.onSurface} />
-                  <Text style={{ flex: 1, fontSize: 15, color: colors.onSurface }}>Creează primul tău spațiu</Text>
-                  <Ionicons name="chevron-forward" size={18} color={muted} />
-                </PressableScale>
+                <Group>
+                  <Row
+                    onPress={() => router.push("/spaces")}
+                    leading={<Ionicons name="add-circle-outline" size={22} color={colors.onSurface} />}
+                    title="Creează primul tău spațiu"
+                    chevron
+                  />
+                </Group>
               ) : (
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.md - 2 }}>
                   {spaces.map((s) => {
                     const todos = todoCountBySpace.get(s.id) ?? 0;
                     // Spend is only known per KIND; attribute it to a space
                     // only when it's the sole space of that kind.
-                    const spend = kindCount.get(s.kind) === 1
-                      ? segments.find((seg) => seg.kind === s.kind)?.amount ?? 0
-                      : 0;
-                    const value = todos > 0 ? `${todos} de făcut` : spend > 0 ? lei(spend) : "La zi";
-                    const tint = spaceTextColor(s.kind, isDark) ?? colors.onSurface;
-                    const fill = SPACE_IDENTITY_COLORS[s.kind] ?? colors.onSurfaceTertiary;
+                    const spend = kindCount.get(s.kind) === 1 ? segments.find((seg) => seg.kind === s.kind)?.amount ?? 0 : 0;
+                    const value = todos > 0 ? `${todos} de făcut` : spend > 0 ? lei(Math.round(spend)) : "La zi";
+                    const fill = SPACE_IDENTITY_COLORS[s.kind] ?? muted;
                     return (
                       <PressableScale
                         key={s.id}
                         onPress={() => router.push(`/${s.id}`)}
                         accessibilityRole="button"
                         accessibilityLabel={`${s.name}, ${value}`}
-                        style={{ width: "48.4%", backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg - 4, padding: spacing.md + 2, gap: spacing.md }}
+                        style={{ width: "48.4%", backgroundColor: colors.surfaceSecondary, borderRadius: radius.card, padding: spacing.md + 2, gap: spacing.md }}
                       >
-                        <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: `${fill}29`, alignItems: "center", justifyContent: "center" }}>
-                          <Ionicons name={KIND_ICON[s.kind] ?? "apps-outline"} size={18} color={tint} />
-                        </View>
+                        <IconWell icon={KIND_ICON[s.kind] ?? "apps-outline"} color={fill} tint={spaceTextColor(s.kind, isDark)} size={34} />
                         <View>
                           <Text style={{ fontSize: 13, color: muted }} numberOfLines={1}>{s.name}</Text>
                           <Text style={{ fontSize: 17, fontWeight: "600", color: colors.onSurface }} numberOfLines={1}>{value}</Text>
@@ -327,32 +316,24 @@ export default function Home() {
 
             {/* Plăți recurente -- the next few bills, then savings. */}
             {nextBills.length > 0 ? (
-              <View style={{ gap: spacing.md }}>
-                <Text style={sectionTitle}>Plăți recurente</Text>
-                <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg - 4, overflow: "hidden" }}>
-                  {nextBills.map((bill: any, i: number) => (
-                    <PressableScale
+              <View style={{ gap: spacing.sm }}>
+                <SectionHeader title="Plăți recurente" />
+                <Group>
+                  {nextBills.map((bill: any) => (
+                    <Row
                       key={bill.id}
                       testID={`home-recurring-${bill.id}`}
                       onPress={() => router.push("/calendar")}
-                      scaleTo={0.99}
-                      style={{
-                        flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, minHeight: 56,
-                        borderTopWidth: i === 0 ? 0 : 1, borderTopColor: colors.border,
-                      }}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>{bill.title}</Text>
-                        <Text style={{ fontSize: 13, color: muted }}>
-                          {new Date(bill.due_at).toLocaleDateString("ro-RO", { day: "numeric", month: "long" })}
-                        </Text>
-                      </View>
-                      {bill.amount != null ? (
-                        <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{lei(Number(bill.amount))}</Text>
-                      ) : null}
-                    </PressableScale>
+                      title={bill.title}
+                      subtitle={roDate(bill.due_at)}
+                      trailing={
+                        bill.amount != null ? (
+                          <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{lei(Number(bill.amount))}</Text>
+                        ) : null
+                      }
+                    />
                   ))}
-                </View>
+                </Group>
               </View>
             ) : null}
 
@@ -362,8 +343,8 @@ export default function Home() {
                 onPress={() => router.push("/budget")}
                 accessibilityRole="button"
                 accessibilityLabel="Obiectiv de economii"
-                scaleTo={0.985}
-                style={{ ...card, gap: spacing.sm }}
+                scaleTo={motion.scale.card}
+                style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.sm }}
               >
                 <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
                   <Text style={{ fontSize: 13, color: muted }}>Economii</Text>
@@ -394,47 +375,6 @@ export default function Home() {
   );
 }
 
-/** One "De făcut" row: space dot, title + space name, urgency chip. */
-function TodoRowView({ row, first, space, onPress }: { row: TodoRow; first: boolean; space?: SpaceCard; onPress: () => void }) {
-  const { colors, spacing, isDark } = useTheme();
-  const muted = colors.onSurfaceTertiary;
-  const kind = space?.kind;
-  const subtitleColor = kind ? spaceTextColor(kind, isDark) ?? muted : row.space ? muted : CUSTOM_EVENT_COLOR;
-  const chip =
-    row.urgency === "overdue"
-      ? { text: `Restant ${Math.max(1, -row.days)} ${-row.days === 1 ? "zi" : "zile"}`, color: colors.error, filled: true }
-      : row.urgency === "today"
-        ? { text: "Azi", color: colors.warning, filled: true }
-        : { text: row.days === 1 ? "Mâine" : `în ${row.days} zile`, color: muted, filled: false };
-  return (
-    <PressableScale
-      onPress={onPress}
-      scaleTo={0.99}
-      accessibilityRole="button"
-      accessibilityLabel={`${row.title}, ${chip.text}`}
-      style={{
-        flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, minHeight: 60,
-        borderTopWidth: first ? 0 : 1, borderTopColor: colors.border,
-      }}
-    >
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: kind ? SPACE_IDENTITY_COLORS[kind] ?? muted : CUSTOM_EVENT_COLOR }} />
-      <View style={{ flex: 1, paddingVertical: 10 }}>
-        <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>{row.title}</Text>
-        <Text style={{ fontSize: 13, color: subtitleColor }} numberOfLines={1}>{space?.name ?? row.space?.name ?? "Personal"}</Text>
-      </View>
-      <Text
-        style={{
-          fontSize: 12, fontWeight: chip.filled ? "600" : "500", color: chip.color, overflow: "hidden",
-          backgroundColor: chip.filled ? `${chip.color}1F` : "transparent",
-          paddingHorizontal: chip.filled ? 8 : 0, paddingVertical: 4, borderRadius: 6,
-        }}
-      >
-        {chip.text}
-      </Text>
-    </PressableScale>
-  );
-}
-
 /** The hero's split bar -- grows from empty once per mount (skipped
  * under reduced motion), segment widths are each space's share. */
 function SpendBar({ segments, track }: { segments: { key: string; share: number; color: string }[]; track: string }) {
@@ -457,6 +397,7 @@ function SpendBar({ segments, track }: { segments: { key: string; share: number;
         <Animated.View
           key={s.key}
           style={{
+            flexShrink: 1,
             backgroundColor: s.color,
             width: grow.interpolate({ inputRange: [0, 1], outputRange: ["0%", `${Math.min(100, s.share * 100)}%`] }),
           }}

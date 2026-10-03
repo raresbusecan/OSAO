@@ -14,7 +14,6 @@ import {
   IBMPlexSans_400Regular,
   IBMPlexSans_500Medium,
   IBMPlexSans_600SemiBold,
-  IBMPlexSans_700Bold,
 } from "@expo-google-fonts/ibm-plex-sans";
 
 import { ThemeProvider } from "@/lib/theme";
@@ -99,7 +98,6 @@ function RootLayout() {
     IBMPlexSans_400Regular,
     IBMPlexSans_500Medium,
     IBMPlexSans_600SemiBold,
-    IBMPlexSans_700Bold,
   });
   if (!fontsLoaded && !fontError) return null;
 

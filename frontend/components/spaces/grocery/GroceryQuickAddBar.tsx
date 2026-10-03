@@ -2,10 +2,11 @@ import React, { useState } from "react";
 import { View, Text, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
-import type { GroceryCategory } from "@/lib/spaces/grocery/grocery.types";
+import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { groceryCategoryLabel, type GroceryCategory } from "@/lib/spaces/grocery/grocery.types";
 import { matchIngredientCategory, useIngredientReferences } from "@/lib/spaces/grocery/ingredientLookup";
 import { PressableScale } from "@/components/ui/PressableScale";
+import { motion } from "@/lib/motion";
 
 export type GroceryQuickAddBarProps = {
   onAdd: (draft: { name: string; category: GroceryCategory }) => void;
@@ -24,11 +25,14 @@ export type GroceryQuickAddBarProps = {
  * several items go in back to back.
  */
 export function GroceryQuickAddBar({ onAdd }: GroceryQuickAddBarProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing, radius, isDark } = useTheme();
   const [value, setValue] = useState("");
   const [focused, setFocused] = useState(false);
   const ingredientReferences = useIngredientReferences();
   const fill = SPACE_IDENTITY_COLORS.grocery!;
+  // Amber is 2.1:1 on the light theme's raised layer -- the focus ring
+  // uses the deeper text tint there.
+  const ring = isDark ? fill : spaceTextColor("grocery", false)!;
 
   const matchedCategory = matchIngredientCategory(ingredientReferences, value);
   const canSubmit = !!value.trim();
@@ -59,10 +63,10 @@ export function GroceryQuickAddBar({ onAdd }: GroceryQuickAddBarProps) {
             flex: 1,
             height: 52,
             paddingHorizontal: spacing.lg,
-            borderRadius: radius.md + 2,
+            borderRadius: radius.control,
             backgroundColor: colors.surfaceSecondary,
             borderWidth: 1.5,
-            borderColor: focused ? fill : "transparent",
+            borderColor: focused ? ring : "transparent",
             color: colors.onSurface,
             fontSize: 15,
           }}
@@ -72,20 +76,20 @@ export function GroceryQuickAddBar({ onAdd }: GroceryQuickAddBarProps) {
           testID="grocery-quick-add-submit"
           onPress={submit}
           disabled={!canSubmit}
-          scaleTo={0.92}
+          scaleTo={motion.scale.control}
           accessibilityRole="button"
           accessibilityLabel="Adaugă produsul"
           style={{
             width: 52,
             height: 52,
-            borderRadius: radius.md + 2,
-            // Fixed dark "+" -- white on amber fails contrast (~2.2:1).
+            borderRadius: radius.control,
+            // Dark "+" -- white on amber fails contrast (~2.2:1).
             backgroundColor: canSubmit ? fill : `${fill}55`,
             alignItems: "center",
             justifyContent: "center",
           }}
         >
-          <Ionicons name="add" size={24} color="#1A1206" />
+          <Ionicons name="add" size={24} color={SPACE_ON_FILL.grocery} />
         </PressableScale>
       </View>
 
@@ -93,7 +97,7 @@ export function GroceryQuickAddBar({ onAdd }: GroceryQuickAddBarProps) {
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 4 }}>
           <Ionicons name="pricetag-outline" size={13} color={colors.onSurfaceTertiary} />
           <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>
-            Recunoscut ca <Text style={{ fontWeight: "600", color: colors.onSurface }}>{matchedCategory}</Text>
+            Recunoscut ca <Text style={{ fontWeight: "600", color: colors.onSurface }}>{groceryCategoryLabel(matchedCategory)}</Text>
           </Text>
         </View>
       ) : null}

@@ -6,7 +6,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/providers/auth";
 import { api } from "@/lib/api";
-import { notifyAction } from "@/lib/confirm";
+import { confirmAction, notifyAction } from "@/lib/confirm";
+import { TopBar, SectionHeader, Group, Row, IconWell, Button } from "@/components/ui/primitives";
 
 type SettingsRow = {
   key: string;
@@ -20,113 +21,86 @@ type SettingsRow = {
 };
 
 /**
- * Reached by tapping the "Bună ziua" greeting on Home. Each row below
+ * Reached from the avatar in Home's header. Each row below
  * is its own subtask (name, password, email, language, colors, theme)
  * built one at a time -- wire a row's onPress up when its subtask
  * actually lands, don't get ahead of the current one.
  */
 export default function Settings() {
-  const { colors, spacing, radius, typography } = useTheme();
+  const { colors, spacing } = useTheme();
   const router = useRouter();
-  const { user, updateUser } = useAuth();
+  const { user, updateUser, signOut } = useAuth();
   const [editingName, setEditingName] = useState(false);
   const [editingPassword, setEditingPassword] = useState(false);
   const [editingEmail, setEditingEmail] = useState(false);
 
-  const rows: SettingsRow[] = [
+  const account: SettingsRow[] = [
     { key: "name", icon: "person-outline", label: "Nume", value: user?.name, onPress: () => setEditingName(true) },
-    { key: "password", icon: "lock-closed-outline", label: "Parolă", onPress: () => setEditingPassword(true) },
     { key: "email", icon: "mail-outline", label: "Email", value: user?.email, onPress: () => setEditingEmail(true) },
-    { key: "language", icon: "language-outline", label: "Limbă" },
-    { key: "colors", icon: "color-palette-outline", label: "Culori" },
-    { key: "theme", icon: "sparkles-outline", label: "Temă" },
+    { key: "password", icon: "lock-closed-outline", label: "Parolă", onPress: () => setEditingPassword(true) },
   ];
+  const app: SettingsRow[] = [
+    { key: "language", icon: "language-outline", label: "Limbă", value: "Română" },
+    { key: "colors", icon: "color-palette-outline", label: "Culori" },
+    { key: "theme", icon: "contrast-outline", label: "Temă", value: "Automat" },
+  ];
+
+  // Sign-out lives here, behind a confirmation -- it used to be a
+  // one-tap icon in Home's header, easy to hit by accident.
+  const handleSignOut = async () => {
+    const ok = await confirmAction("Ieși din cont?", "Va trebui să te autentifici din nou ca să-ți vezi datele.", {
+      confirmLabel: "Ieși",
+      destructive: true,
+    });
+    if (ok) signOut();
+  };
+
+  const initial = (user?.name ?? "?").trim().charAt(0).toUpperCase();
+
+  const renderRow = (row: SettingsRow) => (
+    <Row
+      key={row.key}
+      testID={`settings-row-${row.key}`}
+      leading={<IconWell icon={row.icon} color={colors.onSurfaceTertiary} tint={colors.onSurfaceSecondary} size={34} />}
+      title={row.label}
+      onPress={row.onPress}
+      dim={!row.onPress}
+      trailing={
+        <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, maxWidth: 170 }} numberOfLines={1}>
+          {row.onPress ? row.value ?? "" : row.value ?? "În curând"}
+        </Text>
+      }
+      chevron={!!row.onPress}
+    />
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }} testID="settings-screen">
       <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: spacing.md,
-            paddingHorizontal: spacing.xl,
-            paddingVertical: spacing.md,
-          }}
-        >
-          <Pressable
-            testID="settings-back"
-            onPress={() => router.back()}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: radius.pill,
-              backgroundColor: "transparent",
-              borderWidth: 1,
-              borderColor: colors.border,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
-          </Pressable>
-          <Text style={{ ...typography.title, color: colors.onSurface }}>Setări</Text>
-        </View>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: spacing.xl, gap: spacing.section }}>
+          <TopBar onBack={() => router.back()} backTestID="settings-back" />
 
-        <ScrollView contentContainerStyle={{ padding: spacing.xl, gap: spacing.sm }}>
-          {rows.map((row) => (
-            <Pressable
-              key={row.key}
-              testID={`settings-row-${row.key}`}
-              onPress={row.onPress}
-              disabled={!row.onPress}
-              accessibilityRole="button"
-              accessibilityLabel={row.label}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: spacing.md,
-                minHeight: 56,
-                paddingHorizontal: spacing.lg,
-                borderRadius: radius.sm,
-                borderWidth: 1,
-                borderColor: colors.border,
-                backgroundColor: "transparent",
-                opacity: row.onPress ? 1 : 0.5,
-              }}
-            >
-              <View
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.surfaceSecondary,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons name={row.icon} size={16} color={colors.onSurface} />
-              </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md + 2 }}>
+            <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 20, fontWeight: "600", color: colors.onSurface }}>{initial}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 20, fontWeight: "600", color: colors.onSurface }} numberOfLines={1}>{user?.name ?? "Setări"}</Text>
+              {user?.email ? <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }} numberOfLines={1}>{user.email}</Text> : null}
+            </View>
+          </View>
 
-              <View style={{ flex: 1 }}>
-                <Text style={{ ...typography.body, color: colors.onSurface }}>{row.label}</Text>
-                {row.value ? (
-                  <Text style={{ ...typography.caption, color: colors.onSurfaceTertiary, marginTop: 2 }} numberOfLines={1}>
-                    {row.value}
-                  </Text>
-                ) : null}
-              </View>
+          <View style={{ gap: spacing.sm }}>
+            <SectionHeader title="Cont" muted />
+            <Group inset={62}>{account.map(renderRow)}</Group>
+          </View>
 
-              {row.onPress ? (
-                <Ionicons name="chevron-forward" size={18} color={colors.onSurfaceTertiary} />
-              ) : (
-                <Text style={{ ...typography.micro, color: colors.onSurfaceTertiary }}>În curând</Text>
-              )}
-            </Pressable>
-          ))}
+          <View style={{ gap: spacing.sm }}>
+            <SectionHeader title="Aplicație" muted />
+            <Group inset={62}>{app.map(renderRow)}</Group>
+          </View>
+
+          <Button testID="settings-signout" variant="destructive" icon="log-out-outline" label="Ieși din cont" onPress={handleSignOut} />
         </ScrollView>
       </SafeAreaView>
 

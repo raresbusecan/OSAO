@@ -1,4 +1,3 @@
-import { Alert, Platform } from "react-native";
 import { showConfirmDialog, showNotifyDialog } from "./confirmHost";
 
 /**
@@ -21,9 +20,12 @@ import { showConfirmDialog, showNotifyDialog } from "./confirmHost";
  *
  * Now both render through ConfirmHost (lib/confirmHost.tsx, mounted
  * once at the app root) -- our own Modal, not a browser-native dialog,
- * so it actually shows regardless of how the page was opened. Native
- * (iOS/Android app builds, not the web preview) still uses the real
- * Alert.alert, which doesn't have this problem there.
+ * so it actually shows regardless of how the page was opened.
+ *
+ * Since the 2026-10 redesign native goes through ConfirmHost too (it
+ * used to fall back to Alert.alert there): the system alert can't take
+ * the app's look, so the same delete confirmation looked like two
+ * different apps on web and on the phone.
  */
 
 export function confirmAction(
@@ -31,37 +33,15 @@ export function confirmAction(
   message: string,
   options?: { confirmLabel?: string; cancelLabel?: string; destructive?: boolean },
 ): Promise<boolean> {
-  if (Platform.OS === "web") {
-    return showConfirmDialog({
-      title,
-      message,
-      confirmLabel: options?.confirmLabel,
-      cancelLabel: options?.cancelLabel,
-      destructive: options?.destructive,
-    });
-  }
-
-  return new Promise((resolve) => {
-    Alert.alert(title, message, [
-      {
-        text: options?.cancelLabel ?? "Anulează",
-        style: "cancel",
-        onPress: () => resolve(false),
-      },
-      {
-        text: options?.confirmLabel ?? "Confirmă",
-        style: options?.destructive ? "destructive" : "default",
-        onPress: () => resolve(true),
-      },
-    ]);
+  return showConfirmDialog({
+    title,
+    message,
+    confirmLabel: options?.confirmLabel,
+    cancelLabel: options?.cancelLabel,
+    destructive: options?.destructive,
   });
 }
 
 export function notifyAction(title: string, message: string): void {
-  if (Platform.OS === "web") {
-    showNotifyDialog(title, message);
-    return;
-  }
-
-  Alert.alert(title, message);
+  showNotifyDialog(title, message);
 }

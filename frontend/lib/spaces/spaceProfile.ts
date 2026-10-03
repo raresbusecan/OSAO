@@ -64,14 +64,35 @@ export const SPACE_IDENTITY_COLORS: Partial<Record<SpaceKind, string>> = {
  * purple #9333EA label on the dark card layer is only ~3:1 -- so text
  * gets a lighter tint in dark mode and a deeper one in light mode, same
  * hue. Fills (bars, buttons, dots) keep using SPACE_IDENTITY_COLORS. */
-const SPACE_TEXT_COLORS: Record<"dark" | "light", Partial<Record<SpaceKind, string>>> = {
-  dark: { car: "#6FA5F8", home: "#B37BF5", grocery: "#F5B13D", expenses: "#3DD3BF" },
-  light: { car: "#2563EB", home: "#7E22CE", grocery: "#B45309", expenses: "#0F766E" },
+const SPACE_TEXT_COLORS: Record<"dark" | "light", Partial<Record<SpaceKind | "custom", string>>> = {
+  dark: { car: "#6FA5F8", home: "#B37BF5", grocery: "#F5B13D", expenses: "#3DD3BF", custom: "#EC4899" },
+  light: { car: "#2563EB", home: "#7E22CE", grocery: "#B45309", expenses: "#0F766E", custom: "#BE185D" },
 };
 
-export function spaceTextColor(kind: SpaceKind, isDark: boolean): string | undefined {
+/** `"custom"` = a calendar event with no space (CUSTOM_EVENT_COLOR). */
+export function spaceTextColor(kind: SpaceKind | "custom", isDark: boolean): string | undefined {
   return SPACE_TEXT_COLORS[isDark ? "dark" : "light"][kind];
 }
+
+/** Ink for text/icons ON a filled identity color (a primary button, the
+ * active Grocery pill). Amber and teal are too light for white (2.2:1 /
+ * 2.5:1), so they take a dark ink. */
+export const SPACE_ON_FILL: Partial<Record<SpaceKind, string>> = {
+  car: "#FFFFFF",
+  home: "#FFFFFF",
+  grocery: "#1A1206",
+  expenses: "#04201C",
+};
+
+/** Fill for a filled button carrying a TEXT label. White on the car blue
+ * (#3B82F6) is only 3.7:1 -- fine for an icon, short of 4.5:1 for a
+ * label -- so labelled buttons use a deeper shade of the same hue. */
+export const SPACE_BUTTON_FILL: Partial<Record<SpaceKind, string>> = {
+  car: "#2563EB",
+  home: "#9333EA",
+  grocery: "#F59E0B",
+  expenses: "#14B8A6",
+};
 
 /** Romanian display name per space kind. */
 export const SPACE_KIND_LABEL: Partial<Record<SpaceKind, string>> = {

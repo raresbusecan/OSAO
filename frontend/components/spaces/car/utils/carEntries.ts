@@ -67,23 +67,23 @@ export const buildCarRecentItems = ({
     ...fuelEntries.map((entry) => {
       const subtitle =
         entry.odometer !== undefined
-          ? `${formatCarDate(entry.date)} · ${formatCarNumber(
+          ? `${formatCarDate(entry.date)}, ${formatCarNumber(
               entry.odometer,
             )} km`
           : formatCarDate(entry.date);
 
       const amount =
         entry.total_paid !== undefined
-          ? `${formatCarNumber(entry.total_paid)} RON`
+          ? `${formatCarNumber(entry.total_paid)} lei`
           : entry.liters !== undefined
-            ? `${formatCarNumber(entry.liters)} L`
+            ? `${formatCarNumber(entry.liters)} l`
             : undefined;
 
       return {
         id: entry.id,
         type: "fuel" as const,
         icon: "water-outline" as const,
-        title: "Fuel",
+        title: "Alimentare",
         subtitle,
         amount,
         date: entry.date,
@@ -97,9 +97,9 @@ export const buildCarRecentItems = ({
       title: entry.service,
       subtitle:
         entry.odometer !== undefined
-          ? `${formatCarDate(entry.date)} · ${formatCarNumber(entry.odometer)} km`
+          ? `${formatCarDate(entry.date)}, ${formatCarNumber(entry.odometer)} km`
           : formatCarDate(entry.date),
-      amount: `${formatCarNumber(entry.price)} RON`,
+      amount: `${formatCarNumber(entry.price)} lei`,
       date: entry.date,
       archived: entry.archived,
       statusDot: getMaintenanceStatusDot(entry, currentOdometer),
@@ -113,12 +113,12 @@ export const buildCarRecentItems = ({
       title: entry.title,
       subtitle: `${entry.documentType}${
         entry.expiryDate
-          ? ` · Expires ${entry.expiryDate}`
+          ? `, expiră pe ${formatCarDate(entry.expiryDate)}`
           : ""
       }`,
       amount:
         entry.price !== undefined
-          ? `${formatCarNumber(entry.price)} RON`
+          ? `${formatCarNumber(entry.price)} lei`
           : undefined,
       date: entry.date,
       archived: entry.archived,
@@ -133,14 +133,14 @@ export const buildCarRecentItems = ({
       // Category and title are both optional now (only Amount is
       // required, see CarExpenseForm.tsx) -- fall back so a blank one
       // never renders as an empty title/subtitle.
-      title: entry.title || entry.category || "Expense",
+      title: entry.title || entry.category || "Cheltuială",
       subtitle: [
         entry.category,
         entry.odometer ? `${formatCarNumber(entry.odometer)} km` : null,
       ]
         .filter(Boolean)
-        .join(" · "),
-      amount: `${formatCarNumber(entry.amount)} RON`,
+        .join(", "),
+      amount: `${formatCarNumber(entry.amount)} lei`,
       date: entry.date,
     })),
   ];

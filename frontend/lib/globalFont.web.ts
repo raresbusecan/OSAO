@@ -7,7 +7,7 @@
  * render as spans with their own family and are left alone. Web is a
  * dev-only surface (screenshots, quick checks), not what ships.
  */
-import { IBMPlexSans_400Regular, IBMPlexSans_500Medium, IBMPlexSans_600SemiBold, IBMPlexSans_700Bold } from "@expo-google-fonts/ibm-plex-sans";
+import { IBMPlexSans_400Regular, IBMPlexSans_500Medium, IBMPlexSans_600SemiBold } from "@expo-google-fonts/ibm-plex-sans";
 
 const src = (asset: unknown) => (typeof asset === "string" ? asset : (asset as { uri?: string })?.uri ?? "");
 
@@ -20,8 +20,11 @@ if (typeof document !== "undefined" && !document.querySelector("style[data-plex]
     face(IBMPlexSans_400Regular, 400),
     face(IBMPlexSans_500Medium, 500),
     face(IBMPlexSans_600SemiBold, 600),
-    face(IBMPlexSans_700Bold, 700),
-    // Heavier legacy weights (800/900) fall back to the Bold file.
+    // The redesign uses only 400/500/600: map every heavier legacy
+    // weight onto the SemiBold file too (same as native's fw()).
+    face(IBMPlexSans_600SemiBold, 700),
+    face(IBMPlexSans_600SemiBold, 800),
+    face(IBMPlexSans_600SemiBold, 900),
     `div[dir="auto"],input,textarea{font-family:"IBM Plex Sans",system-ui,sans-serif}`,
   ].join("\n");
   document.head.appendChild(el);

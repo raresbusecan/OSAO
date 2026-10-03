@@ -1,5 +1,5 @@
-import { Tabs } from "expo-router";
-import { View } from "react-native";
+import { Tabs, useSegments } from "expo-router";
+import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 
@@ -16,6 +16,19 @@ export const REFRESH_EVENT = "lifeos.refresh";
  */
 export default function TabsLayout() {
   const { colors } = useTheme();
+  // A Space screen ([id], hidden from the bar) still belongs to "Spații"
+  // -- keep that tab lit there instead of no tab looking active.
+  const segments = useSegments() as string[];
+  const inSpace = segments[1] === "[id]";
+
+  const icon = (outline: keyof typeof Ionicons.glyphMap, filled: keyof typeof Ionicons.glyphMap, forceOn = false) =>
+    ({ color, size, focused }: { color: any; size: number; focused: boolean }) => (
+      <Ionicons name={focused || forceOn ? filled : outline} size={size} color={forceOn ? colors.onSurface : color} />
+    );
+  const label = (text: string, forceOn = false) =>
+    ({ focused, color }: { focused: boolean; color: any }) => (
+      <Text style={{ fontSize: 11, fontWeight: focused || forceOn ? "600" : "500", color: forceOn ? colors.onSurface : color }}>{text}</Text>
+    );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
@@ -24,7 +37,6 @@ export default function TabsLayout() {
           headerShown: false,
           tabBarActiveTintColor: colors.onSurface,
           tabBarInactiveTintColor: colors.onSurfaceTertiary,
-          tabBarLabelStyle: { fontSize: 11, fontWeight: "500" },
           // One step off the page color (the redesign's layering), with
           // the hairline kept as the edge between content and chrome.
           tabBarStyle: {
@@ -37,28 +49,32 @@ export default function TabsLayout() {
           name="home"
           options={{
             title: "Acasă",
-            tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} />,
+            tabBarLabel: label("Acasă"),
+            tabBarIcon: icon("home-outline", "home"),
           }}
         />
         <Tabs.Screen
           name="spaces"
           options={{
             title: "Spații",
-            tabBarIcon: ({ color, size }) => <Ionicons name="grid-outline" size={size} color={color} />,
+            tabBarLabel: label("Spații", inSpace),
+            tabBarIcon: icon("grid-outline", "grid", inSpace),
           }}
         />
         <Tabs.Screen
           name="calendar"
           options={{
             title: "Calendar",
-            tabBarIcon: ({ color, size }) => <Ionicons name="calendar-outline" size={size} color={color} />,
+            tabBarLabel: label("Calendar"),
+            tabBarIcon: icon("calendar-outline", "calendar"),
           }}
         />
         <Tabs.Screen
           name="budget"
           options={{
             title: "Buget",
-            tabBarIcon: ({ color, size }) => <Ionicons name="wallet-outline" size={size} color={color} />,
+            tabBarLabel: label("Buget"),
+            tabBarIcon: icon("wallet-outline", "wallet"),
           }}
         />
         {/* Search was removed (replaced by Budget above) -- deleting the

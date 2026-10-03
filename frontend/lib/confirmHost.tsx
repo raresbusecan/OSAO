@@ -1,6 +1,9 @@
-import React, { useEffect, useState } from "react";
-import { Modal, Pressable, View, Text } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, Modal, Pressable, View, Text } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { useReducedMotion } from "@/lib/motion";
+import { Button } from "@/components/ui/primitives";
 
 type DialogRequest = {
   kind: "confirm" | "notify";
@@ -59,7 +62,6 @@ export function showNotifyDialog(title: string, message: string): void {
  * opened.
  */
 export function ConfirmHost() {
-  const { colors, spacing, radius } = useTheme();
   const [request, setRequest] = useState<DialogRequest | null>(null);
 
   useEffect(() => {
@@ -77,87 +79,77 @@ export function ConfirmHost() {
   };
 
   return (
-    <Modal visible transparent animationType="fade" onRequestClose={() => close(false)}>
-      <View
+    <Modal visible transparent animationType="none" onRequestClose={() => close(false)} statusBarTranslucent>
+      <Dialog request={request} close={close} />
+    </Modal>
+  );
+}
+
+/** 2026-10 redesign: a centered card with a tinted icon (trash for a
+ * destructive confirm), the question, then Cancel / Confirm side by
+ * side. Fades and lifts in; skipped under reduced motion. */
+function Dialog({ request, close }: { request: DialogRequest; close: (value: boolean) => void }) {
+  const { colors, spacing, radius } = useTheme();
+  const reduced = useReducedMotion();
+  const appear = useRef(new Animated.Value(reduced ? 1 : 0)).current;
+
+  useEffect(() => {
+    if (reduced) return;
+    Animated.spring(appear, { toValue: 1, useNativeDriver: true, damping: 20, stiffness: 260 }).start();
+  }, [appear, reduced]);
+
+  const tone = request.destructive ? colors.error : colors.onSurface;
+  const icon: keyof typeof Ionicons.glyphMap =
+    request.kind === "notify" ? "information-circle-outline" : request.destructive ? "trash-outline" : "help-circle-outline";
+
+  return (
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl }}>
+      <Animated.View style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundColor: "rgba(5,7,10,0.62)", opacity: appear }}>
+        <Pressable style={{ flex: 1 }} onPress={() => close(false)} accessibilityLabel="Închide" />
+      </Animated.View>
+      <Animated.View
+        accessibilityViewIsModal
         style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
+          width: "100%",
+          maxWidth: 340,
+          borderRadius: radius.lg + 2,
+          backgroundColor: colors.surfaceSecondary,
           padding: spacing.xl,
-          backgroundColor: "rgba(0,0,0,0.4)",
+          paddingBottom: spacing.gutter,
+          gap: spacing.lg + 2,
+          opacity: appear,
+          transform: [{ translateY: appear.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }, { scale: appear.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1] }) }],
         }}
       >
-        <View
-          style={{
-            width: "100%",
-            maxWidth: 360,
-            borderRadius: radius.lg,
-            backgroundColor: colors.surface,
-            padding: spacing.xl,
-          }}
-        >
-          <Text style={{ fontSize: 17, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.sm }}>
-            {request.title}
-          </Text>
-          <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, marginBottom: spacing.lg, lineHeight: 20 }}>
-            {request.message}
-          </Text>
-
-          {request.kind === "confirm" ? (
-            <View style={{ flexDirection: "row", gap: spacing.sm }}>
-              <Pressable
-                testID="confirm-host-cancel"
-                onPress={() => close(false)}
-                style={{
-                  flex: 1,
-                  minHeight: 48,
-                  borderRadius: radius.sm,
-                  backgroundColor: "transparent",
-                  borderWidth: 1,
-                  borderColor: colors.error,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>
-                  {request.cancelLabel ?? "Cancel"}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                testID="confirm-host-confirm"
-                onPress={() => close(true)}
-                style={{
-                  flex: 1,
-                  minHeight: 48,
-                  borderRadius: radius.sm,
-                  backgroundColor: request.destructive ? colors.error : colors.onSurface,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text style={{ fontSize: 14, fontWeight: "800", color: colors.surface }}>
-                  {request.confirmLabel ?? "Confirm"}
-                </Text>
-              </Pressable>
-            </View>
-          ) : (
-            <Pressable
-              testID="confirm-host-ok"
-              onPress={() => close(true)}
-              style={{
-                minHeight: 48,
-                borderRadius: radius.sm,
-                backgroundColor: colors.onSurface,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "800", color: colors.surface }}>OK</Text>
-            </Pressable>
-          )}
+        <View style={{ alignItems: "center", gap: spacing.sm }}>
+          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: `${tone}24`, alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name={icon} size={22} color={tone} />
+          </View>
+          <Text style={{ fontSize: 18, fontWeight: "600", color: colors.onSurface, textAlign: "center" }}>{request.title}</Text>
+          {request.message ? (
+            <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, textAlign: "center", lineHeight: 20 }}>{request.message}</Text>
+          ) : null}
         </View>
-      </View>
-    </Modal>
+
+        {request.kind === "confirm" ? (
+          <View style={{ flexDirection: "row", gap: spacing.sm }}>
+            <View style={{ flex: 1 }}>
+              <Button testID="confirm-host-cancel" compact variant="secondary" label={request.cancelLabel ?? "Renunță"} onPress={() => close(false)} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Button
+                testID="confirm-host-confirm"
+                compact
+                label={request.confirmLabel ?? "Confirmă"}
+                tone={request.destructive ? colors.error : undefined}
+                onPress={() => close(true)}
+              />
+            </View>
+          </View>
+        ) : (
+          <Button testID="confirm-host-ok" compact label="OK" onPress={() => close(true)} />
+        )}
+      </Animated.View>
+    </View>
   );
 }

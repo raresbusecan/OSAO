@@ -3,7 +3,8 @@ import { View, Text, ScrollView, Pressable, DeviceEventEmitter, Animated } from 
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL } from "@/lib/spaces/spaceProfile";
+import { CircleButton, TopBar, Identity, Button } from "@/components/ui/primitives";
 import { confirmAction, notifyAction } from "@/lib/confirm";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/auth";
@@ -621,8 +622,8 @@ export default function GroceryDashboard({
     if (existing) return existing;
 
     if (lists.length >= MAX_GROCERY_LISTS) {
-      const message = `You can have up to ${MAX_GROCERY_LISTS} lists -- delete one before creating another.`;
-      notifyAction("List limit reached", message);
+      const message = `Poți avea cel mult ${MAX_GROCERY_LISTS} liste. Șterge una ca să creezi alta.`;
+      notifyAction("Ai atins limita de liste", message);
       throw new Error(message);
     }
 
@@ -720,9 +721,9 @@ export default function GroceryDashboard({
   // Delete Product...).
   const confirmDeleteList = async (list: GroceryList) => {
     const confirmed = await confirmAction(
-      "Delete list",
-      `Delete "${list.name}" and everything on it?`,
-      { confirmLabel: "Delete", destructive: true },
+      `Ștergi lista ${list.name}?`,
+      "Tot ce e pe ea se șterge și nu se poate anula.",
+      { confirmLabel: "Șterge", destructive: true },
     );
 
     if (confirmed) handleDeleteList(list.id);
@@ -794,29 +795,18 @@ export default function GroceryDashboard({
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingHorizontal: spacing.lg + 4, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.lg + 2 }}
+        contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
       >
         {/* TOP BAR -- back; recipes, who's on this list, edit space. */}
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <HeaderCircle testID="space-back" icon="chevron-back" label="Înapoi la spații" onPress={() => router.push("/spaces")} />
-          <View style={{ flexDirection: "row", gap: spacing.sm }}>
-            <HeaderCircle testID="grocery-recipes-button" icon="restaurant-outline" label="Rețete" onPress={() => setView("recipes")} />
-            <HeaderCircle testID="space-edit" icon="create-outline" label="Editează spațiul" onPress={onEdit} />
-          </View>
-        </View>
+        <TopBar onBack={() => router.push("/spaces")}>
+          <CircleButton testID="grocery-recipes-button" icon="restaurant-outline" label="Rețete" onPress={() => setView("recipes")} />
+          <CircleButton testID="space-edit" icon="create-outline" label="Editează spațiul" onPress={onEdit} />
+        </TopBar>
 
         {/* IDENTITY + SHARING -- who can see the active list. The avatar
             stack (or "Invită pe cineva") opens SpaceMembersModal. */}
         <View style={{ gap: spacing.md }}>
-          <View style={{ gap: 2 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: groceryFill }} />
-              <Text style={{ fontSize: 14, color: muted }}>Cumpărături</Text>
-            </View>
-            <Text style={{ fontSize: 28, fontWeight: "600", letterSpacing: -0.6, color: colors.onSurface }} numberOfLines={1}>
-              {space?.name || "Cumpărături"}
-            </Text>
-          </View>
+          <Identity color={groceryFill} kicker="Cumpărături" title={space?.name || "Cumpărături"} />
 
           <PressableScale
             testID="grocery-members-stack"
@@ -824,7 +814,7 @@ export default function GroceryDashboard({
             disabled={!effectiveActiveListId}
             accessibilityRole="button"
             accessibilityLabel="Cine are acces la această listă"
-            style={{ flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: spacing.sm, opacity: effectiveActiveListId ? 1 : 0.4 }}
+            style={{ flexDirection: "row", alignItems: "center", alignSelf: "flex-start", minHeight: 44, gap: spacing.sm, opacity: effectiveActiveListId ? 1 : 0.4 }}
           >
             {otherPeople.length > 0 ? (
               <View style={{ flexDirection: "row" }}>
@@ -867,6 +857,7 @@ export default function GroceryDashboard({
             <PressableScale
               testID="grocery-list-card-new"
               onPress={() => setCreatingList(true)}
+              hitSlop={{ top: 2, bottom: 2 }}
               accessibilityRole="button"
               accessibilityLabel="Listă nouă"
               style={{
@@ -920,11 +911,11 @@ export default function GroceryDashboard({
                       testID="grocery-clear-cart"
                       onPress={() => handleClearCart(effectiveActiveListId)}
                       accessibilityRole="button"
-                      accessibilityLabel="Golește coșul"
-                      style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 8, paddingLeft: spacing.md }}
+                      accessibilityLabel="Debifează tot"
+                      style={{ flexDirection: "row", alignItems: "center", gap: 4, minHeight: 44, paddingLeft: spacing.md }}
                     >
-                      <Ionicons name="refresh-outline" size={15} color={muted} />
-                      <Text style={{ fontSize: 13, color: muted }}>Golește</Text>
+                      <Ionicons name="arrow-undo-outline" size={15} color={muted} />
+                      <Text style={{ fontSize: 13, color: muted }}>Debifează tot</Text>
                     </PressableScale>
                   ) : null}
                 </View>
@@ -962,23 +953,12 @@ export default function GroceryDashboard({
             {/* Only once something's actually in the cart -- finishing an
                 empty cart has nothing to log. */}
             {inCartTotal > 0 && effectiveActiveListId ? (
-              <PressableScale
+              <Button
+                label="Termină cumpărăturile"
+                icon="checkmark-done"
+                tone={groceryFill}
                 onPress={() => setFinishShoppingListId(effectiveActiveListId)}
-                accessibilityRole="button"
-                accessibilityLabel="Termină cumpărăturile"
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                  height: 52,
-                  borderRadius: radius.md + 2,
-                  backgroundColor: groceryFill,
-                }}
-              >
-                <Ionicons name="checkmark-done" size={18} color="#1A1206" />
-                <Text style={{ fontSize: 15, fontWeight: "600", color: "#1A1206" }}>Termină cumpărăturile</Text>
-              </PressableScale>
+              />
             ) : null}
           </>
         )}
@@ -1037,23 +1017,6 @@ export default function GroceryDashboard({
   );
 }
 
-/** 44px round icon button on the card layer -- back, recipes, edit. */
-function HeaderCircle({ icon, label, onPress, testID }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress?: () => void; testID?: string }) {
-  const { colors } = useTheme();
-  const isBack = icon === "chevron-back";
-  return (
-    <PressableScale
-      testID={testID}
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={label}
-      style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
-    >
-      <Ionicons name={icon} size={isBack ? 22 : 18} color={isBack ? colors.onSurface : colors.onSurfaceTertiary} />
-    </PressableScale>
-  );
-}
-
 /** One pill in the list row -- the active one is filled in Grocery's
  * color and grows a small "x" (delete) when the viewer may manage it. */
 function ListPill({
@@ -1074,7 +1037,7 @@ function ListPill({
   isShared: boolean;
 }) {
   const { colors, spacing, radius } = useTheme();
-  const fg = active ? "#1A1206" : colors.onSurface;
+  const fg = active ? SPACE_ON_FILL.grocery! : colors.onSurface;
 
   return (
     // Pill body and its "x" are siblings, not nested -- a button inside
@@ -1092,6 +1055,7 @@ function ListPill({
       <PressableScale
         testID={`grocery-list-card-${list.id}`}
         onPress={onPress}
+        hitSlop={{ top: 2, bottom: 2 }}
         accessibilityRole="button"
         accessibilityState={{ selected: active }}
         accessibilityLabel={list.name}
@@ -1113,7 +1077,7 @@ function ListPill({
         <Pressable
           testID={`grocery-list-card-delete-${list.id}`}
           onPress={onDelete}
-          hitSlop={8}
+          hitSlop={{ top: 10, bottom: 10, right: 10, left: 4 }}
           accessibilityRole="button"
           accessibilityLabel={`Șterge lista ${list.name}`}
           style={{ width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(26,18,6,0.12)" }}

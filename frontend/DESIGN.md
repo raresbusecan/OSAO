@@ -1,3 +1,8 @@
+> **Superseded (2026-10):** the app moved to a layered, dark-first redesign
+> (filled cards, identity colors, IBM Plex Sans). The rules live in
+> `frontend/CLAUDE.md` → "Theme (2026-10 redesign)". This file is kept only
+> as history of the earlier hairline direction.
+
 # Design reference — how to make orgOS feel more modern
 
 Written after the user compared orgOS's look to other apps and felt it

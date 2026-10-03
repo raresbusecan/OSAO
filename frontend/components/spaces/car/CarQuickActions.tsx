@@ -4,6 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
 import { PressableScale } from "@/components/ui/PressableScale";
+import { motion } from "@/lib/motion";
 
 export type CarQuickAction = {
   key: string;
@@ -43,7 +44,7 @@ export function CarQuickActions({ actions, onAction }: CarQuickActionsProps) {
             onPress={() => onAction?.(action.key)}
             accessibilityRole="button"
             accessibilityLabel={`Adaugă ${action.label.toLowerCase()}`}
-            scaleTo={0.94}
+            scaleTo={motion.scale.control}
             style={{ flex: 1, alignItems: "center", gap: spacing.sm }}
           >
             <View
@@ -51,14 +52,14 @@ export function CarQuickActions({ actions, onAction }: CarQuickActionsProps) {
                 width: 56,
                 height: 56,
                 borderRadius: 18,
-                backgroundColor: primary ? fill : `${fill}24`,
+                backgroundColor: primary ? fill : `${fill}29`,
                 alignItems: "center",
                 justifyContent: "center",
               }}
             >
               <Ionicons name={action.icon as any} size={22} color={primary ? "#FFFFFF" : tint} />
             </View>
-            <Text style={{ fontSize: 12, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>
+            <Text style={{ fontSize: 12, fontWeight: "500", color: colors.onSurfaceSecondary }} numberOfLines={1}>
               {action.label}
             </Text>
           </PressableScale>
