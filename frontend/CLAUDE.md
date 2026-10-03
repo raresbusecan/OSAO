@@ -112,7 +112,10 @@ name + price + date + notes, no sub-categories.
   on react-native-web; it now renders one month directly off plain
   `index` state).
 - `lib/spaces/expenses/expensesItems.ts`.
-- Dead: `ExpenseCategoryPickerSheet.tsx`, `index.ts`.
+- Dead: `ExpenseCategoryPickerSheet.tsx`, `index.ts`,
+  `lib/spaces/expenses/expenses.mock.ts` (its fake entries used to seed
+  `components/spaces/expenses/expenses.mock.ts`'s `initialExpensesData`,
+  which is now an empty list -- entries come only from the API).
 
 ## Shared frontend systems
 

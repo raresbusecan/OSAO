@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from "react";
 import { ScrollView, View } from "react-native";
+import { useRouter } from "expo-router";
 import { useTheme } from "@/lib/theme";
+import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 
 import type { ExpensesData } from "./expenses.data.types";
 import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
@@ -35,6 +37,7 @@ export default function ExpensesDashboard({
   onEntryDelete,
 }: ExpensesDashboardProps) {
   const { spacing, colors } = useTheme();
+  const router = useRouter();
 
   const entries = expensesData.entries;
   const [editingEntry, setEditingEntry] = useState<ExpenseEntry | null>(null);
@@ -91,6 +94,7 @@ export default function ExpensesDashboard({
   }
 
   return (
+    <SwipeBackView onBack={() => router.push("/spaces")}>
     <ScrollView
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{
@@ -117,5 +121,6 @@ export default function ExpensesDashboard({
         onDelete={handleEditDelete}
       />
     </ScrollView>
+    </SwipeBackView>
   );
 }

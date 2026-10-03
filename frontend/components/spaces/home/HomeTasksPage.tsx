@@ -14,11 +14,10 @@ import type { HomeData } from "./home.data.types";
 import type { HomeTaskEntry } from "@/lib/spaces/home/home.types";
 import {
   getHomeTasksView,
-  getRecurringTaskWarnings,
+  recurringWarningTierColor,
   type HomeTaskRow,
   type RecurringWarningTier,
 } from "@/lib/spaces/home/calculations/dashboard.calculations";
-import { severityColor } from "@/lib/statusColors";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 
 export type HomeTasksPageProps = {
@@ -26,9 +25,6 @@ export type HomeTasksPageProps = {
   onBack: () => void;
   onAdd: () => void;
   onEdit: (entry: HomeTaskEntry) => void;
-  /** Restanțe card tap -- opens HomeRecurringWarningsPage, the itemized
-   * breakdown of the 4 counts shown on the card. */
-  onWarningsPress: () => void;
   /** Checkbox tap -- the caller decides what happens: a purchase task
    * opens HomeTaskResolveSheet for the price, everything else completes
    * instantly. Not named onToggleComplete because it isn't always one. */
@@ -49,13 +45,12 @@ function formatDate(dateString: string): string {
   return date.toLocaleDateString("en-US", { day: "numeric", month: "short" });
 }
 
-// Same mapping as HomeRecurringWarningsPage's own tierStyle -- a task
-// reads the same color here as it would on the Restanțe page.
+// Same mapping (recurringWarningTierColor) as HomeRecurringWarningsPage's
+// own tierStyle -- a task reads the same color here as it would on the
+// Restanțe page.
 function tierColor(tier: RecurringWarningTier | undefined, colors: any): string {
-  if (tier === "red") return severityColor("critical", colors);
-  if (tier === "orangeToday" || tier === "orangeDays") return severityColor("warning", colors);
-  if (tier === "yellow") return severityColor("caution", colors);
-  return colors.onSurfaceTertiary;
+  if (!tier) return colors.onSurfaceTertiary;
+  return recurringWarningTierColor(tier, colors);
 }
 
 function tierLabel(row: HomeTaskRow): string {
@@ -70,14 +65,12 @@ export function HomeTasksPage({
   onBack,
   onAdd,
   onEdit,
-  onWarningsPress,
   onCheckboxPress,
   onDelete,
   onReorder,
 }: HomeTasksPageProps) {
   const { colors, spacing, radius } = useTheme();
 
-  const { counts: warningCounts } = getRecurringTaskWarnings(homeData);
   const { dueSoon, upcoming, recentDone } = getHomeTasksView(homeData);
 
   const findEntry = (id: string) => homeData.taskEntries.find((t) => t.id === id)!;
@@ -127,35 +120,6 @@ export function HomeTasksPage({
             Tasks
           </Text>
         </View>
-
-        {/* Restanțe -- recurring tasks only, broken down by the 4
-            states (galben 3-4 zile, portocaliu 1-2 zile, portocaliu azi,
-            roșu restant). Tap opens the itemized list
-            (HomeRecurringWarningsPage). */}
-        <Pressable
-          onPress={onWarningsPress}
-          accessibilityRole="button"
-          accessibilityLabel="View recurring task warnings"
-          style={{
-            marginBottom: spacing.xl,
-            padding: spacing.lg,
-            borderRadius: radius.sm,
-            backgroundColor: colors.surfaceSecondary,
-            borderWidth: 1,
-            borderColor: colors.border,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.md }}>
-            <Text style={{ fontSize: 13, fontWeight: "800", color: colors.onSurface }}>Restanțe</Text>
-            <Ionicons name="chevron-forward" size={15} color={colors.onSurfaceTertiary} />
-          </View>
-          <View style={{ flexDirection: "row" }}>
-            <WarningCount value={warningCounts.yellow} label="4 zile" color={severityColor("caution", colors)} />
-            <WarningCount value={warningCounts.orangeDays} label="2 zile" color={severityColor("warning", colors)} />
-            <WarningCount value={warningCounts.orangeToday} label="Azi" color={severityColor("warning", colors)} />
-            <WarningCount value={warningCounts.red} label="Restant" color={severityColor("critical", colors)} last />
-          </View>
-        </Pressable>
 
         {/* Add -- always the first row of the list, above every section
             (never buried at the bottom of ALL, which could be scrolled
@@ -243,25 +207,6 @@ export function HomeTasksPage({
         </View>
       </NestableScrollContainer>
     </SwipeBackView>
-  );
-}
-
-function WarningCount({
-  value,
-  label,
-  color,
-  last,
-}: {
-  value: number;
-  label: string;
-  color: string;
-  last?: boolean;
-}) {
-  return (
-    <View style={{ flex: 1, alignItems: "center", borderRightWidth: last ? 0 : 1, borderRightColor: `${color}22` }}>
-      <Text style={{ fontSize: 20, fontWeight: "800", color: value > 0 ? color : "#A3A3A3" }}>{value}</Text>
-      <Text style={{ fontSize: 10.5, fontWeight: "700", color: "#A3A3A3", marginTop: 2 }}>{label}</Text>
-    </View>
   );
 }
 

@@ -6,6 +6,7 @@ import { useTheme } from "@/lib/theme";
 import { confirmAction, notifyAction } from "@/lib/confirm";
 import { severityColor, type SeverityTier } from "@/lib/statusColors";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 
 import type { HomeData } from "./home.data.types";
 import type { HomeNextItem } from "./home.ui.types";
@@ -32,30 +33,32 @@ import { HomeSupplyRestockSheet } from "./HomeSupplyRestockSheet";
 import HomeTaskForm from "./forms/HomeTaskForm";
 import HomeSupplyForm from "./forms/HomeSupplyForm";
 import { HOME_CATEGORIES, type HomeCategoryKey } from "./homeCategoryConfig";
+import { HomeRestanteCard } from "./HomeRestanteCard";
 import {
   getThisMonthHomeExpenses,
   getUpcomingHomeItems,
-  getHomeTaskStats,
+  getTaskTierCounts,
+  getMaintenanceTierCounts,
+  getRecurringTierCounts,
+  getRecurringTaskWarnings,
+  recurringWarningTierColor,
   getSupplyRestockEstimate,
   nextTaskOccurrence,
+  type RecurringWarningTier,
 } from "@/lib/spaces/home/calculations/dashboard.calculations";
 import type { HomeProfile } from "@/lib/spaces/spaceProfile";
 
 type CategoryBadge = { count: number; severity: SeverityTier } | null;
-
-/** How many of `items` (getUpcomingHomeItems's full, unsliced list)
- * belong to one category -- its id is always "<prefix>-<entry id>" (see
- * that function) -- and how urgent the worst of them is. `urgency` is
- * days-until-due, so the minimum across matches is the closest one;
- * negative means already overdue ("critical"), 0+ means coming up
- * ("warning"). Null (no badge) when the category has nothing upcoming
- * at all, same as the tile showing no number today. */
-function categoryBadge(items: HomeNextItem[], prefix: string): CategoryBadge {
-  const matches = items.filter((item) => String(item.id).startsWith(prefix));
-  if (matches.length === 0) return null;
-  const worst = Math.min(...matches.map((item) => item.urgency));
-  return { count: matches.length, severity: worst < 0 ? "critical" : "warning" };
-}
+/** One dot per urgency tier instead of a single combined number -- per
+ * explicit user request, every category tile that has a due-date-based
+ * urgency concept (Task-uri/Mentenanță/Recurente -- Cheltuieli has no
+ * due date, Provizii uses a different rate-based restock model, see
+ * getSupplyRestockEstimate) gets its OWN dots from its OWN entries only,
+ * never a combined cross-category total -- a dot always traces back to
+ * exactly one tile. Each tier has its own distinct color (see
+ * recurringWarningTierColor), so no two dots on the same tile ever look
+ * identical either. */
+type TierDots = { tier: RecurringWarningTier; count: number }[];
 
 export type HomeDashboardProps = {
   space: any;
@@ -158,28 +161,38 @@ export default function HomeDashboard({
   // badge at all). HomeNextSection still only ever sees the first 3.
   const upcomingItems = getUpcomingHomeItems(homeData);
 
-  const taskStats = getHomeTaskStats(homeData);
-  const taskBadge: CategoryBadge =
-    taskStats.overdue + taskStats.dueToday > 0
-      ? { count: taskStats.overdue + taskStats.dueToday, severity: taskStats.overdue > 0 ? "critical" : "warning" }
-      : null;
+  // One dot per urgency tier per tile -- each tile's dots come only from
+  // its OWN entries (getXTierCounts), never a cross-category total, so a
+  // dot always traces back to exactly one category.
+  const toTierDots = (counts: Record<RecurringWarningTier, number>): TierDots =>
+    (["red", "orangeToday", "orangeDays", "yellow"] as const)
+      .filter((tier) => counts[tier] > 0)
+      .map((tier) => ({ tier, count: counts[tier] }));
+
+  const taskTierDots = toTierDots(getTaskTierCounts(homeData));
+  const maintenanceTierDots = toTierDots(getMaintenanceTierCounts(homeData));
+  const recurringTierDots = toTierDots(getRecurringTierCounts(homeData));
+
+  // Restanțe (the itemized, cross-category breakdown/drill-down) lives
+  // on this main page now, not buried inside Tasks -- per explicit user
+  // request, since it combines all 3 sources and reading it from inside
+  // "Task-uri" made its counts look like they disagreed with the Task
+  // tile's own (tasks-only) dots.
+  const { counts: restanteCounts } = getRecurringTaskWarnings(homeData);
 
   const lowSupplyCount = homeData.supplyEntries.filter(
     (entry) => getSupplyRestockEstimate(entry)?.isLow,
   ).length;
   const supplyBadge: CategoryBadge = lowSupplyCount > 0 ? { count: lowSupplyCount, severity: "critical" } : null;
 
-  const maintenanceBadge = categoryBadge(upcomingItems, "maint-");
-  const recurringBadge = categoryBadge(upcomingItems, "rec-");
-
   // Documents deliberately excluded here too -- no tile for it until it
   // has real utility (file upload).
   const categoryTiles = [
-    { key: "expenses" as const, label: "Cheltuieli", icon: HOME_CATEGORIES.find((c) => c.key === "expenses")!.icon, badge: null as CategoryBadge },
-    { key: "maintenance" as const, label: "Mentenanță", icon: HOME_CATEGORIES.find((c) => c.key === "maintenance")!.icon, badge: maintenanceBadge },
-    { key: "recurring" as const, label: "Recurente", icon: HOME_CATEGORIES.find((c) => c.key === "recurring")!.icon, badge: recurringBadge },
-    { key: "supplies" as const, label: "Provizii", icon: "basket-outline" as const, badge: supplyBadge },
-    { key: "task" as const, label: "Task-uri", icon: "checkmark-circle-outline" as const, badge: taskBadge },
+    { key: "expenses" as const, label: "Cheltuieli", icon: HOME_CATEGORIES.find((c) => c.key === "expenses")!.icon, badge: null as CategoryBadge, dots: [] as TierDots },
+    { key: "maintenance" as const, label: "Mentenanță", icon: HOME_CATEGORIES.find((c) => c.key === "maintenance")!.icon, badge: null as CategoryBadge, dots: maintenanceTierDots },
+    { key: "recurring" as const, label: "Recurente", icon: HOME_CATEGORIES.find((c) => c.key === "recurring")!.icon, badge: null as CategoryBadge, dots: recurringTierDots },
+    { key: "supplies" as const, label: "Provizii", icon: "basket-outline" as const, badge: supplyBadge, dots: [] as TierDots },
+    { key: "task" as const, label: "Task-uri", icon: "checkmark-circle-outline" as const, badge: null as CategoryBadge, dots: taskTierDots },
   ];
 
   // Every Task/Supplies sub-view (page, form, archive, warnings, resolve
@@ -218,10 +231,13 @@ export default function HomeDashboard({
       const wasOnTasksPage = tasksPageVisible;
       setActiveCategory(null);
       closeAllSubViews();
+      // taskFormVisible now renders nested inside the tasksPageVisible
+      // block (a bottom sheet over the list, not its own full-page
+      // replacement) -- both need to end up true together, or the sheet
+      // has nowhere to mount.
+      setTasksPageVisible(true);
       if (wasOnTasksPage) {
         setTaskFormVisible(true);
-      } else {
-        setTasksPageVisible(true);
       }
       return;
     }
@@ -248,26 +264,52 @@ export default function HomeDashboard({
   // "<prefix>-<entry id>" (see getUpcomingHomeItems), opens that entry
   // for editing in its own category page, same deep-link mechanism the
   // TodoCarousel/initialOpenItem effect below already uses.
-  const handleNextItemPress = (item: HomeNextItem) => {
+  // Shared by press/resolve/delete below -- item.id is always
+  // "<prefix>-<entry id>" (doc-/maint-/rec-, see getUpcomingHomeItems),
+  // the one place that knows how to turn that back into a real
+  // category + entry id.
+  const decodeNextItem = (item: HomeNextItem): { categoryKey: HomeCategoryKey; entryId: string } | null => {
     const id = String(item.id);
-    let categoryKey: HomeCategoryKey | null = null;
-    let entryId = "";
+    if (id.startsWith("doc-")) return { categoryKey: "documents", entryId: id.slice(4) };
+    if (id.startsWith("maint-")) return { categoryKey: "maintenance", entryId: id.slice(6) };
+    if (id.startsWith("rec-")) return { categoryKey: "recurring", entryId: id.slice(4) };
+    return null;
+  };
 
-    if (id.startsWith("doc-")) {
-      categoryKey = "documents";
-      entryId = id.slice(4);
-    } else if (id.startsWith("maint-")) {
-      categoryKey = "maintenance";
-      entryId = id.slice(6);
-    } else if (id.startsWith("rec-")) {
-      categoryKey = "recurring";
-      entryId = id.slice(4);
-    }
-    if (!categoryKey) return;
+  const handleNextItemPress = (item: HomeNextItem) => {
+    const decoded = decodeNextItem(item);
+    if (!decoded) return;
 
     closeAllSubViews();
-    setActiveCategory(categoryKey);
-    setInitialCategoryEditId(entryId);
+    setActiveCategory(decoded.categoryKey);
+    setInitialCategoryEditId(decoded.entryId);
+  };
+
+  // Swipe-right on a NEXT row -- reuses resolveCategoryEntry as-is (its
+  // own confirm dialog, the recurring-Maintenance price-sheet special
+  // case, all of it), same action the category page's own row swipe
+  // already fires, just reachable one level up without opening that
+  // page first.
+  const handleNextItemResolve = (item: HomeNextItem) => {
+    const decoded = decodeNextItem(item);
+    if (!decoded) return;
+    resolveCategoryEntry(decoded.categoryKey, decoded.entryId);
+  };
+
+  // Swipe-left on a NEXT row -- same confirm copy as HomeCategoryPage's
+  // own row-delete (this reaches the exact same permanent delete,
+  // deleteHandlers itself has no confirm built in).
+  const handleNextItemDelete = async (item: HomeNextItem) => {
+    const decoded = decodeNextItem(item);
+    if (!decoded) return;
+
+    const confirmed = await confirmAction(
+      "Delete entry",
+      "Are you sure you want to delete this? This can't be undone.",
+      { confirmLabel: "Delete", destructive: true },
+    );
+    if (!confirmed) return;
+    deleteHandlers[decoded.categoryKey](decoded.entryId);
   };
 
   const handleTaskSave = (entry: HomeTaskEntry) => {
@@ -507,6 +549,20 @@ export default function HomeDashboard({
     setRestockSheetEntry(entry);
   };
 
+  // The supply row's own swipe-to-delete -- same confirm copy as
+  // handleTaskRowDelete, since this reaches the exact same permanent
+  // delete without going through the edit form first (unlike
+  // handleSupplyFormDelete, which confirms inside the form itself).
+  const handleSupplyRowDelete = async (entry: HomeSupplyEntry) => {
+    const confirmed = await confirmAction(
+      "Delete entry",
+      "This entry will be permanently deleted.",
+      { confirmLabel: "Delete", destructive: true },
+    );
+    if (!confirmed) return;
+    onSupplyDelete(entry.id);
+  };
+
   // Logs the new restock event with its quantity. getSupplyRestockEstimate
   // only starts predicting once restockHistory has 2+ entries (1 real
   // interval to learn a rate from), so the estimate only kicks in from
@@ -543,20 +599,6 @@ export default function HomeDashboard({
     supplies: onSupplyDelete,
   };
 
-  if (taskFormVisible) {
-    return (
-      <HomeTaskForm
-        entry={editingTaskEntry ?? undefined}
-        onCancel={() => {
-          setTaskFormVisible(false);
-          setEditingTaskEntry(null);
-        }}
-        onSave={handleTaskSave}
-        onDelete={editingTaskEntry ? handleTaskDelete : undefined}
-      />
-    );
-  }
-
   if (supplyFormVisible) {
     return (
       <HomeSupplyForm
@@ -586,6 +628,7 @@ export default function HomeDashboard({
             setSupplyFormVisible(true);
           }}
           onRestock={handleSupplyRestock}
+          onDelete={handleSupplyRowDelete}
         />
         {restockSheetEntry ? (
           <HomeSupplyRestockSheet
@@ -671,7 +714,6 @@ export default function HomeDashboard({
         <HomeTasksPage
           homeData={homeData}
           onBack={() => setTasksPageVisible(false)}
-          onWarningsPress={() => setWarningsPageVisible(true)}
           onAdd={() => {
             setEditingTaskEntry(null);
             setTaskFormVisible(true);
@@ -689,6 +731,17 @@ export default function HomeDashboard({
             entry={resolveSheetEntry}
             onCancel={() => setResolveSheetEntry(null)}
             onResolve={handleResolveConfirm}
+          />
+        ) : null}
+        {taskFormVisible ? (
+          <HomeTaskForm
+            entry={editingTaskEntry ?? undefined}
+            onCancel={() => {
+              setTaskFormVisible(false);
+              setEditingTaskEntry(null);
+            }}
+            onSave={handleTaskSave}
+            onDelete={editingTaskEntry ? handleTaskDelete : undefined}
           />
         ) : null}
       </>
@@ -738,6 +791,7 @@ export default function HomeDashboard({
   }
 
   return (
+    <SwipeBackView onBack={() => router.push("/spaces")}>
     <ScrollView
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{
@@ -759,6 +813,14 @@ export default function HomeDashboard({
         thisMonthExpenses={thisMonthExpenses}
         upcomingCount={upcomingItems.length}
         onSpendPress={() => setSpendPageVisible(true)}
+      />
+
+      <HomeRestanteCard
+        counts={restanteCounts}
+        onPress={() => setWarningsPageVisible(true)}
+        colors={colors}
+        spacing={spacing}
+        radius={radius}
       />
 
       <Text
@@ -788,7 +850,11 @@ export default function HomeDashboard({
               onPress={() => selectCategory(tile.key)}
               accessibilityRole="button"
               accessibilityLabel={
-                tile.badge ? `${tile.label}, ${tile.badge.count}` : tile.label
+                tile.badge
+                  ? `${tile.label}, ${tile.badge.count}`
+                  : tile.dots.length > 0
+                    ? `${tile.label}, ${tile.dots.reduce((sum, d) => sum + d.count, 0)}`
+                    : tile.label
               }
               style={{
                 // flexGrow (not a fixed width) so a lone tile wrapping onto
@@ -800,55 +866,107 @@ export default function HomeDashboard({
                 flexBasis: "46%",
                 minHeight: 56,
                 paddingHorizontal: 12,
+                paddingVertical: 10,
                 backgroundColor: colors.surfaceSecondary,
                 borderWidth: 1,
                 borderColor: colors.border,
                 borderRadius: radius.md,
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: isAlone ? "center" : "flex-start",
-                gap: 10,
+                // Column, not row -- dots (when present) render as their
+                // OWN full-width row below icon+label instead of being
+                // crammed onto the same line, which on a narrow ~46%-
+                // width tile overflowed the tile's own edge (half the
+                // last dot rendered outside the card). See dots block
+                // below.
+                flexDirection: "column",
+                justifyContent: "center",
+                gap: 6,
               }}
             >
-              {/* Tinted chip (identity color at 1A alpha, matching the same
-                  recipe HomeHeader's own avatar already uses) instead of a
-                  bare colored icon on white -- one hue per Space, just given
-                  real visual weight instead of a thin outline. */}
               <View
                 style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: radius.sm,
-                  backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
+                  flexDirection: "row",
                   alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
+                  justifyContent: isAlone ? "center" : "flex-start",
+                  gap: 10,
                 }}
               >
-                <Ionicons name={tile.icon} size={16} color={SPACE_IDENTITY_COLORS.home!} />
-              </View>
-              <Text
-                style={{ fontSize: 12.5, fontWeight: "600", color: colors.onSurface, flexGrow: isAlone ? 0 : 1 }}
-                numberOfLines={1}
-              >
-                {tile.label}
-              </Text>
-              {tile.badge ? (
+                {/* Tinted chip (identity color at 1A alpha, matching the
+                    same recipe HomeHeader's own avatar already uses)
+                    instead of a bare colored icon on white -- one hue per
+                    Space, just given real visual weight instead of a thin
+                    outline. */}
                 <View
                   style={{
-                    minWidth: 18,
-                    height: 18,
-                    paddingHorizontal: 5,
-                    borderRadius: 9,
-                    backgroundColor: severityColor(tile.badge.severity, colors),
+                    width: 32,
+                    height: 32,
+                    borderRadius: radius.sm,
+                    backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
                     alignItems: "center",
                     justifyContent: "center",
                     flexShrink: 0,
                   }}
                 >
-                  <Text style={{ fontSize: 10, fontWeight: "800", color: colors.onBrandPrimary }}>
-                    {tile.badge.count}
-                  </Text>
+                  <Ionicons name={tile.icon} size={16} color={SPACE_IDENTITY_COLORS.home!} />
+                </View>
+                <Text
+                  style={{ fontSize: 12.5, fontWeight: "600", color: colors.onSurface, flexGrow: isAlone ? 0 : 1 }}
+                  numberOfLines={1}
+                >
+                  {tile.label}
+                </Text>
+                {tile.badge ? (
+                  <View
+                    style={{
+                      minWidth: 18,
+                      height: 18,
+                      paddingHorizontal: 5,
+                      borderRadius: 9,
+                      backgroundColor: severityColor(tile.badge.severity, colors),
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: "800", color: colors.onBrandPrimary }}>
+                      {tile.badge.count}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
+
+              {/* One dot per urgency tier -- its own full-width row so up
+                  to 4 dots always have the whole tile's width to lay out
+                  in, never squeezed onto the same line as icon+label.
+                  Each tier has its own distinct color
+                  (recurringWarningTierColor's 4-stop gradient), so no two
+                  dots on the same tile ever look identical, and a tier
+                  with 0 count renders no dot at all. */}
+              {tile.dots.length > 0 ? (
+                <View
+                  style={{
+                    flexDirection: "row",
+                    gap: 4,
+                    justifyContent: isAlone ? "center" : "flex-start",
+                  }}
+                >
+                  {tile.dots.map(({ tier, count }) => (
+                    <View
+                      key={tier}
+                      style={{
+                        minWidth: 16,
+                        height: 16,
+                        paddingHorizontal: 4,
+                        borderRadius: 8,
+                        backgroundColor: recurringWarningTierColor(tier, colors),
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Text style={{ fontSize: 9, fontWeight: "800", color: colors.onBrandPrimary }}>
+                        {count}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
               ) : null}
             </Pressable>
@@ -856,7 +974,13 @@ export default function HomeDashboard({
         })}
       </View>
 
-      <HomeNextSection items={upcomingItems.slice(0, 3)} onItemPress={handleNextItemPress} />
+      <HomeNextSection
+        items={upcomingItems.slice(0, 3)}
+        onItemPress={handleNextItemPress}
+        onItemResolve={handleNextItemResolve}
+        onItemDelete={handleNextItemDelete}
+      />
     </ScrollView>
+    </SwipeBackView>
   );
 }

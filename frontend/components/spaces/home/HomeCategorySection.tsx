@@ -1,9 +1,25 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "@/lib/theme";
+import { useTheme, type ThemeColors } from "@/lib/theme";
 import { severityColor, type SeverityTier } from "@/lib/statusColors";
+import { recurringWarningTierColor, type RecurringWarningTier } from "@/lib/spaces/home/calculations/dashboard.calculations";
 import { SwipeRow } from "@/components/spaces/SwipeRow";
+
+const RECURRING_TIERS = new Set<string>(["red", "orangeToday", "orangeDays", "yellow"]);
+
+/** `urgencyTier` is one of two disjoint tier vocabularies depending on
+ * which category set it -- Documents' classifyDocumentUrgencyTier
+ * (3-value SeverityTier) or Maintenance/Recurring's
+ * classifyTaskUrgencyTier (4-value RecurringWarningTier, its own
+ * dedicated color gradient, see recurringWarningTierColor). Resolved
+ * here (not at config-build time in homeCategoryConfig.ts) since that
+ * config has no `colors`/theme access -- same reason Documents' own
+ * tier was always resolved this late too. */
+function resolveUrgencyColor(tier: SeverityTier | RecurringWarningTier, colors: ThemeColors): string {
+  if (RECURRING_TIERS.has(tier)) return recurringWarningTierColor(tier as RecurringWarningTier, colors);
+  return severityColor(tier as SeverityTier, colors);
+}
 
 export type HomeCategoryRow = {
   id: string | number;
@@ -16,11 +32,13 @@ export type HomeCategoryRow = {
    * confirm dialog afterward. Only Maintenance sets this today. */
   isRecurring?: boolean;
   /** Set only when this row is within its own alert window (Documents'
-   * classifyDocumentUrgencyTier, Maintenance's severityFromRecurringTier
-   * -- see homeCategoryConfig.ts) -- colors the subtitle red/orange/
-   * yellow instead of the plain gray default, same escalation Car's own
-   * Documents list already shows via statusColor. */
-  urgencyTier?: SeverityTier;
+   * classifyDocumentUrgencyTier, Maintenance/Recurring's
+   * classifyTaskUrgencyTier -- see homeCategoryConfig.ts) -- colors the
+   * subtitle instead of the plain gray default, same escalation Car's
+   * own Documents list already shows via statusColor. See
+   * resolveUrgencyColor above for how the two tier vocabularies map to
+   * an actual color. */
+  urgencyTier?: SeverityTier | RecurringWarningTier;
 };
 
 export type HomeCategorySectionProps = {
@@ -102,6 +120,13 @@ export function HomeCategorySection({
                 paddingHorizontal: spacing.lg,
                 paddingVertical: spacing.md,
                 gap: spacing.md,
+                // A colored left edge, same urgency color as the
+                // subtitle text -- a quick visual "frame" per row state
+                // without restructuring this shared list container (its
+                // rows sit edge-to-edge with hairline separators, not as
+                // individual bordered cards like Tasks' own TaskRowCard).
+                borderLeftWidth: row.urgencyTier ? 3 : 0,
+                borderLeftColor: row.urgencyTier ? resolveUrgencyColor(row.urgencyTier, colors) : "transparent",
                 borderBottomWidth:
                   index === rows.length - 1 ? 0 : StyleSheet.hairlineWidth,
                 borderBottomColor: colors.border,
@@ -164,7 +189,7 @@ export function HomeCategorySection({
                     style={{
                       ...typography.caption,
                       marginTop: 2,
-                      color: row.urgencyTier ? severityColor(row.urgencyTier, colors) : colors.onSurfaceTertiary,
+                      color: row.urgencyTier ? resolveUrgencyColor(row.urgencyTier, colors) : colors.onSurfaceTertiary,
                       fontWeight: row.urgencyTier ? "700" : typography.caption.fontWeight,
                     }}
                   >

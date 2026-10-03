@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  View, Text, ScrollView, Pressable, ActivityIndicator, DeviceEventEmitter, Modal, StyleSheet,
+  View, Text, ScrollView, Pressable, ActivityIndicator, DeviceEventEmitter, Modal, StyleSheet, Dimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -51,6 +51,15 @@ const TEMPLATES = [
 export default function Spaces() {
   const { colors, spacing, radius } = useTheme();
   const router = useRouter();
+  // A fixed pixel width, not "48%" -- DraggableFlatList's ScaleDecorator
+  // wraps every cell (and the ListHeaderComponent sits in that same grid
+  // row slot) in an Animated.View with no width/flex styling of its own,
+  // so a percentage width on the card inside it has no correctly-sized
+  // ancestor to resolve against and collapses to something far smaller
+  // than intended -- confirmed on a real device (severely truncated card
+  // titles). Two cards per row, minus the page's own side padding
+  // (spacing.xl each side) and the gap between them (spacing.md).
+  const cardWidth = (Dimensions.get("window").width - spacing.xl * 2 - spacing.md) / 2;
   const [spaces, setSpaces] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [profiles, setProfiles] = useState<Record<string, SpaceProfile | null>>({});
@@ -199,7 +208,7 @@ export default function Spaces() {
           onLongPress={drag}
           disabled={isActive}
           style={{
-            width: "48%",
+            width: cardWidth,
             minHeight: 140,
             backgroundColor: "transparent",
             borderWidth: 1,
@@ -369,7 +378,7 @@ export default function Spaces() {
               testID="space-add-tile"
               onPress={() => setTemplatePickerVisible(true)}
               style={{
-                width: "48%",
+                width: cardWidth,
                 minHeight: 140,
                 borderWidth: 1.5,
                 borderStyle: "dashed",

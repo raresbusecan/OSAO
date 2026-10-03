@@ -15,3 +15,9 @@ node_modules/
 
 # Dev server / tunnel runtime logs
 *.log
+
+# Local QA-sweep scratch (Sanctum test tokens, test space/item ids)
+.qa_*
+
+# Stray patch files dropped by tooling
+*.diff

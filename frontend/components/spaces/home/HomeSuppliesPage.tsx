@@ -5,6 +5,7 @@ import { useTheme, type ThemeColors } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import { severityColor, severityTint } from "@/lib/statusColors";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
+import { SwipeRow } from "@/components/spaces/SwipeRow";
 
 import type { HomeData } from "./home.data.types";
 import type { HomeSupplyEntry } from "@/lib/spaces/home/home.types";
@@ -18,6 +19,9 @@ export type HomeSuppliesPageProps = {
   /** "Restocked" tap -- logs a new restock event (appends today to
    * restockHistory) without opening the edit form. */
   onRestock: (entry: HomeSupplyEntry) => void;
+  /** Row's own swipe-to-delete -- caller is expected to confirm before
+   * actually deleting (see HomeDashboard's handleSupplyRowDelete). */
+  onDelete: (entry: HomeSupplyEntry) => void;
 };
 
 function statusFor(entry: HomeSupplyEntry, colors: ThemeColors) {
@@ -47,7 +51,7 @@ function statusFor(entry: HomeSupplyEntry, colors: ThemeColors) {
  * form) -- each restock logged here feeds getSupplyRestockEstimate,
  * which Grocery's shopping list reads cross-space to suggest supplies
  * that are probably running low while the user is actively shopping. */
-export function HomeSuppliesPage({ homeData, onBack, onAdd, onEdit, onRestock }: HomeSuppliesPageProps) {
+export function HomeSuppliesPage({ homeData, onBack, onAdd, onEdit, onRestock, onDelete }: HomeSuppliesPageProps) {
   const { colors, spacing, radius } = useTheme();
 
   const entries = homeData.supplyEntries;
@@ -107,8 +111,14 @@ export function HomeSuppliesPage({ homeData, onBack, onAdd, onEdit, onRestock }:
             {entries.map((entry) => {
               const status = statusFor(entry, colors);
               return (
-                <View
+                <SwipeRow
                   key={entry.id}
+                  onResolve={() => onRestock(entry)}
+                  onDelete={() => onDelete(entry)}
+                  cornerRadius={radius.sm}
+                  colors={colors}
+                >
+                <View
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
@@ -124,11 +134,14 @@ export function HomeSuppliesPage({ homeData, onBack, onAdd, onEdit, onRestock }:
                     <Text style={{ fontSize: 14.5, fontWeight: "700", color: colors.onSurface }} numberOfLines={1}>
                       {entry.name}
                     </Text>
+                    {/* Category/quantity + status on one line (was 2
+                        separate lines) -- made every Supplies row
+                        noticeably taller than every other category's
+                        2-line row, an inconsistency the user flagged
+                        after comparing them side by side. */}
                     <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary, marginTop: 2 }} numberOfLines={1}>
-                      {entry.category} · {entry.quantity} {entry.unit}
-                    </Text>
-                    <Text style={{ fontSize: 11.5, fontWeight: "700", color: status.color, marginTop: 4 }}>
-                      {status.label}
+                      {entry.category} · {entry.quantity} {entry.unit} ·{" "}
+                      <Text style={{ fontWeight: "700", color: status.color }}>{status.label}</Text>
                     </Text>
                   </Pressable>
 
@@ -151,6 +164,7 @@ export function HomeSuppliesPage({ homeData, onBack, onAdd, onEdit, onRestock }:
                     <Text style={{ fontSize: 11.5, fontWeight: "700", color: colors.onSurface }}>Restocked</Text>
                   </Pressable>
                 </View>
+                </SwipeRow>
               );
             })}
           </View>

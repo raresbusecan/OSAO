@@ -13,7 +13,6 @@ import {
   dueSubtitle,
   classifyDocumentUrgencyTier,
   classifyTaskUrgencyTier,
-  severityFromRecurringTier,
 } from "@/lib/spaces/home/calculations/dashboard.calculations";
 
 export type HomeCategoryField = {
@@ -355,12 +354,13 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
         .filter((entry) => !entry.completed)
         .map((entry) => {
           // Same window/tier a recurring entry is already flagged with in
-          // the Restanțe warnings widget (getRecurringTaskWarnings) -- a
-          // row here shows exactly the urgency already computed there,
-          // not a second independent definition of "urgent".
-          const remaining = entry.isRecurring && entry.nextDueDate ? daysUntil(entry.nextDueDate, now) : null;
+          // the Restanțe widget (getRecurringTaskWarnings) and the tile's
+          // own dots (getMaintenanceTierCounts) -- gated only on
+          // nextDueDate existing (not also entry.isRecurring, which
+          // those two don't check either) so this can never disagree
+          // with either of them on which entries count as urgent.
+          const remaining = entry.nextDueDate ? daysUntil(entry.nextDueDate, now) : null;
           const taskTier = remaining !== null ? classifyTaskUrgencyTier(remaining) : undefined;
-          const tier = taskTier ? severityFromRecurringTier(taskTier) : undefined;
 
           return {
             id: entry.id,
@@ -374,7 +374,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
               : `${entry.description} · ${formatDate(entry.date)}`,
             amount: entry.price.toLocaleString("en-US"),
             isRecurring: entry.isRecurring,
-            urgencyTier: tier,
+            urgencyTier: taskTier,
           };
         });
     },
@@ -439,7 +439,6 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
         // guard needed, unlike Maintenance), so this always runs.
         const remaining = daysUntil(entry.nextDueDate, now);
         const taskTier = classifyTaskUrgencyTier(remaining);
-        const tier = taskTier ? severityFromRecurringTier(taskTier) : undefined;
 
         return {
           id: entry.id,
@@ -449,7 +448,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
             : `${entry.frequency} · next ${formatDate(entry.nextDueDate)}`,
           amount: entry.amount.toLocaleString("en-US"),
           isRecurring: true,
-          urgencyTier: tier,
+          urgencyTier: taskTier,
         };
       });
     },

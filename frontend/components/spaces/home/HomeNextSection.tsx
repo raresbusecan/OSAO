@@ -3,6 +3,7 @@ import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SwipeRow } from "@/components/spaces/SwipeRow";
 import type { HomeNextItem } from "./home.ui.types";
 
 export type HomeNextSectionProps = {
@@ -13,9 +14,19 @@ export type HomeNextSectionProps = {
    * back into a category+id. Rows render as plain Views (no tap,
    * no chevron) when this is omitted. */
   onItemPress?: (item: HomeNextItem) => void;
+  /** Swipe-right -- same resolveCategoryEntry action the category
+   * page's own row swipe already fires, reachable here without opening
+   * that page first. A "doc-" item has no resolve concept at all (only
+   * Maintenance/Recurring do, see homeCategoryConfig.ts's resolveEntry)
+   * -- that row skips the left-swipe reveal entirely rather than
+   * wiring a dead gesture (same "omit onResolve to skip it" pattern
+   * every other SwipeRow usage uses, not a disabled/no-op action). */
+  onItemResolve?: (item: HomeNextItem) => void;
+  /** Swipe-left -- deletes the entry (caller confirms first). */
+  onItemDelete?: (item: HomeNextItem) => void;
 };
 
-export function HomeNextSection({ items, onItemPress }: HomeNextSectionProps) {
+export function HomeNextSection({ items, onItemPress, onItemResolve, onItemDelete }: HomeNextSectionProps) {
   const { colors, spacing, radius } = useTheme();
 
   if (items.length === 0) {
@@ -37,7 +48,15 @@ export function HomeNextSection({ items, onItemPress }: HomeNextSectionProps) {
       </Text>
 
       <View style={{ gap: spacing.sm, marginBottom: spacing.xl }}>
-        {items.map((item) => (
+        {items.map((item) => {
+          // Only Maintenance/Recurring entries have a resolve concept
+          // at all (see homeCategoryConfig.ts's resolveEntry) -- a
+          // Document row omits onResolve entirely rather than wiring a
+          // swipe that would silently do nothing, same as every other
+          // SwipeRow usage in the app.
+          const canResolve = !String(item.id).startsWith("doc-");
+
+          const row = (
           <Pressable
             key={item.id}
             testID={`home-next-item-${item.id}`}
@@ -110,7 +129,22 @@ export function HomeNextSection({ items, onItemPress }: HomeNextSectionProps) {
               <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceTertiary} />
             ) : null}
           </Pressable>
-        ))}
+          );
+
+          if (!onItemDelete) return row;
+
+          return (
+            <SwipeRow
+              key={item.id}
+              onResolve={canResolve && onItemResolve ? () => onItemResolve(item) : undefined}
+              onDelete={() => onItemDelete(item)}
+              cornerRadius={radius.sm}
+              colors={colors}
+            >
+              {row}
+            </SwipeRow>
+          );
+        })}
       </View>
     </>
   );

@@ -2,11 +2,17 @@ import type { HomeData } from "@/components/spaces/home/home.data.types";
 import type { HomeNextItem } from "@/components/spaces/home/home.ui.types";
 import type { SupplyRestockEvent } from "@/lib/spaces/home/home.types";
 import type { SeverityTier } from "@/lib/statusColors";
+import type { ThemeColors } from "@/lib/theme";
 import { getThisMonthHomeSpend } from "./spend.calculations";
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const DOC_ALERT_DAYS = 45;
 const DUE_ALERT_DAYS = 14;
+// DUE SOON's own outer window (see getHomeTasksView) -- classifyTaskUrgencyTier
+// already colors anything within 0-4 days/overdue, this just extends the
+// same section a bit further (5-10 days) uncolored, instead of a task
+// vanishing from the page entirely between "4 days" and "ALL".
+const DUE_SOON_MAX_DAYS = 10;
 
 /** Kept as the existing public name (used by HomeDashboard's stat card
  * and lib/dashboard/monthlyExpenses.ts's cross-space aggregator) --
@@ -32,6 +38,8 @@ export function dueSubtitle(daysRemaining: number, verb: "Expires" | "Due"): str
       : `${overdueVerb} ${days} day${days !== 1 ? "s" : ""}`;
   }
 
+  if (daysRemaining === 0) return `${verb} today`;
+
   return `${verb} in ${daysRemaining} day${daysRemaining !== 1 ? "s" : ""}`;
 }
 
@@ -56,15 +64,34 @@ export function classifyDocumentUrgencyTier(remaining: number): SeverityTier | u
   return "caution";
 }
 
-/** Maps the task-specific 4-value tier (see classifyTaskUrgencyTier
- * below) onto the shared 3-color SeverityTier scale -- same collapse
- * HomeTasksPage.tsx's own local tierColor already does (red -> critical,
- * both oranges -> warning, yellow -> caution), pulled out here so
- * Maintenance rows can reuse it too instead of a second copy. */
-export function severityFromRecurringTier(tier: RecurringWarningTier): SeverityTier {
-  if (tier === "red") return "critical";
-  if (tier === "yellow") return "caution";
-  return "warning";
+/** Dedicated 4-stop color gradient for task/maintenance/recurring
+ * urgency -- pulled out here so the Task-uri tile's dots,
+ * HomeTasksPage, and HomeRecurringWarningsPage all read the same color
+ * for the same tier instead of independent copies. Per explicit user
+ * request, `error`/red is reserved STRICTLY for genuinely overdue
+ * ("red"/restant) -- an earlier version of this collapsed "orangeToday"
+ * onto the same red (to fix Azi/2-zile looking identical), but that then
+ * made two DIFFERENT tiers (restant, azi) render as indistinguishable
+ * same-color dots with no text label to tell them apart. Settled on a
+ * plain red/orange/yellow/neutral gradient instead -- restant -> azi ->
+ * 2 zile -> 4 zile, most to least urgent -- `onSurfaceTertiary` standing
+ * in for "alb" (white): a literal #FFFFFF would vanish against this
+ * app's near-white light-mode cards, so this reuses the same neutral
+ * gray already used everywhere else in the app for "de-emphasized, not
+ * really an alert" (e.g. WarningCount's own labels), which stays
+ * visible in both themes since it already flips dark-on-light/light-on-
+ * dark like every other theme token here. */
+export function recurringWarningTierColor(tier: RecurringWarningTier, colors: ThemeColors): string {
+  switch (tier) {
+    case "red":
+      return colors.error;
+    case "orangeToday":
+      return colors.warning;
+    case "orangeDays":
+      return colors.caution;
+    case "yellow":
+      return colors.onSurfaceTertiary;
+  }
 }
 
 export function getUpcomingHomeItems(
@@ -191,6 +218,58 @@ export function classifyTaskUrgencyTier(remaining: number): RecurringWarningTier
   return undefined;
 }
 
+/** Tasks only (not maintenance/recurring, unlike getRecurringTaskWarnings
+ * below) -- one count per urgency tier, for HomeDashboard's "Task-uri"
+ * category tile: a dot per tier next to the tile's own label, per
+ * explicit user request ("unde exista deja bulina de restante rosii sa
+ * punem bulina si pentru celelalte stari"), scoped to tasks since that's
+ * what the tile itself represents (Maintenance/Recurring already have
+ * their own separate tiles/badges). */
+export function getTaskTierCounts(homeData: HomeData): Record<RecurringWarningTier, number> {
+  const now = new Date();
+  const counts: Record<RecurringWarningTier, number> = { yellow: 0, orangeDays: 0, orangeToday: 0, red: 0 };
+
+  homeData.taskEntries.forEach((task) => {
+    if (task.completed || !task.dueDate) return;
+    const tier = classifyTaskUrgencyTier(daysUntil(task.dueDate, now));
+    if (tier) counts[tier] += 1;
+  });
+
+  return counts;
+}
+
+/** Same idea as getTaskTierCounts, for Mentenanță's own tile -- per
+ * explicit user request, every category tile gets its OWN dots from its
+ * OWN entries now (not a combined Task+Maintenance+Recurring total),
+ * so a dot always traces back to exactly one tile/category, never a
+ * mix. Same nextDueDate/completed guards as getRecurringTaskWarnings'
+ * own Maintenance loop. */
+export function getMaintenanceTierCounts(homeData: HomeData): Record<RecurringWarningTier, number> {
+  const now = new Date();
+  const counts: Record<RecurringWarningTier, number> = { yellow: 0, orangeDays: 0, orangeToday: 0, red: 0 };
+
+  homeData.maintenanceEntries.forEach((entry) => {
+    if (entry.completed || !entry.nextDueDate) return;
+    const tier = classifyTaskUrgencyTier(daysUntil(entry.nextDueDate, now));
+    if (tier) counts[tier] += 1;
+  });
+
+  return counts;
+}
+
+/** Same idea as getTaskTierCounts, for Recurente's own tile. */
+export function getRecurringTierCounts(homeData: HomeData): Record<RecurringWarningTier, number> {
+  const now = new Date();
+  const counts: Record<RecurringWarningTier, number> = { yellow: 0, orangeDays: 0, orangeToday: 0, red: 0 };
+
+  homeData.recurringEntries.forEach((entry) => {
+    const tier = classifyTaskUrgencyTier(daysUntil(entry.nextDueDate, now));
+    if (tier) counts[tier] += 1;
+  });
+
+  return counts;
+}
+
 export function getRecurringTaskWarnings(homeData: HomeData): {
   counts: Record<RecurringWarningTier, number>;
   rows: RecurringWarningRow[];
@@ -299,9 +378,16 @@ export function getHomeTaskStats(homeData: HomeData): { overdue: number; dueToda
   return { overdue, dueToday };
 }
 
-/** Splits tasks into the 3 sections HomeTasksPage renders: overdue/due
- * today first (DUE SOON), everything else not yet done (ALL, soonest
- * first, no-date tasks last), and whatever was completed today (RECENT). */
+/** Splits tasks into the 3 sections HomeTasksPage renders: everything
+ * due within 10 days or already overdue (DUE SOON -- colored by tier
+ * when within 0-4 days/overdue, same as Restanțe, plain otherwise for
+ * the 5-10 day window), everything else not yet done (ALL, soonest
+ * first, no-date tasks last), and whatever was completed today
+ * (RECENT). Restanțe (on Home's main page) also shows 0-4 day/overdue
+ * tasks, combined with Maintenance/Recurring -- that's a deliberate
+ * duplication, not a bug: Restanțe is reachable without opening Tasks
+ * at all, so a task page that hid its own urgent tasks would leave
+ * nothing to actually resolve them from while already on this page. */
 export function getHomeTasksView(homeData: HomeData): {
   dueSoon: HomeTaskRow[];
   upcoming: HomeTaskRow[];
@@ -329,11 +415,9 @@ export function getHomeTasksView(homeData: HomeData): {
     const tier = classifyTaskUrgencyTier(remaining);
 
     if (tier) {
-      // Widened from "overdue or due today only" to the same 4-day
-      // window Restanțe warns about -- a task with the same urgency
-      // reads with the same color/label wherever it shows up, not just
-      // on the recurring-only warnings page.
       dueSoon.push({ ...task, tier, daysRemaining: remaining, overdue: remaining < 0 });
+    } else if (remaining <= DUE_SOON_MAX_DAYS) {
+      dueSoon.push({ ...task, daysRemaining: remaining });
     } else {
       upcoming.push({ ...task });
     }

@@ -25,6 +25,7 @@ import { GroceryRecipesPage } from "./GroceryRecipesPage";
 import { SpaceMembersModal } from "./SpaceMembersModal";
 import { GroceryQuickAddBar } from "./GroceryQuickAddBar";
 import { GroceryNewListModal } from "./GroceryNewListModal";
+import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import { GrocerySuggestionModal, type SupplySuggestion } from "./GrocerySuggestionModal";
 import { GroceryFinishShoppingSheet } from "./GroceryFinishShoppingSheet";
 import { itemToSupplyEntry, supplyEntryToItemBody } from "@/lib/spaces/home/homeItems";
@@ -783,7 +784,7 @@ export default function GroceryDashboard({
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface }}>
+    <SwipeBackView onBack={() => router.push("/spaces")} style={{ backgroundColor: colors.surface }}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 150 }}
@@ -1177,7 +1178,7 @@ export default function GroceryDashboard({
           onConfirm={(price) => handleFinishShopping(finishShoppingListId, price)}
         />
       ) : null}
-    </View>
+    </SwipeBackView>
   );
 }
 

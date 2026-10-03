@@ -6,6 +6,7 @@ import { isRecentToday } from "@/lib/spaces/car/utils/recency";
 import { isDocumentLocked } from "@/lib/spaces/car/utils/documentLock";
 import { notifyAction } from "@/lib/confirm";
 import { severityColor } from "@/lib/statusColors";
+import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 
 import {
     View,
@@ -766,6 +767,7 @@ export default function CarDashboard({
 
     return (
         <>
+            <SwipeBackView onBack={() => router.push("/spaces")}>
             <ScrollView
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{
@@ -1265,6 +1267,7 @@ export default function CarDashboard({
                 ) : null}
 
             </ScrollView>
+            </SwipeBackView>
         </>
     );
 }

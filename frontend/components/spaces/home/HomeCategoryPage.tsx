@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, TextInput, Pressable, ScrollView, LayoutAnimation, Platform, UIManager } from "react-native";
+import { Animated, View, Text, TextInput, Pressable, ScrollView, Modal, KeyboardAvoidingView, Platform } from "react-native";
+import { PanGestureHandler, State } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
@@ -10,19 +11,18 @@ import { confirmAction } from "@/lib/confirm";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import type { HomeIcon } from "./home.ui.types";
 
-// Old-architecture Android needs this opt-in for LayoutAnimation to do
-// anything at all; a no-op everywhere else (new architecture, iOS, web).
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+// The add/edit form used to expand INLINE, right below the header,
+// pushed there by a "+ Add X" row -- per explicit user request, it's
+// now a bottom sheet instead (matching ExpenseEditModal/
+// HomeSupplyRestockSheet), with the same drag-to-dismiss handle, built
+// on the classic PanGestureHandler + React Native Animated (not
+// react-native-reanimated's newer Gesture.Pan()/worklet system,
+// confirmed live on a real device to do nothing in this project's Expo
+// Go install).
+const DISMISS_DISTANCE = 120;
+const DISMISS_VELOCITY = 800;
 
-/** Animates the form growing/shrinking in place instead of just
- * appearing/disappearing where the "+ Add X" row was -- called right
- * before every setFormExpanded so the height change itself is what
- * animates (LayoutAnimation reacts to the very next layout pass). */
-function animateFormToggle() {
-  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-}
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 function formatFieldDate(iso: string): string {
   const d = new Date(iso);
@@ -85,10 +85,8 @@ export function HomeCategoryPage({
   const [values, setValues] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [datePickerFor, setDatePickerFor] = useState<string | null>(null);
-  // The form (add or edit) starts collapsed behind a "+ Add X" row --
-  // opened either by that row or by tapping an existing entry to edit
-  // it. Never both at once with the list underneath fighting for
-  // attention on entry.
+  // The form (add or edit) opens as a bottom sheet, triggered either by
+  // the "+ Add X" row or by tapping an existing entry to edit it.
   const [formExpanded, setFormExpanded] = useState(false);
 
   const isFieldVisible = (field: HomeCategoryField) =>
@@ -122,7 +120,6 @@ export function HomeCategoryPage({
 
   const closeForm = () => {
     reset();
-    animateFormToggle();
     setFormExpanded(false);
   };
 
@@ -135,7 +132,6 @@ export function HomeCategoryPage({
   const startEdit = (id: string | number) => {
     setEditingId(String(id));
     setValues(getEditValues(String(id)));
-    animateFormToggle();
     setFormExpanded(true);
   };
 
@@ -222,245 +218,27 @@ export function HomeCategoryPage({
         </Text>
       </View>
 
-      {!formExpanded ? (
-        <Pressable
-          testID="category-add-row"
-          onPress={() => {
-            animateFormToggle();
-            setFormExpanded(true);
-          }}
-          accessibilityRole="button"
-          accessibilityLabel={submitLabel}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 8,
-            height: 46,
-            borderRadius: radius.sm,
-            backgroundColor: colors.onSurface,
-            marginBottom: spacing.xl,
-          }}
-        >
-          <Ionicons name="add" size={15} color={colors.surface} />
-          <Text style={{ fontSize: 13.5, fontWeight: "800", color: colors.surface }}>
-            {submitLabel}
-          </Text>
-        </Pressable>
-      ) : (
-      <View
+      <Pressable
+        testID="category-add-row"
+        onPress={() => setFormExpanded(true)}
+        accessibilityRole="button"
+        accessibilityLabel={submitLabel}
         style={{
-          backgroundColor: colors.surfaceSecondary,
-          borderWidth: 1,
-          borderColor: colors.border,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          height: 46,
           borderRadius: radius.sm,
-          padding: spacing.lg,
-          gap: spacing.sm,
+          backgroundColor: colors.onSurface,
           marginBottom: spacing.xl,
         }}
       >
-        {fields.filter(isFieldVisible).map((field) => (
-          <View key={field.key}>
-            {field.type !== "toggle" ? (
-              <Text
-                style={{
-                  ...typography.label,
-                  color: colors.onSurfaceTertiary,
-                  marginBottom: 4,
-                  textTransform: "uppercase",
-                }}
-              >
-                {field.label}
-                {field.required !== false ? <Text style={{ color: colors.error }}> *</Text> : null}
-              </Text>
-            ) : null}
-
-            {field.type === "toggle" ? (
-              <Pressable
-                testID={`category-field-${field.key}`}
-                onPress={() =>
-                  setValues((current) => ({
-                    ...current,
-                    [field.key]: current[field.key] === "true" ? "false" : "true",
-                  }))
-                }
-                accessibilityRole="button"
-                accessibilityState={{ selected: values[field.key] === "true" }}
-                style={{
-                  height: 44,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.sm,
-                  backgroundColor: values[field.key] === "true" ? colors.onSurface : colors.surface,
-                  borderWidth: 1,
-                  borderColor: values[field.key] === "true" ? colors.onSurface : colors.border,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 14,
-                    fontWeight: "600",
-                    color: values[field.key] === "true" ? colors.surface : colors.onSurface,
-                  }}
-                >
-                  {field.placeholder || field.label}
-                </Text>
-                <Ionicons
-                  name={values[field.key] === "true" ? "checkmark-circle" : "ellipse-outline"}
-                  size={18}
-                  color={values[field.key] === "true" ? colors.surface : colors.onSurfaceTertiary}
-                />
-              </Pressable>
-            ) : field.type === "date" ? (
-              <Pressable
-                testID={`category-field-${field.key}`}
-                onPress={() => setDatePickerFor(field.key)}
-                style={{
-                  height: 44,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.sm,
-                  backgroundColor: colors.surface,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Text style={{ fontSize: 14, color: values[field.key] ? colors.onSurface : colors.onSurfaceTertiary }}>
-                  {values[field.key] ? formatFieldDate(values[field.key]) : "Set a date"}
-                </Text>
-                <Ionicons name="calendar-outline" size={16} color={colors.onSurfaceTertiary} />
-              </Pressable>
-            ) : field.type === "select" ? (
-              <View style={{ flexDirection: "row", gap: spacing.sm }}>
-                {(field.options || []).map((option) => {
-                  const selected = (values[field.key] ?? field.defaultValue) === option.value;
-                  return (
-                    <Pressable
-                      key={option.value}
-                      testID={`category-field-${field.key}-${option.value}`}
-                      onPress={() => setValues((current) => ({ ...current, [field.key]: option.value }))}
-                      hitSlop={{ top: 4, bottom: 4 }}
-                      style={{
-                        flex: 1,
-                        height: 40,
-                        borderRadius: radius.sm,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: selected ? colors.onSurface : colors.surface,
-                        borderWidth: 1,
-                        borderColor: selected ? colors.onSurface : colors.border,
-                      }}
-                    >
-                      <Text style={{ fontSize: 12.5, fontWeight: "700", color: selected ? colors.surface : colors.onSurfaceTertiary }}>
-                        {option.label}
-                      </Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            ) : (
-              <TextInput
-                testID={`category-field-${field.key}`}
-                value={values[field.key] || ""}
-                onChangeText={(text) => setValues((current) => ({ ...current, [field.key]: text }))}
-                placeholder={field.placeholder}
-                placeholderTextColor={colors.onSurfaceTertiary}
-                keyboardType={field.keyboardType === "numeric" ? "numeric" : "default"}
-                style={{
-                  height: 44,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.sm,
-                  backgroundColor: colors.surface,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  color: colors.onSurface,
-                  fontSize: 14,
-                }}
-              />
-            )}
-            {isFieldInvalid(field) ? (
-              <Text style={{ fontSize: 12, color: colors.error, marginTop: 4 }}>
-                Enter a valid, non-negative number.
-              </Text>
-            ) : null}
-          </View>
-        ))}
-
-        <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: 4 }}>
-          <Pressable
-            testID="category-submit"
-            onPress={submit}
-            disabled={!canSubmit}
-            style={{
-              flex: 1,
-              height: 46,
-              borderRadius: radius.sm,
-              // Editing an existing row is a save, not a creation --
-              // green like the resolve button below it, distinct from
-              // the black "add new" fill. Per explicit user request.
-              backgroundColor: editingId ? colors.success : colors.onSurface,
-              alignItems: "center",
-              justifyContent: "center",
-              opacity: canSubmit ? 1 : 0.5,
-            }}
-          >
-            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.surface }}>
-              {editingId ? "Save" : submitLabel}
-            </Text>
-          </Pressable>
-
-          <Pressable
-            testID="category-cancel-edit"
-            onPress={closeForm}
-            style={{
-              height: 46,
-              paddingHorizontal: spacing.lg,
-              borderRadius: radius.sm,
-              borderWidth: 1,
-              borderColor: colors.error,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>
-              Cancel
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* Only while editing an existing row, for a category that has a
-            resolve concept (Maintenance today) -- a separate, full-width
-            row below Update/Cancel rather than crammed into the same
-            row as a third button. */}
-        {editingId && onResolve ? (
-          <Pressable
-            testID="category-resolve"
-            onPress={resolve}
-            style={{
-              height: 46,
-              borderRadius: radius.sm,
-              borderWidth: 1,
-              borderColor: colors.success,
-              backgroundColor: colors.surface,
-              alignItems: "center",
-              justifyContent: "center",
-              flexDirection: "row",
-              gap: 6,
-              marginTop: 4,
-            }}
-          >
-            <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
-            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.success }}>
-              Rezolvă
-            </Text>
-          </Pressable>
-        ) : null}
-      </View>
-      )}
+        <Ionicons name="add" size={15} color={colors.surface} />
+        <Text style={{ fontSize: 13.5, fontWeight: "800", color: colors.surface }}>
+          {submitLabel}
+        </Text>
+      </Pressable>
 
       <HomeCategorySection
         title="Existing"
@@ -473,6 +251,23 @@ export function HomeCategoryPage({
     </ScrollView>
     </SwipeBackView>
 
+    {formExpanded ? (
+      <CategoryFormSheet
+        fields={fields}
+        values={values}
+        setValues={setValues}
+        isFieldVisible={isFieldVisible}
+        isFieldInvalid={isFieldInvalid}
+        canSubmit={canSubmit}
+        editingId={editingId}
+        submitLabel={submitLabel}
+        onSubmit={submit}
+        onCancel={closeForm}
+        onResolve={onResolve ? resolve : undefined}
+        onDatePickerOpen={setDatePickerFor}
+      />
+    ) : null}
+
     {datePickerFor ? (
       <HomeDatePickerSheet
         value={values[datePickerFor]}
@@ -484,5 +279,329 @@ export function HomeCategoryPage({
       />
     ) : null}
     </>
+  );
+}
+
+function CategoryFormSheet({
+  fields,
+  values,
+  setValues,
+  isFieldVisible,
+  isFieldInvalid,
+  canSubmit,
+  editingId,
+  submitLabel,
+  onSubmit,
+  onCancel,
+  onResolve,
+  onDatePickerOpen,
+}: {
+  fields: HomeCategoryField[];
+  values: Record<string, string>;
+  setValues: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  isFieldVisible: (field: HomeCategoryField) => boolean;
+  isFieldInvalid: (field: HomeCategoryField) => boolean;
+  canSubmit: boolean;
+  editingId: string | null;
+  submitLabel: string;
+  onSubmit: () => void;
+  onCancel: () => void;
+  onResolve?: () => void;
+  onDatePickerOpen: (fieldKey: string) => void;
+}) {
+  const { colors, spacing, radius, typography } = useTheme();
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  const onHandleGestureEvent = Animated.event(
+    [{ nativeEvent: { translationY: translateY } }],
+    { useNativeDriver: true },
+  );
+
+  const onHandleStateChange = (event: {
+    nativeEvent: { state: number; translationY: number; velocityY: number };
+  }) => {
+    const { state, translationY, velocityY } = event.nativeEvent;
+    if (state !== State.END && state !== State.CANCELLED && state !== State.FAILED) return;
+
+    const pastThreshold = translationY > DISMISS_DISTANCE || velocityY > DISMISS_VELOCITY;
+    if (pastThreshold) {
+      Animated.timing(translateY, {
+        toValue: 600,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) onCancel();
+      });
+    } else {
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        damping: 20,
+        stiffness: 200,
+      }).start();
+    }
+  };
+
+  // Clamped at 0 -- the handle can't be dragged UP past the sheet's own
+  // resting position, only down to dismiss.
+  const clampedTranslateY = translateY.interpolate({
+    inputRange: [0, 600],
+    outputRange: [0, 600],
+    extrapolateLeft: "clamp",
+  });
+
+  // Backdrop fades out in step with the drag instead of staying flatly
+  // opaque until the sheet's already gone.
+  const backdropOpacity = translateY.interpolate({
+    inputRange: [0, DISMISS_DISTANCE],
+    outputRange: [1, 0],
+    extrapolate: "clamp",
+  });
+
+  return (
+    <Modal visible transparent animationType="slide" onRequestClose={onCancel}>
+      <KeyboardAvoidingView
+        style={{ flex: 1, justifyContent: "flex-end" }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <AnimatedPressable
+          onPress={onCancel}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", opacity: backdropOpacity }}
+        />
+        <Animated.View
+          style={{
+            backgroundColor: colors.surface,
+            borderTopLeftRadius: radius.lg,
+            borderTopRightRadius: radius.lg,
+            maxHeight: "85%",
+            transform: [{ translateY: clampedTranslateY }],
+          }}
+        >
+          <PanGestureHandler
+            activeOffsetY={10}
+            failOffsetY={-10}
+            onGestureEvent={onHandleGestureEvent}
+            onHandlerStateChange={onHandleStateChange}
+          >
+            <Animated.View style={{ height: 56, alignItems: "center", justifyContent: "center" }}>
+              <View
+                style={{
+                  width: 36,
+                  height: 4,
+                  borderRadius: 2,
+                  backgroundColor: colors.border,
+                }}
+              />
+            </Animated.View>
+          </PanGestureHandler>
+
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: spacing.xl, gap: spacing.sm }}
+          >
+            {fields.filter(isFieldVisible).map((field) => (
+              <View key={field.key}>
+                {field.type !== "toggle" ? (
+                  <Text
+                    style={{
+                      ...typography.label,
+                      color: colors.onSurfaceTertiary,
+                      marginBottom: 4,
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {field.label}
+                    {field.required !== false ? <Text style={{ color: colors.error }}> *</Text> : null}
+                  </Text>
+                ) : null}
+
+                {field.type === "toggle" ? (
+                  <Pressable
+                    testID={`category-field-${field.key}`}
+                    onPress={() =>
+                      setValues((current) => ({
+                        ...current,
+                        [field.key]: current[field.key] === "true" ? "false" : "true",
+                      }))
+                    }
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: values[field.key] === "true" }}
+                    style={{
+                      height: 44,
+                      paddingHorizontal: spacing.md,
+                      borderRadius: radius.sm,
+                      backgroundColor: values[field.key] === "true" ? colors.onSurface : colors.surfaceSecondary,
+                      borderWidth: 1,
+                      borderColor: values[field.key] === "true" ? colors.onSurface : colors.border,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 14,
+                        fontWeight: "600",
+                        color: values[field.key] === "true" ? colors.surface : colors.onSurface,
+                      }}
+                    >
+                      {field.placeholder || field.label}
+                    </Text>
+                    <Ionicons
+                      name={values[field.key] === "true" ? "checkmark-circle" : "ellipse-outline"}
+                      size={18}
+                      color={values[field.key] === "true" ? colors.surface : colors.onSurfaceTertiary}
+                    />
+                  </Pressable>
+                ) : field.type === "date" ? (
+                  <Pressable
+                    testID={`category-field-${field.key}`}
+                    onPress={() => onDatePickerOpen(field.key)}
+                    style={{
+                      height: 44,
+                      paddingHorizontal: spacing.md,
+                      borderRadius: radius.sm,
+                      backgroundColor: colors.surfaceSecondary,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, color: values[field.key] ? colors.onSurface : colors.onSurfaceTertiary }}>
+                      {values[field.key] ? formatFieldDate(values[field.key]) : "Set a date"}
+                    </Text>
+                    <Ionicons name="calendar-outline" size={16} color={colors.onSurfaceTertiary} />
+                  </Pressable>
+                ) : field.type === "select" ? (
+                  <View style={{ flexDirection: "row", gap: spacing.sm }}>
+                    {(field.options || []).map((option) => {
+                      const selected = (values[field.key] ?? field.defaultValue) === option.value;
+                      return (
+                        <Pressable
+                          key={option.value}
+                          testID={`category-field-${field.key}-${option.value}`}
+                          onPress={() => setValues((current) => ({ ...current, [field.key]: option.value }))}
+                          hitSlop={{ top: 4, bottom: 4 }}
+                          style={{
+                            flex: 1,
+                            height: 40,
+                            borderRadius: radius.sm,
+                            alignItems: "center",
+                            justifyContent: "center",
+                            backgroundColor: selected ? colors.onSurface : colors.surfaceSecondary,
+                            borderWidth: 1,
+                            borderColor: selected ? colors.onSurface : colors.border,
+                          }}
+                        >
+                          <Text style={{ fontSize: 12.5, fontWeight: "700", color: selected ? colors.surface : colors.onSurfaceTertiary }}>
+                            {option.label}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : (
+                  <TextInput
+                    testID={`category-field-${field.key}`}
+                    value={values[field.key] || ""}
+                    onChangeText={(text) => setValues((current) => ({ ...current, [field.key]: text }))}
+                    placeholder={field.placeholder}
+                    placeholderTextColor={colors.onSurfaceTertiary}
+                    keyboardType={field.keyboardType === "numeric" ? "numeric" : "default"}
+                    style={{
+                      height: 44,
+                      paddingHorizontal: spacing.md,
+                      borderRadius: radius.sm,
+                      backgroundColor: colors.surfaceSecondary,
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      color: colors.onSurface,
+                      fontSize: 14,
+                    }}
+                  />
+                )}
+                {isFieldInvalid(field) ? (
+                  <Text style={{ fontSize: 12, color: colors.error, marginTop: 4 }}>
+                    Enter a valid, non-negative number.
+                  </Text>
+                ) : null}
+              </View>
+            ))}
+
+            <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: 4 }}>
+              <Pressable
+                testID="category-submit"
+                onPress={onSubmit}
+                disabled={!canSubmit}
+                style={{
+                  flex: 1,
+                  height: 46,
+                  borderRadius: radius.sm,
+                  // Editing an existing row is a save, not a creation --
+                  // green like the resolve button below it, distinct from
+                  // the black "add new" fill. Per explicit user request.
+                  backgroundColor: editingId ? colors.success : colors.onSurface,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  opacity: canSubmit ? 1 : 0.5,
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.surface }}>
+                  {editingId ? "Save" : submitLabel}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                testID="category-cancel-edit"
+                onPress={onCancel}
+                style={{
+                  height: 46,
+                  paddingHorizontal: spacing.lg,
+                  borderRadius: radius.sm,
+                  borderWidth: 1,
+                  borderColor: colors.error,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>
+                  Cancel
+                </Text>
+              </Pressable>
+            </View>
+
+            {/* Only while editing an existing row, for a category that has
+                a resolve concept (Maintenance today) -- a separate,
+                full-width row below Save/Cancel rather than crammed into
+                the same row as a third button. */}
+            {editingId && onResolve ? (
+              <Pressable
+                testID="category-resolve"
+                onPress={onResolve}
+                style={{
+                  height: 46,
+                  borderRadius: radius.sm,
+                  borderWidth: 1,
+                  borderColor: colors.success,
+                  backgroundColor: colors.surface,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexDirection: "row",
+                  gap: 6,
+                  marginTop: 4,
+                }}
+              >
+                <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
+                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.success }}>
+                  Rezolvă
+                </Text>
+              </Pressable>
+            ) : null}
+          </ScrollView>
+        </Animated.View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }

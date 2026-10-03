@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,10 @@ import {
   KeyboardAvoidingView,
   Platform,
   ScrollView,
+  Modal,
+  Animated,
 } from "react-native";
+import { PanGestureHandler, State } from "react-native-gesture-handler";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
@@ -16,6 +19,17 @@ import { confirmAction } from "@/lib/confirm";
 
 import type { HomeTaskEntry } from "@/lib/spaces/home/home.types";
 import { HomeDatePickerSheet } from "@/components/spaces/home/HomeDatePickerSheet";
+
+// Bottom sheet with drag-to-dismiss, same recipe as ExpenseEditModal/
+// HomeSupplyRestockSheet/HomeCategoryPage's CategoryFormSheet -- per
+// explicit user request, Add/Edit Task should match those instead of
+// being its own full-page screen. Classic PanGestureHandler + React
+// Native Animated (not react-native-reanimated's Gesture.Pan()/worklet
+// system, confirmed live to do nothing in this project's Expo Go install).
+const DISMISS_DISTANCE = 120;
+const DISMISS_VELOCITY = 800;
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type HomeTaskFormProps = {
   onCancel: () => void;
@@ -53,6 +67,54 @@ export default function HomeTaskForm({
 
   const [focusedField, setFocusedField] = useState<string | null>(null);
   const [error, setError] = useState("");
+
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  const onHandleGestureEvent = Animated.event(
+    [{ nativeEvent: { translationY: translateY } }],
+    { useNativeDriver: true },
+  );
+
+  const onHandleStateChange = (event: {
+    nativeEvent: { state: number; translationY: number; velocityY: number };
+  }) => {
+    const { state, translationY, velocityY } = event.nativeEvent;
+    if (state !== State.END && state !== State.CANCELLED && state !== State.FAILED) return;
+
+    const pastThreshold = translationY > DISMISS_DISTANCE || velocityY > DISMISS_VELOCITY;
+    if (pastThreshold) {
+      Animated.timing(translateY, {
+        toValue: 600,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) onCancel();
+      });
+    } else {
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+        damping: 20,
+        stiffness: 200,
+      }).start();
+    }
+  };
+
+  // Clamped at 0 -- the handle can't be dragged UP past the sheet's own
+  // resting position, only down to dismiss.
+  const clampedTranslateY = translateY.interpolate({
+    inputRange: [0, 600],
+    outputRange: [0, 600],
+    extrapolateLeft: "clamp",
+  });
+
+  // Backdrop fades out in step with the drag instead of staying flatly
+  // opaque until the sheet's already gone.
+  const backdropOpacity = translateY.interpolate({
+    inputRange: [0, DISMISS_DISTANCE],
+    outputRange: [1, 0],
+    extrapolate: "clamp",
+  });
 
   const handleSave = () => {
     setError("");
@@ -102,365 +164,398 @@ export default function HomeTaskForm({
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{
-          paddingHorizontal: spacing.xl,
-          paddingTop: spacing.xl,
-          paddingBottom: spacing.xl,
-        }}
+    <Modal visible transparent animationType="slide" onRequestClose={onCancel}>
+      <KeyboardAvoidingView
+        style={{ flex: 1, justifyContent: "flex-end" }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        {/* Header */}
-
-        <View
+        <AnimatedPressable
+          onPress={onCancel}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", opacity: backdropOpacity }}
+        />
+        <Animated.View
           style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: spacing.xl,
+            backgroundColor: colors.surface,
+            borderTopLeftRadius: radius.lg,
+            borderTopRightRadius: radius.lg,
+            maxHeight: "85%",
+            transform: [{ translateY: clampedTranslateY }],
           }}
         >
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+          <PanGestureHandler
+            activeOffsetY={10}
+            failOffsetY={-10}
+            onGestureEvent={onHandleGestureEvent}
+            onHandlerStateChange={onHandleStateChange}
+          >
+            <Animated.View style={{ height: 56, alignItems: "center", justifyContent: "center" }}>
               <View
                 style={{
                   width: 36,
-                  height: 36,
-                  borderRadius: radius.md,
-                  // Same tinted-chip identity signal as the Space header
-                  // avatar (HomeHeader.tsx) -- this form makes a Home
-                  // entry, same identity, not a state/nav element.
-                  backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
-                  alignItems: "center",
-                  justifyContent: "center",
+                  height: 4,
+                  borderRadius: 2,
+                  backgroundColor: colors.border,
                 }}
-              >
-                <Ionicons name="checkmark-circle-outline" size={19} color={SPACE_IDENTITY_COLORS.home} />
-              </View>
+              />
+            </Animated.View>
+          </PanGestureHandler>
 
-              <Text
-                style={{
-                  fontSize: 22,
-                  fontWeight: "800",
-                  color: colors.onSurface,
-                  letterSpacing: -0.3,
-                }}
-              >
-                {isEditing ? "Edit Task" : "Add Task"}
-              </Text>
-            </View>
-
-            <Text style={{ marginTop: 6, fontSize: 13, color: colors.onSurfaceTertiary }}>
-              {isEditing ? "Update this task" : "A quick thing to do around the house"}
-            </Text>
-          </View>
-
-          <Pressable
-            onPress={onCancel}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Close task form"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: radius.pill,
-              backgroundColor: "transparent",
-              borderWidth: 1,
-              borderColor: colors.border,
-              alignItems: "center",
-              justifyContent: "center",
+          <ScrollView
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{
+              paddingHorizontal: spacing.xl,
+              paddingBottom: spacing.xl,
             }}
           >
-            <Ionicons name="close" size={20} color={colors.onSurfaceTertiary} />
-          </Pressable>
-        </View>
+            {/* Header */}
 
-        {/* Title */}
-
-        <FormField
-          label="Title"
-          value={title}
-          onChangeText={setTitle}
-          placeholder="e.g. Scoate gunoiul"
-          required
-          colors={colors}
-          spacing={spacing}
-          radius={radius}
-          fieldName="title"
-          focusedField={focusedField}
-          onFocus={setFocusedField}
-          onBlur={() => setFocusedField(null)}
-        />
-
-        {/* Due date -- optional, unlike every Car date field. A day-grid
-            picker (HomeDatePickerSheet), not typed text -- no format to
-            get wrong. */}
-
-        <View style={{ marginBottom: spacing.xl }}>
-          <Text style={{ marginBottom: spacing.sm, fontSize: 12, fontWeight: "700", color: colors.onSurfaceTertiary }}>
-            Due date
-          </Text>
-          <Pressable
-            onPress={() => setDatePickerVisible(true)}
-            accessibilityRole="button"
-            accessibilityLabel="Choose due date"
-            style={{
-              minHeight: 52,
-              borderRadius: radius.sm,
-              backgroundColor: colors.surfaceSecondary,
-              borderWidth: 1,
-              borderColor: colors.border,
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              paddingHorizontal: spacing.md,
-            }}
-          >
-            <Text style={{ fontSize: 15, color: dueDate ? colors.onSurface : colors.onSurfaceTertiary }}>
-              {dueDate
-                ? new Date(dueDate).toLocaleDateString("ro-RO", { day: "numeric", month: "long", year: "numeric" })
-                : "Fără dată (opțional)"}
-            </Text>
-            <Ionicons name="calendar-outline" size={18} color={colors.onSurfaceTertiary} />
-          </Pressable>
-        </View>
-
-        {datePickerVisible ? (
-          <HomeDatePickerSheet
-            value={dueDate}
-            onCancel={() => setDatePickerVisible(false)}
-            onSelect={(picked) => {
-              setDueDate(picked);
-              setDatePickerVisible(false);
-            }}
-          />
-        ) : null}
-
-        {/* Purchase toggle -- price itself is never asked here, only at
-            resolution (HomeTaskResolveSheet), since the real cost usually
-            isn't known yet. */}
-
-        <View
-          style={{
-            borderRadius: radius.sm,
-            backgroundColor: colors.surfaceSecondary,
-            borderWidth: 1.5,
-            borderColor: isPurchase ? colors.onSurface : colors.border,
-            padding: spacing.md,
-            marginBottom: spacing.xl,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1 }}>
-              <View
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.surfaceTertiary,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons name="cart-outline" size={16} color={colors.onSurface} />
-              </View>
-              <Text style={{ fontSize: 14.5, fontWeight: "700", color: colors.onSurface }}>
-                Implică o cumpărare
-              </Text>
-            </View>
-            <Switch
-              value={isPurchase}
-              onValueChange={setIsPurchase}
-              trackColor={{ false: colors.surfaceTertiary, true: colors.brandPrimary }}
-            />
-          </View>
-          <Text style={{ fontSize: 11.5, color: colors.onSurfaceTertiary, marginTop: spacing.sm, lineHeight: 16 }}>
-            Vei putea introduce prețul când marchezi task-ul ca rezolvat — nu acum.
-          </Text>
-        </View>
-
-        {/* Recurring toggle -- a recurring task never archives when
-            resolved; it logs the occurrence and stays active, ready for
-            next time. Only a non-recurring task archives on resolve. */}
-
-        <View
-          style={{
-            borderRadius: radius.sm,
-            backgroundColor: colors.surfaceSecondary,
-            borderWidth: 1.5,
-            borderColor: isRecurring ? colors.onSurface : colors.border,
-            padding: spacing.md,
-            marginBottom: spacing.xl,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1 }}>
-              <View
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.surfaceTertiary,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons name="repeat-outline" size={16} color={colors.onSurface} />
-              </View>
-              <Text style={{ fontSize: 14.5, fontWeight: "700", color: colors.onSurface }}>
-                Task recurent
-              </Text>
-            </View>
-            <Switch
-              value={isRecurring}
-              onValueChange={setIsRecurring}
-              trackColor={{ false: colors.surfaceTertiary, true: colors.brandPrimary }}
-            />
-          </View>
-          <Text style={{ fontSize: 11.5, color: colors.onSurfaceTertiary, marginTop: spacing.sm, lineHeight: 16 }}>
-            {isRecurring
-              ? "Nu se arhivează la rezolvare — rămâne activ, gata pentru data următoare."
-              : "Se arhivează imediat ce e marcat ca rezolvat."}
-          </Text>
-
-          {isRecurring ? (
-            <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.md }}>
-              {(
-                [
-                  { key: "daily", label: "Zilnic" },
-                  { key: "weekly", label: "Săptămânal" },
-                  { key: "monthly", label: "Lunar" },
-                ] as const
-              ).map((option) => {
-                const selected = recurrenceFrequency === option.key;
-                return (
-                  <Pressable
-                    key={option.key}
-                    onPress={() => setRecurrenceFrequency(option.key)}
-                    hitSlop={{ top: 4, bottom: 4 }}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                marginBottom: spacing.xl,
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                  <View
                     style={{
-                      flex: 1,
-                      minHeight: 40,
-                      borderRadius: radius.pill,
-                      backgroundColor: selected ? colors.onSurface : colors.surfaceTertiary,
-                      borderWidth: 1,
-                      borderColor: selected ? colors.onSurface : colors.border,
+                      width: 36,
+                      height: 36,
+                      borderRadius: radius.md,
+                      // Same tinted-chip identity signal as the Space header
+                      // avatar (HomeHeader.tsx) -- this form makes a Home
+                      // entry, same identity, not a state/nav element.
+                      backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
                       alignItems: "center",
                       justifyContent: "center",
                     }}
                   >
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: "700",
-                        color: selected ? colors.surface : colors.onSurface,
-                      }}
-                    >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
+                    <Ionicons name="checkmark-circle-outline" size={19} color={SPACE_IDENTITY_COLORS.home} />
+                  </View>
+
+                  <Text
+                    style={{
+                      fontSize: 22,
+                      fontWeight: "800",
+                      color: colors.onSurface,
+                      letterSpacing: -0.3,
+                    }}
+                  >
+                    {isEditing ? "Edit Task" : "Add Task"}
+                  </Text>
+                </View>
+
+                <Text style={{ marginTop: 6, fontSize: 13, color: colors.onSurfaceTertiary }}>
+                  {isEditing ? "Update this task" : "A quick thing to do around the house"}
+                </Text>
+              </View>
+
+              <Pressable
+                onPress={onCancel}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Close task form"
+                style={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: radius.pill,
+                  backgroundColor: "transparent",
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Ionicons name="close" size={20} color={colors.onSurfaceTertiary} />
+              </Pressable>
             </View>
-          ) : null}
-        </View>
 
-        {/* Notes */}
+            {/* Title */}
 
-        <FormField
-          label="Notes"
-          value={notes}
-          onChangeText={setNotes}
-          placeholder="Optional notes"
-          multiline
-          colors={colors}
-          spacing={spacing}
-          radius={radius}
-          fieldName="notes"
-          focusedField={focusedField}
-          onFocus={setFocusedField}
-          onBlur={() => setFocusedField(null)}
-        />
+            <FormField
+              label="Title"
+              value={title}
+              onChangeText={setTitle}
+              placeholder="e.g. Scoate gunoiul"
+              required
+              colors={colors}
+              spacing={spacing}
+              radius={radius}
+              fieldName="title"
+              focusedField={focusedField}
+              onFocus={setFocusedField}
+              onBlur={() => setFocusedField(null)}
+            />
 
-        {/* Error */}
+            {/* Due date -- optional, unlike every Car date field. A day-grid
+                picker (HomeDatePickerSheet), not typed text -- no format to
+                get wrong. */}
 
-        {error ? (
-          <View
-            style={{
-              marginTop: spacing.sm,
-              padding: spacing.md,
-              borderRadius: radius.sm,
-              backgroundColor: colors.surfaceSecondary,
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}
-          >
-            <Text style={{ fontSize: 13, color: colors.onSurface }}>{error}</Text>
-          </View>
-        ) : null}
+            <View style={{ marginBottom: spacing.xl }}>
+              <Text style={{ marginBottom: spacing.sm, fontSize: 12, fontWeight: "700", color: colors.onSurfaceTertiary }}>
+                Due date
+              </Text>
+              <Pressable
+                onPress={() => setDatePickerVisible(true)}
+                accessibilityRole="button"
+                accessibilityLabel="Choose due date"
+                style={{
+                  minHeight: 52,
+                  borderRadius: radius.sm,
+                  backgroundColor: colors.surfaceSecondary,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  paddingHorizontal: spacing.md,
+                }}
+              >
+                <Text style={{ fontSize: 15, color: dueDate ? colors.onSurface : colors.onSurfaceTertiary }}>
+                  {dueDate
+                    ? new Date(dueDate).toLocaleDateString("ro-RO", { day: "numeric", month: "long", year: "numeric" })
+                    : "Fără dată (opțional)"}
+                </Text>
+                <Ionicons name="calendar-outline" size={18} color={colors.onSurfaceTertiary} />
+              </Pressable>
+            </View>
 
-        {/* Save */}
+            {datePickerVisible ? (
+              <HomeDatePickerSheet
+                value={dueDate}
+                onCancel={() => setDatePickerVisible(false)}
+                onSelect={(picked) => {
+                  setDueDate(picked);
+                  setDatePickerVisible(false);
+                }}
+              />
+            ) : null}
 
-        <Pressable
-          onPress={handleSave}
-          accessibilityRole="button"
-          accessibilityLabel="Save task"
-          style={{
-            marginTop: spacing.xl,
-            minHeight: 52,
-            borderRadius: radius.md,
-            backgroundColor: colors.onSurface,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text style={{ fontSize: 14, fontWeight: "800", color: colors.surface }}>
-            {isEditing ? "Save Changes" : "Save Task"}
-          </Text>
-        </Pressable>
+            {/* Purchase toggle -- price itself is never asked here, only at
+                resolution (HomeTaskResolveSheet), since the real cost usually
+                isn't known yet. */}
 
-        {/* Cancel */}
+            <View
+              style={{
+                borderRadius: radius.sm,
+                backgroundColor: colors.surfaceSecondary,
+                borderWidth: 1.5,
+                borderColor: isPurchase ? colors.onSurface : colors.border,
+                padding: spacing.md,
+                marginBottom: spacing.xl,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1 }}>
+                  <View
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: radius.md,
+                      backgroundColor: colors.surfaceTertiary,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons name="cart-outline" size={16} color={colors.onSurface} />
+                  </View>
+                  <Text style={{ fontSize: 14.5, fontWeight: "700", color: colors.onSurface }}>
+                    Implică o cumpărare
+                  </Text>
+                </View>
+                <Switch
+                  value={isPurchase}
+                  onValueChange={setIsPurchase}
+                  trackColor={{ false: colors.surfaceTertiary, true: colors.brandPrimary }}
+                />
+              </View>
+              <Text style={{ fontSize: 11.5, color: colors.onSurfaceTertiary, marginTop: spacing.sm, lineHeight: 16 }}>
+                Vei putea introduce prețul când marchezi task-ul ca rezolvat — nu acum.
+              </Text>
+            </View>
 
-        <Pressable
-          onPress={onCancel}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel task"
-          style={{
-            marginTop: spacing.sm,
-            minHeight: 48,
-            borderRadius: radius.md,
-            borderWidth: 1,
-            borderColor: colors.error,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>Cancel</Text>
-        </Pressable>
+            {/* Recurring toggle -- a recurring task never archives when
+                resolved; it logs the occurrence and stays active, ready for
+                next time. Only a non-recurring task archives on resolve. */}
 
-        {isEditing && onDelete ? (
-          <Pressable
-            onPress={handleDelete}
-            accessibilityRole="button"
-            accessibilityLabel="Delete task"
-            style={{
-              marginTop: spacing.sm,
-              minHeight: 48,
-              borderRadius: radius.md,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>Delete Entry</Text>
-          </Pressable>
-        ) : null}
-      </ScrollView>
-    </KeyboardAvoidingView>
+            <View
+              style={{
+                borderRadius: radius.sm,
+                backgroundColor: colors.surfaceSecondary,
+                borderWidth: 1.5,
+                borderColor: isRecurring ? colors.onSurface : colors.border,
+                padding: spacing.md,
+                marginBottom: spacing.xl,
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1 }}>
+                  <View
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: radius.md,
+                      backgroundColor: colors.surfaceTertiary,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Ionicons name="repeat-outline" size={16} color={colors.onSurface} />
+                  </View>
+                  <Text style={{ fontSize: 14.5, fontWeight: "700", color: colors.onSurface }}>
+                    Task recurent
+                  </Text>
+                </View>
+                <Switch
+                  value={isRecurring}
+                  onValueChange={setIsRecurring}
+                  trackColor={{ false: colors.surfaceTertiary, true: colors.brandPrimary }}
+                />
+              </View>
+              <Text style={{ fontSize: 11.5, color: colors.onSurfaceTertiary, marginTop: spacing.sm, lineHeight: 16 }}>
+                {isRecurring
+                  ? "Nu se arhivează la rezolvare — rămâne activ, gata pentru data următoare."
+                  : "Se arhivează imediat ce e marcat ca rezolvat."}
+              </Text>
+
+              {isRecurring ? (
+                <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.md }}>
+                  {(
+                    [
+                      { key: "daily", label: "Zilnic" },
+                      { key: "weekly", label: "Săptămânal" },
+                      { key: "monthly", label: "Lunar" },
+                    ] as const
+                  ).map((option) => {
+                    const selected = recurrenceFrequency === option.key;
+                    return (
+                      <Pressable
+                        key={option.key}
+                        onPress={() => setRecurrenceFrequency(option.key)}
+                        hitSlop={{ top: 4, bottom: 4 }}
+                        style={{
+                          flex: 1,
+                          minHeight: 40,
+                          borderRadius: radius.pill,
+                          backgroundColor: selected ? colors.onSurface : colors.surfaceTertiary,
+                          borderWidth: 1,
+                          borderColor: selected ? colors.onSurface : colors.border,
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 12,
+                            fontWeight: "700",
+                            color: selected ? colors.surface : colors.onSurface,
+                          }}
+                        >
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              ) : null}
+            </View>
+
+            {/* Notes */}
+
+            <FormField
+              label="Notes"
+              value={notes}
+              onChangeText={setNotes}
+              placeholder="Optional notes"
+              multiline
+              colors={colors}
+              spacing={spacing}
+              radius={radius}
+              fieldName="notes"
+              focusedField={focusedField}
+              onFocus={setFocusedField}
+              onBlur={() => setFocusedField(null)}
+            />
+
+            {/* Error */}
+
+            {error ? (
+              <View
+                style={{
+                  marginTop: spacing.sm,
+                  padding: spacing.md,
+                  borderRadius: radius.sm,
+                  backgroundColor: colors.surfaceSecondary,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              >
+                <Text style={{ fontSize: 13, color: colors.onSurface }}>{error}</Text>
+              </View>
+            ) : null}
+
+            {/* Save */}
+
+            <Pressable
+              onPress={handleSave}
+              accessibilityRole="button"
+              accessibilityLabel="Save task"
+              style={{
+                marginTop: spacing.xl,
+                minHeight: 52,
+                borderRadius: radius.md,
+                backgroundColor: colors.onSurface,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: "800", color: colors.surface }}>
+                {isEditing ? "Save Changes" : "Save Task"}
+              </Text>
+            </Pressable>
+
+            {/* Cancel */}
+
+            <Pressable
+              onPress={onCancel}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel task"
+              style={{
+                marginTop: spacing.sm,
+                minHeight: 48,
+                borderRadius: radius.md,
+                borderWidth: 1,
+                borderColor: colors.error,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>Cancel</Text>
+            </Pressable>
+
+            {isEditing && onDelete ? (
+              <Pressable
+                onPress={handleDelete}
+                accessibilityRole="button"
+                accessibilityLabel="Delete task"
+                style={{
+                  marginTop: spacing.sm,
+                  minHeight: 48,
+                  borderRadius: radius.md,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>Delete Entry</Text>
+              </Pressable>
+            ) : null}
+          </ScrollView>
+        </Animated.View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
