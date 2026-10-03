@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, ScrollView, Pressable, useWindowDimensions, DeviceEventEmitter } from "react-native";
+import { View, Text, ScrollView, Pressable, DeviceEventEmitter, Animated } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
@@ -26,6 +26,8 @@ import { SpaceMembersModal } from "./SpaceMembersModal";
 import { GroceryQuickAddBar } from "./GroceryQuickAddBar";
 import { GroceryNewListModal } from "./GroceryNewListModal";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
+import { PressableScale } from "@/components/ui/PressableScale";
+import { motion, useReducedMotion } from "@/lib/motion";
 import { GrocerySuggestionModal, type SupplySuggestion } from "./GrocerySuggestionModal";
 import { GroceryFinishShoppingSheet } from "./GroceryFinishShoppingSheet";
 import { itemToSupplyEntry, supplyEntryToItemBody } from "@/lib/spaces/home/homeItems";
@@ -100,8 +102,6 @@ export default function GroceryDashboard({
   // there's more room for the name before it truncates (see
   // ListCard's numberOfLines={1}), and the next card still peeks in
   // as a scroll affordance.
-  const { width: windowWidth } = useWindowDimensions();
-  const listCardWidth = (windowWidth - spacing.xl * 2 - spacing.sm) / 1.7;
 
   // No mock seed -- loadMyGroceryData below fills this from the API,
   // same as Home's taskEntries. Combined with `key={space.id}` on this
@@ -783,348 +783,203 @@ export default function GroceryDashboard({
     setHomeEditingItem(null);
   };
 
+  const groceryFill = SPACE_IDENTITY_COLORS.grocery!;
+  const muted = colors.onSurfaceTertiary;
+  const activeTotal = toBuyTotal + inCartTotal;
+  const activePriced = activeListItems.filter((item) => item.price != null);
+  const activePriceTotal = activePriced.length > 0 ? activePriced.reduce((sum, item) => sum + (item.price ?? 0), 0) : null;
+
   return (
     <SwipeBackView onBack={() => router.push("/spaces")} style={{ backgroundColor: colors.surface }}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 150 }}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingHorizontal: spacing.lg + 4, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.lg + 2 }}
       >
-        {/* HEADER */}
-        <View style={{ position: "relative", alignItems: "center", paddingTop: spacing.md, paddingBottom: spacing.xl }}>
-          {/* BACK -- every other space has this corner button (see
-              CarDashboard's space-back) to return to Spaces; Grocery
-              never did, because the invite stack used to sit right
-              here instead. Same style/position as Car's, so the two
-              spaces read as one consistent chrome. */}
-          <Pressable
-            testID="space-back"
-            onPress={() => router.push("/spaces")}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Back to Spaces"
-            style={{
-              position: "absolute",
-              left: 0,
-              top: spacing.md + 10,
-              width: 40,
-              height: 40,
-              borderRadius: radius.pill,
-              backgroundColor: "transparent",
-              borderWidth: 1,
-              borderColor: colors.border,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
-          </Pressable>
-
-          {/* EDIT */}
-          <Pressable
-            testID="space-edit"
-            onPress={onEdit}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Edit grocery space"
-            style={{
-              position: "absolute",
-              right: 0,
-              top: spacing.md + 10,
-              width: 40,
-              height: 40,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Ionicons name="create-outline" size={19} color={colors.caution} />
-          </Pressable>
-
-          {/* SPACE ICON -- every other Space (Car/Home/Expenses) leads
-              with this tinted avatar before its name; Grocery skipped it
-              entirely, the one header that didn't match the other 3. */}
-          <View
-            style={{
-              width: 68,
-              height: 68,
-              borderRadius: radius.lg,
-              backgroundColor: `${SPACE_IDENTITY_COLORS.grocery}1A`,
-              alignItems: "center",
-              justifyContent: "center",
-              marginBottom: spacing.md,
-            }}
-          >
-            <Ionicons
-              name={(space?.icon || "cart-outline") as any}
-              size={32}
-              color={SPACE_IDENTITY_COLORS.grocery}
-            />
-          </View>
-
-          <Text style={{ textAlign: "center", fontSize: 30, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.7 }}>
-            {space?.name || "Grocery"}
-          </Text>
-          {activeList ? (
-            <Text style={{ marginTop: 4, textAlign: "center", fontSize: 14, color: colors.onSurfaceTertiary }}>
-              {activeList.name} ·{" "}
-              {otherPeopleCount === 0 ? "just you" : `shared with ${otherPeopleCount} other${otherPeopleCount === 1 ? "" : "s"}`}
-            </Text>
-          ) : null}
-
-          {/* INVITE + RECIPES -- both now sit here as a pair. Invite used
-              to sit where BACK now is (top-left, in place of the corner
-              button every other space has); moved here, under the
-              list's own name+subtitle, since it's about this list's
-              access, not the space-level chrome the back/edit corners
-              are. Recipes used to only be reachable through the shared
-              FAB's fan (now removed everywhere -- see
-              app/(tabs)/_layout.tsx); it's not tied to a list the way
-              Invite is, but lives beside it as the second "space-wide"
-              action on this header rather than getting its own row. */}
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm, marginTop: spacing.md }}>
-            <Pressable
-              testID="grocery-members-stack"
-              onPress={() => setMembersModalVisible(true)}
-              disabled={!effectiveActiveListId}
-              accessibilityRole="button"
-              accessibilityLabel="Manage who has access to this list"
-              style={{ flexDirection: "row", alignItems: "center", opacity: effectiveActiveListId ? 1 : 0.4 }}
-            >
-              {otherPeople.slice(0, 2).map((person, index) => (
-                <View key={person.id} style={{ marginLeft: index === 0 ? 0 : -12, zIndex: 10 - index }}>
-                  <Avatar id={person.id} name={person.name} size={40} ringed />
-                </View>
-              ))}
-
-              {/* Nobody on this list yet -- a bare "+" here doesn't read
-                  as "invite someone" on its own, so it grows into a
-                  labeled pill instead. The moment there's a real avatar
-                  to look at, the label's job is done (that's the
-                  context now) and it shrinks back to the plain dashed
-                  circle everyone already recognizes as "add more". */}
-              {otherPeople.length === 0 ? (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
-                    height: 40,
-                    paddingLeft: 14,
-                    paddingRight: 14,
-                    borderRadius: 20,
-                    borderWidth: 1.5,
-                    borderStyle: "dashed",
-                    borderColor: colors.border,
-                    backgroundColor: "transparent",
-                  }}
-                >
-                  <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurfaceTertiary }}>
-                    Invite someone
-                  </Text>
-                  <Ionicons name="add" size={16} color={colors.onSurfaceTertiary} />
-                </View>
-              ) : (
-                <View
-                  style={{
-                    marginLeft: -12,
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    borderWidth: 1.5,
-                    borderStyle: "dashed",
-                    borderColor: colors.border,
-                    backgroundColor: "transparent",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Ionicons name="add" size={18} color={colors.onSurfaceTertiary} />
-                </View>
-              )}
-            </Pressable>
-
-            <Pressable
-              testID="grocery-recipes-button"
-              onPress={() => setView("recipes")}
-              hitSlop={4}
-              accessibilityRole="button"
-              accessibilityLabel="Recipes"
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 6,
-                height: 40,
-                paddingLeft: 14,
-                paddingRight: 14,
-                borderRadius: 20,
-                borderWidth: 1.5,
-                borderColor: colors.border,
-                backgroundColor: "transparent",
-              }}
-            >
-              <Ionicons name="restaurant-outline" size={16} color={colors.onSurfaceTertiary} />
-              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurfaceTertiary }}>
-                Recipes
-              </Text>
-            </Pressable>
+        {/* TOP BAR -- back; recipes, who's on this list, edit space. */}
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <HeaderCircle testID="space-back" icon="chevron-back" label="Înapoi la spații" onPress={() => router.push("/spaces")} />
+          <View style={{ flexDirection: "row", gap: spacing.sm }}>
+            <HeaderCircle testID="grocery-recipes-button" icon="restaurant-outline" label="Rețete" onPress={() => setView("recipes")} />
+            <HeaderCircle testID="space-edit" icon="create-outline" label="Editează spațiul" onPress={onEdit} />
           </View>
         </View>
 
-        {/* LIST GRID -- tapping a card never navigates anywhere; it just
-            changes which list's stats/items show below. The "New list"
-            card opens the same GroceryNewListModal Recipes/Smart List
-            use, just triggered from here instead of the FAB; it leads
-            the scroll (not trailing) so it's never scrolled out of
-            sight behind a long row of lists, same reasoning as
-            Recipes' own "+ New list" pill. Horizontal scroll, not
-            wrapping -- more than a couple of lists used to pile this
-            into more and more rows; cards are wider than the old
-            2-column wrap's half-screen (see listCardWidth above) so a
-            longer name has room before it truncates. */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ flexDirection: "row", gap: spacing.sm }}
-          style={{ marginBottom: spacing.lg }}
-        >
-          {/* Owner-only (see ItemController::canCreateInSpace) -- a
-              non-owner doesn't get this even disabled/dimmed, same
-              reasoning as an active card's own delete "x": nothing to
-              explain, it's just not their space to add lists to. */}
+        {/* IDENTITY + SHARING -- who can see the active list. The avatar
+            stack (or "Invită pe cineva") opens SpaceMembersModal. */}
+        <View style={{ gap: spacing.md }}>
+          <View style={{ gap: 2 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: groceryFill }} />
+              <Text style={{ fontSize: 14, color: muted }}>Cumpărături</Text>
+            </View>
+            <Text style={{ fontSize: 28, fontWeight: "600", letterSpacing: -0.6, color: colors.onSurface }} numberOfLines={1}>
+              {space?.name || "Cumpărături"}
+            </Text>
+          </View>
+
+          <PressableScale
+            testID="grocery-members-stack"
+            onPress={() => setMembersModalVisible(true)}
+            disabled={!effectiveActiveListId}
+            accessibilityRole="button"
+            accessibilityLabel="Cine are acces la această listă"
+            style={{ flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: spacing.sm, opacity: effectiveActiveListId ? 1 : 0.4 }}
+          >
+            {otherPeople.length > 0 ? (
+              <View style={{ flexDirection: "row" }}>
+                {otherPeople.slice(0, 3).map((person, index) => (
+                  <View key={person.id} style={{ marginLeft: index === 0 ? 0 : -10, zIndex: 10 - index }}>
+                    <Avatar id={person.id} name={person.name} size={30} ringed />
+                  </View>
+                ))}
+              </View>
+            ) : (
+              <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" }}>
+                <Ionicons name="person-add-outline" size={15} color={muted} />
+              </View>
+            )}
+            <Text style={{ fontSize: 14, color: muted }}>
+              {otherPeopleCount === 0
+                ? "Doar tu. Invită pe cineva"
+                : `Împărțită cu ${otherPeopleCount} ${otherPeopleCount === 1 ? "persoană" : "persoane"}`}
+            </Text>
+          </PressableScale>
+        </View>
+
+        {/* LIST PILLS -- tapping one switches which list shows below,
+            never navigates. "Listă nouă" leads (owner-only) so a long row
+            of lists never scrolls it out of sight; the active list's own
+            "x" deletes it (owner/creator only). */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+          {lists.map((list) => (
+            <ListPill
+              key={list.id}
+              list={list}
+              active={list.id === effectiveActiveListId}
+              onPress={() => setActiveListId(list.id)}
+              onDelete={() => confirmDeleteList(list)}
+              canManage={canManageList(list)}
+              isShared={list.spaceId !== String(space?.id)}
+            />
+          ))}
           {canCreateList ? (
-            <Pressable
+            <PressableScale
               testID="grocery-list-card-new"
               onPress={() => setCreatingList(true)}
               accessibilityRole="button"
-              accessibilityLabel="New list"
+              accessibilityLabel="Listă nouă"
               style={{
-                width: listCardWidth,
-                minHeight: 64,
-                borderRadius: radius.sm,
+                height: 40,
+                paddingHorizontal: spacing.lg,
+                borderRadius: radius.pill,
                 borderWidth: 1.5,
                 borderStyle: "dashed",
-                borderColor: colors.border,
-                backgroundColor: "transparent",
+                borderColor: colors.borderStrong,
                 flexDirection: "row",
                 alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
+                gap: 4,
               }}
             >
-              <Ionicons name="add" size={16} color={colors.onSurfaceTertiary} />
-              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurfaceTertiary }}>New list</Text>
-            </Pressable>
+              <Ionicons name="add" size={16} color={muted} />
+              <Text style={{ fontSize: 14, color: muted }}>Listă nouă</Text>
+            </PressableScale>
           ) : null}
-
-          {lists.map((list) => {
-            const listItems = getItemsForList(items, list.id);
-            const pricedItems = listItems.filter((item) => item.price != null);
-            return (
-              <ListCard
-                key={list.id}
-                list={list}
-                width={listCardWidth}
-                active={list.id === effectiveActiveListId}
-                onPress={() => setActiveListId(list.id)}
-                onDelete={() => confirmDeleteList(list)}
-                canManage={canManageList(list)}
-                isShared={list.spaceId !== String(space?.id)}
-                itemCount={listItems.length}
-                boughtCount={listItems.filter((item) => item.inCart).length}
-                priceTotal={pricedItems.length > 0 ? pricedItems.reduce((sum, item) => sum + (item.price ?? 0), 0) : undefined}
-              />
-            );
-          })}
         </ScrollView>
 
         {lists.length === 0 ? (
-          <View style={{ alignItems: "center", paddingVertical: spacing["3xl"] ?? 48, gap: spacing.sm }}>
-            <Ionicons name="albums-outline" size={28} color={colors.onSurfaceTertiary} />
-            <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface, textAlign: "center" }}>
-              {isOwner ? "No lists yet." : "Nothing shared with you yet."}
+          <View style={{ alignItems: "center", paddingVertical: spacing["3xl"], gap: spacing.sm }}>
+            <Ionicons name="albums-outline" size={28} color={muted} />
+            <Text style={{ fontSize: 16, fontWeight: "600", color: colors.onSurface, textAlign: "center" }}>
+              {isOwner ? "Nicio listă încă" : "Nimic împărțit cu tine încă"}
             </Text>
-            <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, textAlign: "center" }}>
+            <Text style={{ fontSize: 14, color: muted, textAlign: "center" }}>
               {isOwner
-                ? "Tap + above to create one for this week, a trip, or anything else you shop for."
-                : "Ask this space's owner to add you to one of their lists."}
+                ? "Creează una pentru săptămâna asta, o ieșire sau orice cumperi des."
+                : "Roagă-l pe proprietarul spațiului să te adauge pe o listă."}
             </Text>
           </View>
         ) : (
           <>
-            {/* STATS */}
-            <View style={{ flexDirection: "row", gap: spacing.md, marginBottom: spacing.xl }}>
-              <HomeStatCard value={toBuyTotal} label="To buy" />
-              <HomeStatCard
-                value={inCartTotal}
-                label="In cart"
-                onClear={inCartTotal > 0 && effectiveActiveListId ? () => handleClearCart(effectiveActiveListId) : undefined}
-              />
+            {/* THE LIST -- progress header, bar, then the items on the
+                same card. Checking an item keeps it in place (crossed
+                off, like paper) rather than moving it to another section. */}
+            <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, overflow: "hidden" }}>
+              <View style={{ padding: spacing.lg, gap: spacing.md }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                  <View>
+                    <Text style={{ fontSize: 16, fontWeight: "600", color: colors.onSurface }}>
+                      {activeTotal === 0 ? "Lista e goală" : `${inCartTotal} din ${activeTotal} în coș`}
+                    </Text>
+                    {activePriceTotal != null ? (
+                      <Text style={{ fontSize: 13, color: muted }}>Estimat {new Intl.NumberFormat("ro-RO").format(activePriceTotal)} lei</Text>
+                    ) : null}
+                  </View>
+                  {inCartTotal > 0 && effectiveActiveListId ? (
+                    <PressableScale
+                      testID="grocery-clear-cart"
+                      onPress={() => handleClearCart(effectiveActiveListId)}
+                      accessibilityRole="button"
+                      accessibilityLabel="Golește coșul"
+                      style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 8, paddingLeft: spacing.md }}
+                    >
+                      <Ionicons name="refresh-outline" size={15} color={muted} />
+                      <Text style={{ fontSize: 13, color: muted }}>Golește</Text>
+                    </PressableScale>
+                  ) : null}
+                </View>
+                {activeTotal > 0 ? <CartProgress ratio={inCartTotal / activeTotal} color={groceryFill} track={colors.surfaceTertiary} /> : null}
+              </View>
+
+              {activeListItems.length === 0 ? (
+                <View style={{ alignItems: "center", paddingBottom: spacing.xl, paddingHorizontal: spacing.lg, gap: 4 }}>
+                  <Ionicons name="cart-outline" size={26} color={groceryFill} />
+                  <Text style={{ fontSize: 14, color: muted, textAlign: "center" }}>Adaugă primul produs mai jos.</Text>
+                </View>
+              ) : (
+                activeListItems.map((item) => (
+                  <View key={item.id} style={{ borderTopWidth: 1, borderTopColor: colors.border }}>
+                    <GroceryItemRow
+                      item={item}
+                      onToggle={handleToggle}
+                      onOpenMenu={setHomeEditingItem}
+                      onDelete={handleDelete}
+                      trailing={item.addedBy ? <Avatar id={item.addedBy.id} name={item.addedBy.name} size={20} /> : null}
+                    />
+                  </View>
+                ))
+              )}
             </View>
 
-            {/* Only surfaces once something's actually checked into
-                cart -- finishing an empty cart has nothing to log. */}
+            <GroceryQuickAddBar onAdd={handleHomeQuickAdd} />
+
+            {activeListItems.length > 0 ? (
+              <Text style={{ fontSize: 13, color: muted, textAlign: "center" }}>
+                Ține apăsat un produs ca să-l editezi, glisează spre stânga ca să-l ștergi.
+              </Text>
+            ) : null}
+
+            {/* Only once something's actually in the cart -- finishing an
+                empty cart has nothing to log. */}
             {inCartTotal > 0 && effectiveActiveListId ? (
-              <Pressable
+              <PressableScale
                 onPress={() => setFinishShoppingListId(effectiveActiveListId)}
                 accessibilityRole="button"
-                accessibilityLabel="Finalizează cumpărăturile"
+                accessibilityLabel="Termină cumpărăturile"
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "center",
                   gap: 8,
-                  height: 48,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.onSurface,
-                  marginBottom: spacing.xl,
+                  height: 52,
+                  borderRadius: radius.md + 2,
+                  backgroundColor: groceryFill,
                 }}
               >
-                <Ionicons name="checkmark-done-outline" size={16} color={colors.surface} />
-                <Text style={{ fontSize: 13.5, fontWeight: "800", color: colors.surface }}>
-                  Finalizează cumpărăturile
-                </Text>
-              </Pressable>
+                <Ionicons name="checkmark-done" size={18} color="#1A1206" />
+                <Text style={{ fontSize: 15, fontWeight: "600", color: "#1A1206" }}>Termină cumpărăturile</Text>
+              </PressableScale>
             ) : null}
-
-            <GroceryQuickAddBar onAdd={handleHomeQuickAdd} />
-
-            {activeListItems.length === 0 ? (
-              <View style={{ alignItems: "center", paddingVertical: spacing["3xl"] ?? 48, gap: spacing.sm }}>
-                {/* Same identity glyph as the header avatar (already
-                    tinted) -- was left neutral here. */}
-                <Ionicons name="cart-outline" size={28} color={SPACE_IDENTITY_COLORS.grocery} />
-                <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface, textAlign: "center" }}>
-                  {activeList?.name ?? "This list"} is empty.
-                </Text>
-                <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, textAlign: "center" }}>
-                  Add your first product above.
-                </Text>
-              </View>
-            ) : (
-              // One list, not two -- checking an item off used to move it
-              // out of TO BUY into a separate IN CART section below; now
-              // it just stays where it is and its own row recolors (see
-              // GroceryItemRow's checked-circle fill), matching how a
-              // paper list actually works -- you cross something off in
-              // place, you don't re-sort the page. toBuyTotal/inCartTotal
-              // above still split for the stat cards; nothing about
-              // what's tracked changed, only this one render.
-              <HomeItemSection
-                title={
-                  activeList ? (
-                    <>
-                      Items from list:{" "}
-                      <Text style={{ color: SPACE_IDENTITY_COLORS.grocery }}>{activeList.name}</Text>
-                    </>
-                  ) : (
-                    "ITEMS"
-                  )
-                }
-                items={activeListItems}
-                onToggle={handleToggle}
-                onOpenMenu={setHomeEditingItem}
-                onDelete={handleDelete}
-              />
-            )}
           </>
         )}
       </ScrollView>
@@ -1182,213 +1037,120 @@ export default function GroceryDashboard({
   );
 }
 
-/** "5 items / To buy" -- counts for whichever list's tab is active,
- * unaffected by the category filter underneath (side by side with "In
- * cart"). Deliberately simpler than the retired GroceryStats (no icon
- * row) to match the Grocery redesign. */
-/** One pill in Home's list-tab row -- the active one grows a small "x"
- * (same convention as a custom category pill in GroceryProductModal),
- * everyone else just switches to it on tap. */
-function ListCard({
+/** 44px round icon button on the card layer -- back, recipes, edit. */
+function HeaderCircle({ icon, label, onPress, testID }: { icon: keyof typeof Ionicons.glyphMap; label: string; onPress?: () => void; testID?: string }) {
+  const { colors } = useTheme();
+  const isBack = icon === "chevron-back";
+  return (
+    <PressableScale
+      testID={testID}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
+    >
+      <Ionicons name={icon} size={isBack ? 22 : 18} color={isBack ? colors.onSurface : colors.onSurfaceTertiary} />
+    </PressableScale>
+  );
+}
+
+/** One pill in the list row -- the active one is filled in Grocery's
+ * color and grows a small "x" (delete) when the viewer may manage it. */
+function ListPill({
   list,
-  width,
   active,
   onPress,
   onDelete,
   canManage,
   isShared,
-  itemCount,
-  boughtCount,
-  priceTotal,
 }: {
   list: GroceryList;
-  /** Fixed width, computed in GroceryDashboard from the screen (see
-   * listCardWidth) -- the grid scrolls horizontally now instead of
-   * wrapping, so this replaces the old flexBasis "48%" (which only
-   * made sense inside a wrapping flex row). */
-  width: number;
   active: boolean;
   onPress: () => void;
   onDelete: () => void;
-  /** Whether the current user may delete THIS list -- the space owner,
-   * or whoever created it (see ItemController::canManageList). Someone
-   * with access to a list via a share still uses its items freely, just
-   * can't delete the list row itself. */
+  /** The space owner or the list's creator (ItemController::canManageList). */
   canManage: boolean;
-  /** The list's two states, per GroceryList.spaceId's own doc --
-   * "private" (lives in the viewer's own space) vs "shared" (lives in
-   * someone else's, surfaced here through a list_members invite). A
-   * small people glyph is the only thing marking the difference; the
-   * list itself behaves identically either way. */
+  /** Lives in someone else's space, reached through a list_members share. */
   isShared: boolean;
-  itemCount: number;
-  boughtCount: number;
-  /** Sum of `price` across this list's items that actually have one
-   * recorded -- undefined (not 0) when none do, so a list with no
-   * priced products just omits it instead of showing "0 RON". */
-  priceTotal?: number;
 }) {
   const { colors, spacing, radius } = useTheme();
-  const dimColor = active ? colors.onBrandPrimary : colors.onSurfaceTertiary;
+  const fg = active ? "#1A1206" : colors.onSurface;
 
   return (
-    <Pressable
-      testID={`grocery-list-card-${list.id}`}
-      onPress={onPress}
-      style={{
-        width,
-        padding: spacing.md,
-        borderRadius: radius.sm,
-        backgroundColor: active ? colors.brandPrimary : "transparent",
-        borderWidth: active ? 0 : 1,
-        borderColor: colors.border,
-      }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, flex: 1, marginRight: spacing.sm }}>
-          {isShared ? <Ionicons name="people" size={12} color={dimColor} /> : null}
-          <Text
-            numberOfLines={1}
-            style={{ fontSize: 13, fontWeight: "800", color: active ? colors.onBrandPrimary : colors.onSurface, flexShrink: 1 }}
-          >
-            {list.name}
-          </Text>
-        </View>
-
-        {/* Price + delete share this corner -- side by side, not
-            stacked, so an active+manageable list with a price stays
-            just as compact (still 2 lines) instead of growing a 3rd. */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-          {priceTotal != null ? (
-            <Text style={{ fontSize: 12, fontWeight: "700", color: dimColor }} numberOfLines={1}>
-              {new Intl.NumberFormat("en-US").format(priceTotal)} RON
-            </Text>
-          ) : null}
-
-          {active && canManage ? (
-            <Pressable
-              testID={`grocery-list-card-delete-${list.id}`}
-              onPress={onDelete}
-              hitSlop={8}
-              accessibilityRole="button"
-              accessibilityLabel={`Delete ${list.name}`}
-            >
-              <Ionicons name="close-circle" size={16} color={colors.error} />
-            </Pressable>
-          ) : null}
-        </View>
-      </View>
-
-      <Text style={{ fontSize: 12, color: dimColor }}>
-        {itemCount} {itemCount === 1 ? "item" : "items"} &middot; {boughtCount} bought
-      </Text>
-    </Pressable>
-  );
-}
-
-function HomeStatCard({
-  value,
-  label,
-  onClear,
-}: {
-  value: number;
-  label: string;
-  /** "Clear cart" -- was GroceryListsPage's per-list refresh icon, kept
-   * here on the "In cart" card (its only sensible other home) instead
-   * of on the tab row, which is busy enough with the delete "x" already. */
-  onClear?: () => void;
-}) {
-  const { colors, spacing, radius, typography } = useTheme();
-
-  return (
+    // Pill body and its "x" are siblings, not nested -- a button inside
+    // a button is invalid on web and ambiguous for screen readers.
     <View
       style={{
-        flex: 1,
-        padding: spacing.lg,
-        backgroundColor: "transparent",
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: radius.sm,
+        height: 40,
+        borderRadius: radius.pill,
+        backgroundColor: active ? SPACE_IDENTITY_COLORS.grocery : colors.surfaceSecondary,
+        flexDirection: "row",
+        alignItems: "center",
+        paddingRight: active && canManage ? spacing.sm : 0,
       }}
     >
-      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
-        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-          <Text style={{ ...typography.display, color: colors.onSurface }}>
-            {value}
-          </Text>
-          <Text style={{ ...typography.caption, color: colors.onSurfaceTertiary }}>{value === 1 ? "item" : "items"}</Text>
-        </View>
-
-        {onClear ? (
-          <Pressable
-            testID="grocery-clear-cart"
-            onPress={onClear}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Clear cart"
-          >
-            <Ionicons name="refresh-outline" size={16} color={colors.onSurfaceTertiary} />
-          </Pressable>
-        ) : null}
-      </View>
-      <Text style={{ ...typography.caption, marginTop: 2, color: colors.onSurfaceTertiary }}>{label}</Text>
+      <PressableScale
+        testID={`grocery-list-card-${list.id}`}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityState={{ selected: active }}
+        accessibilityLabel={list.name}
+        style={{
+          height: 40,
+          paddingLeft: spacing.lg,
+          paddingRight: active && canManage ? spacing.xs : spacing.lg,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 6,
+        }}
+      >
+        {isShared ? <Ionicons name="people" size={14} color={active ? fg : colors.onSurfaceTertiary} /> : null}
+        <Text numberOfLines={1} style={{ fontSize: 14, fontWeight: active ? "600" : "400", color: fg, maxWidth: 160 }}>
+          {list.name}
+        </Text>
+      </PressableScale>
+      {active && canManage ? (
+        <Pressable
+          testID={`grocery-list-card-delete-${list.id}`}
+          onPress={onDelete}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={`Șterge lista ${list.name}`}
+          style={{ width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(26,18,6,0.12)" }}
+        >
+          <Ionicons name="close" size={14} color={fg} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
 
+/** The active list's "in cart" bar -- glides to its new length whenever
+ * an item is ticked (skipped under reduced motion). */
+function CartProgress({ ratio, color, track }: { ratio: number; color: string; track: string }) {
+  const reduced = useReducedMotion();
+  const anim = useRef(new Animated.Value(ratio)).current;
 
-function HomeItemSection({
-  title,
-  items,
-  onToggle,
-  onOpenMenu,
-  onDelete,
-}: {
-  // ReactNode (not just string) so the caller can color just the
-  // dynamic list-name portion of the label without a second Text
-  // element duplicating the base font/letterSpacing/weight styling.
-  title: React.ReactNode;
-  items: GroceryItem[];
-  onToggle: (id: string) => void;
-  onOpenMenu: (item: GroceryItem) => void;
-  onDelete: (id: string) => void;
-}) {
-  const { colors, spacing, radius } = useTheme();
-
-  // Sections that have nothing to show (e.g. "IN CART" before anything's
-  // been bought yet) just don't render -- same as the mockup, which only
-  // ever shows a "TO BUY" section with items in it.
-  if (items.length === 0) return null;
+  useEffect(() => {
+    if (reduced) {
+      anim.setValue(ratio);
+      return;
+    }
+    const a = Animated.timing(anim, { toValue: ratio, duration: 420, easing: motion.reveal.easing, useNativeDriver: false });
+    a.start();
+    return () => a.stop();
+  }, [ratio, reduced, anim]);
 
   return (
-    <View style={{ marginBottom: spacing.xl }}>
-      <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 1, color: colors.onSurfaceTertiary, marginBottom: spacing.sm }}>
-        {title}
-      </Text>
-
-      <View style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, overflow: "hidden" }}>
-        {items.map((item, index) => (
-          <View
-            key={item.id}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              borderBottomWidth: index === items.length - 1 ? 0 : 1,
-              borderBottomColor: colors.border,
-            }}
-          >
-            <View style={{ flex: 1 }}>
-              <GroceryItemRow item={item} onToggle={onToggle} onOpenMenu={onOpenMenu} onDelete={onDelete} />
-            </View>
-
-            {item.addedBy ? (
-              <View style={{ marginRight: spacing.lg }}>
-                <Avatar id={item.addedBy.id} name={item.addedBy.name} size={18} />
-              </View>
-            ) : null}
-          </View>
-        ))}
-      </View>
+    <View style={{ height: 6, borderRadius: 3, backgroundColor: track, overflow: "hidden" }}>
+      <Animated.View
+        style={{
+          height: "100%",
+          borderRadius: 3,
+          backgroundColor: color,
+          width: anim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }),
+        }}
+      />
     </View>
   );
 }

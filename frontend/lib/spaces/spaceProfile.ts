@@ -59,6 +59,28 @@ export const SPACE_IDENTITY_COLORS: Partial<Record<SpaceKind, string>> = {
   expenses: "#14B8A6",
 };
 
+/** The identity color as TEXT (a label, a subtitle) or a stroke icon on
+ * a card. The base identity colors are tuned for filled marks -- a
+ * purple #9333EA label on the dark card layer is only ~3:1 -- so text
+ * gets a lighter tint in dark mode and a deeper one in light mode, same
+ * hue. Fills (bars, buttons, dots) keep using SPACE_IDENTITY_COLORS. */
+const SPACE_TEXT_COLORS: Record<"dark" | "light", Partial<Record<SpaceKind, string>>> = {
+  dark: { car: "#6FA5F8", home: "#B37BF5", grocery: "#F5B13D", expenses: "#3DD3BF" },
+  light: { car: "#2563EB", home: "#7E22CE", grocery: "#B45309", expenses: "#0F766E" },
+};
+
+export function spaceTextColor(kind: SpaceKind, isDark: boolean): string | undefined {
+  return SPACE_TEXT_COLORS[isDark ? "dark" : "light"][kind];
+}
+
+/** Romanian display name per space kind. */
+export const SPACE_KIND_LABEL: Partial<Record<SpaceKind, string>> = {
+  car: "Mașină",
+  home: "Casă",
+  grocery: "Cumpărături",
+  expenses: "Cheltuieli",
+};
+
 /** Same idea as SPACE_IDENTITY_COLORS, for the one thing that's
  * deliberately NOT in a space: a custom calendar event created with no
  * space_id (see calendar.tsx). Kept here rather than re-declared per

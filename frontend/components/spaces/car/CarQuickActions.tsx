@@ -1,8 +1,9 @@
 import React from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { PressableScale } from "@/components/ui/PressableScale";
 
 export type CarQuickAction = {
   key: string;
@@ -13,108 +14,56 @@ export type CarQuickAction = {
 export type CarQuickActionsProps = {
   // Widened to plain string/SpaceCategory[] rather than a narrow key
   // union -- this reuses the exact same array CarDashboard already
-  // builds for the FAB registration (carCategories), so the two never
-  // drift out of sync.
+  // builds (carCategories), so the two never drift out of sync.
   actions: CarQuickAction[];
   onAction?: (key: string) => void;
 };
 
 /**
- * Revived -- was dead code (see frontend/CLAUDE.md's earlier note),
- * dropped in favor of the shared "+" FAB opening each form directly
- * (see CarDashboard.tsx's handleCarAction), a row here would have just
- * duplicated that. Brought back on the same visual footing as Home's
- * own "CATEGORII" grid (tinted icon chip, identity color at 1A alpha,
- * horizontal row) -- since these cards now cover exactly what the FAB
- * did, the FAB is hidden for Car specifically (app/(tabs)/_layout.tsx)
- * instead of duplicating navigation two ways.
+ * The one way into each Car form. 2026-10 redesign: a row of square
+ * icon buttons with the label underneath (the finance-app "deposit /
+ * withdraw / transfer" row). The FIRST action -- Fuel, the most frequent
+ * entry by far -- is the filled primary in the Space's own color; the
+ * rest are tinted wells, so there's one obvious default without hiding
+ * the others.
  */
-export function CarQuickActions({
-  actions,
-  onAction,
-}: CarQuickActionsProps) {
-  const { colors, spacing, radius } = useTheme();
+export function CarQuickActions({ actions, onAction }: CarQuickActionsProps) {
+  const { colors, spacing, isDark } = useTheme();
+  const fill = SPACE_IDENTITY_COLORS.car!;
+  const tint = spaceTextColor("car", isDark) ?? fill;
 
   return (
-    <View>
-      <Text
-        style={{
-          fontSize: 12,
-          fontWeight: "800",
-          letterSpacing: 1,
-          color: colors.onSurfaceTertiary,
-          marginBottom: 10,
-        }}
-      >
-        QUICK ACTIONS
-      </Text>
-
-      <View
-        style={{
-          flexDirection: "row",
-          flexWrap: "wrap",
-          gap: spacing.sm,
-        }}
-      >
-        {actions.map((action, index) => {
-          // Same fix as Home's category grid -- a lone tile alone on its
-          // own row (odd total) centers as a group instead of hugging
-          // the left edge. Always false today (4 actions, always even),
-          // but stays correct if a 5th action ever gets added.
-          const isAlone = index === actions.length - 1 && actions.length % 2 !== 0;
-
-          return (
-            <Pressable
-              key={action.key}
-              testID={`car-action-${action.key}`}
-              onPress={() => onAction?.(action.key)}
+    <View style={{ flexDirection: "row", justifyContent: "space-between", gap: spacing.sm }}>
+      {actions.map((action, index) => {
+        const primary = index === 0;
+        return (
+          <PressableScale
+            key={action.key}
+            testID={`car-action-${action.key}`}
+            onPress={() => onAction?.(action.key)}
+            accessibilityRole="button"
+            accessibilityLabel={`Adaugă ${action.label.toLowerCase()}`}
+            scaleTo={0.94}
+            style={{ flex: 1, alignItems: "center", gap: spacing.sm }}
+          >
+            <View
               style={{
-                flexGrow: 1,
-                flexBasis: "46%",
-                minHeight: 56,
-                paddingHorizontal: 12,
-                borderRadius: radius.md,
-                borderWidth: 1,
-                borderColor: colors.border,
-                flexDirection: "row",
+                width: 56,
+                height: 56,
+                borderRadius: 18,
+                backgroundColor: primary ? fill : `${fill}24`,
                 alignItems: "center",
-                justifyContent: isAlone ? "center" : "flex-start",
-                gap: 10,
+                justifyContent: "center",
               }}
             >
-              <View
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: radius.sm,
-                  backgroundColor: `${SPACE_IDENTITY_COLORS.car}1A`,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-              >
-                <Ionicons
-                  name={action.icon as any}
-                  size={16}
-                  color={SPACE_IDENTITY_COLORS.car!}
-                />
-              </View>
-
-              <Text
-                style={{
-                  fontSize: 12.5,
-                  fontWeight: "600",
-                  color: colors.onSurface,
-                  flexGrow: isAlone ? 0 : 1,
-                }}
-                numberOfLines={1}
-              >
-                {action.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+              <Ionicons name={action.icon as any} size={22} color={primary ? "#FFFFFF" : tint} />
+            </View>
+            <Text style={{ fontSize: 12, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>
+              {action.label}
+            </Text>
+          </PressableScale>
+        );
+      })}
     </View>
   );
 }

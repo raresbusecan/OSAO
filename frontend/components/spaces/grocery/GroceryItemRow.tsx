@@ -1,121 +1,132 @@
-import React from "react";
-import { View, Text, Pressable } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { View, Text, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { confirmAction } from "@/lib/confirm";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import type { GroceryItem } from "@/lib/spaces/grocery/grocery.types";
+import { PressableScale } from "@/components/ui/PressableScale";
+import { SwipeRow } from "@/components/spaces/SwipeRow";
+import { motion, useReducedMotion } from "@/lib/motion";
 
 export type GroceryItemRowProps = {
   item: GroceryItem;
   onToggle: (id: string) => void;
-  /** Opens the shared add/edit sheet on this item -- the pencil icon
-   * (and Delete from inside the sheet, still there too). */
+  /** Opens the shared add/edit sheet on this item -- long-press the row
+   * (Delete also lives inside that sheet). */
   onOpenMenu: (item: GroceryItem) => void;
-  /** Deletes the item straight from the row, no sheet in the way --
-   * confirms first, same as every other delete in this space. */
+  /** Deletes the item -- swipe the row left; confirms first, same as
+   * every other delete in this space. */
   onDelete: (id: string) => void;
+  /** Trailing slot, e.g. the avatar of who added it on a shared list. */
+  trailing?: React.ReactNode;
 };
 
-/** One row -- a filled black circle+checkmark and struck-through gray
- * text once bought, an empty circle otherwise. Tapping the circle (or
- * anywhere on the row except the pencil/trash icons) toggles it, always
- * reversibly. */
-export function GroceryItemRow({ item, onToggle, onOpenMenu, onDelete }: GroceryItemRowProps) {
-  const { colors, spacing, typography } = useTheme();
+/**
+ * One product row, 2026-10 redesign. Tap anywhere = tick it into the
+ * cart (always reversible) -- the check pops and the row fades, the way
+ * you cross something off paper. The old per-row trash and pencil
+ * icons are gone: swipe left to delete, long-press to edit, so the row
+ * is one big target instead of three small ones side by side.
+ */
+export function GroceryItemRow({ item, onToggle, onOpenMenu, onDelete, trailing }: GroceryItemRowProps) {
+  const { colors, spacing } = useTheme();
+  const reduced = useReducedMotion();
+  const fill = SPACE_IDENTITY_COLORS.grocery!;
+
+  const pop = useRef(new Animated.Value(1)).current;
+  const fade = useRef(new Animated.Value(item.inCart ? 0.45 : 1)).current;
+  const first = useRef(true);
+
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    const target = item.inCart ? 0.45 : 1;
+    if (reduced) {
+      fade.setValue(target);
+      return;
+    }
+    Animated.parallel([
+      Animated.timing(fade, { toValue: target, useNativeDriver: true, ...motion.quick }),
+      Animated.sequence([
+        Animated.timing(pop, { toValue: 1.18, duration: 90, useNativeDriver: true }),
+        Animated.spring(pop, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 10 }),
+      ]),
+    ]).start();
+  }, [item.inCart, reduced, fade, pop]);
 
   const handleDelete = async () => {
     const confirmed = await confirmAction(
-      "Delete product",
-      `Remove "${item.name}" from your shopping list?`,
-      { confirmLabel: "Delete", destructive: true },
+      "Șterge produsul",
+      `Scoți „${item.name}" de pe listă?`,
+      { confirmLabel: "Șterge", destructive: true },
     );
-
     if (confirmed) onDelete(item.id);
   };
 
+  const detail = item.price != null ? `${new Intl.NumberFormat("ro-RO").format(item.price)} lei` : null;
+
   return (
-    <Pressable
-      testID={`grocery-item-${item.id}`}
-      onPress={() => onToggle(item.id)}
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.md,
-        paddingHorizontal: spacing.lg,
-        paddingVertical: spacing.md,
-      }}
-    >
-      <View
+    <SwipeRow onDelete={handleDelete} cornerRadius={0} colors={colors}>
+      <PressableScale
+        testID={`grocery-item-${item.id}`}
+        onPress={() => onToggle(item.id)}
+        onLongPress={() => onOpenMenu(item)}
+        delayLongPress={350}
+        scaleTo={0.99}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: !!item.inCart }}
+        accessibilityLabel={item.name}
+        accessibilityHint="Atinge ca să bifezi. Ține apăsat ca să editezi."
         style={{
-          width: 26,
-          height: 26,
-          borderRadius: 13,
+          flexDirection: "row",
           alignItems: "center",
-          justifyContent: "center",
-          // Grocery's identity color once checked -- same "this is
-          // Grocery" signal Car/Home already carry, instead of the
-          // generic black/white fill every category used before. Fixed
-          // dark checkmark (not colors.surface, which flips to white in
-          // light mode): amber fails contrast against white
-          // (~2.2:1, under WCAG's 3:1 minimum) but easily clears it
-          // against near-black in both themes.
-          backgroundColor: item.inCart ? SPACE_IDENTITY_COLORS.grocery : "transparent",
-          borderWidth: item.inCart ? 0 : 1.5,
-          borderColor: colors.border,
+          gap: spacing.md,
+          paddingHorizontal: spacing.lg,
+          minHeight: 58,
+          backgroundColor: colors.surfaceSecondary,
         }}
       >
-        {item.inCart ? <Ionicons name="checkmark" size={15} color="#111111" /> : null}
-      </View>
-
-      <View style={{ flex: 1 }}>
-        <Text
+        <Animated.View
           style={{
-            ...typography.body,
-            color: item.inCart ? colors.onSurfaceTertiary : colors.onSurface,
-            textDecorationLine: item.inCart ? "line-through" : "none",
+            width: 26,
+            height: 26,
+            borderRadius: 8,
+            alignItems: "center",
+            justifyContent: "center",
+            // Amber fill with a fixed dark check: a white check on amber
+            // is ~2.2:1, under the 3:1 minimum for a graphic.
+            backgroundColor: item.inCart ? fill : "transparent",
+            borderWidth: item.inCart ? 0 : 2,
+            borderColor: colors.borderStrong,
+            transform: [{ scale: pop }],
           }}
         >
-          {item.name}
-        </Text>
+          {item.inCart ? <Ionicons name="checkmark" size={16} color="#1A1206" /> : null}
+        </Animated.View>
 
-        {item.quantity || item.price != null ? (
+        <Animated.View style={{ flex: 1, opacity: fade, paddingVertical: spacing.sm + 2 }}>
           <Text
             style={{
-              ...typography.caption,
-              marginTop: 2,
-              color: colors.onSurfaceTertiary,
+              fontSize: 16,
+              fontWeight: "500",
+              color: colors.onSurface,
               textDecorationLine: item.inCart ? "line-through" : "none",
             }}
+            numberOfLines={2}
           >
-            {[item.quantity, item.price != null ? `${new Intl.NumberFormat("en-US").format(item.price)} RON` : null]
-              .filter(Boolean)
-              .join(" · ")}
+            {item.name}
           </Text>
+          {detail ? <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, marginTop: 1 }}>{detail}</Text> : null}
+        </Animated.View>
+
+        {item.quantity ? (
+          <Animated.Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, opacity: fade }}>{item.quantity}</Animated.Text>
         ) : null}
-      </View>
-
-      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-        <Pressable
-          testID={`grocery-item-delete-${item.id}`}
-          onPress={handleDelete}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel={`Delete ${item.name}`}
-        >
-          <Ionicons name="trash-outline" size={17} color={colors.error} />
-        </Pressable>
-
-        <Pressable
-          testID={`grocery-item-menu-${item.id}`}
-          onPress={() => onOpenMenu(item)}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel={`Edit ${item.name}`}
-        >
-          <Ionicons name="create-outline" size={18} color={colors.caution} />
-        </Pressable>
-      </View>
-    </Pressable>
+        {trailing ? <View>{trailing}</View> : null}
+      </PressableScale>
+    </SwipeRow>
   );
 }
