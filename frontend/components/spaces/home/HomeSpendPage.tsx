@@ -1,8 +1,13 @@
 import React, { useMemo, useState } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet, Modal } from "react-native";
+import { View, Text, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { PressableScale } from "@/components/ui/PressableScale";
+import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+import { TopBar, Identity, Pill, SectionHeader, Group, Row, IconWell, EmptyState } from "@/components/ui/primitives";
+import { motion } from "@/lib/motion";
+import { lei, roDate } from "@/lib/format";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import type { HomeData } from "./home.data.types";
 import type { HomeProfile } from "@/lib/spaces/spaceProfile";
@@ -50,13 +55,7 @@ function periodsEqual(a: HomeSpendPeriod, b: HomeSpendPeriod): boolean {
 }
 
 function formatDate(dateString: string): string {
-  const d = new Date(dateString);
-  if (Number.isNaN(d.getTime())) return dateString;
-  return d.toLocaleDateString("ro-RO", { day: "numeric", month: "short", year: "numeric" });
-}
-
-function formatAmount(value: number): string {
-  return value.toLocaleString("en-US");
+  return roDate(dateString) || dateString;
 }
 
 /**
@@ -71,7 +70,7 @@ function formatAmount(value: number): string {
  * returns.
  */
 export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: HomeSpendPageProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing, radius, isDark, typography } = useTheme();
 
   // "Introdus" -- purchasePrice is always a number on a saved profile
   // (HomeProfileForm defaults it to 0 rather than leaving it undefined),
@@ -84,7 +83,6 @@ export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: Home
 
   const [activeCategories, setActiveCategories] = useState<Set<HomeSpendCategory>>(new Set());
   const [period, setPeriod] = useState<HomeSpendPeriod>({ kind: "thisMonth" });
-  const [periodPickerOpen, setPeriodPickerOpen] = useState(false);
   const [listExpanded, setListExpanded] = useState(false);
 
   const toggleCategory = (category: HomeSpendCategory) => {
@@ -139,386 +137,112 @@ export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: Home
 
   const visibleRecords = listExpanded ? filteredRecords : filteredRecords.slice(0, 8);
 
-  const renderRecord = (record: HomeSpendRecord, isLast: boolean) => (
-    <Pressable
-      key={`${record.category}-${record.id}`}
-      testID={`home-spend-record-${record.category}-${record.id}`}
-      onPress={() => onRecordPress?.(record.category, record.entryId)}
-      disabled={!onRecordPress}
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        paddingHorizontal: spacing.lg,
-        paddingVertical: spacing.md,
-        gap: spacing.md,
-        borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
-        borderBottomColor: colors.border,
-      }}
-    >
-      <View
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: radius.md,
-          backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Ionicons name={record.icon} size={17} color={SPACE_IDENTITY_COLORS.home} />
-      </View>
-
-      <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurface }} numberOfLines={1}>
-          {record.title}
-        </Text>
-        <Text style={{ marginTop: 2, fontSize: 12, color: colors.onSurfaceTertiary }} numberOfLines={1}>
-          {record.categoryLabel} · {formatDate(record.date)}
-          {record.subtitle ? ` · ${record.subtitle}` : ""}
-        </Text>
-      </View>
-
-      <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurface }}>
-        {formatAmount(record.amount)} RON
-      </Text>
-
-      {onRecordPress ? <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceTertiary} /> : null}
-    </Pressable>
-  );
+  const HOME = SPACE_IDENTITY_COLORS.home!;
+  const tint = spaceTextColor("home", isDark) ?? HOME;
+  const muted = colors.onSurfaceTertiary;
 
   return (
     <SwipeBackView onBack={onBack}>
     <ScrollView
       testID="home-spend-page"
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 150 }}
+      contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >
-      {/* HEADER */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: spacing.md,
-          paddingTop: spacing.md,
-          paddingBottom: spacing.xl,
-        }}
-      >
-        <Pressable
-          testID="home-spend-back"
-          onPress={onBack}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: radius.pill,
-            backgroundColor: "transparent",
-            borderWidth: 1,
-            borderColor: colors.border,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
-        </Pressable>
+      <TopBar onBack={onBack} backTestID="home-spend-back" />
+      <Identity color={HOME} kicker="Casă" title="Cheltuieli" />
 
-        <View
-          style={{
-            width: 36,
-            height: 36,
-            borderRadius: radius.md,
-            backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Ionicons name="wallet-outline" size={17} color={SPACE_IDENTITY_COLORS.home} />
-        </View>
+      {/* Period -- the 5 presets as pills (was a modal picker). */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+        {PERIOD_PRESETS.map((preset) => (
+          <Pill
+            key={preset.label}
+            testID={`home-spend-period-option-${preset.label}`}
+            label={preset.label}
+            active={periodsEqual(period, preset.period)}
+            onPress={() => setPeriod(preset.period)}
+          />
+        ))}
+      </ScrollView>
 
-        <Text style={{ fontSize: 22, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.4 }}>
-          Cheltuieli
-        </Text>
-      </View>
-
-      {/* TOTAL */}
-      <View
-        style={{
-          backgroundColor: colors.surfaceSecondary,
-          borderWidth: 1,
-          borderColor: colors.border,
-          borderRadius: radius.sm,
-          padding: spacing.lg,
-          marginBottom: spacing.lg,
-        }}
-      >
-        <View style={{ flexDirection: "row" }}>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurfaceTertiary, marginBottom: 4 }}>
-              TOTAL CHELTUIT
-            </Text>
-            <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4 }}>
-              <Text
-                style={{ flexShrink: 1, fontSize: hasPurchasePrice ? 22 : 30, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 }}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.6}
-              >
-                {formatAmount(total)}
-              </Text>
-              <Text style={{ flexShrink: 0, fontSize: 13, fontWeight: "600", color: colors.onSurfaceTertiary }}>RON</Text>
-            </View>
-            <Text style={{ marginTop: 4, fontSize: 12, color: colors.onSurfaceTertiary }} numberOfLines={1}>
-              {formatSpendPeriodLabel(period)}
-              {activeCategories.size > 0 ? ` · ${categoryLabelsSelected}` : ""}
-            </Text>
+      {/* Total for the period (+ the category chips that filter it). */}
+      <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>
+        <View style={{ gap: 2 }}>
+          <Text style={{ fontSize: 13, color: muted }}>
+            Total cheltuit, {formatSpendPeriodLabel(period).toLowerCase()}
+            {activeCategories.size > 0 ? `, ${categoryLabelsSelected.toLowerCase()}` : ""}
+          </Text>
+          <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
+            <AnimatedNumber value={total} style={{ ...typography.display, color: colors.onSurface }} />
+            <Text style={{ fontSize: 16, color: muted }}>lei</Text>
           </View>
-
           {hasPurchasePrice ? (
-            <>
-              <View
-                style={{
-                  width: StyleSheet.hairlineWidth,
-                  backgroundColor: colors.border,
-                  marginHorizontal: spacing.md,
-                }}
-              />
-
-              <View style={{ flex: 1, minWidth: 0 }} testID="home-overall-cost">
-                <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurfaceTertiary, marginBottom: 4 }}>
-                  OVERALL
-                </Text>
-                <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4 }}>
-                  <Text
-                    style={{ flexShrink: 1, fontSize: 22, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 }}
-                    numberOfLines={1}
-                    adjustsFontSizeToFit
-                    minimumFontScale={0.6}
-                  >
-                    {formatAmount(overall)}
-                  </Text>
-                  <Text style={{ flexShrink: 0, fontSize: 13, fontWeight: "600", color: colors.onSurfaceTertiary }}>RON</Text>
-                </View>
-                <Text style={{ marginTop: 4, fontSize: 12, color: colors.onSurfaceTertiary }} numberOfLines={1}>
-                  {formatAmount(purchasePrice)} RON purchase
-                </Text>
-              </View>
-            </>
+            <Text testID="home-overall-cost" style={{ fontSize: 13, color: muted }}>
+              Cu tot cu prețul casei ({lei(purchasePrice)}): {lei(overall)}
+            </Text>
           ) : null}
         </View>
 
         {byCategory.length > 0 ? (
-          <View
-            style={{
-              flexDirection: "row",
-              flexWrap: "wrap",
-              gap: spacing.sm,
-              marginTop: spacing.md,
-              paddingTop: spacing.md,
-              borderTopWidth: StyleSheet.hairlineWidth,
-              borderTopColor: colors.border,
-            }}
-          >
-            {byCategory.map((entry, index) => {
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border }}>
+            {byCategory.map((entry) => {
               const isActive = activeCategories.has(entry.category);
-              const isAlone = index === byCategory.length - 1 && index % 2 === 0;
-
               return (
-                <Pressable
+                <PressableScale
                   key={entry.category}
                   testID={`home-spend-filter-${entry.category}`}
                   onPress={() => toggleCategory(entry.category)}
+                  scaleTo={motion.scale.tile}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
+                  accessibilityLabel={`${entry.label}: ${lei(entry.amount)}`}
                   style={{
                     flexBasis: "48%",
                     flexGrow: 1,
-                    gap: 4,
+                    gap: 2,
                     padding: spacing.md,
-                    borderRadius: radius.md,
-                    // Selected state stays neutral black/white, never
-                    // the identity color -- same rule as everywhere
-                    // else in the app (see frontend/CLAUDE.md).
-                    backgroundColor: isActive ? colors.onSurface : colors.surfaceTertiary,
-                    alignItems: isAlone ? "center" : "flex-start",
+                    borderRadius: radius.control,
+                    backgroundColor: isActive ? `${HOME}29` : colors.surfaceTertiary,
+                    borderWidth: 1.5,
+                    borderColor: isActive ? HOME : "transparent",
                   }}
                 >
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    {isActive ? (
-                      <Ionicons name="checkmark" size={12} color={colors.surface} />
-                    ) : (
-                      <Ionicons name={entry.icon} size={12} color={colors.onSurfaceTertiary} />
-                    )}
-                    <Text
-                      style={{ fontSize: 11, fontWeight: "600", color: isActive ? colors.surface : colors.onSurfaceTertiary }}
-                      numberOfLines={1}
-                    >
-                      {entry.label}
-                    </Text>
+                    <Ionicons name={isActive ? "checkmark-circle" : entry.icon} size={14} color={isActive ? tint : muted} />
+                    <Text style={{ fontSize: 13, color: isActive ? colors.onSurface : muted }} numberOfLines={1}>{entry.label}</Text>
                   </View>
-                  <Text
-                    style={{ fontSize: 15, fontWeight: "800", color: isActive ? colors.surface : colors.onSurface }}
-                    numberOfLines={1}
-                  >
-                    {formatAmount(entry.amount)} RON
-                  </Text>
-                </Pressable>
+                  <Text style={{ fontSize: 16, fontWeight: "600", color: colors.onSurface }} numberOfLines={1}>{lei(entry.amount)}</Text>
+                </PressableScale>
               );
             })}
           </View>
         ) : null}
       </View>
 
-      {/* PERIOD -- same modal bottom-sheet trigger as CarExpensesPage/
-          CarHistoryPage's own "Period" row (the app's one established
-          period-filter model), just without their custom weeks/months
-          stepper -- Home's 5 fixed presets don't need one. */}
-      <View
-        style={{
-          backgroundColor: colors.surfaceSecondary,
-          borderWidth: 1,
-          borderColor: colors.border,
-          borderRadius: radius.sm,
-          padding: spacing.lg,
-          marginBottom: spacing.lg,
-        }}
-      >
-        <Pressable
-          testID="home-spend-period-trigger"
-          onPress={() => setPeriodPickerOpen(true)}
-          accessibilityRole="button"
-          style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
-        >
-          <Text style={{ fontSize: 13, fontWeight: "600", color: colors.onSurface }}>Perioadă</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurface }}>
-              {formatSpendPeriodLabel(period)}
-            </Text>
-            <Ionicons name="chevron-down" size={16} color={colors.onSurfaceTertiary} />
-          </View>
-        </Pressable>
-      </View>
-
-      {/* PERIOD PICKER */}
-      <Modal
-        visible={periodPickerOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setPeriodPickerOpen(false)}
-      >
-        <View style={{ flex: 1, justifyContent: "flex-end" }}>
-          <Pressable
-            onPress={() => setPeriodPickerOpen(false)}
-            style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }}
-          />
-
-          <View
-            style={{
-              backgroundColor: colors.surface,
-              padding: spacing.xl,
-              borderTopLeftRadius: radius.lg,
-              borderTopRightRadius: radius.lg,
-            }}
-          >
-            <Text style={{ fontSize: 18, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.sm }}>
-              Perioadă
-            </Text>
-
-            {PERIOD_PRESETS.map((preset) => {
-              const isActive = periodsEqual(period, preset.period);
-              return (
-                <Pressable
-                  key={preset.label}
-                  testID={`home-spend-period-option-${preset.label}`}
-                  onPress={() => {
-                    setPeriod(preset.period);
-                    setPeriodPickerOpen(false);
-                  }}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingVertical: spacing.md,
-                    borderBottomWidth: StyleSheet.hairlineWidth,
-                    borderBottomColor: colors.border,
-                  }}
-                >
-                  <Text style={{ fontSize: 15, fontWeight: isActive ? "700" : "500", color: colors.onSurface }}>
-                    {preset.label}
-                  </Text>
-                  {isActive ? <Ionicons name="checkmark" size={18} color={colors.onSurface} /> : null}
-                </Pressable>
-              );
-            })}
-
-            <Pressable
-              testID="home-spend-period-done"
-              onPress={() => setPeriodPickerOpen(false)}
-              style={{
-                marginTop: spacing.md,
-                minHeight: 48,
-                borderRadius: radius.md,
-                backgroundColor: colors.onSurface,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.surface }}>Done</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      {/* LIST */}
       {allRecords.length === 0 ? (
-        <View style={{ alignItems: "center", paddingVertical: spacing.xl, gap: spacing.sm }}>
-          <Ionicons name="receipt-outline" size={28} color={SPACE_IDENTITY_COLORS.home} />
-          <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, textAlign: "center" }}>
-            Nicio cheltuială înregistrată încă.
-          </Text>
-        </View>
+        <EmptyState icon="receipt-outline" message="Nicio cheltuială înregistrată încă." />
       ) : filteredRecords.length === 0 ? (
-        <View style={{ alignItems: "center", paddingVertical: spacing.xl, gap: spacing.sm }}>
-          <Ionicons name="filter-outline" size={28} color={colors.onSurfaceTertiary} />
-          <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, textAlign: "center" }}>
-            Nimic în această perioadă/filtru.
-          </Text>
-        </View>
+        <EmptyState icon="filter-outline" message="Nimic în această perioadă sau cu acest filtru." />
       ) : (
-        <>
-          <View
-            style={{
-              backgroundColor: colors.surfaceSecondary,
-              borderWidth: 1,
-              borderColor: colors.border,
-              borderRadius: radius.sm,
-              overflow: "hidden",
-            }}
-          >
-            {visibleRecords.map((record, index) => renderRecord(record, index === visibleRecords.length - 1))}
-          </View>
-
-          {filteredRecords.length > 8 ? (
-            <Pressable
-              testID="home-spend-show-more"
-              onPress={() => setListExpanded((v) => !v)}
-              hitSlop={8}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 4,
-                paddingVertical: spacing.sm,
-                marginTop: spacing.sm,
-              }}
-            >
-              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurface }}>
-                {listExpanded ? "Arată mai puțin" : `Arată mai mult (${filteredRecords.length - 8})`}
-              </Text>
-              <Ionicons name={listExpanded ? "chevron-up" : "chevron-down"} size={13} color={colors.onSurfaceTertiary} />
-            </Pressable>
-          ) : null}
-        </>
+        <View style={{ gap: spacing.sm }}>
+          <SectionHeader
+            title={`${filteredRecords.length} ${filteredRecords.length === 1 ? "înregistrare" : "înregistrări"}`}
+            muted
+            action={filteredRecords.length > 8 ? { label: listExpanded ? "Arată mai puțin" : "Arată tot", onPress: () => setListExpanded((v) => !v), testID: "home-spend-show-more" } : undefined}
+          />
+          <Group inset={68}>
+            {visibleRecords.map((record) => (
+              <Row
+                key={`${record.category}-${record.id}`}
+                testID={`home-spend-record-${record.category}-${record.id}`}
+                onPress={onRecordPress ? () => onRecordPress(record.category, record.entryId) : undefined}
+                leading={<IconWell icon={record.icon} color={HOME} tint={tint} />}
+                title={record.title}
+                subtitle={[record.categoryLabel, formatDate(record.date), record.subtitle].filter(Boolean).join(", ")}
+                trailing={<Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{lei(record.amount)}</Text>}
+              />
+            ))}
+          </Group>
+        </View>
       )}
     </ScrollView>
     </SwipeBackView>

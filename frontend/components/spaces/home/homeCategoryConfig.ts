@@ -8,6 +8,7 @@ import type {
   HomeSupplyEntry,
 } from "@/lib/spaces/home/home.types";
 import type { HomeCategoryRow } from "./HomeCategorySection";
+import { roCount, roDate } from "@/lib/format";
 import {
   daysUntil,
   dueSubtitle,
@@ -161,27 +162,36 @@ function makeId(prefix: string): string {
 function formatDate(dateString: string): string {
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return dateString;
-  return date.toLocaleDateString("en-US", { day: "numeric", month: "short", year: "numeric" });
+  return roDate(date);
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+const FREQUENCY_LABEL: Record<string, string> = { weekly: "Săptămânal", monthly: "Lunar", yearly: "Anual" };
+const UNIT: Record<string, [string, string]> = { weekly: ["săptămână", "săptămâni"], monthly: ["lună", "luni"], yearly: ["an", "ani"] };
+
+/** "la fiecare 3 luni" / "în fiecare lună". */
+function everyLabel(interval: number, frequency: string): string {
+  const [one, many] = UNIT[frequency] ?? UNIT.monthly;
+  return interval <= 1 ? `în fiecare ${one}` : `la fiecare ${roCount(interval, one, many)}`;
+}
+
 export const HOME_CATEGORIES: HomeCategoryConfig[] = [
   {
     key: "documents",
-    label: "Documents",
+    label: "Documente",
     icon: "document-text-outline",
     fields: [
-      { key: "title", label: "Title", placeholder: "e.g. Road Tax Certificate" },
-      { key: "documentType", label: "Document type", placeholder: "e.g. RCA" },
+      { key: "title", label: "Titlu", placeholder: "ex. Certificat de impozit" },
+      { key: "documentType", label: "Tip document", placeholder: "ex. RCA" },
       // Optional -- a document with no expiry (e.g. a deed) just never
       // enters classifyDocumentUrgencyTier's alert window (see rows()
       // below), same as leaving it unset always did before urgency
       // coloring existed.
-      { key: "expiryDate", label: "Expiry date", placeholder: "", type: "date", required: false },
+      { key: "expiryDate", label: "Expiră pe", placeholder: "", type: "date", required: false },
     ],
-    submitLabel: "Add Document",
-    emptyLabel: "No documents yet.",
+    submitLabel: "Adaugă documentul",
+    emptyLabel: "Niciun document încă.",
     entries: (data) => data.documentEntries,
     buildEntry: (values, existing?: HomeDocumentEntry): HomeDocumentEntry => ({
       id: existing?.id ?? makeId("doc"),
@@ -208,8 +218,8 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
           title: entry.title,
           subtitle: entry.expiryDate
             ? tier
-              ? `${entry.documentType} · ${dueSubtitle(remaining!, "Expires")}`
-              : `${entry.documentType} · Expires ${formatDate(entry.expiryDate)}`
+              ? `${entry.documentType}, ${dueSubtitle(remaining!, "Expires")}`
+              : `${entry.documentType}, expiră pe ${formatDate(entry.expiryDate)}`
             : entry.documentType,
           urgencyTier: tier,
         };
@@ -218,14 +228,14 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
   },
   {
     key: "expenses",
-    label: "Expenses",
+    label: "Cheltuieli",
     icon: "card-outline",
     fields: [
-      { key: "title", label: "Title", placeholder: "e.g. Roof Repair" },
-      { key: "amount", label: "Amount (RON)", placeholder: "0", nonNegativeNumber: true },
+      { key: "title", label: "Titlu", placeholder: "ex. Reparație acoperiș" },
+      { key: "amount", label: "Sumă (lei)", placeholder: "0", nonNegativeNumber: true },
     ],
-    submitLabel: "Add Expense",
-    emptyLabel: "No expenses yet.",
+    submitLabel: "Adaugă cheltuiala",
+    emptyLabel: "Nicio cheltuială încă.",
     entries: (data) => data.expenseEntries,
     buildEntry: (values, existing?: HomeExpenseEntry): HomeExpenseEntry => ({
       id: existing?.id ?? makeId("exp"),
@@ -243,43 +253,43 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
         id: entry.id,
         title: entry.title,
         subtitle: formatDate(entry.date),
-        amount: entry.amount.toLocaleString("en-US"),
+        amount: `${entry.amount.toLocaleString("ro-RO")} lei`,
       })),
   },
   {
     key: "maintenance",
-    label: "Maintenance",
+    label: "Mentenanță",
     icon: "construct-outline",
     fields: [
-      { key: "service", label: "Service", placeholder: "e.g. Plumbing Check" },
-      { key: "price", label: "Price (RON)", placeholder: "0", nonNegativeNumber: true },
-      { key: "date", label: "Date", placeholder: "", type: "date", required: false },
-      { key: "isRecurring", label: "Recurring", placeholder: "Recurent", type: "toggle", required: false },
+      { key: "service", label: "Lucrare", placeholder: "ex. Verificare instalație" },
+      { key: "price", label: "Preț (lei)", placeholder: "0", nonNegativeNumber: true },
+      { key: "date", label: "Data", placeholder: "", type: "date", required: false },
+      { key: "isRecurring", label: "Se repetă", placeholder: "Recurent", type: "toggle", required: false },
       {
         key: "recurrenceFrequency",
-        label: "Repeats every",
+        label: "Se repetă la",
         placeholder: "",
         type: "select",
         required: false,
         defaultValue: "monthly",
         showWhen: "isRecurring",
         options: [
-          { value: "weekly", label: "Week(s)" },
-          { value: "monthly", label: "Month(s)" },
-          { value: "yearly", label: "Year(s)" },
+          { value: "weekly", label: "Săptămâni" },
+          { value: "monthly", label: "Luni" },
+          { value: "yearly", label: "Ani" },
         ],
       },
       {
         key: "recurrenceInterval",
-        label: "Interval (e.g. 3 = every 3)",
+        label: "La fiecare (ex. 3 = la fiecare 3)",
         placeholder: "1",
         required: false,
         showWhen: "isRecurring",
         keyboardType: "numeric",
       },
     ],
-    submitLabel: "Add Maintenance",
-    emptyLabel: "No maintenance entries yet.",
+    submitLabel: "Adaugă lucrarea",
+    emptyLabel: "Nicio lucrare de mentenanță încă.",
     // Resolved-and-inactive (a non-recurring entry, once resolved --
     // see resolveEntry below) drops out of the active list entirely,
     // rather than lingering marked "done".
@@ -368,11 +378,11 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
             subtitle: entry.isRecurring
               ? entry.nextDueDate
                 ? taskTier
-                  ? `${entry.description} · ${dueSubtitle(remaining!, "Due")}`
-                  : `${entry.description} · next ${formatDate(entry.nextDueDate)}`
-                : `${entry.description} · every ${entry.recurrenceInterval ?? 1} ${entry.recurrenceFrequency ?? "monthly"}`
-              : `${entry.description} · ${formatDate(entry.date)}`,
-            amount: entry.price.toLocaleString("en-US"),
+                  ? `${entry.description}, ${dueSubtitle(remaining!, "Due")}`
+                  : `${entry.description}, următoarea pe ${formatDate(entry.nextDueDate)}`
+                : `${entry.description}, ${everyLabel(entry.recurrenceInterval ?? 1, entry.recurrenceFrequency ?? "monthly")}`
+              : `${entry.description}, ${formatDate(entry.date)}`,
+            amount: `${entry.price.toLocaleString("ro-RO")} lei`,
             isRecurring: entry.isRecurring,
             urgencyTier: taskTier,
           };
@@ -381,28 +391,28 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
   },
   {
     key: "recurring",
-    label: "Recurring",
+    label: "Recurente",
     icon: "repeat-outline",
     fields: [
-      { key: "title", label: "Title", placeholder: "e.g. Internet Subscription" },
-      { key: "amount", label: "Amount (RON)", placeholder: "0", nonNegativeNumber: true },
-      { key: "nextDueDate", label: "Next due date", placeholder: "", type: "date", required: false },
+      { key: "title", label: "Titlu", placeholder: "ex. Abonament internet" },
+      { key: "amount", label: "Sumă (lei)", placeholder: "0", nonNegativeNumber: true },
+      { key: "nextDueDate", label: "Următoarea plată", placeholder: "", type: "date", required: false },
       {
         key: "frequency",
-        label: "Frequency",
+        label: "Frecvență",
         placeholder: "",
         type: "select",
         required: false,
         defaultValue: "monthly",
         options: [
-          { value: "weekly", label: "Weekly" },
-          { value: "monthly", label: "Monthly" },
-          { value: "yearly", label: "Yearly" },
+          { value: "weekly", label: "Săptămânal" },
+          { value: "monthly", label: "Lunar" },
+          { value: "yearly", label: "Anual" },
         ],
       },
     ],
-    submitLabel: "Add Recurring",
-    emptyLabel: "No recurring payments yet.",
+    submitLabel: "Adaugă plata",
+    emptyLabel: "Nicio plată recurentă încă.",
     entries: (data) => data.recurringEntries,
     buildEntry: (values, existing?: HomeRecurringEntry): HomeRecurringEntry => ({
       id: existing?.id ?? makeId("rec"),
@@ -444,9 +454,9 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
           id: entry.id,
           title: entry.title,
           subtitle: taskTier
-            ? `${entry.frequency} · ${dueSubtitle(remaining, "Due")}`
-            : `${entry.frequency} · next ${formatDate(entry.nextDueDate)}`,
-          amount: entry.amount.toLocaleString("en-US"),
+            ? `${FREQUENCY_LABEL[entry.frequency] ?? entry.frequency}, ${dueSubtitle(remaining, "Due")}`
+            : `${FREQUENCY_LABEL[entry.frequency] ?? entry.frequency}, următoarea pe ${formatDate(entry.nextDueDate)}`,
+          amount: `${entry.amount.toLocaleString("ro-RO")} lei`,
           isRecurring: true,
           urgencyTier: taskTier,
         };
@@ -455,14 +465,14 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
   },
   {
     key: "supplies",
-    label: "Supplies",
+    label: "Provizii",
     icon: "basket-outline",
     fields: [
-      { key: "name", label: "Name", placeholder: "e.g. Toilet Paper" },
-      { key: "quantity", label: "Quantity", placeholder: "e.g. 12 rolls", nonNegativeNumber: true },
+      { key: "name", label: "Nume", placeholder: "ex. Hârtie igienică" },
+      { key: "quantity", label: "Cantitate", placeholder: "ex. 12", nonNegativeNumber: true },
     ],
-    submitLabel: "Add Supply",
-    emptyLabel: "No supplies tracked yet.",
+    submitLabel: "Adaugă provizia",
+    emptyLabel: "Nicio provizie urmărită încă.",
     entries: (data) => data.supplyEntries,
     buildEntry: (values, existing?: HomeSupplyEntry): HomeSupplyEntry => ({
       id: existing?.id ?? makeId("sup"),
@@ -493,7 +503,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       data.supplyEntries.map((entry) => ({
         id: entry.id,
         title: entry.name,
-        subtitle: `${entry.category} · ${entry.quantity} ${entry.unit}`,
+        subtitle: `${entry.category}, ${entry.quantity} ${entry.unit}`,
       })),
   },
 ];

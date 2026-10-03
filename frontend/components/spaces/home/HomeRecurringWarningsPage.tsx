@@ -1,7 +1,9 @@
 import React, { useState } from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useTheme, type ThemeColors } from "@/lib/theme";
+import { View, ScrollView } from "react-native";
+import { useTheme } from "@/lib/theme";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { TopBar, Identity, SectionHeader, Group, Row, IconWell, Chip, EmptyState } from "@/components/ui/primitives";
+import { roCount } from "@/lib/format";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 
 import type { HomeData } from "./home.data.types";
@@ -20,10 +22,10 @@ const COLLAPSED_ROW_COUNT = 3;
 
 const TIER_ORDER: RecurringWarningTier[] = ["red", "orangeToday", "orangeDays", "yellow"];
 const TIER_SECTION_TITLE: Record<RecurringWarningTier, string> = {
-  red: "RESTANT",
-  orangeToday: "AZI",
-  orangeDays: "ÎN 1-2 ZILE",
-  yellow: "ÎN 3-4 ZILE",
+  red: "Restante",
+  orangeToday: "Azi",
+  orangeDays: "În 1-2 zile",
+  yellow: "În 3-4 zile",
 };
 
 // Sections above already group by URGENCY -- this is the other axis
@@ -51,18 +53,10 @@ export type HomeRecurringWarningsPageProps = {
 
 // Built from `colors` (not a module-level constant) so it actually flips
 // with dark mode -- the old hardcoded hex here never did.
-function tierStyle(colors: ThemeColors): Record<RecurringWarningTier, { color: string; bg: string; label: (row: RecurringWarningRow) => string }> {
-  const colorFor = (tier: RecurringWarningTier) => recurringWarningTierColor(tier, colors);
-  // Same tint recipe as severityTint (hex + alpha suffix) -- can't reuse
-  // it directly since it only accepts the 3-value SeverityTier, not this
-  // page's own 4-stop gradient.
-  const bgFor = (tier: RecurringWarningTier) => `${colorFor(tier)}11`;
-  return {
-    red: { color: colorFor("red"), bg: bgFor("red"), label: () => "RESTANT" },
-    orangeToday: { color: colorFor("orangeToday"), bg: bgFor("orangeToday"), label: () => "Azi" },
-    orangeDays: { color: colorFor("orangeDays"), bg: bgFor("orangeDays"), label: (r) => `${r.daysRemaining} zile` },
-    yellow: { color: colorFor("yellow"), bg: bgFor("yellow"), label: (r) => `${r.daysRemaining} zile` },
-  };
+function rowChip(row: RecurringWarningRow): string {
+  if (row.tier === "red") return row.daysRemaining < 0 ? `Restant ${roCount(-row.daysRemaining, "zi", "zile")}` : "Restant";
+  if (row.tier === "orangeToday") return "Azi";
+  return row.daysRemaining === 1 ? "Mâine" : `în ${roCount(row.daysRemaining, "zi", "zile")}`;
 }
 
 /** Opened from the Restanțe card on HomeDashboard -- every task/
@@ -72,70 +66,27 @@ function tierStyle(colors: ThemeColors): Record<RecurringWarningTier, { color: s
  * to its title -- per explicit user request, replacing the old single
  * flat list. */
 export function HomeRecurringWarningsPage({ homeData, onBack, onResolvePress }: HomeRecurringWarningsPageProps) {
-  const { colors, spacing, radius } = useTheme();
-  const TIER_STYLE = tierStyle(colors);
+  const { colors, spacing } = useTheme();
 
   const { rows } = getRecurringTaskWarnings(homeData);
-  const rowsByTier: Record<RecurringWarningTier, RecurringWarningRow[]> = {
-    red: [],
-    orangeToday: [],
-    orangeDays: [],
-    yellow: [],
-  };
+  const rowsByTier: Record<RecurringWarningTier, RecurringWarningRow[]> = { red: [], orangeToday: [], orangeDays: [], yellow: [] };
   rows.forEach((row) => rowsByTier[row.tier].push(row));
 
   return (
     <SwipeBackView onBack={onBack} style={{ backgroundColor: colors.surface }}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: 100 }}
+        contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 100, gap: spacing.section }}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.xl }}>
-          <Pressable
-            onPress={onBack}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: radius.pill,
-              backgroundColor: "transparent",
-              borderWidth: 1,
-              borderColor: colors.border,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Ionicons name="chevron-back" size={20} color={colors.onSurface} />
-          </Pressable>
-          <Text style={{ fontSize: 26, fontWeight: "800", letterSpacing: -0.4, color: colors.onSurface }}>
-            Restanțe
-          </Text>
-        </View>
+        <TopBar onBack={onBack} />
+        <Identity color={SPACE_IDENTITY_COLORS.home} kicker="Casă" title="Restanțe" subtitle="Atinge un rând ca să-l rezolvi." />
 
         {rows.length > 0 ? (
-          <View style={{ gap: spacing.xl }}>
-            {TIER_ORDER.filter((tier) => rowsByTier[tier].length > 0).map((tier) => (
-              <TierSection
-                key={tier}
-                title={TIER_SECTION_TITLE[tier]}
-                rows={rowsByTier[tier]}
-                style={TIER_STYLE[tier]}
-                onResolvePress={onResolvePress}
-                colors={colors}
-                spacing={spacing}
-                radius={radius}
-              />
-            ))}
-          </View>
+          TIER_ORDER.filter((tier) => rowsByTier[tier].length > 0).map((tier) => (
+            <TierSection key={tier} tier={tier} rows={rowsByTier[tier]} onResolvePress={onResolvePress} />
+          ))
         ) : (
-          <View style={{ alignItems: "center", paddingVertical: spacing.xl, gap: spacing.sm }}>
-            <Ionicons name="checkmark-done-outline" size={26} color={colors.onSurfaceTertiary} />
-            <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>
-              Nimic nu se apropie de scadență.
-            </Text>
-          </View>
+          <EmptyState icon="checkmark-done-outline" title="Ești la zi" message="Nimic nu se apropie de scadență." />
         )}
       </ScrollView>
     </SwipeBackView>
@@ -143,98 +94,38 @@ export function HomeRecurringWarningsPage({ homeData, onBack, onResolvePress }: 
 }
 
 function TierSection({
-  title,
+  tier,
   rows,
-  style,
   onResolvePress,
-  colors,
-  spacing,
-  radius,
 }: {
-  title: string;
+  tier: RecurringWarningTier;
   rows: RecurringWarningRow[];
-  style: { color: string; bg: string; label: (row: RecurringWarningRow) => string };
   onResolvePress: (row: RecurringWarningRow) => void;
-  colors: ThemeColors;
-  spacing: any;
-  radius: any;
 }) {
+  const { colors, spacing } = useTheme();
   const [expanded, setExpanded] = useState(false);
+  const color = recurringWarningTierColor(tier, colors);
   const canCollapse = rows.length > COLLAPSED_ROW_COUNT;
   const visibleRows = expanded ? rows : rows.slice(0, COLLAPSED_ROW_COUNT);
 
   return (
-    <View>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.sm }}>
-        <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 1, color: style.color }}>
-          {title} ({rows.length})
-        </Text>
-        {canCollapse ? (
-          <Pressable
-            onPress={() => setExpanded((current) => !current)}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={expanded ? "Show less" : "Show more"}
-            style={{ flexDirection: "row", alignItems: "center", gap: 2 }}
-          >
-            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurfaceTertiary }}>
-              {expanded ? "Show less" : "Show more"}
-            </Text>
-            <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={13} color={colors.onSurfaceTertiary} />
-          </Pressable>
-        ) : null}
-      </View>
-
-      <View style={{ gap: spacing.sm }}>
+    <View style={{ gap: spacing.sm }}>
+      <SectionHeader
+        title={`${TIER_SECTION_TITLE[tier]} (${rows.length})`}
+        action={canCollapse ? { label: expanded ? "Arată mai puțin" : "Arată tot", onPress: () => setExpanded((c) => !c) } : undefined}
+      />
+      <Group inset={68}>
         {visibleRows.map((row) => (
-          <Pressable
+          <Row
             key={row.id}
             onPress={() => onResolvePress(row)}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: spacing.md,
-              padding: spacing.md + 1,
-              borderRadius: radius.lg,
-              backgroundColor: style.bg,
-              borderWidth: 1,
-              borderColor: style.color,
-            }}
-          >
-            <View
-              style={{
-                width: 34,
-                height: 34,
-                borderRadius: radius.md,
-                backgroundColor: `${style.color}22`,
-                alignItems: "center",
-                justifyContent: "center",
-                flexShrink: 0,
-              }}
-            >
-              <Ionicons name={row.isRecurring ? "repeat-outline" : "alert-circle-outline"} size={16} color={style.color} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 14.5, fontWeight: "700", color: colors.onSurface }} numberOfLines={1}>
-                {row.title}
-              </Text>
-              <Text style={{ marginTop: 2, fontSize: 11.5, fontWeight: "600", color: colors.onSurfaceTertiary }}>
-                {KIND_LABEL[row.kind]}
-              </Text>
-            </View>
-            {row.tier === "red" ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: `${style.color}22` }}>
-                <View style={{ width: 13, height: 13, borderRadius: 7, backgroundColor: style.color, alignItems: "center", justifyContent: "center" }}>
-                  <Text style={{ fontSize: 9, fontWeight: "900", color: colors.surface, lineHeight: 11 }}>!</Text>
-                </View>
-                <Text style={{ fontSize: 11, fontWeight: "800", color: style.color }}>{style.label(row)}</Text>
-              </View>
-            ) : (
-              <Text style={{ fontSize: 11.5, fontWeight: "800", color: style.color }}>{style.label(row)}</Text>
-            )}
-          </Pressable>
+            leading={<IconWell icon={row.isRecurring ? "repeat-outline" : "alert-circle-outline"} color={color} />}
+            title={row.title}
+            subtitle={KIND_LABEL[row.kind]}
+            trailing={tier === "yellow" ? <Chip label={rowChip(row)} color={colors.onSurfaceTertiary} filled={false} /> : <Chip label={rowChip(row)} color={color} icon={tier === "red" ? "alert-circle" : undefined} />}
+          />
         ))}
-      </View>
+      </Group>
     </View>
   );
 }

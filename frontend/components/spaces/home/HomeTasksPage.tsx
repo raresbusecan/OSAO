@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, Pressable, StyleSheet } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
   NestableScrollContainer,
@@ -9,6 +9,9 @@ import {
 import { useTheme } from "@/lib/theme";
 import { SwipeRow } from "@/components/spaces/SwipeRow";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
+import { PressableScale } from "@/components/ui/PressableScale";
+import { TopBar, CircleButton, Identity, SectionHeader, Chip, EmptyState } from "@/components/ui/primitives";
+import { roCount, roDate, lei } from "@/lib/format";
 
 import type { HomeData } from "./home.data.types";
 import type { HomeTaskEntry } from "@/lib/spaces/home/home.types";
@@ -16,7 +19,6 @@ import {
   getHomeTasksView,
   recurringWarningTierColor,
   type HomeTaskRow,
-  type RecurringWarningTier,
 } from "@/lib/spaces/home/calculations/dashboard.calculations";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 
@@ -29,116 +31,81 @@ export type HomeTasksPageProps = {
    * opens HomeTaskResolveSheet for the price, everything else completes
    * instantly. Not named onToggleComplete because it isn't always one. */
   onCheckboxPress: (entry: HomeTaskEntry) => void;
-  /** The row's own trash icon -- deletes directly, without going
-   * through the edit form first. Caller is expected to confirm before
-   * actually deleting (see HomeDashboard's handleTaskRowDelete). */
+  /** Swipe-left delete. Caller is expected to confirm before actually
+   * deleting (see HomeDashboard's handleTaskRowDelete). */
   onDelete: (entry: HomeTaskEntry) => void;
-  /** Drag-reorder in ALL -- fires with that section's full id list in
-   * its new order every time a drag ends (not just the one row that
-   * moved), same as Spaces' own drag-reorder on the Spaces tab. */
+  /** Drag-reorder in "Toate" -- fires with that section's full id list
+   * in its new order every time a drag ends. */
   onReorder: (orderedIds: string[]) => void;
 };
 
-function formatDate(dateString: string): string {
-  const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) return dateString;
-  return date.toLocaleDateString("en-US", { day: "numeric", month: "short" });
+const HOME = SPACE_IDENTITY_COLORS.home!;
+
+/** The urgency chip for a task: Restant / Azi / în N zile. */
+function TaskChip({ row }: { row: HomeTaskRow }) {
+  const { colors } = useTheme();
+  if (!row.tier && row.daysRemaining == null) return null;
+  const color = row.tier ? recurringWarningTierColor(row.tier, colors) : colors.onSurfaceTertiary;
+  if (row.tier === "red") {
+    const late = Math.max(1, Math.abs(row.daysRemaining ?? 1));
+    return <Chip label={`Restant ${roCount(late, "zi", "zile")}`} color={colors.error} icon="alert-circle" />;
+  }
+  if (row.tier === "orangeToday") return <Chip label="Azi" color={colors.warning} />;
+  if (row.daysRemaining != null) {
+    const label = row.daysRemaining === 1 ? "Mâine" : `în ${roCount(row.daysRemaining, "zi", "zile")}`;
+    return row.tier ? <Chip label={label} color={color} /> : <Chip label={label} color={colors.onSurfaceTertiary} filled={false} />;
+  }
+  return null;
 }
 
-// Same mapping (recurringWarningTierColor) as HomeRecurringWarningsPage's
-// own tierStyle -- a task reads the same color here as it would on the
-// Restanțe page.
-function tierColor(tier: RecurringWarningTier | undefined, colors: any): string {
-  if (!tier) return colors.onSurfaceTertiary;
-  return recurringWarningTierColor(tier, colors);
-}
-
-function tierLabel(row: HomeTaskRow): string {
-  if (row.tier === "red") return "RESTANT";
-  if (row.tier === "orangeToday") return "Azi";
-  if (row.daysRemaining != null) return `${row.daysRemaining} zile`;
-  return "";
-}
-
-export function HomeTasksPage({
-  homeData,
-  onBack,
-  onAdd,
-  onEdit,
-  onCheckboxPress,
-  onDelete,
-  onReorder,
-}: HomeTasksPageProps) {
+/**
+ * Home -> Task-uri, 2026-10 redesign. "+" in the top bar adds (always
+ * reachable, never buried under a long list); rows are one big target:
+ * tap the round check to complete (a purchase task asks for the price),
+ * tap the row to edit, swipe right to resolve / left to delete, and in
+ * "Toate" long-press to drag into a new order.
+ */
+export function HomeTasksPage({ homeData, onBack, onAdd, onEdit, onCheckboxPress, onDelete, onReorder }: HomeTasksPageProps) {
   const { colors, spacing, radius } = useTheme();
 
   const { dueSoon, upcoming, recentDone } = getHomeTasksView(homeData);
-
   const findEntry = (id: string) => homeData.taskEntries.find((t) => t.id === id)!;
+  const openCount = dueSoon.length + upcoming.length;
+
+  const groupStyle = { backgroundColor: colors.surfaceSecondary, borderRadius: radius.card, overflow: "hidden" as const };
 
   return (
     <SwipeBackView onBack={onBack} style={{ backgroundColor: colors.surface }}>
       <NestableScrollContainer
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingTop: spacing.md, paddingBottom: 100 }}
+        contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 100, gap: spacing.section }}
       >
-        {/* Header -- no per-page Archive button anymore, see
-            HomeArchivePage: one space-level entry point on Home's own
-            main dashboard instead (matches Car's Archive/History
-            pattern, always visible there, not scattered per category). */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: spacing.xl }}>
-          <Pressable
-            onPress={onBack}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: radius.pill,
-              backgroundColor: "transparent",
-              borderWidth: 1,
-              borderColor: colors.border,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Ionicons name="chevron-back" size={20} color={colors.onSurface} />
-          </Pressable>
-          <View
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: radius.md,
-              backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Ionicons name="checkmark-circle-outline" size={16} color={SPACE_IDENTITY_COLORS.home} />
-          </View>
-          <Text style={{ fontSize: 26, fontWeight: "800", letterSpacing: -0.4, color: colors.onSurface }}>
-            Tasks
-          </Text>
-        </View>
+        <TopBar onBack={onBack}>
+          <CircleButton testID="home-task-add" icon="add" label="Task nou" tone={HOME} onPress={onAdd} />
+        </TopBar>
 
-        {/* Add -- always the first row of the list, above every section
-            (never buried at the bottom of ALL, which could be scrolled
-            past on a long list), and not a floating circle so it never
-            duplicates/overlaps the shared "+" FAB. */}
-        <AddTaskRow onPress={onAdd} colors={colors} spacing={spacing} radius={radius} />
+        <Identity
+          color={HOME}
+          kicker="Casă"
+          title="Task-uri"
+          subtitle={
+            openCount === 0 && recentDone.length === 0
+              ? null
+              : [openCount > 0 ? `${openCount} de făcut` : null, recentDone.length > 0 ? `${recentDone.length} rezolvat${recentDone.length === 1 ? "" : "e"} azi` : null]
+                  .filter(Boolean)
+                  .join(", ")
+          }
+        />
 
-        {/* DUE SOON */}
         {dueSoon.length > 0 ? (
-          <View style={{ marginBottom: spacing.xl }}>
-            <SectionTitle title="DUE SOON" colors={colors} />
-            <View style={{ gap: spacing.sm }}>
-              {dueSoon.map((row) => (
-                <TaskRowCard
+          <View style={{ gap: spacing.sm }}>
+            <SectionHeader title="În curând" />
+            <View style={groupStyle}>
+              {dueSoon.map((row, i) => (
+                <TaskRow
                   key={row.id}
                   row={row}
-                  colors={colors}
-                  spacing={spacing}
-                  radius={radius}
+                  first={i === 0}
                   onToggle={() => onCheckboxPress(findEntry(row.id))}
                   onPress={() => onEdit(findEntry(row.id))}
                   onDelete={() => onDelete(findEntry(row.id))}
@@ -148,18 +115,16 @@ export function HomeTasksPage({
           </View>
         ) : null}
 
-        {/* RECENT (done today) */}
         {recentDone.length > 0 ? (
-          <View style={{ marginBottom: spacing.xl }}>
-            <SectionTitle title="RECENT (Azi)" colors={colors} />
-            <View style={{ backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, overflow: "hidden" }}>
-              {recentDone.map((row, index) => (
-                <DoneRow
+          <View style={{ gap: spacing.sm }}>
+            <SectionHeader title="Rezolvate azi" />
+            <View style={groupStyle}>
+              {recentDone.map((row, i) => (
+                <TaskRow
                   key={row.id}
                   row={row}
-                  colors={colors}
-                  spacing={spacing}
-                  last={index === recentDone.length - 1}
+                  first={i === 0}
+                  done
                   onToggle={() => onCheckboxPress(findEntry(row.id))}
                   onPress={() => onEdit(findEntry(row.id))}
                 />
@@ -168,278 +133,143 @@ export function HomeTasksPage({
           </View>
         ) : null}
 
-        {/* ALL -- everything else not yet done. Long-press a row (see
-            UpcomingRow's own onLongPress={drag}) to pick it up and drag
-            it anywhere in this list -- NestableDraggableFlatList instead
-            of the plain DraggableFlatList used on the Spaces tab, since
-            this list lives inside the page's own outer scroll (the
-            "Nestable" pair is the library's own answer to exactly that:
-            one draggable section among otherwise-static page content). */}
-        <View>
-          <SectionTitle title="ALL" colors={colors} />
+        {/* "Toate" -- everything else not yet done. Long-press a row to
+            drag it: NestableDraggableFlatList because this list lives
+            inside the page's own outer scroll. */}
+        <View style={{ gap: spacing.sm }}>
+          <SectionHeader title="Toate" />
           {upcoming.length > 0 ? (
-            <View style={{ backgroundColor: colors.surfaceSecondary, borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, overflow: "hidden" }}>
+            <View style={groupStyle}>
               <NestableDraggableFlatList
                 data={upcoming}
                 keyExtractor={(row) => row.id}
                 onDragEnd={({ data }) => onReorder(data.map((row) => row.id))}
                 renderItem={({ item: row, drag, isActive, getIndex }: RenderItemParams<HomeTaskRow>) => (
-                  <UpcomingRow
+                  <TaskRow
                     row={row}
-                    colors={colors}
-                    spacing={spacing}
-                    last={getIndex() === upcoming.length - 1}
+                    first={getIndex() === 0}
                     onToggle={() => onCheckboxPress(findEntry(row.id))}
                     onPress={() => onEdit(findEntry(row.id))}
                     onDelete={() => onDelete(findEntry(row.id))}
                     onDrag={drag}
                     isActive={isActive}
+                    showDate
                   />
                 )}
               />
             </View>
           ) : (
-            <View style={{ alignItems: "center", paddingVertical: spacing.xl, gap: spacing.sm }}>
-              <Ionicons name="checkmark-done-outline" size={26} color={colors.onSurfaceTertiary} />
-              <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Nimic altceva de făcut.</Text>
-            </View>
+            <EmptyState icon="checkmark-done-outline" message={dueSoon.length > 0 ? "Nimic altceva de făcut." : "Niciun task. Adaugă unul cu „+”."} />
           )}
         </View>
+
+        {openCount > 0 ? (
+          <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, textAlign: "center" }}>
+            Glisează dreapta ca să rezolvi, stânga ca să ștergi. Ține apăsat în „Toate” ca să muți.
+          </Text>
+        ) : null}
       </NestableScrollContainer>
     </SwipeBackView>
   );
 }
 
-function SectionTitle({ title, colors }: { title: string; colors: any }) {
-  return (
-    <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 1, color: colors.onSurfaceTertiary, marginBottom: 10 }}>
-      {title}
-    </Text>
-  );
-}
-
-function AddTaskRow({
-  onPress,
-  colors,
-  spacing,
-  radius,
-}: {
-  onPress: () => void;
-  colors: any;
-  spacing: any;
-  radius: any;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel="Add task"
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: 8,
-        height: 46,
-        borderRadius: radius.md,
-        backgroundColor: colors.onSurface,
-        marginBottom: spacing.xl,
-      }}
-    >
-      <Ionicons name="add" size={15} color={colors.surface} />
-      <Text style={{ fontSize: 13.5, fontWeight: "800", color: colors.surface }}>Add Task</Text>
-    </Pressable>
-  );
-}
-
-function Checkbox({ onPress, colors }: { onPress: () => void; colors: any }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      hitSlop={12}
-      accessibilityRole="button"
-      accessibilityLabel="Mark done"
-      style={{
-        width: 22,
-        height: 22,
-        borderRadius: 6,
-        borderWidth: 2,
-        // colors.success, not a neutral border -- the same "this
-        // resolves something" signal every other resolve-style checkbox
-        // in the app now uses (see HomeCategorySection.tsx's own resolve
-        // checkbox), so it reads as one consistent control before it's
-        // even tapped, not just once DoneRow below fills it in.
-        borderColor: colors.success,
-        flexShrink: 0,
-      }}
-    />
-  );
-}
-
-function TaskRowCard({
+/** One task: round check, title (+ purchase/recurring marks and date),
+ * urgency chip. `done` = completed today (filled check, struck title,
+ * tap the check to undo). */
+function TaskRow({
   row,
-  colors,
-  spacing,
-  radius,
-  onToggle,
-  onPress,
-  onDelete,
-}: {
-  row: HomeTaskRow;
-  colors: any;
-  spacing: any;
-  radius: any;
-  onToggle: () => void;
-  onPress: () => void;
-  onDelete: () => void;
-}) {
-  const color = tierColor(row.tier, colors);
-
-  return (
-    <SwipeRow onResolve={onToggle} onDelete={onDelete} cornerRadius={radius.sm} colors={colors}>
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.md,
-        padding: spacing.md,
-        borderRadius: radius.sm,
-        backgroundColor: colors.surfaceSecondary,
-        borderWidth: 1,
-        // Colored for any of the 4 urgency tiers now, not just overdue
-        // -- 4 days / 2 days / today / restant all get their own color,
-        // same as Restanțe.
-        borderColor: row.tier ? color : colors.border,
-      }}
-    >
-      <Checkbox onPress={onToggle} colors={colors} />
-      <Pressable onPress={onPress} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-        {row.isPurchase ? <Ionicons name="cart-outline" size={15} color={colors.onSurfaceTertiary} /> : null}
-        {row.isRecurring ? <Ionicons name="repeat-outline" size={15} color={colors.onSurfaceTertiary} /> : null}
-        <Text style={{ flex: 1, fontSize: 14.5, fontWeight: "700", color: colors.onSurface }} numberOfLines={1}>
-          {row.title}
-        </Text>
-        {row.tier === "red" ? (
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: radius.pill, backgroundColor: `${color}22` }}>
-            <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: color, alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ fontSize: 9, fontWeight: "900", color: colors.surface, lineHeight: 11 }}>!</Text>
-            </View>
-            <Text style={{ fontSize: 11, fontWeight: "800", color }}>{tierLabel(row)}</Text>
-          </View>
-        ) : (
-          <Text style={{ fontSize: 11.5, fontWeight: "800", color }}>{tierLabel(row)}</Text>
-        )}
-      </Pressable>
-      {/* Direct delete, same trash icon/color as HomeCategorySection's
-          own row delete -- no longer only reachable via the edit form. */}
-      <Pressable onPress={onDelete} hitSlop={{ top: 14, bottom: 14, left: 8, right: 14 }} accessibilityRole="button" accessibilityLabel="Delete task" style={{ padding: 2 }}>
-        <Ionicons name="trash-outline" size={16} color={colors.error} />
-      </Pressable>
-    </View>
-    </SwipeRow>
-  );
-}
-
-function DoneRow({
-  row,
-  colors,
-  spacing,
-  last,
-  onToggle,
-  onPress,
-}: {
-  row: HomeTaskRow;
-  colors: any;
-  spacing: any;
-  last: boolean;
-  onToggle: () => void;
-  onPress: () => void;
-}) {
-  return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.md,
-        paddingHorizontal: spacing.lg,
-        paddingVertical: spacing.md,
-        borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
-        borderBottomColor: colors.border,
-      }}
-    >
-      <Pressable onPress={onToggle} hitSlop={12} accessibilityRole="button" accessibilityLabel="Undo" style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: colors.success, alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        <Ionicons name="checkmark" size={13} color={colors.surface} />
-      </Pressable>
-      <Pressable onPress={onPress} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-        <Text style={{ flex: 1, fontSize: 14.5, fontWeight: "600", color: colors.onSurfaceTertiary, textDecorationLine: "line-through" }} numberOfLines={1}>
-          {row.title}
-        </Text>
-        {row.isPurchase && row.price ? (
-          <Text style={{ fontSize: 12.5, fontWeight: "700", color: colors.onSurfaceTertiary }}>
-            {row.price.toLocaleString("en-US")} RON
-          </Text>
-        ) : null}
-      </Pressable>
-    </View>
-  );
-}
-
-function UpcomingRow({
-  row,
-  colors,
-  spacing,
-  last,
+  first,
+  done,
   onToggle,
   onPress,
   onDelete,
   onDrag,
   isActive,
+  showDate,
 }: {
   row: HomeTaskRow;
-  colors: any;
-  spacing: any;
-  last: boolean;
+  first: boolean;
+  done?: boolean;
   onToggle: () => void;
   onPress: () => void;
-  onDelete: () => void;
-  /** Long-press-to-drag, from NestableDraggableFlatList's own
-   * renderItem params -- same onLongPress={drag} pattern the Spaces
-   * tab's card grid already uses. */
-  onDrag: () => void;
-  isActive: boolean;
+  onDelete?: () => void;
+  onDrag?: () => void;
+  isActive?: boolean;
+  showDate?: boolean;
 }) {
+  const { colors, spacing } = useTheme();
+
+  const meta = [
+    row.isPurchase && done && row.price ? lei(row.price) : null,
+    showDate && !row.tier ? (row.dueDate ? roDate(row.dueDate) : "Fără dată") : null,
+  ].filter(Boolean).join(", ");
+
+  const body = (
+    <View>
+      {!first ? <View style={{ height: 1, marginLeft: 54, backgroundColor: colors.border }} /> : null}
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          gap: spacing.md,
+          paddingLeft: spacing.md + 2,
+          paddingRight: spacing.lg,
+          minHeight: 58,
+          backgroundColor: isActive ? colors.surfaceTertiary : colors.surfaceSecondary,
+        }}
+      >
+        <Pressable
+          onPress={onToggle}
+          hitSlop={10}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: !!done }}
+          accessibilityLabel={done ? `Anulează: ${row.title}` : `Rezolvă: ${row.title}`}
+          style={{
+            width: 26,
+            height: 26,
+            borderRadius: 13,
+            borderWidth: done ? 0 : 2,
+            borderColor: colors.control,
+            backgroundColor: done ? HOME : "transparent",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {done ? <Ionicons name="checkmark" size={15} color="#FFFFFF" /> : null}
+        </Pressable>
+        <PressableScale
+          onPress={onPress}
+          onLongPress={onDrag}
+          delayLongPress={350}
+          disabled={isActive}
+          scaleTo={1}
+          accessibilityRole="button"
+          accessibilityLabel={row.title}
+          style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingVertical: spacing.sm + 2, opacity: done ? 0.5 : 1 }}
+        >
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              {row.isPurchase ? <Ionicons name="cart-outline" size={14} color={colors.onSurfaceTertiary} /> : null}
+              {row.isRecurring ? <Ionicons name="repeat-outline" size={14} color={colors.onSurfaceTertiary} /> : null}
+              <Text
+                style={{ flex: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface, textDecorationLine: done ? "line-through" : "none" }}
+                numberOfLines={2}
+              >
+                {row.title}
+              </Text>
+            </View>
+            {meta ? <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, marginTop: 2 }}>{meta}</Text> : null}
+          </View>
+          {!done ? <TaskChip row={row} /> : null}
+        </PressableScale>
+      </View>
+    </View>
+  );
+
+  if (!onDelete) return body;
   return (
     <SwipeRow onResolve={onToggle} onDelete={onDelete} cornerRadius={0} colors={colors}>
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.md,
-        paddingHorizontal: spacing.lg,
-        paddingVertical: spacing.md,
-        borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
-        borderBottomColor: colors.border,
-        backgroundColor: isActive ? colors.surfaceTertiary : colors.surfaceSecondary,
-      }}
-    >
-      <Checkbox onPress={onToggle} colors={colors} />
-      <Pressable
-        onPress={onPress}
-        onLongPress={onDrag}
-        disabled={isActive}
-        style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm }}
-      >
-        {row.isPurchase ? <Ionicons name="cart-outline" size={14} color={colors.onSurfaceTertiary} /> : null}
-        {row.isRecurring ? <Ionicons name="repeat-outline" size={14} color={colors.onSurfaceTertiary} /> : null}
-        <Text style={{ flex: 1, fontSize: 14.5, fontWeight: "600", color: colors.onSurface }} numberOfLines={1}>
-          {row.title}
-        </Text>
-        <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>{row.dueDate ? formatDate(row.dueDate) : "Fără dată"}</Text>
-        <Ionicons name="chevron-forward" size={15} color={colors.onSurfaceTertiary} />
-      </Pressable>
-      <Pressable onPress={onDelete} hitSlop={{ top: 14, bottom: 14, left: 8, right: 14 }} accessibilityRole="button" accessibilityLabel="Delete task" style={{ padding: 2 }}>
-        <Ionicons name="trash-outline" size={16} color={colors.error} />
-      </Pressable>
-    </View>
+      {body}
     </SwipeRow>
   );
 }
