@@ -1,6 +1,8 @@
 import React from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { PressableScale } from "@/components/ui/PressableScale";
+import { motion } from "@/lib/motion";
 import {
   recurringWarningTierColor,
   type RecurringWarningTier,
@@ -14,11 +16,12 @@ export type HomeRestanteCardProps = {
   radius: any;
 };
 
+// Most urgent first (the approved redesign mockup's order).
 const COLUMNS: { tier: RecurringWarningTier; label: string }[] = [
-  { tier: "yellow", label: "4 zile" },
-  { tier: "orangeDays", label: "2 zile" },
-  { tier: "orangeToday", label: "Azi" },
   { tier: "red", label: "Restant" },
+  { tier: "orangeToday", label: "Azi" },
+  { tier: "orangeDays", label: "2 zile" },
+  { tier: "yellow", label: "4 zile" },
 ];
 
 /** Rendered on HomeDashboard's main page (HomeTasksPage's old inline
@@ -35,43 +38,36 @@ export function HomeRestanteCard({ counts, onPress, colors, spacing, radius }: H
   const visibleColumns = COLUMNS.filter((c) => counts[c.tier] > 0);
 
   return (
-    <Pressable
+    <PressableScale
+      testID="home-restante-card"
       onPress={onPress}
+      scaleTo={motion.scale.card}
       accessibilityRole="button"
-      accessibilityLabel={`View recurring task warnings, ${total} total`}
+      accessibilityLabel={`Restanțe: ${total}. Vezi lista`}
       style={{
-        marginBottom: spacing.xl,
-        padding: spacing.lg,
-        borderRadius: radius.sm,
+        flexDirection: "row",
+        alignItems: "center",
+        gap: spacing.md,
+        paddingHorizontal: spacing.lg + 2,
+        paddingVertical: spacing.lg,
+        borderRadius: radius.lg,
         backgroundColor: colors.surfaceSecondary,
-        borderWidth: 1,
-        borderColor: colors.border,
       }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.md }}>
-        <Text style={{ fontSize: 13, fontWeight: "800", color: colors.onSurface }}>Restanțe ({total})</Text>
-        <Ionicons name="chevron-forward" size={15} color={colors.onSurfaceTertiary} />
+      <View style={{ flex: 1, gap: spacing.sm }}>
+        <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>Restanțe ({total})</Text>
+        <View style={{ flexDirection: "row", gap: spacing.lg + 2 }}>
+          {visibleColumns.map((column) => (
+            <View key={column.tier}>
+              <Text style={{ fontSize: 20, fontWeight: "600", color: recurringWarningTierColor(column.tier, colors) }}>
+                {counts[column.tier]}
+              </Text>
+              <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{column.label}</Text>
+            </View>
+          ))}
+        </View>
       </View>
-      <View style={{ flexDirection: "row" }}>
-        {visibleColumns.map((column, index) => (
-          <WarningCount
-            key={column.tier}
-            value={counts[column.tier]}
-            label={column.label}
-            color={recurringWarningTierColor(column.tier, colors)}
-            last={index === visibleColumns.length - 1}
-          />
-        ))}
-      </View>
-    </Pressable>
-  );
-}
-
-function WarningCount({ value, label, color, last }: { value: number; label: string; color: string; last?: boolean }) {
-  return (
-    <View style={{ flex: 1, alignItems: "center", borderRightWidth: last ? 0 : 1, borderRightColor: `${color}22` }}>
-      <Text style={{ fontSize: 20, fontWeight: "800", color }}>{value}</Text>
-      <Text style={{ fontSize: 10.5, fontWeight: "700", color: "#A3A3A3", marginTop: 2 }}>{label}</Text>
-    </View>
+      <Ionicons name="chevron-forward" size={18} color={colors.onSurfaceTertiary} />
+    </PressableScale>
   );
 }

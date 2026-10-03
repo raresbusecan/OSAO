@@ -5,7 +5,9 @@ import { useRouter } from "expo-router";
 import { useTheme } from "@/lib/theme";
 import { confirmAction, notifyAction } from "@/lib/confirm";
 import { severityColor, type SeverityTier } from "@/lib/statusColors";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { PressableScale } from "@/components/ui/PressableScale";
+import { IconWell } from "@/components/ui/primitives";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 
 import type { HomeData } from "./home.data.types";
@@ -59,6 +61,16 @@ type CategoryBadge = { count: number; severity: SeverityTier } | null;
  * recurringWarningTierColor), so no two dots on the same tile ever look
  * identical either. */
 type TierDots = { tier: RecurringWarningTier; count: number }[];
+
+/** A small filled count on a category tile -- urgency tier or badge
+ * color, with black/white ink picked for contrast (readableTextOn). */
+function CountDot({ count, color }: { count: number; color: string }) {
+  return (
+    <View style={{ minWidth: 20, height: 20, paddingHorizontal: 5, borderRadius: 10, backgroundColor: color, alignItems: "center", justifyContent: "center" }}>
+      <Text style={{ fontSize: 11, fontWeight: "600", color: readableTextOn(color) }}>{count}</Text>
+    </View>
+  );
+}
 
 /** Black or white, whichever contrasts more with a dot's hex background --
  * a fixed white failed on caution yellow (#FFD600, ~1.4:1) and on dark
@@ -123,7 +135,8 @@ export default function HomeDashboard({
   onTaskReorder,
   initialOpenItem,
 }: HomeDashboardProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing, radius, isDark } = useTheme();
+  const homeTint = spaceTextColor("home", isDark) ?? SPACE_IDENTITY_COLORS.home!;
   const router = useRouter();
 
   const [activeCategory, setActiveCategory] = useState<HomeCategoryKey | null>(null);
@@ -807,15 +820,15 @@ export default function HomeDashboard({
     <ScrollView
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{
-        paddingHorizontal: spacing.xl,
-        // Clears the floating Quick Add / category FAB in the bottom-right
-        // corner.
+        paddingHorizontal: spacing.gutter,
+        paddingTop: spacing.md,
         paddingBottom: 100,
+        gap: spacing.section,
       }}
     >
       <HomeHeader
         space={space}
-        subtitle={profile?.county}
+        subtitle={profile?.county ? `Județul ${profile.county}` : undefined}
         onBack={() => router.push("/spaces")}
         onEdit={onEdit}
         onHistoryPress={() => setHomeArchivePageVisible(true)}
@@ -838,28 +851,14 @@ export default function HomeDashboard({
         radius={radius}
       />
 
-      <Text
-        style={{
-          fontSize: 11,
-          fontWeight: "800",
-          letterSpacing: 0.5,
-          color: colors.onSurfaceTertiary,
-          marginBottom: 10,
-        }}
-      >
-        CATEGORII
-      </Text>
-
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: spacing.xl }}>
+      {/* Categories -- a 2-column grid of tiles; each tile's own
+          urgency dots (one per tier, its own entries only) or badge
+          sits top-right, opposite the icon. */}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.md - 2 }}>
         {categoryTiles.map((tile, index) => {
-          // The last tile is alone on its own row only when the total
-          // count is odd (2-per-row wrapping) -- when that happens, the
-          // icon+label+badge group centers as a unit instead of hugging
-          // the left edge with dead space stretching out to the right.
           const isAlone = index === categoryTiles.length - 1 && categoryTiles.length % 2 !== 0;
-
           return (
-            <Pressable
+            <PressableScale
               key={tile.key}
               testID={`home-category-tile-${tile.key}`}
               onPress={() => selectCategory(tile.key)}
@@ -872,119 +871,30 @@ export default function HomeDashboard({
                     : tile.label
               }
               style={{
-                // flexGrow (not a fixed width) so a lone tile wrapping onto
-                // its own row -- 5 tiles into 2 columns always leaves one
-                // odd one out -- stretches to fill that whole row instead
-                // of sitting stuck at half-width with empty space beside
-                // it. Same fix already applied at Car's QuickActions row.
                 flexGrow: 1,
-                flexBasis: "46%",
-                minHeight: 56,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
+                flexBasis: isAlone ? "100%" : "46%",
+                minHeight: 96,
+                padding: spacing.md + 2,
                 backgroundColor: colors.surfaceSecondary,
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: radius.md,
-                // Column, not row -- dots (when present) render as their
-                // OWN full-width row below icon+label instead of being
-                // crammed onto the same line, which on a narrow ~46%-
-                // width tile overflowed the tile's own edge (half the
-                // last dot rendered outside the card). See dots block
-                // below.
-                flexDirection: "column",
-                justifyContent: "center",
-                gap: 6,
+                borderRadius: radius.card,
+                gap: spacing.md,
               }}
             >
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: isAlone ? "center" : "flex-start",
-                  gap: 10,
-                }}
-              >
-                {/* Tinted chip (identity color at 1A alpha, matching the
-                    same recipe HomeHeader's own avatar already uses)
-                    instead of a bare colored icon on white -- one hue per
-                    Space, just given real visual weight instead of a thin
-                    outline. */}
-                <View
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: radius.sm,
-                    backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                >
-                  <Ionicons name={tile.icon} size={16} color={SPACE_IDENTITY_COLORS.home!} />
-                </View>
-                <Text
-                  style={{ fontSize: 12.5, fontWeight: "600", color: colors.onSurface, flexGrow: isAlone ? 0 : 1 }}
-                  numberOfLines={1}
-                >
-                  {tile.label}
-                </Text>
-                {tile.badge ? (
-                  <View
-                    style={{
-                      minWidth: 18,
-                      height: 18,
-                      paddingHorizontal: 5,
-                      borderRadius: 9,
-                      backgroundColor: severityColor(tile.badge.severity, colors),
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Text style={{ fontSize: 10, fontWeight: "800", color: colors.onBrandPrimary }}>
-                      {tile.badge.count}
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-
-              {/* One dot per urgency tier -- its own full-width row so up
-                  to 4 dots always have the whole tile's width to lay out
-                  in, never squeezed onto the same line as icon+label.
-                  Each tier has its own distinct color
-                  (recurringWarningTierColor's 4-stop gradient), so no two
-                  dots on the same tile ever look identical, and a tier
-                  with 0 count renders no dot at all. */}
-              {tile.dots.length > 0 ? (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    gap: 4,
-                    justifyContent: isAlone ? "center" : "flex-start",
-                  }}
-                >
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <IconWell icon={tile.icon} color={SPACE_IDENTITY_COLORS.home!} tint={homeTint} size={34} />
+                <View style={{ flexDirection: "row", gap: 4 }}>
+                  {tile.badge ? (
+                    <CountDot count={tile.badge.count} color={severityColor(tile.badge.severity, colors)} />
+                  ) : null}
                   {tile.dots.map(({ tier, count }) => (
-                    <View
-                      key={tier}
-                      style={{
-                        minWidth: 16,
-                        height: 16,
-                        paddingHorizontal: 4,
-                        borderRadius: 8,
-                        backgroundColor: recurringWarningTierColor(tier, colors),
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Text style={{ fontSize: 9, fontWeight: "800", color: readableTextOn(recurringWarningTierColor(tier, colors)) }}>
-                        {count}
-                      </Text>
-                    </View>
+                    <CountDot key={tier} count={count} color={recurringWarningTierColor(tier, colors)} />
                   ))}
                 </View>
-              ) : null}
-            </Pressable>
+              </View>
+              <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>
+                {tile.label}
+              </Text>
+            </PressableScale>
           );
         })}
       </View>

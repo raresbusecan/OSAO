@@ -1,146 +1,31 @@
 import React from "react";
-import { View, Text, Pressable } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { TopBar, CircleButton, Identity } from "@/components/ui/primitives";
 
 export type HomeHeaderProps = {
   space: any;
-  /** The profile's county (Județ) -- shown gray/small under the name, same spot a hardcoded category list used to sit. */
+  /** The profile's county/city -- shown under the name. */
   subtitle?: string;
   onBack: () => void;
   onEdit?: () => void;
-  /** Space-level History (Tasks + Maintenance resolved entries) --
-      mirrors Car's own Docs/Archive/History pill, centered directly
-      under the name/subtitle. */
+  /** Space-level History (Tasks + Maintenance resolved entries). */
   onHistoryPress?: () => void;
 };
 
+/** 2026-10 redesign: back on the left; history + edit as round buttons
+ * on the right; then the left-aligned identity block (kind dot "Casă",
+ * the home's name, its location) -- same header every Space uses. */
 export function HomeHeader({ space, subtitle, onBack, onEdit, onHistoryPress }: HomeHeaderProps) {
-  const { colors, spacing, radius } = useTheme();
-
+  const { spacing } = useTheme();
   return (
-    <View
-      style={{
-        position: "relative",
-        alignItems: "center",
-        paddingTop: spacing.md,
-        paddingBottom: spacing.xl,
-      }}
-    >
-      {/* The old "+" here opened the exact same sheet as the category
-          menu handle below -- one action, two buttons. This is the only
-          way back to Spaces from inside a space now. */}
-      <Pressable
-        testID="space-back"
-        onPress={onBack}
-        hitSlop={10}
-        accessibilityRole="button"
-        accessibilityLabel="Back to Spaces"
-        style={{
-          position: "absolute",
-          left: 0,
-          top: spacing.md + 10,
-          width: 40,
-          height: 40,
-          borderRadius: radius.pill,
-          backgroundColor: "transparent",
-          borderWidth: 1,
-          borderColor: colors.border,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
-      </Pressable>
-
-      <Pressable
-        testID="space-edit"
-        onPress={onEdit}
-        hitSlop={10}
-        accessibilityRole="button"
-        accessibilityLabel="Edit home"
-        style={{
-          position: "absolute",
-          right: 0,
-          top: spacing.md + 10,
-          width: 40,
-          height: 40,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Ionicons name="create-outline" size={19} color={colors.caution} />
-      </Pressable>
-
-      <View
-        style={{
-          width: 68,
-          height: 68,
-          borderRadius: radius.lg,
-          backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
-          alignItems: "center",
-          justifyContent: "center",
-          marginBottom: spacing.md,
-        }}
-      >
-        <Ionicons
-          name={(space?.icon || "home-outline") as any}
-          size={32}
-          color={SPACE_IDENTITY_COLORS.home}
-        />
-      </View>
-
-      <Text
-        style={{
-          fontSize: 30,
-          lineHeight: 36,
-          fontWeight: "800",
-          color: colors.onSurface,
-          letterSpacing: -0.7,
-        }}
-      >
-        {space?.name || "Home"}
-      </Text>
-
-      {subtitle ? (
-        <Text
-          style={{
-            marginTop: 4,
-            fontSize: 14,
-            color: colors.onSurfaceTertiary,
-          }}
-        >
-          {subtitle}
-        </Text>
-      ) : null}
-
-      {onHistoryPress ? (
-        <Pressable
-          testID="home-history-open"
-          onPress={onHistoryPress}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="View history"
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 5,
-            marginTop: spacing.md,
-            paddingVertical: 7,
-            paddingHorizontal: spacing.md,
-            borderRadius: radius.pill,
-            backgroundColor: "transparent",
-            borderWidth: 1,
-            borderColor: colors.border,
-          }}
-        >
-          <Ionicons name="time-outline" size={12} color={colors.onSurfaceTertiary} />
-          <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurface }}>
-            History
-          </Text>
-        </Pressable>
-      ) : null}
+    <View style={{ gap: spacing.section }}>
+      <TopBar onBack={onBack}>
+        {onHistoryPress ? <CircleButton testID="home-history-open" icon="time-outline" label="Istoric" onPress={onHistoryPress} /> : null}
+        {onEdit ? <CircleButton testID="space-edit" icon="create-outline" label="Editează casa" onPress={onEdit} /> : null}
+      </TopBar>
+      <Identity color={SPACE_IDENTITY_COLORS.home} kicker="Casă" title={space?.name || "Casa mea"} subtitle={subtitle} />
     </View>
   );
 }

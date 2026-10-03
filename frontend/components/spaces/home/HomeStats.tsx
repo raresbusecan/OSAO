@@ -1,124 +1,50 @@
 import React from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import type { HomeIcon } from "./home.ui.types";
+import { PressableScale } from "@/components/ui/PressableScale";
+import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+import { motion } from "@/lib/motion";
 
 export type HomeStatsProps = {
   thisMonthExpenses: number;
   upcomingCount: number;
-  currency?: string;
   /** Opens HomeSpendPage -- the whole space's spend, not just this
-   * month's total. Card stays a plain View (no chevron/tap) when
-   * omitted, same as "Upcoming" still is today. */
+   * month's total. */
   onSpendPress?: () => void;
 };
 
-export function HomeStats({
-  thisMonthExpenses,
-  upcomingCount,
-  currency = "RON",
-  onSpendPress,
-}: HomeStatsProps) {
-  const { colors, spacing, radius, typography } = useTheme();
+/** The Home space's hero card: this month's spend (tap -> spend page)
+ * and how many things are coming up, side by side. */
+export function HomeStats({ thisMonthExpenses, upcomingCount, onSpendPress }: HomeStatsProps) {
+  const { colors, spacing, radius } = useTheme();
+  const muted = colors.onSurfaceTertiary;
+  const big = { fontSize: 24, fontWeight: "600" as const, letterSpacing: -0.5, color: colors.onSurface };
 
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        gap: spacing.md,
-        marginBottom: spacing.xl,
-      }}
-    >
-      <StatCard
-        icon="wallet-outline"
-        value={thisMonthExpenses.toLocaleString("en-US")}
-        label="This month"
-        suffix={currency}
+    <View style={{ flexDirection: "row", backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>
+      <PressableScale
+        testID="home-spend-stat"
         onPress={onSpendPress}
-        colors={colors}
-        radius={radius}
-        spacing={spacing}
-        typography={typography}
-      />
-
-      <StatCard
-        icon="alert-circle-outline"
-        value={upcomingCount.toLocaleString("en-US")}
-        label="Upcoming"
-        suffix={upcomingCount === 1 ? "item" : "items"}
-        colors={colors}
-        radius={radius}
-        spacing={spacing}
-        typography={typography}
-      />
-    </View>
-  );
-}
-
-function StatCard({
-  icon,
-  value,
-  label,
-  suffix,
-  onPress,
-  colors,
-  radius,
-  spacing,
-  typography,
-}: {
-  icon: HomeIcon;
-  value: string;
-  label: string;
-  suffix: string;
-  onPress?: () => void;
-  colors: any;
-  radius: any;
-  spacing: any;
-  typography: any;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={!onPress}
-      accessibilityRole={onPress ? "button" : undefined}
-      style={{
-        flex: 1,
-        minHeight: 110,
-        padding: spacing.lg,
-        backgroundColor: colors.surfaceSecondary,
-        borderWidth: 1,
-        borderColor: colors.border,
-        borderRadius: radius.sm,
-        justifyContent: "space-between",
-      }}
-    >
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Ionicons name={icon} size={19} color={colors.onSurfaceTertiary} />
-        {onPress ? <Ionicons name="chevron-forward" size={14} color={colors.onSurfaceTertiary} /> : null}
-      </View>
-
-      <View>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "baseline",
-            gap: 4,
-          }}
-        >
-          <Text style={{ ...typography.title, color: colors.onSurface }}>
-            {value}
-          </Text>
-
-          <Text style={{ ...typography.micro, color: colors.onSurfaceTertiary }}>
-            {suffix}
-          </Text>
+        disabled={!onSpendPress}
+        scaleTo={motion.scale.tile}
+        accessibilityRole="button"
+        accessibilityLabel={`Luna asta: ${thisMonthExpenses} lei. Vezi cheltuielile`}
+        style={{ flex: 1, gap: 2 }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+          <Text style={{ fontSize: 13, color: muted }}>Luna asta</Text>
+          {onSpendPress ? <Ionicons name="chevron-forward" size={13} color={muted} /> : null}
         </View>
-
-        <Text style={{ ...typography.caption, marginTop: 2, color: colors.onSurfaceTertiary }}>
-          {label}
-        </Text>
+        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4 }}>
+          <AnimatedNumber value={thisMonthExpenses} style={big} />
+          <Text style={{ fontSize: 15, color: muted }}>lei</Text>
+        </View>
+      </PressableScale>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={{ fontSize: 13, color: muted }}>Urmează</Text>
+        <AnimatedNumber value={upcomingCount} style={big} />
       </View>
-    </Pressable>
+    </View>
   );
 }

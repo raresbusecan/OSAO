@@ -1,4 +1,5 @@
 import type { HomeData } from "@/components/spaces/home/home.data.types";
+import { roCount } from "@/lib/format";
 import type { HomeNextItem } from "@/components/spaces/home/home.ui.types";
 import type { SupplyRestockEvent } from "@/lib/spaces/home/home.types";
 import type { SeverityTier } from "@/lib/statusColors";
@@ -30,17 +31,15 @@ export function daysUntil(dateString: string, now: Date): number {
 }
 
 export function dueSubtitle(daysRemaining: number, verb: "Expires" | "Due"): string {
-  if (daysRemaining < 0) {
-    const overdueVerb = verb === "Expires" ? "Expired" : "Overdue by";
-    const days = Math.abs(daysRemaining);
-    return verb === "Expires"
-      ? `${overdueVerb} ${days} day${days !== 1 ? "s" : ""} ago`
-      : `${overdueVerb} ${days} day${days !== 1 ? "s" : ""}`;
+  const days = Math.abs(daysRemaining);
+  if (verb === "Expires") {
+    if (daysRemaining < 0) return `a expirat acum ${roCount(days, "zi", "zile")}`;
+    if (daysRemaining === 0) return "expiră azi";
+    return `expiră în ${roCount(days, "zi", "zile")}`;
   }
-
-  if (daysRemaining === 0) return `${verb} today`;
-
-  return `${verb} in ${daysRemaining} day${daysRemaining !== 1 ? "s" : ""}`;
+  if (daysRemaining < 0) return `restant de ${roCount(days, "zi", "zile")}`;
+  if (daysRemaining === 0) return "azi";
+  return `în ${roCount(days, "zi", "zile")}`;
 }
 
 const DOC_TIER_WARNING_DAYS = 30;
