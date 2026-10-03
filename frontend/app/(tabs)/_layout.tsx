@@ -24,8 +24,11 @@ export default function TabsLayout() {
           headerShown: false,
           tabBarActiveTintColor: colors.onSurface,
           tabBarInactiveTintColor: colors.onSurfaceTertiary,
+          tabBarLabelStyle: { fontSize: 11, fontWeight: "500" },
+          // One step off the page color (the redesign's layering), with
+          // the hairline kept as the edge between content and chrome.
           tabBarStyle: {
-            backgroundColor: colors.surface,
+            backgroundColor: colors.surfaceSecondary,
             borderTopColor: colors.border,
           },
         }}
@@ -33,14 +36,14 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="home"
           options={{
-            title: "Home",
+            title: "Acasă",
             tabBarIcon: ({ color, size }) => <Ionicons name="home-outline" size={size} color={color} />,
           }}
         />
         <Tabs.Screen
           name="spaces"
           options={{
-            title: "Spaces",
+            title: "Spații",
             tabBarIcon: ({ color, size }) => <Ionicons name="grid-outline" size={size} color={color} />,
           }}
         />
@@ -54,7 +57,7 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="budget"
           options={{
-            title: "Budget",
+            title: "Buget",
             tabBarIcon: ({ color, size }) => <Ionicons name="wallet-outline" size={size} color={color} />,
           }}
         />

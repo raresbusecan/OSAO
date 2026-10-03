@@ -1,3 +1,5 @@
+// Must run before anything renders: makes IBM Plex the default font.
+import "@/lib/globalFont";
 import React from "react";
 import { Stack, Redirect, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -7,6 +9,13 @@ import { BottomSheetModalProvider } from "@gorhom/bottom-sheet";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as Sentry from "@sentry/react-native";
+import {
+  useFonts,
+  IBMPlexSans_400Regular,
+  IBMPlexSans_500Medium,
+  IBMPlexSans_600SemiBold,
+  IBMPlexSans_700Bold,
+} from "@expo-google-fonts/ibm-plex-sans";
 
 import { ThemeProvider } from "@/lib/theme";
 import { ConfirmHost } from "@/lib/confirmHost";
@@ -82,6 +91,18 @@ function AuthGuard() {
 }
 
 function RootLayout() {
+  // Every themed text style names one of these files (see lib/theme.tsx's
+  // fw()), so hold the first render until they're registered -- the
+  // splash screen stays up meanwhile. A load failure falls through to the
+  // system font rather than a blank app.
+  const [fontsLoaded, fontError] = useFonts({
+    IBMPlexSans_400Regular,
+    IBMPlexSans_500Medium,
+    IBMPlexSans_600SemiBold,
+    IBMPlexSans_700Bold,
+  });
+  if (!fontsLoaded && !fontError) return null;
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
