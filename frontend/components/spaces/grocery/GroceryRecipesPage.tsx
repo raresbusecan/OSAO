@@ -1,8 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, Pressable, Modal } from "react-native";
+import { View, Text, ScrollView, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
+import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL } from "@/lib/spaces/spaceProfile";
+import { Sheet } from "@/components/ui/Sheet";
+import { PressableScale } from "@/components/ui/PressableScale";
+import { TopBar, Identity, Segmented, Pill, SectionHeader, Button, EmptyState } from "@/components/ui/primitives";
+import { roCount } from "@/lib/format";
 import { notifyAction } from "@/lib/confirm";
 import type { GroceryItem, GroceryList } from "@/lib/spaces/grocery/grocery.types";
 import { findGroceryItemByName, getItemsForList } from "@/lib/spaces/grocery/grocery.calculations";
@@ -49,19 +54,19 @@ export type GroceryRecipesPageProps = {
 };
 
 const MEAL_TYPE_LABEL: Record<MealType, string> = {
-  breakfast: "Breakfast",
-  lunch: "Lunch",
-  dinner: "Dinner",
-  snack: "Snacks",
+  breakfast: "Mic dejun",
+  lunch: "Prânz",
+  dinner: "Cină",
+  snack: "Gustări",
 };
 
 const CUISINE_LABEL: Record<Cuisine, string> = {
-  italian: "Italian",
-  mexican: "Mexican",
-  asian: "Asian",
-  mediterranean: "Mediterranean",
-  american: "American",
-  romanian: "Romanian",
+  italian: "Italiană",
+  mexican: "Mexicană",
+  asian: "Asiatică",
+  mediterranean: "Mediteraneană",
+  american: "Americană",
+  romanian: "Românească",
 };
 
 /** One muted accent pair per cuisine -- `block` is the grid card's
@@ -259,10 +264,7 @@ export function GroceryRecipesPage({
       // instead of leaving the ingredients stranded.
       if (pendingAdd) {
         onAddToList(pendingAdd.items, id, pendingAdd.recipeIds.length > 0 ? pendingAdd.recipeIds : undefined);
-        notifyAction(
-          "Added",
-          `${pendingAdd.items.length} ingredient${pendingAdd.items.length === 1 ? "" : "s"} added to "${trimmed}".`,
-        );
+        notifyAction("Adăugat", `${roCount(pendingAdd.items.length, "ingredient", "ingrediente")} pe lista „${trimmed}”.`);
         if (pendingAdd.clearSelectionAfter) setSelectedRecipeIds(new Set());
         setPendingAdd(null);
       }
@@ -281,11 +283,12 @@ export function GroceryRecipesPage({
 
     const targetList = lists.find((list) => list.id === targetListId);
     onAddToList(pendingAdd.items, targetListId, pendingAdd.recipeIds.length > 0 ? pendingAdd.recipeIds : undefined);
+    const listName = targetList?.name ?? "lista ta";
     notifyAction(
-      "Added",
+      "Adăugat",
       pendingAdd.skippedOnCurrentList > 0
-        ? `${pendingAdd.items.length} ingredients added to "${targetList?.name ?? "your list"}" -- ${pendingAdd.skippedOnCurrentList} were already on it.`
-        : `${pendingAdd.items.length} ingredient${pendingAdd.items.length === 1 ? "" : "s"} added to "${targetList?.name ?? "your list"}".`,
+        ? `${roCount(pendingAdd.items.length, "ingredient", "ingrediente")} pe „${listName}”. ${roCount(pendingAdd.skippedOnCurrentList, "era", "erau")} deja pe ea.`
+        : `${roCount(pendingAdd.items.length, "ingredient", "ingrediente")} pe „${listName}”.`,
     );
     if (pendingAdd.clearSelectionAfter) setSelectedRecipeIds(new Set());
     setPendingAdd(null);
@@ -346,7 +349,7 @@ export function GroceryRecipesPage({
     const skipped = seen.size - toAdd.length;
 
     if (toAdd.length === 0) {
-      notifyAction("Nothing new", "All those ingredients are already on that list.");
+      notifyAction("Nimic nou", "Toate ingredientele sunt deja pe lista aceea.");
       return;
     }
 
@@ -364,421 +367,144 @@ export function GroceryRecipesPage({
     });
   };
 
+  const GROC = SPACE_IDENTITY_COLORS.grocery!;
+  const muted = colors.onSurfaceTertiary;
+  const targetList = lists.find((list) => list.id === targetListId);
+
   return (
     <>
     <SwipeBackView onBack={onBack} style={{ backgroundColor: colors.surface }}>
     <ScrollView
       style={{ backgroundColor: colors.surface }}
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 150 }}
+      contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >
-      {/* HEADER */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: spacing.md,
-          paddingTop: spacing.md,
-          paddingBottom: spacing.lg,
-        }}
-      >
-        <Pressable
-          testID="grocery-recipes-back"
-          onPress={onBack}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: radius.pill,
-            backgroundColor: "transparent",
-            borderWidth: 1,
-            borderColor: colors.border,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
-        </Pressable>
+      <TopBar onBack={onBack} backTestID="grocery-recipes-back" />
+      <Identity color={GROC} kicker="Cumpărături" title="Rețete" subtitle="Alege ce ai poftă, apoi pune pe listă ce lipsește" />
 
-        <Text style={{ fontSize: 26, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 }}>
-          Recipes
-        </Text>
-      </View>
-
-      {/* CUISINE / MEAL TYPE -- a 2-tab switcher instead of two always-
-          stacked rows; only the active tab's pills show below. A small
-          dot marks a tab whose group has a selection even while it's
-          not the one open, so a filter picked on the other tab is
-          never invisible. Switching tabs never clears either axis --
-          both still combine with AND once picked (see filteredRecipes
-          above), same as before. */}
-      <View
-        style={{
-          flexDirection: "row",
-          gap: 6,
-          padding: 3,
-          borderRadius: radius.sm,
-          backgroundColor: "transparent",
-          borderWidth: 1,
-          borderColor: colors.border,
-          marginBottom: spacing.md,
-        }}
-      >
-        <Pressable
-          testID="grocery-recipes-tab-cuisine"
-          onPress={() => setFilterTab("cuisine")}
-          hitSlop={{ top: 6, bottom: 6, left: 0, right: 0 }}
-          style={{
-            flex: 1,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 5,
-            paddingVertical: 8,
-            borderRadius: radius.sm,
-            backgroundColor: "transparent",
-            borderWidth: filterTab === "cuisine" ? 1 : 0,
-            borderColor: colors.onSurface,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 13,
-              fontWeight: "700",
-              color: filterTab === "cuisine" ? colors.onSurface : colors.onSurfaceTertiary,
-            }}
-          >
-            Cuisine
-          </Text>
-          {selectedCuisines.size > 0 ? (
-            <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: colors.onSurface }} />
-          ) : null}
-        </Pressable>
-
-        <Pressable
-          testID="grocery-recipes-tab-meal"
-          onPress={() => setFilterTab("meal")}
-          hitSlop={{ top: 6, bottom: 6, left: 0, right: 0 }}
-          style={{
-            flex: 1,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: 5,
-            paddingVertical: 8,
-            borderRadius: radius.sm,
-            backgroundColor: "transparent",
-            borderWidth: filterTab === "meal" ? 1 : 0,
-            borderColor: colors.onSurface,
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 13,
-              fontWeight: "700",
-              color: filterTab === "meal" ? colors.onSurface : colors.onSurfaceTertiary,
-            }}
-          >
-            Meal Type
-          </Text>
-          {selectedMealTypes.size > 0 ? (
-            <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: colors.onSurface }} />
-          ) : null}
-        </Pressable>
-      </View>
-
-      {filterTab === "cuisine" && availableCuisines.length > 0 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ flexDirection: "row", gap: spacing.sm }}
-          style={{ marginBottom: spacing.sm }}
-        >
-          {availableCuisines.map((cuisine) => {
-            const selected = selectedCuisines.has(cuisine);
-            return (
-              <Pressable
-                key={cuisine}
-                testID={`grocery-recipes-cuisine-${cuisine}`}
-                onPress={() => handleToggleCuisine(cuisine)}
-                hitSlop={4}
-                style={{
-                  paddingHorizontal: spacing.md,
-                  minHeight: 36,
-                  borderRadius: radius.pill,
-                  backgroundColor: selected ? colors.onSurface : "transparent",
-                  borderWidth: 1,
-                  borderColor: selected ? colors.onSurface : colors.border,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: "700", color: selected ? colors.surface : colors.onSurface }}>
-                  {CUISINE_LABEL[cuisine]}
-                </Text>
-              </Pressable>
-            );
-          })}
+      {/* Filters: cuisine and meal type as two tabs of pills. A dot marks
+          the tab that has a selection while it's not the one open. Both
+          axes combine with AND (see filteredRecipes). */}
+      <View style={{ gap: spacing.md }}>
+        <Segmented
+          testIDPrefix="grocery-recipes-tab"
+          options={[
+            { key: "cuisine", label: selectedCuisines.size > 0 ? `Bucătărie (${selectedCuisines.size})` : "Bucătărie" },
+            { key: "meal", label: selectedMealTypes.size > 0 ? `Masa (${selectedMealTypes.size})` : "Masa" },
+          ]}
+          value={filterTab}
+          onChange={setFilterTab}
+        />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+          {filterTab === "cuisine"
+            ? availableCuisines.map((cuisine) => (
+                <Pill
+                  key={cuisine}
+                  testID={`grocery-recipes-cuisine-${cuisine}`}
+                  label={CUISINE_LABEL[cuisine]}
+                  active={selectedCuisines.has(cuisine)}
+                  tone={GROC}
+                  onPress={() => handleToggleCuisine(cuisine)}
+                />
+              ))
+            : MEAL_TYPE_TAGS.map((type) => (
+                <Pill
+                  key={type}
+                  testID={`grocery-recipes-meal-${type}`}
+                  label={MEAL_TYPE_LABEL[type]}
+                  active={selectedMealTypes.has(type)}
+                  tone={GROC}
+                  onPress={() => handleToggleMealType(type)}
+                />
+              ))}
         </ScrollView>
-      ) : null}
-
-      {filterTab === "meal" ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginBottom: spacing.sm }}>
-          {MEAL_TYPE_TAGS.map((type) => {
-            const selected = selectedMealTypes.has(type);
-            return (
-              <Pressable
-                key={type}
-                testID={`grocery-recipes-meal-${type}`}
-                onPress={() => handleToggleMealType(type)}
-                hitSlop={4}
-                style={{
-                  paddingHorizontal: spacing.md,
-                  minHeight: 36,
-                  borderRadius: radius.pill,
-                  backgroundColor: selected ? colors.onSurface : "transparent",
-                  borderWidth: 1,
-                  borderColor: selected ? colors.onSurface : colors.border,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: "700", color: selected ? colors.surface : colors.onSurface }}>
-                  {MEAL_TYPE_LABEL[type]}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      ) : null}
-
-      {hasActiveFilters ? (
-        <Pressable
-          testID="grocery-recipes-clear-filters"
-          onPress={() => {
-            setSelectedCuisines(new Set());
-            setSelectedMealTypes(new Set());
-            setShown(false);
-          }}
-          hitSlop={8}
-          style={{ alignSelf: "flex-start", marginBottom: spacing.lg }}
-        >
-          <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurfaceTertiary }}>Clear filters</Text>
-        </Pressable>
-      ) : (
-        <View style={{ marginBottom: spacing.lg }} />
-      )}
-
-      {/* ADD TO -- applies to whichever recipe's "Add missing to list"
-          gets tapped below; same inline "+ New list" creator as Smart
-          List, for the same reason (never block browsing on having a
-          list already). */}
-      <View style={{ marginBottom: spacing.xl }}>
-        <Text
-          style={{
-            fontSize: 12,
-            fontWeight: "800",
-            letterSpacing: 1,
-            color: colors.onSurfaceTertiary,
-            marginBottom: spacing.sm,
-          }}
-        >
-          ADD TO
-        </Text>
-
-        {/* Horizontal, not wrapping -- a handful of lists used to pile
-            up into more and more rows here; this keeps ADD TO to one
-            line no matter how many lists exist. "+ New list" leads the
-            scroll (not trailing) so it's never scrolled out of sight
-            behind a long row of lists. */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ flexDirection: "row", gap: spacing.sm }}
-        >
-          {/* Was only reachable via the shared "+" FAB elsewhere on
-              Home before -- this is the one place that gated creating
-              a list on leaving this page first. */}
+        {hasActiveFilters ? (
           <Pressable
-            testID="grocery-recipes-new-list"
-            onPress={onCreatingListOpen}
-            hitSlop={4}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 4,
-              paddingHorizontal: spacing.md,
-              minHeight: 38,
-              borderRadius: radius.pill,
-              borderWidth: 1.5,
-              borderStyle: "dashed",
-              borderColor: colors.border,
-              justifyContent: "center",
+            testID="grocery-recipes-clear-filters"
+            onPress={() => {
+              setSelectedCuisines(new Set());
+              setSelectedMealTypes(new Set());
+              setShown(false);
             }}
+            style={{ alignSelf: "flex-start", minHeight: 44, justifyContent: "center" }}
           >
-            <Ionicons name="add" size={14} color={colors.onSurfaceTertiary} />
-            <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurfaceTertiary }}>New list</Text>
+            <Text style={{ fontSize: 14, color: muted }}>Șterge filtrele</Text>
           </Pressable>
+        ) : null}
+      </View>
 
+      {/* Target list for "add missing" -- "+ Listă nouă" leads the row so
+          it's never scrolled out of sight. */}
+      <View style={{ gap: spacing.sm }}>
+        <SectionHeader title="Adaugă pe lista" muted />
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+          <Pill testID="grocery-recipes-new-list" icon="add" label="Listă nouă" dashed onPress={onCreatingListOpen} />
           {lists.map((list) => {
             const selected = targetListId === list.id;
-            // Same restraint as Home's own list grid (ListCard's "x"):
-            // only the selected pill can show delete, and only for
-            // someone allowed to manage that specific list -- pick it
-            // first, then delete, rather than cluttering every pill in
-            // the row with its own "x".
             const canDelete = selected && canManageList(list);
             return (
-              <Pressable
-                key={list.id}
-                testID={`grocery-recipes-target-${list.id}`}
-                onPress={() => setTargetListId(list.id)}
-                hitSlop={4}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 6,
-                  paddingHorizontal: spacing.md,
-                  minHeight: 38,
-                  borderRadius: radius.pill,
-                  backgroundColor: selected ? colors.onSurface : "transparent",
-                  borderWidth: 1,
-                  borderColor: selected ? colors.onSurface : colors.border,
-                  justifyContent: "center",
-                }}
-              >
-                <Text style={{ fontSize: 12, fontWeight: "700", color: selected ? colors.surface : colors.onSurface }}>
-                  {list.name}
-                </Text>
-
+              <View key={list.id} style={{ flexDirection: "row", alignItems: "center", borderRadius: radius.pill, backgroundColor: selected ? GROC : colors.surfaceSecondary, paddingRight: canDelete ? spacing.sm : 0 }}>
+                <Pressable
+                  testID={`grocery-recipes-target-${list.id}`}
+                  onPress={() => setTargetListId(list.id)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  style={{ height: 40, paddingLeft: spacing.md + 2, paddingRight: canDelete ? spacing.xs : spacing.md + 2, justifyContent: "center" }}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: selected ? "600" : "500", color: selected ? SPACE_ON_FILL.grocery : colors.onSurface }}>{list.name}</Text>
+                </Pressable>
                 {canDelete ? (
                   <Pressable
                     testID={`grocery-recipes-delete-${list.id}`}
                     onPress={() => onDeleteList(list)}
-                    hitSlop={8}
+                    hitSlop={{ top: 10, bottom: 10, right: 10, left: 4 }}
                     accessibilityRole="button"
-                    accessibilityLabel={`Delete ${list.name}`}
+                    accessibilityLabel={`Șterge lista ${list.name}`}
+                    style={{ width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(26,18,6,0.12)" }}
                   >
-                    <Ionicons name="close-circle" size={15} color={colors.error} />
+                    <Ionicons name="close" size={14} color={SPACE_ON_FILL.grocery} />
                   </Pressable>
                 ) : null}
-              </Pressable>
+              </View>
             );
           })}
         </ScrollView>
       </View>
 
-      {/* SHOW RECIPES -- the library stays hidden below this until it's
-          pressed (see the `shown` state above); pressing it again after
-          changing a filter is required every time, on purpose. ADD
-          SELECTED sits right under it (used to be all the way at the
-          bottom, past the whole grid) so both of this page's primary
-          actions stay together instead of one of them scrolling away
-          as soon as a recipe's checked. */}
-      <View style={{ gap: spacing.sm, marginBottom: spacing.xl }}>
-        <Pressable
+      {/* Show / add-selected -- the library stays hidden until "Arată"
+          is pressed, and again after any filter change (see `shown`). */}
+      <View style={{ gap: spacing.sm }}>
+        <Button
           testID="grocery-recipes-show"
+          icon="restaurant-outline"
+          tone={filteredRecipes.length === 0 ? undefined : GROC}
+          variant={filteredRecipes.length === 0 ? "secondary" : "primary"}
+          disabled={filteredRecipes.length === 0}
+          label={filteredRecipes.length === 0 ? "Nicio rețetă nu se potrivește" : `Arată ${roCount(filteredRecipes.length, "rețeta", "rețete")}`}
           onPress={() => {
             if (filteredRecipes.length === 0) return;
             setShown(true);
           }}
-          disabled={filteredRecipes.length === 0}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: spacing.sm,
-            minHeight: 52,
-            borderRadius: radius.pill,
-            backgroundColor: filteredRecipes.length === 0 ? colors.surfaceTertiary : colors.onSurface,
-          }}
-        >
-          <Ionicons name="restaurant-outline" size={16} color={filteredRecipes.length === 0 ? colors.onSurfaceTertiary : colors.surface} />
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "800",
-              color: filteredRecipes.length === 0 ? colors.onSurfaceTertiary : colors.surface,
-            }}
-          >
-            {filteredRecipes.length === 0
-              ? "No recipes match"
-              : `Show ${filteredRecipes.length} Recipe${filteredRecipes.length === 1 ? "" : "s"}`}
-          </Text>
-        </Pressable>
-
+        />
         {selectedRecipeIds.size > 0 ? (
           <View style={{ flexDirection: "row", gap: spacing.sm }}>
-            <Pressable
-              testID="grocery-recipes-add-selected"
-              onPress={handleAddSelectedRecipes}
-              disabled={!targetListId}
-              style={{
-                flex: 1,
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: spacing.sm,
-                minHeight: 52,
-                borderRadius: radius.pill,
-                backgroundColor: colors.onSurface,
-                opacity: targetListId ? 1 : 0.4,
-              }}
-            >
-              <Ionicons name="cart-outline" size={16} color={colors.surface} />
-              <Text style={{ fontSize: 14, fontWeight: "800", color: colors.surface }} numberOfLines={1}>
-                Add elements to your selected list
-              </Text>
-            </Pressable>
-
-            {/* Its own labeled pill, not a bare icon -- "Clear recipes"
-                says exactly what it clears, so it doesn't read as the
-                unrelated "Clear cart" (HomeStatCard's onClear) that
-                happens to use a similar icon elsewhere on this space. */}
-            <Pressable
-              testID="grocery-recipes-clear-selected"
-              onPress={() => setSelectedRecipeIds(new Set())}
-              accessibilityRole="button"
-              accessibilityLabel="Clear selected recipes"
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 5,
-                paddingHorizontal: spacing.md,
-                minHeight: 52,
-                borderRadius: radius.pill,
-                backgroundColor: "transparent",
-                borderWidth: 1,
-                borderColor: colors.border,
-              }}
-            >
-              <Ionicons name="close-circle-outline" size={16} color={colors.onSurfaceTertiary} />
-              <Text style={{ fontSize: 12.5, fontWeight: "700", color: colors.onSurfaceTertiary }}>
-                Clear recipes
-              </Text>
-            </Pressable>
+            <View style={{ flex: 1 }}>
+              <Button
+                testID="grocery-recipes-add-selected"
+                icon="cart-outline"
+                label={`Pune pe listă (${selectedRecipeIds.size})`}
+                onPress={handleAddSelectedRecipes}
+                disabled={!targetListId}
+              />
+            </View>
+            <Button testID="grocery-recipes-clear-selected" variant="secondary" icon="close-circle-outline" label="Golește" onPress={() => setSelectedRecipeIds(new Set())} />
           </View>
         ) : null}
       </View>
 
-      {/* LIBRARY -- a 2-column photo grid: each card's colored block
-          stands in for a recipe photo (tinted per cuisine, see
-          CUISINE_VISUALS), tapping a card's body opens its full detail
-          (GroceryRecipeDetailModal) rather than expanding in place --
-          there's no room in a grid cell for ingredients/steps. The
-          corner checkbox is its own tap target, same split the old
-          inline-expand row used, for bulk-selecting into "Add
-          ingredients from N recipes" below without opening anything. */}
       {shown ? (
         filteredRecipes.length === 0 ? (
-          <View style={{ alignItems: "center", paddingVertical: spacing["3xl"] ?? 48, gap: spacing.sm }}>
-            <Ionicons name="restaurant-outline" size={28} color={colors.onSurfaceTertiary} />
-            <Text style={{ fontSize: 15, fontWeight: "700", color: colors.onSurface, textAlign: "center" }}>
-              No recipes here yet.
-            </Text>
-          </View>
+          <EmptyState icon="restaurant-outline" message="Nicio rețetă aici încă." />
         ) : (
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.md }}>
             {filteredRecipes.map((recipe) => {
@@ -788,97 +514,67 @@ export function GroceryRecipesPage({
               const cuisine = getPrimaryCuisine(recipe.tags);
               const mealType = getPrimaryMealType(recipe.tags);
               const visual = cuisine ? CUISINE_VISUALS[cuisine] : DEFAULT_VISUAL;
+              const meta = [recipe.timeMinutes ? `${recipe.timeMinutes} min` : null, mealType ? MEAL_TYPE_LABEL[mealType] : null].filter(Boolean).join(", ");
 
               return (
-                <Pressable
+                <PressableScale
                   key={recipe.id}
                   testID={`grocery-recipe-${recipe.id}`}
                   onPress={() => setDetailRecipeId(recipe.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={recipe.title}
                   style={{
-                    width: "48%",
-                    borderRadius: radius.sm,
+                    width: "47.8%",
+                    borderRadius: radius.card,
                     overflow: "hidden",
-                    borderWidth: checked ? 2 : 1,
-                    borderColor: checked ? colors.onSurface : colors.border,
-                    backgroundColor: colors.surface,
+                    backgroundColor: colors.surfaceSecondary,
+                    borderWidth: 2,
+                    borderColor: checked ? GROC : "transparent",
                   }}
                 >
-                  <View style={{ height: 96, backgroundColor: visual.block, alignItems: "center", justifyContent: "center" }}>
-                    <Ionicons name={(recipe.imageKey as any) ?? "restaurant-outline"} size={32} color={colors.surface} />
-
+                  <View style={{ height: 96, backgroundColor: `${visual.block}40`, alignItems: "center", justifyContent: "center" }}>
+                    <Ionicons name={(recipe.imageKey as any) ?? "restaurant-outline"} size={30} color={visual.block} />
                     {cuisine ? (
-                      <View
-                        style={{
-                          position: "absolute",
-                          top: 6,
-                          left: 6,
-                          paddingHorizontal: spacing.sm,
-                          paddingVertical: 2,
-                          borderRadius: radius.pill,
-                          backgroundColor: "rgba(255,255,255,0.88)",
-                        }}
-                      >
-                        <Text style={{ fontSize: 9, fontWeight: "800", letterSpacing: 0.3, color: visual.accent, textTransform: "uppercase" }}>
-                          {CUISINE_LABEL[cuisine]}
-                        </Text>
+                      <View style={{ position: "absolute", top: 8, left: 8, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: colors.surfaceSecondary }}>
+                        <Text style={{ fontSize: 11, fontWeight: "500", color: colors.onSurface }}>{CUISINE_LABEL[cuisine]}</Text>
                       </View>
                     ) : null}
-
-                    {/* Its own tap target, separate from the card's own
-                        (which opens the detail sheet) -- checking a
-                        recipe to bulk-add its ingredients shouldn't
-                        also open it. */}
+                    {/* Its own target, separate from the card's (which
+                        opens the detail) -- checking to bulk-add shouldn't
+                        also open the recipe. */}
                     <Pressable
                       testID={`grocery-recipe-check-${recipe.id}`}
                       onPress={() => handleToggleRecipeSelection(recipe.id)}
                       hitSlop={12}
                       accessibilityRole="checkbox"
                       accessibilityState={{ checked }}
+                      accessibilityLabel={`Selectează ${recipe.title}`}
                       style={{
                         position: "absolute",
                         top: 6,
                         right: 6,
-                        width: 22,
-                        height: 22,
-                        borderRadius: radius.pill,
+                        width: 28,
+                        height: 28,
+                        borderRadius: 14,
                         alignItems: "center",
                         justifyContent: "center",
-                        backgroundColor: checked ? colors.onSurface : "rgba(255,255,255,0.7)",
-                        borderWidth: checked ? 0 : 1.5,
-                        borderColor: "rgba(255,255,255,0.9)",
+                        backgroundColor: checked ? GROC : colors.surfaceSecondary,
+                        borderWidth: checked ? 0 : 2,
+                        borderColor: colors.control,
                       }}
                     >
-                      {checked ? <Ionicons name="checkmark" size={13} color={colors.surface} /> : null}
+                      {checked ? <Ionicons name="checkmark" size={16} color={SPACE_ON_FILL.grocery} /> : null}
                     </Pressable>
                   </View>
 
-                  <View style={{ padding: spacing.md }}>
-                    <Text style={{ fontSize: 14, fontWeight: "800", color: colors.onSurface, marginBottom: 4 }} numberOfLines={2}>
-                      {recipe.title}
+                  <View style={{ padding: spacing.md, gap: 4 }}>
+                    <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={2}>{recipe.title}</Text>
+                    {meta ? <Text style={{ fontSize: 13, color: muted }}>{meta}</Text> : null}
+                    <Text style={{ fontSize: 12, fontWeight: "500", color: complete ? colors.success : muted }}>
+                      {complete ? "Ai tot ce trebuie" : `Ai ${match.matchedIngredients.length} din ${recipe.ingredients.length} ingrediente`}
                     </Text>
-                    <Text style={{ fontSize: 11, color: colors.onSurfaceTertiary, marginBottom: spacing.sm }}>
-                      {recipe.timeMinutes ? `${recipe.timeMinutes} min` : ""}
-                      {recipe.timeMinutes && mealType ? " · " : ""}
-                      {mealType ? MEAL_TYPE_LABEL[mealType] : ""}
-                    </Text>
-
-                    <View
-                      style={{
-                        alignSelf: "flex-start",
-                        paddingHorizontal: spacing.sm,
-                        paddingVertical: 2,
-                        borderRadius: radius.pill,
-                        backgroundColor: complete ? colors.success + "22" : "transparent",
-                        borderWidth: complete ? 0 : 1,
-                        borderColor: colors.border,
-                      }}
-                    >
-                      <Text style={{ fontSize: 10, fontWeight: "800", color: complete ? colors.success : colors.onSurfaceTertiary }}>
-                        {complete ? "Ready to cook" : `${match.matchedIngredients.length}/${recipe.ingredients.length}`}
-                      </Text>
-                    </View>
                   </View>
-                </Pressable>
+                </PressableScale>
               );
             })}
           </View>
@@ -894,10 +590,8 @@ export function GroceryRecipesPage({
       onClose={() => {
         onCreatingListClose();
         setNewListName("");
-        // Backing out of "New list" while it was opened from the
-        // pending-add prompt (see resolveAddToNewList) abandons the
-        // add too, rather than leaving ingredients silently stranded
-        // with no prompt left on screen to finish them.
+        // Backing out of "Listă nouă" opened from the pending-add prompt
+        // abandons the add too, rather than stranding the ingredients.
         setPendingAdd(null);
       }}
       onCreate={handleCreateListInline}
@@ -908,7 +602,7 @@ export function GroceryRecipesPage({
       visible={!!detailRecipeId}
       recipe={detailRecipe}
       match={detailMatch}
-      otherTags={detailOtherTags}
+      otherTags={detailOtherTags.map((tag) => CUISINE_LABEL[tag as Cuisine] ?? tag)}
       onClose={() => setDetailRecipeId(null)}
       onAddMissing={
         detailRecipe && detailMatch && targetListId && detailMatch.missingIngredients.length > 0
@@ -920,98 +614,28 @@ export function GroceryRecipesPage({
       }
     />
 
-    {/* PENDING ADD -- both add paths (bulk "Add elements to your
-        selected list" and a single recipe's "Add missing to list")
-        land here instead of adding straight to targetListId: a user
-        who never touched ADD TO's picker has no way to know these
-        ingredients are about to land on whatever list happens to be
-        selected there, so this spells it out and offers starting a
-        fresh list instead. */}
-    <Modal
+    {/* Both add paths land here instead of adding straight to the target
+        list: say which list, or start a fresh one for these. */}
+    <Sheet
       visible={!!pendingAdd && !creatingList}
-      transparent
-      animationType="fade"
-      onRequestClose={() => setPendingAdd(null)}
-    >
-      <View
-        style={{
-          flex: 1,
-          alignItems: "center",
-          justifyContent: "center",
-          padding: spacing.xl,
-          backgroundColor: "rgba(0,0,0,0.4)",
-        }}
-      >
-        <View
-          style={{
-            width: "100%",
-            maxWidth: 360,
-            borderRadius: radius.lg,
-            backgroundColor: colors.surface,
-            padding: spacing.xl,
-          }}
-        >
-          {pendingAdd ? (
-            <>
-              <Text style={{ fontSize: 17, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.sm }}>
-                Add to which list?
-              </Text>
-              <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, marginBottom: spacing.lg, lineHeight: 20 }}>
-                {(() => {
-                  const targetList = lists.find((list) => list.id === targetListId);
-                  const targetCount = targetListId ? getItemsForList(allItems, targetListId).length : 0;
-                  return `Add ${pendingAdd.items.length} ingredient${pendingAdd.items.length === 1 ? "" : "s"} to "${targetList?.name ?? "your list"}" (${targetCount} item${targetCount === 1 ? "" : "s"} already on it), or start a new list just for these?`;
-                })()}
-              </Text>
-
-              <Pressable
-                testID="grocery-pending-add-current"
-                onPress={resolveAddToCurrentList}
-                style={{
-                  minHeight: 52,
-                  borderRadius: radius.sm,
-                  backgroundColor: colors.onSurface,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginBottom: spacing.sm,
-                }}
-              >
-                <Text style={{ fontSize: 14, fontWeight: "800", color: colors.surface }} numberOfLines={1}>
-                  Add to "{lists.find((list) => list.id === targetListId)?.name ?? "your list"}"
-                </Text>
-              </Pressable>
-
-              <Pressable
-                testID="grocery-pending-add-new-list"
-                onPress={resolveAddToNewList}
-                style={{
-                  minHeight: 52,
-                  borderRadius: radius.sm,
-                  backgroundColor: "transparent",
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginBottom: spacing.sm,
-                }}
-              >
-                <Text style={{ fontSize: 14, fontWeight: "800", color: colors.onSurface }}>
-                  Create a new list for these
-                </Text>
-              </Pressable>
-
-              <Pressable
-                testID="grocery-pending-add-cancel"
-                onPress={() => setPendingAdd(null)}
-                style={{ minHeight: 44, alignItems: "center", justifyContent: "center" }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: "700", color: colors.error }}>Cancel</Text>
-              </Pressable>
-            </>
-          ) : null}
-        </View>
-      </View>
-    </Modal>
+      onClose={() => setPendingAdd(null)}
+      centered
+      icon="cart-outline"
+      tone={GROC}
+      title="Pe ce listă?"
+      subtitle={
+        pendingAdd
+          ? `${roCount(pendingAdd.items.length, "ingredient", "ingrediente")} pe „${targetList?.name ?? "lista ta"}” (are deja ${roCount(targetListId ? getItemsForList(allItems, targetListId).length : 0, "produs", "produse")}) sau pe o listă nouă?`
+          : undefined
+      }
+      footer={
+        <>
+          <Button testID="grocery-pending-add-current" label={`Pe „${targetList?.name ?? "lista ta"}”`} tone={GROC} onPress={resolveAddToCurrentList} />
+          <Button testID="grocery-pending-add-new-list" variant="secondary" label="Pe o listă nouă" onPress={resolveAddToNewList} />
+          <Button testID="grocery-pending-add-cancel" variant="ghost" label="Renunță" onPress={() => setPendingAdd(null)} />
+        </>
+      }
+    />
     </>
   );
 }
