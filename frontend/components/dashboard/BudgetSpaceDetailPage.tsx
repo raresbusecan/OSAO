@@ -1,71 +1,72 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, Pressable, ActivityIndicator, StyleSheet, TextInput } from "react-native";
+import { View, Text, ScrollView, Pressable, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { notifyAction, confirmAction } from "@/lib/confirm";
+import { SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, SPACE_BUTTON_FILL, spaceTextColor, type SpaceKind } from "@/lib/spaces/spaceProfile";
+import { TopBar, Identity, SectionHeader, Group, Row, IconWell, Button, Field, EmptyState, readableOn } from "@/components/ui/primitives";
+import { PressableScale } from "@/components/ui/PressableScale";
+import { capitalize, lei, roCount, roDate } from "@/lib/format";
 
 export type BudgetSpaceDetailPageProps = {
+  /** The budget KEY ("Car", "Home"...) -- what the API takes; the page
+   * shows SPACE_KIND_LABEL's Romanian name instead. */
   category: string;
   icon: keyof typeof Ionicons.glyphMap;
   monthlyLimit?: number;
   onBack: () => void;
-  /** Called after this page's own "BUGET" section saves, changes or
-   * deletes the limit (preset, manual amount or delete), so the Budget
-   * tab's ring cards -- which this page doesn't own -- pick it up once
-   * the user goes back. Setting a budget is entirely self-contained
-   * here now, there's no separate edit sheet to open. */
+  /** Called after this page saves, changes or deletes the limit, so the
+   * Budget tab (which this page doesn't own) picks it up on back. */
   onLimitSaved?: () => void;
 };
 
 type MonthTotal = { year: number; month: number; label: string; total: number };
 type SpaceItem = { id: number | string; type: string; title: string; amount: number | null; currency: string | null; due_at: string | null };
 
-// Three fixed buffers over the 3-month spending average -- not a
-// generic "savings goal" (that's the separate, single overall target
-// on the Budget tab itself); this is specifically "how much headroom
-// over what I actually spend here". Percentages picked so Conservator
-// stays close to actual history and Flexibil comfortably covers a
-// spike month, with Echilibrat as the sane middle default.
+// Three fixed buffers over the 3-month spending average -- "how much
+// headroom over what I actually spend here", not the overall savings
+// goal. Echilibrat is the sane middle default.
 const BUDGET_PRESETS: { key: string; label: string; pct: number; hint: string }[] = [
-  { key: "conservative", label: "Conservator", pct: 0.05, hint: "marjă mică de siguranță" },
-  { key: "balanced", label: "Echilibrat", pct: 0.2, hint: "recomandat" },
-  { key: "flexible", label: "Flexibil", pct: 0.35, hint: "loc pentru luni neprevăzute" },
+  { key: "conservative", label: "Conservator", pct: 0.05, hint: "Marjă mică de siguranță" },
+  { key: "balanced", label: "Echilibrat", pct: 0.2, hint: "Recomandat" },
+  { key: "flexible", label: "Flexibil", pct: 0.35, hint: "Loc pentru luni neprevăzute" },
 ];
 
 function roundToTen(n: number): number {
   return Math.round(n / 10) * 10;
 }
 
-function formatDate(iso: string | null): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("ro-RO", { day: "numeric", month: "short" });
+function monthShort(m: MonthTotal): string {
+  return new Date(m.year, m.month, 1).toLocaleDateString("ro-RO", { month: "short" }).replace(".", "");
+}
+
+function monthLong(m: MonthTotal): string {
+  return capitalize(new Date(m.year, m.month, 1).toLocaleDateString("ro-RO", { month: "long" }));
 }
 
 /**
- * Opened by tapping a space's ring card on the Budget tab -- a real
- * "this space's spending" section instead of just editing the limit
- * number. Pulls from GET /api/budget/spaces/{category}, which uses the
- * exact same type->space-label map the ring itself is built from, so
- * there's no per-space special-casing here (unlike Car's own
- * CarExpensesPage or the standalone Expenses space's own
- * ExpensesDetailPage, both of which stay untouched -- this is a
- * separate, Budget-owned view, not a deep link into either).
+ * Opened from a space's row on the Budget tab -- that space's spend over
+ * the last 4 months, its budget (presets over the real average, or a
+ * manual amount) and its recent records. Pulls GET
+ * /api/budget/spaces/{category}, the same type->space map the Budget
+ * tab is built from.
  */
 export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, onLimitSaved }: BudgetSpaceDetailPageProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing, radius, typography, isDark } = useTheme();
+  const kind = category.toLowerCase() as SpaceKind;
+  const name = SPACE_KIND_LABEL[kind] ?? category;
+  const color = SPACE_IDENTITY_COLORS[kind] ?? colors.onSurface;
+  const tint = spaceTextColor(kind, isDark) ?? color;
+  const buttonFill = SPACE_BUTTON_FILL[kind];
 
   const [loading, setLoading] = useState(true);
   const [months, setMonths] = useState<MonthTotal[]>([]);
   const [items, setItems] = useState<SpaceItem[]>([]);
   const [selected, setSelected] = useState<{ year: number; month: number } | null>(null);
-  // null = the saved budget doesn't match any preset's amount (a manual
-  // custom value, or nothing saved yet) -- no preset should look picked
-  // in that case. Synced to whatever's actually saved by the effect
-  // below, not defaulted to "balanced": the whole point is that
-  // reopening this page reflects the real last decision, not a guess.
+  // null = the saved budget matches no preset (manual value, or nothing
+  // saved yet). Synced to what's actually saved by the effect below --
+  // reopening the page reflects the real last decision, not a default.
   const [selectedPreset, setSelectedPreset] = useState<string | null>(null);
   const [localLimit, setLocalLimit] = useState(monthlyLimit);
   const [savingPreset, setSavingPreset] = useState(false);
@@ -96,9 +97,8 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
   const thisMonth = months[months.length - 1];
   const lastMonth = months[months.length - 2];
 
-  // "Grad de comparație" -- how this month is trending against last
-  // month, not just a bare total. null when there's nothing to compare
-  // against yet (no data last month) rather than a misleading 0%/∞.
+  // This month against last month; null when there's nothing to compare
+  // against yet rather than a misleading 0% or infinity.
   const monthOverMonth = useMemo(() => {
     if (!thisMonth || !lastMonth || lastMonth.total <= 0) return null;
     return ((thisMonth.total - lastMonth.total) / lastMonth.total) * 100;
@@ -107,25 +107,17 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
   const maxTotal = Math.max(1, ...months.map((m) => m.total));
 
   // months is always the 4 most recent (oldest first, current last) --
-  // the same 3-whole-past-months window the Budget tab's own
-  // avg_last_3_months already uses, just derived here from what this
-  // page already fetched instead of a second field on the API.
+  // the same 3-whole-past-months window as the tab's avg_last_3_months.
   const avgLast3 = months.length === 4 ? (months[0].total + months[1].total + months[2].total) / 3 : 0;
 
-  // A brand-new app/space has no 3 full past months yet -- falls back
-  // to last month, then this month, so presets still have SOMETHING to
-  // work from well before the 3-month average is real. Only when
-  // literally nothing has ever been spent here does this hit 0, and
-  // the presets grid gets skipped in favor of the manual field alone.
+  // A new space has no 3 full past months yet -- falls back to last
+  // month, then this month, so presets work early. Only with nothing
+  // ever spent does this hit 0 and leave just the manual field.
   const budgetBase = avgLast3 > 0 ? avgLast3 : lastMonth?.total || thisMonth?.total || 0;
-  const budgetBaseLabel = avgLast3 > 0 ? "Media ultimelor 3 luni" : lastMonth?.total ? "Luna trecută" : thisMonth?.total ? "Luna asta" : null;
+  const budgetBaseLabel = avgLast3 > 0 ? "media ultimelor 3 luni" : lastMonth?.total ? "luna trecută" : thisMonth?.total ? "luna asta" : null;
 
   const presetAmount = (pct: number) => roundToTen(budgetBase * (1 + pct));
 
-  // Reflect the actual saved limit's preset, every time either changes
-  // -- on first load (once budgetBase is known) and again right after
-  // a save, so what's highlighted always matches what's really stored,
-  // never a stale default.
   useEffect(() => {
     if (!localLimit || budgetBase <= 0) {
       setSelectedPreset(null);
@@ -170,11 +162,7 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
   };
 
   const deleteBudget = async () => {
-    const confirmed = await confirmAction(
-      "Remove limit",
-      `Remove the monthly budget for "${category}"?`,
-      { confirmLabel: "Remove", destructive: true },
-    );
+    const confirmed = await confirmAction("Ștergi bugetul?", `${name} rămâne fără limită lunară. Cheltuielile nu se șterg.`, { confirmLabel: "Șterge", destructive: true });
     if (!confirmed) return;
     setDeleting(true);
     try {
@@ -190,6 +178,7 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
   };
 
   const selectedPresetObj = BUDGET_PRESETS.find((p) => p.key === selectedPreset) ?? null;
+  const presetIsSaved = !!selectedPresetObj && presetAmount(selectedPresetObj.pct) === localLimit;
 
   const selectedItems = useMemo(() => {
     if (!selected) return items;
@@ -200,12 +189,9 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
     });
   }, [items, selected]);
 
-  // Always the server-computed total for that month (months[].total),
-  // never re-summed from `selectedItems` -- a recurring bill is folded
-  // into that total but never appears as a row in `items` (see
-  // recurring_monthly below), so summing the filtered list here used to
-  // silently drop it the moment a month got tapped, while the default
-  // (untapped) view showed the correct, higher number. Both now agree.
+  // Always the server-computed total (months[].total), never re-summed
+  // from `selectedItems` -- recurring bills are folded into that total
+  // but never appear as rows, so summing the list would drop them.
   const selectedMonth = selected ? months.find((m) => m.year === selected.year && m.month === selected.month) : thisMonth;
   const selectedTotal = selectedMonth?.total ?? 0;
 
@@ -218,322 +204,182 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
     <ScrollView
       testID="budget-space-detail-page"
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 150 }}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >
-      {/* HEADER */}
-      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.xl }}>
-        <Pressable
-          testID="budget-space-back"
-          onPress={onBack}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={{ width: 40, height: 40, borderRadius: radius.pill, backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }}
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
-        </Pressable>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1 }}>
-          <Ionicons name={icon} size={20} color={colors.onSurface} />
-          <Text style={{ fontSize: 22, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.4 }}>{category}</Text>
-        </View>
-      </View>
+      <TopBar onBack={onBack} backTestID="budget-space-back" />
+      <Identity color={color} kicker="Buget" title={name} />
 
       {loading ? (
         <ActivityIndicator color={colors.onSurfaceTertiary} />
       ) : (
         <>
-          {/* TOTAL + comparison */}
-          <View style={{ marginBottom: spacing.xl }}>
-            <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-              <Text style={{ fontSize: 30, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 }}>
-                {selectedTotal.toLocaleString("en-US")}
+          <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>
+            <View style={{ gap: 2 }}>
+              <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>
+                {selected && selectedMonth ? monthLong(selectedMonth) : "Luna asta"}
               </Text>
-              <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>
-                RON{localLimit ? ` / ${localLimit.toLocaleString("en-US")} RON` : ""}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
+                <Text style={{ ...typography.display, color: colors.onSurface }}>{lei(selectedTotal)}</Text>
+                {localLimit ? <Text style={{ fontSize: 15, color: colors.onSurfaceTertiary }}>din {lei(localLimit)}</Text> : null}
+              </View>
+              {!selected && lastMonth ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+                  <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Luna trecută: {lei(lastMonth.total)}</Text>
+                  {monthOverMonth !== null ? (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+                      <Ionicons
+                        name={monthOverMonth > 0 ? "arrow-up" : monthOverMonth < 0 ? "arrow-down" : "remove"}
+                        size={12}
+                        color={monthOverMonth > 0 ? colors.error : monthOverMonth < 0 ? colors.success : colors.onSurfaceTertiary}
+                      />
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: monthOverMonth > 0 ? colors.error : monthOverMonth < 0 ? colors.success : colors.onSurfaceTertiary }}>
+                        {Math.abs(Math.round(monthOverMonth))}%
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : selected ? (
+                <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, marginTop: 2 }}>{roCount(selectedItems.length, "înregistrare", "înregistrări")}</Text>
+              ) : null}
             </View>
 
-            {!selected && lastMonth ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4 }}>
-                <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>
-                  Luna trecută: {lastMonth.total.toLocaleString("en-US")} RON
-                </Text>
-                {monthOverMonth !== null ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-                    <Ionicons
-                      name={monthOverMonth > 0 ? "arrow-up" : monthOverMonth < 0 ? "arrow-down" : "remove"}
-                      size={11}
-                      color={monthOverMonth > 0 ? colors.error : monthOverMonth < 0 ? colors.success : colors.onSurfaceTertiary}
-                    />
-                    <Text
-                      style={{
-                        fontSize: 12,
-                        fontWeight: "700",
-                        color: monthOverMonth > 0 ? colors.error : monthOverMonth < 0 ? colors.success : colors.onSurfaceTertiary,
-                      }}
-                    >
-                      {Math.abs(Math.round(monthOverMonth))}%
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
-            ) : selected ? (
-              <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary, marginTop: 4 }}>
-                {months.find((m) => m.year === selected.year && m.month === selected.month)?.label} · {selectedItems.length} înregistrări
-              </Text>
-            ) : null}
-          </View>
-
-          {/* TREND CHART */}
-          {months.length > 0 ? (
-            <View style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.lg, marginBottom: spacing.xl }}>
-              <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between", height: 100, gap: spacing.md }}>
-                {months.map((m) => {
-                  const isSelected = selected?.year === m.year && selected?.month === m.month;
-                  const barHeight = Math.max(6, (m.total / maxTotal) * 90);
+            {months.length > 0 ? (
+              <View style={{ flexDirection: "row", alignItems: "flex-end", gap: spacing.md, height: 110, paddingTop: spacing.sm }}>
+                {months.map((m, i) => {
+                  const isSelected = selected ? selected.year === m.year && selected.month === m.month : i === months.length - 1;
                   return (
                     <Pressable
                       key={`${m.year}-${m.month}`}
                       testID={`budget-space-chart-bar-${m.year}-${m.month}`}
                       onPress={() => toggleMonth(m)}
                       accessibilityRole="button"
-                      accessibilityLabel={`${m.label}, ${m.total} RON`}
-                      style={{ flex: 1, alignItems: "center", gap: 6 }}
+                      accessibilityState={{ selected: isSelected }}
+                      accessibilityLabel={`${monthLong(m)}, ${lei(m.total)}`}
+                      style={{ flex: 1, height: "100%", justifyContent: "flex-end", alignItems: "center", gap: 6 }}
                     >
-                      <View
-                        style={{
-                          width: "100%",
-                          height: barHeight,
-                          borderRadius: 6,
-                          backgroundColor: isSelected ? colors.onSurface : colors.surfaceTertiary,
-                          alignItems: "center",
-                          justifyContent: "flex-start",
-                        }}
-                      >
-                        {isSelected ? (
-                          <Text style={{ fontSize: 10, fontWeight: "800", color: colors.surface, marginTop: 6 }}>
-                            {m.total.toLocaleString("en-US")}
-                          </Text>
-                        ) : null}
-                      </View>
-                      <Text style={{ fontSize: 10.5, fontWeight: isSelected ? "800" : "600", color: isSelected ? colors.onSurface : colors.onSurfaceTertiary }}>
-                        {m.label}
-                      </Text>
+                      <View style={{ width: "100%", height: Math.max(4, (m.total / maxTotal) * 78), borderRadius: 6, backgroundColor: isSelected ? color : colors.surfaceTertiary }} />
+                      <Text style={{ fontSize: 12, fontWeight: isSelected ? "600" : "400", color: isSelected ? colors.onSurface : colors.onSurfaceTertiary }}>{monthShort(m)}</Text>
                     </Pressable>
                   );
                 })}
               </View>
-            </View>
-          ) : null}
-
-          {/* BUDGET -- always accessible, never gated on 3 months of
-              history: presets only show once there's SOME base (this or
-              last month, falling back from the 3-month average) to take
-              a % of; with truly nothing spent yet, only the manual field
-              below makes sense, and that's still right here. */}
-          <View style={{ marginBottom: spacing.xl }}>
-            <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 1, color: colors.onSurfaceTertiary, marginBottom: 10 }}>
-              BUGET
-            </Text>
-
-            {budgetBaseLabel ? (
-              <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary, marginBottom: spacing.md }}>
-                {budgetBaseLabel}: <Text style={{ fontWeight: "700", color: colors.onSurface }}>{Math.round(budgetBase).toLocaleString("en-US")} RON</Text>
-              </Text>
-            ) : (
-              <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary, marginBottom: spacing.md }}>
-                Niciun istoric de cheltuieli aici încă -- setează o sumă manual mai jos.
-              </Text>
-            )}
-
-            {budgetBase > 0 ? (
-              <>
-                <View style={{ gap: spacing.sm }}>
-                  {BUDGET_PRESETS.map((preset) => {
-                    const amount = presetAmount(preset.pct);
-                    const isSelected = selectedPreset === preset.key;
-                    return (
-                      <Pressable
-                        key={preset.key}
-                        testID={`budget-preset-${preset.key}`}
-                        onPress={() => setSelectedPreset(preset.key)}
-                        accessibilityRole="radio"
-                        accessibilityState={{ selected: isSelected }}
-                        accessibilityLabel={`${preset.label}, ${amount} RON`}
-                        style={{
-                          flexDirection: "row",
-                          alignItems: "center",
-                          gap: spacing.md,
-                          backgroundColor: "transparent",
-                          borderWidth: isSelected ? 1.5 : 1,
-                          borderColor: isSelected ? colors.success : colors.border,
-                          borderRadius: radius.sm,
-                          paddingHorizontal: spacing.lg,
-                          paddingVertical: 14,
-                        }}
-                      >
-                        <View
-                          style={{
-                            width: 20,
-                            height: 20,
-                            borderRadius: 10,
-                            alignItems: "center",
-                            justifyContent: "center",
-                            backgroundColor: isSelected ? colors.success : "transparent",
-                            borderWidth: isSelected ? 0 : 2,
-                            borderColor: colors.border,
-                          }}
-                        >
-                          {isSelected ? <Ionicons name="checkmark" size={13} color={colors.onBrandPrimary} /> : null}
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 13, fontWeight: "700", color: isSelected ? colors.success : colors.onSurface }}>
-                            {preset.label}
-                          </Text>
-                          <Text style={{ fontSize: 11, color: isSelected ? colors.success : colors.onSurfaceTertiary, marginTop: 1 }}>
-                            +{Math.round(preset.pct * 100)}% peste bază · {preset.hint}
-                          </Text>
-                        </View>
-                        <Text style={{ fontSize: 15, fontWeight: "800", color: isSelected ? colors.success : colors.onSurface }}>
-                          {amount.toLocaleString("en-US")}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                {selectedPresetObj ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.lg, marginTop: spacing.md }}>
-                    <Ionicons name="trending-up-outline" size={18} color={colors.success} />
-                    <Text style={{ fontSize: 12.5, color: colors.onSurfaceTertiary, flex: 1 }}>
-                      Economisești până la{" "}
-                      <Text style={{ fontWeight: "700", color: colors.success }}>
-                        {(presetAmount(selectedPresetObj.pct) - Math.round(budgetBase)).toLocaleString("en-US")} RON/lună
-                      </Text>{" "}
-                      dacă rămâi la nivelul obișnuit de cheltuieli.
-                    </Text>
-                  </View>
-                ) : null}
-
-                <Pressable
-                  testID="budget-preset-save"
-                  onPress={saveLimitPreset}
-                  disabled={savingPreset || !selectedPresetObj}
-                  accessibilityRole="button"
-                  accessibilityLabel={selectedPresetObj ? `Set budget to ${presetAmount(selectedPresetObj.pct)} RON` : "Choose a preset first"}
-                  accessibilityState={{ busy: savingPreset, disabled: savingPreset || !selectedPresetObj }}
-                  style={{
-                    backgroundColor: colors.brandPrimary,
-                    opacity: savingPreset || !selectedPresetObj ? 0.5 : 1,
-                    borderRadius: radius.sm,
-                    paddingVertical: 14,
-                    alignItems: "center",
-                    marginTop: spacing.md,
-                  }}
-                >
-                  {savingPreset ? (
-                    <ActivityIndicator color={colors.onBrandPrimary} />
-                  ) : (
-                    <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onBrandPrimary }}>
-                      {selectedPresetObj
-                        ? `Setează bugetul la ${presetAmount(selectedPresetObj.pct).toLocaleString("en-US")} RON`
-                        : "Alege una dintre opțiunile de mai sus"}
-                    </Text>
-                  )}
-                </Pressable>
-              </>
-            ) : null}
-
-            {/* Manual amount -- always here, never behind a separate
-                sheet: presets are a shortcut, not the only way in. */}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, marginTop: budgetBase > 0 ? spacing.lg : 0 }}>
-              <TextInput
-                testID="budget-manual-input"
-                value={manualAmount}
-                onChangeText={setManualAmount}
-                placeholder="Sau introdu o sumă manual (RON)"
-                placeholderTextColor={colors.onSurfaceTertiary}
-                keyboardType="decimal-pad"
-                style={{ flex: 1, minWidth: 0, backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, color: colors.onSurface, borderRadius: radius.sm, paddingHorizontal: spacing.lg, paddingVertical: 14, fontSize: 15 }}
-              />
-              <Pressable
-                testID="budget-manual-save"
-                onPress={saveManualAmount}
-                disabled={savingManual || !manualAmount.trim()}
-                accessibilityRole="button"
-                accessibilityLabel="Save budget"
-                accessibilityState={{ busy: savingManual, disabled: savingManual || !manualAmount.trim() }}
-                style={{ backgroundColor: colors.brandPrimary, opacity: savingManual || !manualAmount.trim() ? 0.5 : 1, paddingHorizontal: spacing.lg, paddingVertical: 14, borderRadius: radius.sm, alignItems: "center", justifyContent: "center" }}
-              >
-                {savingManual ? <ActivityIndicator color={colors.onBrandPrimary} /> : (
-                  <Text style={{ color: colors.onBrandPrimary, fontWeight: "700", fontSize: 14 }}>Salvează</Text>
-                )}
-              </Pressable>
-            </View>
-
-            {localLimit ? (
-              <Pressable
-                testID="budget-delete"
-                onPress={deleteBudget}
-                disabled={deleting}
-                accessibilityRole="button"
-                accessibilityLabel="Remove budget"
-                style={{ minHeight: 44, alignItems: "center", justifyContent: "center", marginTop: spacing.sm }}
-              >
-                <Text style={{ fontSize: 13, fontWeight: "700", color: colors.error }}>
-                  {deleting ? "Se șterge..." : "Șterge bugetul"}
-                </Text>
-              </Pressable>
             ) : null}
           </View>
 
-          {/* LIST */}
-          <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 1, color: colors.onSurfaceTertiary, marginBottom: 10 }}>
-            {selected ? "ÎNREGISTRĂRI" : "RECENT"}
-          </Text>
+          {/* Budget -- never gated on 3 months of history: presets show
+              once there's SOME base to take a % of; with nothing spent
+              yet only the manual amount makes sense. */}
+          <View style={{ gap: spacing.sm }}>
+            <SectionHeader title="Bugetul lunar" />
+            <Text style={{ fontSize: 14, lineHeight: 20, color: colors.onSurfaceTertiary, paddingHorizontal: 4 }}>
+              {budgetBaseLabel
+                ? `Pornind de la ${budgetBaseLabel}: ${lei(Math.round(budgetBase))}.`
+                : "Niciun istoric aici încă. Pune o sumă mai jos."}
+            </Text>
 
-          {recurringMonthly > 0 ? (
-            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, marginBottom: spacing.sm }}>
-              <Ionicons name="repeat-outline" size={15} color={colors.onSurfaceTertiary} />
-              <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary, flex: 1 }}>
-                + {recurringMonthly.toLocaleString("en-US")} RON recurente incluse mai sus, în fiecare lună -- nu apar ca înregistrare individuală aici.
+            {budgetBase > 0 ? (
+              <Group inset={52}>
+                {BUDGET_PRESETS.map((preset) => {
+                  const amount = presetAmount(preset.pct);
+                  const isSelected = selectedPreset === preset.key;
+                  return (
+                    <PressableScale
+                      key={preset.key}
+                      testID={`budget-preset-${preset.key}`}
+                      onPress={() => setSelectedPreset(preset.key)}
+                      scaleTo={1}
+                      pressedStyle={{ backgroundColor: colors.surfaceTertiary }}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: isSelected }}
+                      accessibilityLabel={`${preset.label}, ${lei(amount)}`}
+                      style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, minHeight: 64, backgroundColor: colors.surfaceSecondary }}
+                    >
+                      <View
+                        style={{
+                          width: 22, height: 22, borderRadius: 11, alignItems: "center", justifyContent: "center",
+                          backgroundColor: isSelected ? color : "transparent",
+                          borderWidth: isSelected ? 0 : 2, borderColor: colors.borderStrong,
+                        }}
+                      >
+                        {isSelected ? <Ionicons name="checkmark" size={14} color={readableOn(color)} /> : null}
+                      </View>
+                      <View style={{ flex: 1, paddingVertical: 10 }}>
+                        <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }}>{preset.label}</Text>
+                        <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, marginTop: 2 }}>+{Math.round(preset.pct * 100)}%, {preset.hint.toLowerCase()}</Text>
+                      </View>
+                      <Text style={{ fontSize: 15, fontWeight: "600", color: isSelected ? tint : colors.onSurface }}>{lei(amount)}</Text>
+                    </PressableScale>
+                  );
+                })}
+              </Group>
+            ) : null}
+
+            {budgetBase > 0 && selectedPresetObj && !presetIsSaved ? (
+              <Button
+                testID="budget-preset-save"
+                label={`Setează ${lei(presetAmount(selectedPresetObj.pct))} pe lună`}
+                tone={buttonFill}
+                onPress={saveLimitPreset}
+                loading={savingPreset}
+              />
+            ) : null}
+
+            {/* Manual amount -- always here: presets are a shortcut,
+                not the only way in. */}
+            <View style={{ flexDirection: "row", alignItems: "flex-end", gap: spacing.sm, marginTop: spacing.sm }}>
+              <View style={{ flex: 1 }}>
+                <Field
+                  testID="budget-manual-input"
+                  label={budgetBase > 0 ? "Sau o sumă a ta" : "Suma lunară"}
+                  value={manualAmount}
+                  onChangeText={setManualAmount}
+                  placeholder="ex. 1000"
+                  keyboardType="decimal-pad"
+                  suffix="lei"
+                  tone={color}
+                />
+              </View>
+              <Button
+                testID="budget-manual-save"
+                label="Salvează"
+                variant="secondary"
+                onPress={saveManualAmount}
+                loading={savingManual}
+                disabled={!manualAmount.trim() || Number(manualAmount.replace(",", ".")) === localLimit}
+              />
+            </View>
+
+            {localLimit ? (
+              <Button testID="budget-delete" variant="ghost" icon="trash-outline" label="Șterge bugetul" onPress={deleteBudget} loading={deleting} />
+            ) : null}
+          </View>
+
+          <View style={{ gap: spacing.sm }}>
+            <SectionHeader title={selected && selectedMonth ? `Înregistrări din ${monthLong(selectedMonth).toLowerCase()}` : "Recente"} />
+            {recurringMonthly > 0 ? (
+              <Text style={{ fontSize: 13, lineHeight: 18, color: colors.onSurfaceTertiary, paddingHorizontal: 4 }}>
+                Totalul include {lei(recurringMonthly)} pe lună din plăți recurente, care nu apar ca rânduri aici.
               </Text>
-            </View>
-          ) : null}
-
-          {selectedItems.length === 0 ? (
-            <View style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.lg }}>
-              <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Nimic înregistrat aici.</Text>
-            </View>
-          ) : (
-            <View style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, overflow: "hidden" }}>
-              {selectedItems.slice(0, 30).map((it, index) => (
-                <View
-                  key={it.id}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: spacing.md,
-                    paddingHorizontal: spacing.lg,
-                    paddingVertical: spacing.md,
-                    borderBottomWidth: index === Math.min(selectedItems.length, 30) - 1 ? 0 : StyleSheet.hairlineWidth,
-                    borderBottomColor: colors.border,
-                  }}
-                >
-                  <Ionicons name={icon} size={16} color={colors.onSurfaceTertiary} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurface }} numberOfLines={1}>
-                      {it.title}
-                    </Text>
-                    <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary, marginTop: 2 }}>{formatDate(it.due_at)}</Text>
-                  </View>
-                  <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurface }}>
-                    {(it.amount ?? 0).toLocaleString("en-US")}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          )}
+            ) : null}
+            {selectedItems.length === 0 ? (
+              <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card }}>
+                <EmptyState icon={icon} message="Nimic înregistrat aici." />
+              </View>
+            ) : (
+              <Group inset={68}>
+                {selectedItems.slice(0, 30).map((it) => (
+                  <Row
+                    key={it.id}
+                    leading={<IconWell icon={icon} color={color} tint={tint} />}
+                    title={it.title.replace(/^Cumpărături -- /, "")}
+                    subtitle={it.due_at ? roDate(it.due_at) : null}
+                    trailing={<Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{lei(it.amount ?? 0)}</Text>}
+                  />
+                ))}
+              </Group>
+            )}
+          </View>
         </>
       )}
     </ScrollView>

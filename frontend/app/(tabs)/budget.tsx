@@ -1,17 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  Pressable,
-  TextInput,
-  Modal,
-  KeyboardAvoidingView,
-  Platform,
-  ActivityIndicator,
-  DeviceEventEmitter,
-  StyleSheet,
-} from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, DeviceEventEmitter } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
@@ -19,12 +7,16 @@ import { api } from "@/lib/api";
 import { REFRESH_EVENT } from "./_layout";
 import { useFocusEffect } from "expo-router";
 import { notifyAction } from "@/lib/confirm";
-import { ProgressBar } from "@/components/dashboard/ProgressBar";
 import { RingProgress } from "@/components/dashboard/RingProgress";
 import { BudgetSpaceDetailPage } from "@/components/dashboard/BudgetSpaceDetailPage";
-import { profileFromSpace, detectSpaceType, SPACE_IDENTITY_COLORS, type SpaceKind } from "@/lib/spaces/spaceProfile";
+import { profileFromSpace, detectSpaceType, SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, spaceTextColor, type SpaceKind } from "@/lib/spaces/spaceProfile";
 import { BudgetOverviewPage } from "@/components/dashboard/BudgetOverviewPage";
 import { severityColor, budgetSeverity } from "@/lib/statusColors";
+import { PressableScale } from "@/components/ui/PressableScale";
+import { Sheet } from "@/components/ui/Sheet";
+import { PageTitle, SectionHeader, Group, Row, IconWell, Button, Field, EmptyState } from "@/components/ui/primitives";
+import { motion } from "@/lib/motion";
+import { capitalize, lei, roDate, roNumber } from "@/lib/format";
 
 type BudgetLimit = { category: string; monthly_limit: number; spent: number };
 type SavingsGoal = { target_amount: number; current_amount: number; target_date: string | null } | null;
@@ -32,9 +24,9 @@ type SpaceKindMeta = { kind: SpaceKind; label: string; icon: keyof typeof Ionico
 
 // The same type->space label map Item::SPENDING_TYPE_SPACE uses on the
 // backend for the Monthly Expenses breakdown -- a budget limit's
-// `category` is one of these labels now, never a free-typed string, so
-// "spent" always means "every real record from that space", not
-// whatever happened to have a matching category column filled in.
+// `category` is one of these labels (English KEYS, never shown -- the
+// screen shows SPACE_KIND_LABEL's Romanian name), so "spent" always
+// means "every real record from that space".
 const SPACE_KIND_META: Partial<Record<SpaceKind, { label: string; icon: keyof typeof Ionicons.glyphMap }>> = {
   car: { label: "Car", icon: "car-outline" },
   home: { label: "Home", icon: "home-outline" },
@@ -42,22 +34,17 @@ const SPACE_KIND_META: Partial<Record<SpaceKind, { label: string; icon: keyof ty
   expenses: { label: "Expenses", icon: "receipt-outline" },
 };
 
+const FREQUENCY_LABEL: Record<string, string> = { weekly: "săptămânal", monthly: "lunar", yearly: "anual" };
+
 // Every grocery_trip's title is literally "Cumpărături -- {listName}"
-// (see groceryTripToItemBody in lib/spaces/grocery/groceryItems.ts) --
-// on this card the space's own icon+label already says "Grocery", so
-// that fixed prefix is pure noise that eats into the 2-line budget
-// before the actual list name (the one distinguishing part) even
-// starts. Stripped here for display only; the stored title (used
-// elsewhere, e.g. a full expense history) is untouched.
+// (see groceryTripToItemBody) -- the row already says which space it
+// is, so that fixed prefix is stripped for display only.
 function biggestExpenseTitle(title: string): string {
   return title.replace(/^Cumpărături -- /, "");
 }
 
 // Fraction of the current month already elapsed (0-1) -- what spending
 // "should" be at today if a budget were spread evenly across the month.
-// Inspired by PocketGuard's "Spending Pace": comparing this to the
-// actual spent/limit ratio catches a space that's on track to go over
-// well before it actually crosses 100%.
 function monthProgress(): number {
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
@@ -66,51 +53,36 @@ function monthProgress(): number {
 
 // How many percentage points ahead of pace a space is -- e.g. 67% of
 // the month gone but 80% of the budget spent is +13. Null once already
-// over budget (ratio >= 1): that's its own, more urgent state (red
-// ring), a pace warning on top would just be noise.
+// over budget (that's its own, more urgent state) or under 10 points.
 function paceDelta(ratio: number): number | null {
   if (ratio >= 1) return null;
-  const pace = monthProgress();
-  const delta = (ratio - pace) * 100;
+  const delta = (ratio - monthProgress()) * 100;
   return delta > 10 ? Math.round(delta) : null;
 }
 
 export default function BudgetScreen() {
-  const { colors, spacing, radius, typography } = useTheme();
+  const { colors, spacing, radius, typography, isDark } = useTheme();
 
   const [limits, setLimits] = useState<BudgetLimit[]>([]);
   // Real spend per space label, this month + last month + a 3-month
-  // average -- populated regardless of whether a limit is set there
-  // yet, so an unset card can still show real numbers (see the
-  // unset-card render below) instead of a bare "set a budget" prompt
-  // with nothing to base the number on.
+  // average -- populated whether or not a limit is set, so an unset row
+  // still shows a real number to base the first budget on.
   const [spending, setSpending] = useState<Record<string, { this_month: number; last_month: number; avg_last_3_months: number }>>({});
-  // This month's single largest line item per label -- "what's
-  // actually driving the number", not just the total.
+  // This month's single largest line item per label.
   const [biggest, setBiggest] = useState<Record<string, { title: string; amount: number; from_last_month: boolean } | null>>({});
-  // Home-only: total monthly commitment from active Recurring items --
-  // deliberately separate from `spent` (see BudgetController::index's
-  // own comment on why home_recurring stays out of SPENDING_TYPES).
+  // Home-only: monthly commitment from active Recurring items --
+  // deliberately separate from `spent` (see BudgetController::index).
   const [recurring, setRecurring] = useState<Record<string, number>>({});
   const [recurringBills, setRecurringBills] = useState<any[]>([]);
   const [savingsGoal, setSavingsGoal] = useState<SavingsGoal>(null);
-  // Every space kind the user actually has at least one space for
-  // (Car/Home/Grocery/Expenses -- "other" spaces don't feed the
-  // spending aggregation at all, so they never get a budget card) --
-  // "based on which spaces exist", not a fixed list of 4.
+  // Every space kind the user actually has at least one space for --
+  // "other" spaces don't feed the spending aggregation, so no row.
   const [spaceKinds, setSpaceKinds] = useState<SpaceKindMeta[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Every ring card (set or unset) opens this same detail page now --
-  // setting, changing and deleting a budget all live inside it (its own
-  // "BUGET" section), not a separate sheet here. No 3-month history
-  // required: that section falls back to a plain manual amount once
-  // there's nothing to base a % suggestion on.
+  // Every space row opens this detail page -- setting, changing and
+  // deleting a budget all live inside it.
   const [spaceDetailFor, setSpaceDetailFor] = useState<{ label: string; icon: keyof typeof Ionicons.glyphMap; monthlyLimit?: number } | null>(null);
-
-  // Reached from the row right under the Savings Goal card -- both are
-  // "whole picture" concerns (not one specific space), so they live
-  // next to each other at the top of the tab.
   const [showOverview, setShowOverview] = useState(false);
 
   const [editingGoal, setEditingGoal] = useState(false);
@@ -173,17 +145,14 @@ export default function BudgetScreen() {
     }
   };
 
-  const goalProgress = savingsGoal && savingsGoal.target_amount > 0
-    ? Math.max(0, Math.min(1, savingsGoal.current_amount / savingsGoal.target_amount))
-    : 0;
   const goalIsNegative = !!savingsGoal && savingsGoal.current_amount < 0;
 
-  // Just the set-budget spaces -- the same "Buget total" entry row's
-  // preview and BudgetOverviewPage's own header total agree on scope
-  // (spaces without a limit still show up in that page's ranked list,
-  // just not in this cumulative sum).
-  const totalBudgetAcrossSpaces = limits.reduce((sum, l) => sum + l.monthly_limit, 0);
-  const totalSpentAcrossSpaces = limits.reduce((sum, l) => sum + l.spent, 0);
+  // Just the set-budget spaces -- the hero and BudgetOverviewPage's own
+  // header total agree on scope.
+  const totalBudget = limits.reduce((sum, l) => sum + l.monthly_limit, 0);
+  const totalSpent = limits.reduce((sum, l) => sum + l.spent, 0);
+  const totalRatio = totalBudget > 0 ? totalSpent / totalBudget : 0;
+  const left = totalBudget - totalSpent;
 
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="budget-screen">
@@ -203,316 +172,183 @@ export default function BudgetScreen() {
           onBack={() => setShowOverview(false)}
         />
       ) : (
-      <ScrollView contentContainerStyle={{ padding: spacing.xl, paddingBottom: 140, gap: spacing.xl }}>
-        <Text style={{ fontSize: 30, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 }}>
-          Budget
-        </Text>
+      <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 140, gap: spacing.section }}>
+        <PageTitle>Buget</PageTitle>
 
         {loading ? (
           <ActivityIndicator color={colors.onSurfaceTertiary} />
         ) : (
           <>
-            {/* Savings goal */}
-            <Pressable
-              testID="savings-goal-card"
-              onPress={openEditGoal}
-              accessibilityRole="button"
-              accessibilityLabel="Edit savings goal"
-              style={{
-                backgroundColor: "transparent",
-                borderWidth: 1,
-                borderColor: colors.border,
-                borderRadius: radius.sm,
-                padding: spacing.lg,
-                gap: spacing.sm,
-              }}
-            >
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <Text style={{ ...typography.label, color: colors.onSurfaceTertiary }}>
-                  SAVINGS GOAL
-                </Text>
-                <Ionicons name="create-outline" size={16} color={colors.caution} />
-              </View>
-
-              {savingsGoal ? (
-                <>
-                  <View style={{ flexDirection: "row", alignItems: "baseline", gap: 4 }}>
-                    <Text style={{ ...typography.title, color: goalIsNegative ? colors.error : colors.onSurface }}>
-                      {savingsGoal.current_amount.toLocaleString("en-US")}
-                    </Text>
-                    <Text style={{ ...typography.caption, color: colors.onSurfaceTertiary }}>
-                      / {savingsGoal.target_amount.toLocaleString("en-US")} RON
-                    </Text>
-                  </View>
-                  <ProgressBar value={goalProgress} tone={goalIsNegative ? "error" : "success"} />
-                  {goalIsNegative ? (
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: colors.error }}>
-                      Ai cheltuit cu {Math.abs(savingsGoal.current_amount).toLocaleString("en-US")} RON peste bugetele planificate.
-                    </Text>
-                  ) : (
-                    <Text style={{ fontSize: 10.5, color: colors.onSurfaceTertiary }}>
-                      Se adaugă automat, la final de lună, tot ce economisești din bugetele fiecărui space.
-                    </Text>
-                  )}
-                </>
-              ) : (
-                <Text style={{ ...typography.caption, color: colors.onSurfaceTertiary }}>
-                  No savings goal set yet. Tap to add one.
-                </Text>
-              )}
-            </Pressable>
-
-            {/* Buget total -- the entry point into BudgetOverviewPage's
-                Model 3 (composition ring + ranked spend list). Right
-                under Savings Goal on purpose: both answer a whole-
-                picture question, not a single space's, so they sit
-                together before the per-space grid below. */}
+            {/* The whole month at a glance -- opens the overview page
+                (composition ring + ranked spend list). */}
             {limits.length > 0 ? (
-              <Pressable
+              <PressableScale
                 testID="budget-overview-entry"
                 onPress={() => setShowOverview(true)}
+                scaleTo={motion.scale.card}
                 accessibilityRole="button"
-                accessibilityLabel={`Total budget: ${totalSpentAcrossSpaces} of ${totalBudgetAcrossSpaces} RON`}
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: spacing.md,
-                  backgroundColor: "transparent",
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: radius.sm,
-                  padding: spacing.lg,
-                }}
+                accessibilityLabel={`Cheltuit din buget: ${lei(totalSpent)} din ${lei(totalBudget)}. Vezi detalii`}
+                style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, flexDirection: "row", alignItems: "center", gap: 18 }}
               >
-                <View style={{ flexDirection: "row" }}>
-                  {limits.map((l, index) => {
-                    const kind = spaceKinds.find((k) => k.label === l.category)?.kind;
-                    const dotColor = (kind && SPACE_IDENTITY_COLORS[kind]) || colors.onSurfaceTertiary;
-                    return (
-                      <View
-                        key={l.category}
-                        style={{
-                          width: 12,
-                          height: 12,
-                          borderRadius: 6,
-                          backgroundColor: dotColor,
-                          marginLeft: index === 0 ? 0 : -4,
-                          borderWidth: 2,
-                          borderColor: colors.surface,
-                        }}
-                      />
-                    );
-                  })}
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurface }}>Buget total</Text>
-                  <Text style={{ fontSize: 11.5, color: colors.onSurfaceTertiary, marginTop: 1 }}>
-                    {totalSpentAcrossSpaces.toLocaleString("en-US")} / {totalBudgetAcrossSpaces.toLocaleString("en-US")} RON · {limits.length} spaces
+                <RingProgress
+                  value={totalRatio}
+                  size={96}
+                  color={severityColor(budgetSeverity(totalRatio), colors)}
+                  trackColor={colors.surfaceTertiary}
+                  paceMarker={monthProgress()}
+                  markerColor={colors.onSurfaceTertiary}
+                />
+                <View style={{ flex: 1, gap: 2 }}>
+                  <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Cheltuit din buget</Text>
+                  <Text style={{ ...typography.display, color: colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>{lei(totalSpent)}</Text>
+                  <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>din {lei(totalBudget)}</Text>
+                  <Text style={{ fontSize: 13, color: left >= 0 ? colors.success : colors.error, marginTop: 4 }}>
+                    {left >= 0 ? `Mai ai ${lei(left)}` : `Ai depășit cu ${lei(-left)}`}
                   </Text>
                 </View>
-                <Ionicons name="chevron-forward" size={18} color={colors.onSurfaceTertiary} />
-              </Pressable>
+              </PressableScale>
+            ) : spaceKinds.length > 0 ? (
+              <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: 4 }}>
+                <Text style={{ fontSize: 17, fontWeight: "600", color: colors.onSurface }}>Încă nu ai un buget</Text>
+                <Text style={{ fontSize: 14, lineHeight: 20, color: colors.onSurfaceTertiary }}>
+                  Alege un spațiu mai jos și pune-i o limită lunară. Vezi apoi aici cât ai cheltuit din ea.
+                </Text>
+              </View>
             ) : null}
 
-            {/* Space budgets -- one ring per space the user actually has,
-                planned (the limit) vs. actual (real spend collected from
-                that space, same source as Monthly Expenses). */}
-            <View style={{ gap: spacing.md }} testID="section-limits">
-              <Text style={{ ...typography.label, color: colors.onSurfaceTertiary }}>
-                SPACE BUDGETS
-              </Text>
-
+            <View style={{ gap: spacing.sm }} testID="section-limits">
+              <SectionHeader title="Pe spații" />
               {spaceKinds.length === 0 ? (
-                <View style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.lg }}>
-                  <Text style={{ ...typography.caption, color: colors.onSurfaceTertiary }}>
-                    No Car, Home, Grocery or Expenses space yet -- create one to set a budget for it.
-                  </Text>
+                <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card }}>
+                  <EmptyState icon="wallet-outline" message="Creează un spațiu Mașină, Casă, Cumpărături sau Cheltuieli ca să-i poți pune un buget." />
                 </View>
               ) : (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.md }}>
+                <Group inset={62}>
                   {spaceKinds.map((meta) => {
+                    const name = SPACE_KIND_LABEL[meta.kind] ?? meta.label;
+                    const color = SPACE_IDENTITY_COLORS[meta.kind] ?? colors.onSurfaceTertiary;
+                    const tint = spaceTextColor(meta.kind, isDark) ?? color;
                     const limit = limits.find((l) => l.category === meta.label);
-                    const cardWidth = "47%" as const;
-
-                    if (!limit) {
-                      // No limit yet, but real spend still shows -- this
-                      // month plus a vs.-last-month comparison, so
-                      // setting a first number is an informed guess, not
-                      // a blind one.
-                      const spend = spending[meta.label];
-                      const change = spend && spend.last_month > 0
-                        ? ((spend.this_month - spend.last_month) / spend.last_month) * 100
-                        : null;
-
-                      return (
-                        <Pressable
-                          key={meta.kind}
-                          testID={`space-budget-unset-${meta.kind}`}
-                          onPress={() => setSpaceDetailFor({ label: meta.label, icon: meta.icon })}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Set a budget for ${meta.label}`}
-                          style={{
-                            width: cardWidth,
-                            borderRadius: radius.sm,
-                            borderWidth: 1.5,
-                            borderStyle: "dashed",
-                            borderColor: colors.border,
-                            padding: spacing.lg,
-                            alignItems: "center",
-                            gap: 6,
-                          }}
-                        >
-                          <Ionicons name={meta.icon} size={20} color={SPACE_IDENTITY_COLORS[meta.kind] ?? colors.onSurfaceTertiary} />
-                          <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurface }}>{meta.label}</Text>
-
-                          {spend ? (
-                            <>
-                              <Text style={{ fontSize: 18, fontWeight: "800", color: colors.onSurface }}>
-                                {spend.this_month.toLocaleString("en-US")} <Text style={{ fontSize: 11, fontWeight: "600", color: colors.onSurfaceTertiary }}>RON</Text>
-                              </Text>
-                              {spend.last_month > 0 ? (
-                                <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
-                                  {change !== null ? (
-                                    <Ionicons
-                                      name={change > 0 ? "arrow-up" : change < 0 ? "arrow-down" : "remove"}
-                                      size={10}
-                                      color={colors.onSurfaceTertiary}
-                                    />
-                                  ) : null}
-                                  <Text style={{ fontSize: 10.5, color: colors.onSurfaceTertiary }}>
-                                    vs {spend.last_month.toLocaleString("en-US")} luna trecută
-                                  </Text>
-                                </View>
-                              ) : null}
-                            </>
-                          ) : null}
-
-                          <Text style={{ fontSize: 11, fontWeight: "700", color: colors.onSurface, marginTop: 4 }}>
-                            Setează un buget
-                          </Text>
-                        </Pressable>
-                      );
-                    }
-
-                    const ratio = limit.monthly_limit > 0 ? limit.spent / limit.monthly_limit : 0;
-                    // A pace warning still takes priority visually even
-                    // under 80% -- 20% over pace at month's 1/3 mark is a
-                    // real early signal that a plain ratio-based tone
-                    // would miss until it's too late to react.
-                    const pace = paceDelta(ratio);
-                    const tone = pace !== null ? colors.warning : severityColor(budgetSeverity(ratio), colors);
+                    const spend = spending[meta.label];
                     const topItem = biggest[meta.label];
-                    const recurringNote = meta.label === "Home" ? recurring["Home"] : 0;
+                    const recurringNote = meta.label === "Home" ? recurring["Home"] || 0 : 0;
+
+                    const ratio = limit && limit.monthly_limit > 0 ? limit.spent / limit.monthly_limit : 0;
+                    // A pace warning takes priority even under 80% --
+                    // 20 points over pace a third into the month is a
+                    // real early signal a plain ratio tone would miss.
+                    const pace = limit ? paceDelta(ratio) : null;
+                    const tone = pace !== null ? colors.warning : severityColor(budgetSeverity(ratio), colors);
+
+                    const notes = [
+                      pace !== null ? { text: `Cu ${pace}% peste ritmul lunii`, color: colors.warning } : null,
+                      ratio >= 1 ? { text: `Depășit cu ${lei(limit!.spent - limit!.monthly_limit)}`, color: colors.error } : null,
+                      topItem ? { text: `Cea mai mare${topItem.from_last_month ? " (luna trecută)" : ""}: ${biggestExpenseTitle(topItem.title)}, ${lei(topItem.amount)}`, color: colors.onSurfaceTertiary } : null,
+                      recurringNote > 0 ? { text: `Din care ${lei(recurringNote)} plăți recurente`, color: colors.onSurfaceTertiary } : null,
+                    ].filter(Boolean) as { text: string; color: string }[];
 
                     return (
-                      <Pressable
+                      <PressableScale
                         key={meta.kind}
-                        testID={`space-budget-${meta.kind}`}
-                        onPress={() => setSpaceDetailFor({ label: meta.label, icon: meta.icon, monthlyLimit: limit.monthly_limit })}
+                        testID={limit ? `space-budget-${meta.kind}` : `space-budget-unset-${meta.kind}`}
+                        onPress={() => setSpaceDetailFor({ label: meta.label, icon: meta.icon, monthlyLimit: limit?.monthly_limit })}
+                        scaleTo={1}
+                        pressedStyle={{ backgroundColor: colors.surfaceTertiary }}
                         accessibilityRole="button"
-                        accessibilityLabel={`${meta.label}: ${limit.spent} of ${limit.monthly_limit} RON`}
-                        style={{
-                          width: cardWidth,
-                          backgroundColor: "transparent",
-                          borderRadius: radius.sm,
-                          padding: spacing.lg,
-                          alignItems: "center",
-                          gap: spacing.sm,
-                          borderWidth: 1,
-                          borderColor: ratio >= 1 ? colors.error : colors.border,
-                        }}
+                        accessibilityLabel={limit ? `${name}: ${lei(limit.spent)} din ${lei(limit.monthly_limit)}` : `Setează un buget pentru ${name}`}
+                        style={{ paddingHorizontal: spacing.lg, paddingVertical: 14, gap: 8, backgroundColor: colors.surfaceSecondary }}
                       >
-                        <View style={{ width: 84, height: 84, alignItems: "center", justifyContent: "center" }}>
-                          <RingProgress
-                            value={ratio}
-                            color={tone}
-                            trackColor={colors.surfaceTertiary}
-                            paceMarker={monthProgress()}
-                            markerColor={colors.onSurface}
-                          />
-                          <Text style={{ position: "absolute", fontSize: 15, fontWeight: "800", color: colors.onSurface }}>
-                            {Math.round(ratio * 100)}%
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          <Ionicons name={meta.icon} size={13} color={SPACE_IDENTITY_COLORS[meta.kind] ?? colors.onSurface} />
-                          <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurface }}>{meta.label}</Text>
-                        </View>
-                        <Text style={{ fontSize: 11.5, color: ratio >= 1 ? colors.error : colors.onSurfaceTertiary, fontWeight: ratio >= 1 ? "700" : "400" }}>
-                          {limit.spent.toLocaleString("en-US")} / {limit.monthly_limit.toLocaleString("en-US")} RON
-                        </Text>
-
-                        {pace !== null ? (
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                            <Ionicons name="trending-up" size={11} color={colors.warning} />
-                            <Text style={{ fontSize: 10, fontWeight: "700", color: colors.warning }}>
-                              {pace}% peste ritmul normal
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+                          <IconWell icon={meta.icon} color={color} tint={tint} size={34} />
+                          <Text style={{ flex: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>{name}</Text>
+                          {limit ? (
+                            <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>
+                              <Text style={{ fontWeight: "600", color: ratio >= 1 ? colors.error : colors.onSurface }}>{roNumber(limit.spent, 2)}</Text>
+                              {` / ${lei(limit.monthly_limit)}`}
                             </Text>
+                          ) : (
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+                              <Text style={{ fontSize: 14, color: tint }}>Setează</Text>
+                              <Ionicons name="chevron-forward" size={14} color={tint} />
+                            </View>
+                          )}
+                        </View>
+                        {limit ? (
+                          <View style={{ marginLeft: 46, height: 6, borderRadius: 3, backgroundColor: colors.surfaceTertiary, overflow: "hidden" }}>
+                            <View style={{ width: `${Math.min(1, ratio) * 100}%`, height: "100%", borderRadius: 3, backgroundColor: tone }} />
                           </View>
-                        ) : null}
-
-                        {topItem ? (
-                          <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 4, width: "100%" }}>
-                            <Ionicons name="flame-outline" size={11} color={colors.onSurfaceTertiary} style={{ marginTop: 1.5 }} />
-                            <Text style={{ fontSize: 10.5, color: colors.onSurfaceTertiary, lineHeight: 13, textAlign: "center", flex: 1 }} numberOfLines={3}>
-                              Cea mai mare {topItem.from_last_month ? "(luna trecută)" : ""}: {biggestExpenseTitle(topItem.title)} · {topItem.amount.toLocaleString("en-US")} RON
-                            </Text>
-                          </View>
-                        ) : null}
-
-                        {recurringNote > 0 ? (
-                          <Text style={{ fontSize: 10.5, color: colors.onSurfaceTertiary }}>
-                            din care {recurringNote.toLocaleString("en-US")} RON recurente
+                        ) : spend ? (
+                          <Text style={{ marginLeft: 46, fontSize: 13, color: colors.onSurfaceTertiary }}>
+                            {lei(spend.this_month)} luna asta{spend.last_month > 0 ? `, ${lei(spend.last_month)} luna trecută` : ""}
                           </Text>
                         ) : null}
-                      </Pressable>
+                        {limit && notes.length > 0 ? (
+                          <View style={{ marginLeft: 46, gap: 2 }}>
+                            {notes.map((n) => (
+                              <Text key={n.text} style={{ fontSize: 13, color: n.color }} numberOfLines={2}>{n.text}</Text>
+                            ))}
+                          </View>
+                        ) : null}
+                      </PressableScale>
                     );
                   })}
-                </View>
+                </Group>
               )}
             </View>
 
-            {/* Recurring bills */}
-            <View style={{ gap: spacing.md }} testID="section-recurring">
-              <Text style={{ ...typography.label, color: colors.onSurfaceTertiary }}>
-                RECURRING BILLS
-              </Text>
-
-              {recurringBills.length === 0 ? (
-                <View style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.lg }}>
-                  <Text style={{ ...typography.caption, color: colors.onSurfaceTertiary }}>
-                    Nothing recurring yet -- add one from a Home space's Recurring category.
+            {/* Savings goal -- filled up automatically at month's end
+                with whatever was left in each space's budget. */}
+            <PressableScale
+              testID="savings-goal-card"
+              onPress={openEditGoal}
+              scaleTo={motion.scale.card}
+              accessibilityRole="button"
+              accessibilityLabel="Editează obiectivul de economii"
+              style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, paddingHorizontal: 18, paddingVertical: spacing.lg, gap: spacing.md }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+                <IconWell icon="wallet-outline" color={goalIsNegative ? colors.error : colors.success} size={34} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }}>Economii</Text>
+                  <Text style={{ fontSize: 13, color: goalIsNegative ? colors.error : colors.onSurfaceTertiary, marginTop: 2 }}>
+                    {savingsGoal
+                      ? `${roNumber(savingsGoal.current_amount, 2)} din ${lei(savingsGoal.target_amount)}`
+                      : "Pune-ți un obiectiv"}
                   </Text>
                 </View>
+                <Ionicons name="chevron-forward" size={18} color={colors.onSurfaceTertiary} />
+              </View>
+              {savingsGoal && savingsGoal.target_amount > 0 ? (
+                <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.surfaceTertiary, overflow: "hidden" }}>
+                  <View style={{ width: `${Math.max(0, Math.min(1, savingsGoal.current_amount / savingsGoal.target_amount)) * 100}%`, height: "100%", borderRadius: 3, backgroundColor: colors.success }} />
+                </View>
+              ) : null}
+              {goalIsNegative ? (
+                <Text style={{ fontSize: 13, lineHeight: 18, color: colors.error }}>
+                  Ai cheltuit cu {lei(Math.abs(savingsGoal!.current_amount))} peste bugetele planificate.
+                </Text>
+              ) : null}
+            </PressableScale>
+
+            <View style={{ gap: spacing.sm }} testID="section-recurring">
+              <SectionHeader title="Plăți recurente" />
+              {recurringBills.length === 0 ? (
+                <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card }}>
+                  <EmptyState icon="repeat" message="Nicio plată recurentă. Le adaugi din spațiul Casă, la Plăți recurente." />
+                </View>
               ) : (
-                <View style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, overflow: "hidden" }}>
-                  {recurringBills.map((bill, index) => (
-                    <View
+                <Group inset={68}>
+                  {recurringBills.map((bill) => (
+                    <Row
                       key={bill.id}
                       testID={`recurring-bill-${bill.id}`}
-                      style={{
-                        flexDirection: "row", alignItems: "center", gap: spacing.md,
-                        paddingHorizontal: spacing.lg, paddingVertical: spacing.md,
-                        borderBottomWidth: index === recurringBills.length - 1 ? 0 : StyleSheet.hairlineWidth,
-                        borderBottomColor: colors.border,
-                      }}
-                    >
-                      <Ionicons name="repeat-outline" size={18} color={colors.onSurfaceTertiary} />
-                      <View style={{ flex: 1 }}>
-                        <Text style={{ ...typography.body, color: colors.onSurface }}>{bill.title}</Text>
-                        <Text style={{ ...typography.caption, color: colors.onSurfaceTertiary }}>
-                          {bill.recurrence}
-                          {bill.due_at ? ` · next ${new Date(bill.due_at).toLocaleDateString()}` : ""}
-                        </Text>
-                      </View>
-                      {bill.amount != null ? (
-                        <Text style={{ ...typography.body, color: colors.onSurface }}>
-                          {Number(bill.amount).toLocaleString("en-US")} {bill.currency || "RON"}
-                        </Text>
-                      ) : null}
-                    </View>
+                      leading={<IconWell icon="repeat" color={SPACE_IDENTITY_COLORS.home!} tint={spaceTextColor("home", isDark)} />}
+                      title={bill.title}
+                      subtitle={capitalize([FREQUENCY_LABEL[bill.recurrence] || bill.recurrence, bill.due_at ? `următoarea pe ${roDate(bill.due_at)}` : null].filter(Boolean).join(", "))}
+                      trailing={bill.amount != null ? <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{lei(Number(bill.amount))}</Text> : null}
+                    />
                   ))}
-                </View>
+                </Group>
               )}
             </View>
           </>
@@ -520,50 +356,27 @@ export default function BudgetScreen() {
       </ScrollView>
       )}
 
-      {/* Edit savings goal */}
-      <Modal visible={editingGoal} animationType="slide" transparent onRequestClose={() => setEditingGoal(false)}>
-        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1, justifyContent: "flex-end" }}>
-          <Pressable onPress={() => setEditingGoal(false)} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }} />
-          <View style={{ backgroundColor: colors.surface, padding: spacing.xl, gap: spacing.lg, borderTopLeftRadius: radius.lg, borderTopRightRadius: radius.lg }}>
-            <Text style={{ ...typography.subtitle, color: colors.onSurface }}>Savings Goal</Text>
-            <TextInput
-              testID="goal-target-input"
-              value={goalTarget}
-              onChangeText={setGoalTarget}
-              placeholder="Target amount (RON)"
-              placeholderTextColor={colors.onSurfaceTertiary}
-              keyboardType="decimal-pad"
-              autoFocus
-              style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, color: colors.onSurface, borderRadius: radius.sm, paddingHorizontal: spacing.lg, paddingVertical: 14, fontSize: 16 }}
-            />
-            <TextInput
-              testID="goal-current-input"
-              value={goalCurrent}
-              onChangeText={setGoalCurrent}
-              placeholder="Saved so far (RON)"
-              placeholderTextColor={colors.onSurfaceTertiary}
-              keyboardType="decimal-pad"
-              style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, color: colors.onSurface, borderRadius: radius.sm, paddingHorizontal: spacing.lg, paddingVertical: 14, fontSize: 16 }}
-            />
-            <Text style={{ fontSize: 11.5, color: colors.onSurfaceTertiary, marginTop: -8 }}>
-              Se actualizează automat la final de lună -- schimbă suma aici doar dacă vrei să o corectezi manual.
-            </Text>
-            <Pressable
-              testID="goal-save-button"
-              onPress={saveGoal}
-              disabled={savingGoal || !goalTarget.trim()}
-              accessibilityRole="button"
-              accessibilityLabel="Save goal"
-              accessibilityState={{ busy: savingGoal, disabled: savingGoal || !goalTarget.trim() }}
-              style={{ backgroundColor: colors.brandPrimary, opacity: savingGoal || !goalTarget.trim() ? 0.5 : 1, paddingVertical: 14, borderRadius: radius.md, alignItems: "center" }}
-            >
-              {savingGoal ? <ActivityIndicator color={colors.onBrandPrimary} /> : (
-                <Text style={{ color: colors.onBrandPrimary, fontWeight: "700", fontSize: 15 }}>Save Goal</Text>
-              )}
-            </Pressable>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      <Sheet
+        visible={editingGoal}
+        onClose={() => setEditingGoal(false)}
+        title="Obiectiv de economii"
+        icon="wallet-outline"
+        tone={colors.success}
+        footer={<Button testID="goal-save-button" label="Salvează obiectivul" onPress={saveGoal} loading={savingGoal} disabled={!goalTarget.trim()} />}
+      >
+        <Field testID="goal-target-input" label="Vreau să strâng" value={goalTarget} onChangeText={setGoalTarget} placeholder="ex. 10000" keyboardType="decimal-pad" suffix="lei" big tone={colors.success} autoFocus />
+        <Field
+          testID="goal-current-input"
+          label="Am strâns deja"
+          value={goalCurrent}
+          onChangeText={setGoalCurrent}
+          placeholder="0"
+          keyboardType="decimal-pad"
+          suffix="lei"
+          tone={colors.success}
+          hint="Se actualizează singur la final de lună. Schimbă suma doar dacă vrei s-o corectezi."
+        />
+      </Sheet>
     </SafeAreaView>
   );
 }

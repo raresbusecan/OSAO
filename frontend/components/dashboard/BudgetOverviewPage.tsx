@@ -1,10 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { MultiRingProgress } from "@/components/dashboard/RingProgress";
-import { SPACE_IDENTITY_COLORS, type SpaceKind } from "@/lib/spaces/spaceProfile";
+import { SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, type SpaceKind } from "@/lib/spaces/spaceProfile";
+import { PressableScale } from "@/components/ui/PressableScale";
+import { TopBar, Identity, SectionHeader, Group, EmptyState } from "@/components/ui/primitives";
+import { capitalize, lei } from "@/lib/format";
 
 type ArchiveMonth = {
   month: string;
@@ -22,13 +25,21 @@ export type BudgetOverviewPageProps = {
   onBack: () => void;
 };
 
+/** "2026-09" -> "Septembrie 2026" (the backend's own label is English). */
+function monthTitle(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  if (!y || !m) return month;
+  return capitalize(new Date(y, m - 1, 1).toLocaleDateString("ro-RO", { month: "long", year: "numeric" }));
+}
+
+function signedLei(n: number): string {
+  return `${n >= 0 ? "+" : "−"}${lei(Math.abs(n))}`;
+}
+
 /**
- * Reached by tapping "Buget total" right under the Savings Goal card on
- * the Budget tab -- Model 3 from the "buget total" mockups: a ring
- * composed of what was actually SPENT this month (not budget shares,
- * that's a different question), each space keeping the same identity
- * color everywhere in the app, plus a ranked list below answering "ce
- * zic cheltuielile din fiecare space" directly, biggest first.
+ * The Budget hero's detail page: a ring composed of what was actually
+ * SPENT this month (each space in its identity color), the spaces
+ * ranked by spend, and one archived snapshot per completed month.
  */
 export function BudgetOverviewPage({ limits, spending, spaceKinds, onBack }: BudgetOverviewPageProps) {
   const { colors, spacing, radius, typography } = useTheme();
@@ -57,14 +68,12 @@ export function BudgetOverviewPage({ limits, spending, spaceKinds, onBack }: Bud
     return spaceKinds
       .map((meta) => {
         const limit = limits.find((l) => l.category === meta.label);
-        // A space without its own budget limit still spent real money
-        // this month -- this_month from the Budget tab's own spending
-        // map covers it, so it isn't silently dropped from the ranking.
+        // A space without its own limit still spent real money this
+        // month -- it stays in the ranking instead of silently dropping.
         const spent = limit ? limit.spent : spending[meta.label]?.this_month ?? 0;
         return {
           kind: meta.kind,
-          label: meta.label,
-          icon: meta.icon,
+          name: SPACE_KIND_LABEL[meta.kind] ?? meta.label,
           spent,
           budget: limit?.monthly_limit,
           color: SPACE_IDENTITY_COLORS[meta.kind] ?? colors.onSurfaceTertiary,
@@ -76,173 +85,158 @@ export function BudgetOverviewPage({ limits, spending, spaceKinds, onBack }: Bud
   const totalSpent = rows.reduce((sum, r) => sum + r.spent, 0);
   const totalBudget = limits.reduce((sum, l) => sum + l.monthly_limit, 0);
   const overallRatio = totalBudget > 0 ? totalSpent / totalBudget : 0;
-
   const segments = rows
     .filter((r) => r.spent > 0)
     .map((r) => ({ value: totalSpent > 0 ? r.spent / totalSpent : 0, color: r.color }));
+
+  // Archived categories carry the English key ("Car") -- show the
+  // Romanian name and the right color for it.
+  const categoryMeta = (category: string) => {
+    const kind = spaceKinds.find((k) => k.label === category)?.kind
+      ?? (["car", "home", "grocery", "expenses"] as SpaceKind[]).find((k) => k === category.toLowerCase());
+    return {
+      name: (kind && SPACE_KIND_LABEL[kind]) || category,
+      color: (kind && SPACE_IDENTITY_COLORS[kind]) || colors.onSurfaceTertiary,
+    };
+  };
 
   return (
     <ScrollView
       testID="budget-overview-page"
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 150 }}
+      contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingTop: spacing.md, paddingBottom: spacing.xl }}>
-        <Pressable
-          testID="budget-overview-back"
-          onPress={onBack}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={{ width: 40, height: 40, borderRadius: radius.pill, backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }}
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
-        </Pressable>
-        <Text style={{ fontSize: 22, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.4 }}>Buget total</Text>
-      </View>
+      <TopBar onBack={onBack} backTestID="budget-overview-back" />
+      <Identity title="Luna asta" subtitle="Unde s-au dus banii, pe spații" />
 
       {rows.length === 0 ? (
-        <View style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.lg }}>
-          <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Niciun space cu buget sau cheltuieli încă.</Text>
+        <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card }}>
+          <EmptyState icon="pie-chart-outline" message="Niciun spațiu cu buget sau cheltuieli încă." />
         </View>
       ) : (
         <>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.lg, backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.lg, marginBottom: spacing.xl }}>
-            <View style={{ width: 88, height: 88 }}>
-              <MultiRingProgress segments={segments} trackColor={colors.surfaceTertiary} />
+          <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.lg }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
+              <MultiRingProgress segments={segments} size={96} trackColor={colors.surfaceTertiary} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Cheltuit în total</Text>
+                <Text style={{ ...typography.display, color: colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>{lei(totalSpent)}</Text>
+                {totalBudget > 0 ? (
+                  <Text style={{ fontSize: 13, color: overallRatio >= 1 ? colors.error : colors.success, marginTop: 2 }}>
+                    {Math.round(overallRatio * 100)}% din bugetul de {lei(totalBudget)}
+                  </Text>
+                ) : null}
+              </View>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 24, fontWeight: "800", color: colors.onSurface }}>
-                {totalSpent.toLocaleString("en-US")} RON
-              </Text>
-              <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary, marginTop: 2 }}>
-                cheltuite luna asta, în total
-              </Text>
-              {totalBudget > 0 ? (
-                <Text style={{ fontSize: 11, fontWeight: "700", color: overallRatio >= 1 ? colors.error : colors.success, marginTop: 3 }}>
-                  {Math.round(overallRatio * 100)}% din bugetul de {totalBudget.toLocaleString("en-US")} RON
-                </Text>
-              ) : null}
-            </View>
-          </View>
 
-          <Text style={{ ...typography.label, color: colors.onSurfaceTertiary, marginBottom: spacing.md }}>
-            DUPĂ CÂT S-A CHELTUIT
-          </Text>
-
-          <View style={{ gap: spacing.md }}>
-            {rows.map((row) => {
-              const shareOfTotal = totalSpent > 0 ? (row.spent / totalSpent) * 100 : 0;
-              const ownRatio = row.budget && row.budget > 0 ? Math.min(1, row.spent / row.budget) : null;
-              return (
-                <View key={row.kind} style={{ gap: 4 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: row.color }} />
-                    <Text style={{ flex: 1, fontSize: 13, fontWeight: "700", color: colors.onSurface }}>{row.label}</Text>
-                    <Text style={{ fontSize: 11.5, color: colors.onSurfaceTertiary }}>
-                      {row.spent.toLocaleString("en-US")}{row.budget ? ` / ${row.budget.toLocaleString("en-US")} RON` : " RON"}
-                    </Text>
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: colors.onSurface, width: 34, textAlign: "right" }}>
-                      {Math.round(shareOfTotal)}%
-                    </Text>
-                  </View>
-                  {ownRatio !== null ? (
-                    <View style={{ height: 6, backgroundColor: colors.surfaceTertiary, borderRadius: 3, overflow: "hidden" }}>
-                      <View style={{ width: `${ownRatio * 100}%`, height: "100%", backgroundColor: row.color }} />
-                    </View>
-                  ) : (
-                    <Text style={{ fontSize: 10.5, color: colors.onSurfaceTertiary }}>fără buget setat</Text>
-                  )}
+            {/* Share of the month's total per space -- the same order as
+                the ring's arcs. Each space's own budget lives in the rows
+                below, so the two numbers never share one bar. */}
+            <View style={{ gap: spacing.sm }}>
+              {rows.filter((r) => r.spent > 0).map((r) => (
+                <View key={r.kind} style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: r.color }} />
+                  <Text style={{ flex: 1, fontSize: 14, color: colors.onSurface }}>{r.name}</Text>
+                  <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>{Math.round((r.spent / totalSpent) * 100)}%</Text>
                 </View>
-              );
-            })}
-          </View>
-
-          <View style={{ padding: spacing.lg, backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, marginTop: spacing.xl }}>
-            <Text style={{ fontSize: 11.5, color: colors.onSurfaceTertiary, lineHeight: 16 }}>
-              Procentul din dreapta arată cât din cheltuiala TOTALĂ reprezintă acel space. Bara mică de sub fiecare rând rămâne cât din bugetul PROPRIU al space-ului -- cele două nu se amestecă.
-            </Text>
-          </View>
-
-          {/* ISTORIC -- one archived snapshot per completed month
-              (BudgetController::archiveCompletedMonths), using the
-              budget that was actually active that month rather than
-              recomputing live, so changing a limit today never rewrites
-              what a past month looked like. */}
-          <Text style={{ ...typography.label, color: colors.onSurfaceTertiary, marginTop: spacing.xl, marginBottom: spacing.md }}>
-            ISTORIC LUNAR
-          </Text>
-
-          {archiveLoading ? (
-            <ActivityIndicator color={colors.onSurfaceTertiary} />
-          ) : archive.length === 0 ? (
-            <View style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, padding: spacing.lg }}>
-              <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>
-                Arhiva se completează automat la finalul fiecărei luni.
-              </Text>
+              ))}
             </View>
-          ) : (
-            <View style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, overflow: "hidden" }}>
-              {archive.map((m, index) => {
-                const isExpanded = expandedMonth === m.month;
-                const diffColor = m.total_diff === null ? colors.onSurfaceTertiary : m.total_diff < 0 ? colors.error : colors.success;
-                return (
-                  <View key={m.month}>
-                    <Pressable
-                      testID={`archive-month-${m.month}`}
-                      onPress={() => setExpandedMonth(isExpanded ? null : m.month)}
-                      accessibilityRole="button"
-                      accessibilityLabel={`${m.label}, ${m.total_spent} of ${m.total_budget} RON`}
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: spacing.md,
-                        paddingHorizontal: spacing.lg,
-                        paddingVertical: spacing.md,
-                        borderTopWidth: index === 0 ? 0 : 1,
-                        borderTopColor: colors.border,
-                      }}
-                    >
-                      <Text style={{ flex: 1, fontSize: 13, fontWeight: "700", color: colors.onSurface }}>{m.label}</Text>
-                      <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>
-                        {m.total_spent.toLocaleString("en-US")} / {m.total_budget.toLocaleString("en-US")} RON
-                      </Text>
-                      {m.total_diff !== null ? (
-                        <Text style={{ fontSize: 12, fontWeight: "700", color: diffColor, minWidth: 60, textAlign: "right" }}>
-                          {m.total_diff >= 0 ? "+" : ""}{m.total_diff.toLocaleString("en-US")}
-                        </Text>
-                      ) : null}
-                      <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={16} color={colors.onSurfaceTertiary} />
-                    </Pressable>
+          </View>
 
-                    {isExpanded ? (
-                      <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md, gap: 6 }}>
-                        {m.categories.map((c) => {
-                          const kind = spaceKinds.find((k) => k.label === c.category)?.kind;
-                          const dotColor = (kind && SPACE_IDENTITY_COLORS[kind]) || colors.onSurfaceTertiary;
-                          const cDiffColor = c.diff === null ? colors.onSurfaceTertiary : c.diff < 0 ? colors.error : colors.onSurfaceTertiary;
-                          return (
-                            <View key={c.category} style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                              <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: dotColor }} />
-                              <Text style={{ flex: 1, fontSize: 12, color: colors.onSurface }}>{c.category}</Text>
-                              <Text style={{ fontSize: 11.5, color: colors.onSurfaceTertiary }}>
-                                {c.spent.toLocaleString("en-US")}{c.budget_limit !== null ? ` / ${c.budget_limit.toLocaleString("en-US")}` : ""} RON
-                              </Text>
-                              {c.diff !== null ? (
-                                <Text style={{ fontSize: 11.5, fontWeight: "700", color: cDiffColor, minWidth: 50, textAlign: "right" }}>
-                                  {c.diff >= 0 ? "+" : ""}{c.diff.toLocaleString("en-US")}
-                                </Text>
-                              ) : null}
-                            </View>
-                          );
-                        })}
+          <View style={{ gap: spacing.sm }}>
+            <SectionHeader title="Față de bugetul fiecăruia" />
+            <Group>
+              {rows.map((row) => {
+                const ownRatio = row.budget && row.budget > 0 ? row.spent / row.budget : null;
+                return (
+                  <View key={row.kind} style={{ paddingHorizontal: spacing.lg, paddingVertical: 14, gap: 8 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: row.color }} />
+                      <Text style={{ flex: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface }}>{row.name}</Text>
+                      <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>
+                        <Text style={{ fontWeight: "600", color: ownRatio !== null && ownRatio >= 1 ? colors.error : colors.onSurface }}>{lei(row.spent)}</Text>
+                        {row.budget ? ` din ${lei(row.budget)}` : ""}
+                      </Text>
+                    </View>
+                    {ownRatio !== null ? (
+                      <View style={{ height: 6, backgroundColor: colors.surfaceTertiary, borderRadius: 3, overflow: "hidden" }}>
+                        <View style={{ width: `${Math.min(1, ownRatio) * 100}%`, height: "100%", borderRadius: 3, backgroundColor: row.color }} />
                       </View>
-                    ) : null}
+                    ) : (
+                      <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Fără buget setat</Text>
+                    )}
                   </View>
                 );
               })}
-            </View>
-          )}
+            </Group>
+          </View>
+
+          {/* One archived snapshot per completed month
+              (BudgetController::archiveCompletedMonths), using the budget
+              active that month -- changing a limit today never rewrites
+              what a past month looked like. */}
+          <View style={{ gap: spacing.sm }}>
+            <SectionHeader title="Lunile trecute" />
+            {archiveLoading ? (
+              <ActivityIndicator color={colors.onSurfaceTertiary} />
+            ) : archive.length === 0 ? (
+              <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card }}>
+                <EmptyState icon="archive-outline" message="La finalul fiecărei luni, bilanțul ei apare aici." />
+              </View>
+            ) : (
+              <Group>
+                {archive.map((m) => {
+                  const isExpanded = expandedMonth === m.month;
+                  const diffColor = m.total_diff === null ? colors.onSurfaceTertiary : m.total_diff < 0 ? colors.error : colors.success;
+                  return (
+                    <View key={m.month}>
+                      <PressableScale
+                        testID={`archive-month-${m.month}`}
+                        onPress={() => setExpandedMonth(isExpanded ? null : m.month)}
+                        scaleTo={1}
+                        pressedStyle={{ backgroundColor: colors.surfaceTertiary }}
+                        accessibilityRole="button"
+                        accessibilityState={{ expanded: isExpanded }}
+                        accessibilityLabel={`${monthTitle(m.month)}, ${lei(m.total_spent)} din ${lei(m.total_budget)}`}
+                        style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, minHeight: 58, backgroundColor: colors.surfaceSecondary }}
+                      >
+                        <View style={{ flex: 1, paddingVertical: 10 }}>
+                          <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }}>{monthTitle(m.month)}</Text>
+                          <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, marginTop: 2 }}>{lei(m.total_spent)} din {lei(m.total_budget)}</Text>
+                        </View>
+                        {m.total_diff !== null ? (
+                          <Text style={{ fontSize: 14, fontWeight: "600", color: diffColor }}>{signedLei(m.total_diff)}</Text>
+                        ) : null}
+                        <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={16} color={colors.onSurfaceTertiary} />
+                      </PressableScale>
+
+                      {isExpanded ? (
+                        <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md, gap: 8 }}>
+                          {m.categories.map((c) => {
+                            const meta = categoryMeta(c.category);
+                            return (
+                              <View key={c.category} style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: meta.color }} />
+                                <Text style={{ flex: 1, fontSize: 14, color: colors.onSurface }}>{meta.name}</Text>
+                                <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>
+                                  {lei(c.spent)}{c.budget_limit !== null ? ` din ${lei(c.budget_limit)}` : ""}
+                                </Text>
+                                {c.diff !== null ? (
+                                  <Text style={{ fontSize: 13, fontWeight: "600", color: c.diff < 0 ? colors.error : colors.onSurfaceTertiary, minWidth: 64, textAlign: "right" }}>
+                                    {signedLei(c.diff)}
+                                  </Text>
+                                ) : null}
+                              </View>
+                            );
+                          })}
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </Group>
+            )}
+          </View>
         </>
       )}
     </ScrollView>
