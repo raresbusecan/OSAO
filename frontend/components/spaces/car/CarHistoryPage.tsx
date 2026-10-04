@@ -1,9 +1,12 @@
 import React, { useMemo, useState } from "react";
-import { View, Text, ScrollView, Pressable, Modal, StyleSheet } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, Text, ScrollView, Pressable } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
+import { TopBar, Identity, Segmented, Pill, SectionHeader, Group, EmptyState } from "@/components/ui/primitives";
+import { capitalize, roCount } from "@/lib/format";
+import { RecentRow } from "./CarDashboard";
+import { CarPeriodSheet, type CustomPeriodUnit } from "./CarPeriodSheet";
 import { buildCarRecentItems } from "./utils/carEntries";
 import type { CarRecentItem } from "./utils/carEntries.types";
 import type { CarData } from "./car.data.types";
@@ -14,18 +17,10 @@ import {
   type CarExpensePeriod,
 } from "@/lib/spaces/car/calculations/expenses.calculations";
 import { getCurrentOdometer } from "@/lib/spaces/car/calculations/dashboard.calculations";
-import { isDocumentLocked } from "@/lib/spaces/car/utils/documentLock";
 
 // Same mapping as CarDashboard.tsx's statusDotColor -- "safe" (not yet
 // inside the alert window) is success/green, the other 3 mirror DUE
 // SOON's own tiers. See CarRecentItem.statusDot.
-function statusDotColor(status: "safe" | "light" | "medium" | "critical", colors: any) {
-  if (status === "safe") return colors.success;
-  if (status === "critical") return colors.error;
-  if (status === "medium") return colors.warning;
-  return colors.caution;
-}
-
 export type CarHistoryPageProps = {
   carData: CarData;
   onBack: () => void;
@@ -38,10 +33,10 @@ export type CarHistoryPageProps = {
 // No "Documents" tab -- see allEntries below, documents never reach
 // this page's feed at all any more.
 const CATEGORY_TABS: { key: CarRecentItem["type"] | "all"; label: string }[] = [
-  { key: "all", label: "All" },
-  { key: "fuel", label: "Fuel" },
-  { key: "maintenance", label: "Maintenance" },
-  { key: "expense", label: "Expenses" },
+  { key: "all", label: "Toate" },
+  { key: "fuel", label: "Alimentări" },
+  { key: "maintenance", label: "Service" },
+  { key: "expense", label: "Cheltuieli" },
 ];
 
 // Identical presets to the Expenses page (see CarExpensesPage.tsx) --
@@ -50,23 +45,6 @@ const CATEGORY_TABS: { key: CarRecentItem["type"] | "all"; label: string }[] = [
 // toggle in the picker below), since records land here as soon as they
 // fall out of the dashboard's 7-day window and "last N weeks" is a more
 // useful cut right at that boundary than "last 1 month" is.
-const PERIOD_PRESETS: { label: string; period: CarExpensePeriod }[] = [
-  { label: "All time", period: { kind: "all" } },
-  { label: "Last 3 months", period: { kind: "months", count: 3 } },
-  { label: "Last 6 months", period: { kind: "months", count: 6 } },
-  { label: "Last year", period: { kind: "months", count: 12 } },
-  { label: "Last 2 years", period: { kind: "years", count: 2 } },
-  { label: "Last 3 years", period: { kind: "years", count: 3 } },
-];
-
-type CustomPeriodUnit = "weeks" | "months";
-
-function periodsEqual(a: CarExpensePeriod, b: CarExpensePeriod): boolean {
-  if (a.kind !== b.kind) return false;
-  if (a.kind === "all") return true;
-  return (a as { count: number }).count === (b as { count: number }).count;
-}
-
 /**
  * Every Fuel/Maintenance/Expense record that isn't (or can't be) on the
  * dashboard right now -- one tap away from the header, and the
@@ -91,7 +69,7 @@ function periodsEqual(a: CarExpensePeriod, b: CarExpensePeriod): boolean {
  * Expenses uses.
  */
 export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPress }: CarHistoryPageProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing } = useTheme();
   const [activeTab, setActiveTab] = useState<CarRecentItem["type"] | "all">(initialTab);
 
   // "All time" by default, same as Expenses. Custom (1-12 weeks OR
@@ -166,464 +144,93 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
     return [...inPeriod].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [pastDashboardEntries, activeTab, period]);
 
+  // Records grouped by calendar month, newest first ("Septembrie").
+  const groups = useMemo(() => {
+    const out: { key: string; label: string; items: CarRecentItem[] }[] = [];
+    items.forEach((item) => {
+      const d = new Date(item.date);
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      let g = out[out.length - 1];
+      if (!g || g.key !== key) {
+        const label = capitalize(d.toLocaleDateString("ro-RO", { month: "long", ...(d.getFullYear() !== new Date().getFullYear() ? { year: "numeric" as const } : {}) }));
+        g = { key, label, items: [] };
+        out.push(g);
+      }
+      g.items.push(item);
+    });
+    return out;
+  }, [items]);
+
   return (
     <SwipeBackView onBack={onBack}>
     <ScrollView
       testID="car-history-page"
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 150 }}
+      contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >
-      {/* HEADER */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: spacing.md,
-          paddingTop: spacing.md,
-          paddingBottom: spacing.xl,
-        }}
-      >
-        <Pressable
-          testID="history-back"
-          onPress={onBack}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: radius.pill,
-            backgroundColor: "transparent",
-            borderWidth: 1,
-            borderColor: colors.border,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
-        </Pressable>
+      <TopBar onBack={onBack} backTestID="history-back" />
+      <Identity color={SPACE_IDENTITY_COLORS.car} kicker="Mașină" title="Istoric" subtitle="Ce a ieșit de pe pagina mașinii după 7 zile" />
 
-        <Text style={{ fontSize: 22, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.4 }}>
-          History
-        </Text>
+      <Segmented options={CATEGORY_TABS} value={activeTab} onChange={setActiveTab} testIDPrefix="history-tab" />
+
+      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+        <Pill
+          testID="history-period-trigger"
+          icon="calendar-outline"
+          label={formatPeriodLabel(period)}
+          active={period.kind !== "all"}
+          onPress={() => setPeriodPickerOpen(true)}
+        />
+        <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{roCount(items.length, "înregistrare", "înregistrări")}</Text>
       </View>
 
-      {/* TABS */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ gap: spacing.sm, marginBottom: spacing.xl }}
-      >
-        {CATEGORY_TABS.map((tab) => {
-          const isActive = activeTab === tab.key;
-
-          return (
-            <Pressable
-              key={tab.key}
-              testID={`history-tab-${tab.key}`}
-              onPress={() => setActiveTab(tab.key)}
-              hitSlop={{ top: 6, bottom: 6 }}
-              accessibilityRole="button"
-              accessibilityState={{ selected: isActive }}
-              style={{
-                paddingHorizontal: spacing.md,
-                minHeight: 34,
-                borderRadius: radius.pill,
-                backgroundColor: isActive ? colors.onSurface : "transparent",
-                borderWidth: 1,
-                borderColor: isActive ? colors.onSurface : colors.border,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ fontSize: 13, fontWeight: "700", color: isActive ? colors.surface : colors.onSurface }}>
-                {tab.label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
-
-      {/* PERIOD -- identical picker to the Expenses page (same presets,
-          same trigger/modal), except Custom also offers a Weeks unit,
-          not just Months. Filters the list only; "All time" (the
-          default) is what makes this History and not just another
-          capped view. */}
-      <Pressable
-        testID="history-period-trigger"
-        onPress={() => setPeriodPickerOpen(true)}
-        accessibilityRole="button"
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-          backgroundColor: "transparent",
-          borderWidth: 1,
-          borderColor: colors.border,
-          borderRadius: radius.sm,
-          paddingHorizontal: spacing.lg,
-          paddingVertical: spacing.md,
-          marginBottom: spacing.xl,
-        }}
-      >
-        <Text style={{ fontSize: 13, fontWeight: "600", color: colors.onSurface }}>Period</Text>
-
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurface }}>
-            {formatPeriodLabel(period)}
-          </Text>
-          <Ionicons name="chevron-down" size={16} color={colors.onSurfaceTertiary} />
-        </View>
-      </Pressable>
-
-      {/* PERIOD PICKER */}
-      <Modal
-        visible={periodPickerOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setPeriodPickerOpen(false)}
-      >
-        <View style={{ flex: 1, justifyContent: "flex-end" }}>
-          <Pressable
-            onPress={() => setPeriodPickerOpen(false)}
-            style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }}
-          />
-
-          <View
-            style={{
-              backgroundColor: colors.surface,
-              padding: spacing.xl,
-              gap: spacing.xs ?? 4,
-              borderTopLeftRadius: radius.lg,
-              borderTopRightRadius: radius.lg,
-            }}
-          >
-            <Text style={{ fontSize: 18, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.sm }}>
-              Period
-            </Text>
-
-            {PERIOD_PRESETS.map((preset) => {
-              const isActive = !usingCustom && periodsEqual(period, preset.period);
-
-              return (
-                <Pressable
-                  key={preset.label}
-                  testID={`history-period-option-${preset.label}`}
-                  onPress={() => selectPreset(preset.period)}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingVertical: spacing.md,
-                    borderBottomWidth: StyleSheet.hairlineWidth,
-                    borderBottomColor: colors.border,
-                  }}
-                >
-                  <Text style={{ fontSize: 15, fontWeight: isActive ? "700" : "500", color: colors.onSurface }}>
-                    {preset.label}
-                  </Text>
-                  {isActive ? <Ionicons name="checkmark" size={18} color={colors.onSurface} /> : null}
-                </Pressable>
-              );
-            })}
-
-            <Pressable
-              testID="history-period-option-custom"
-              onPress={selectCustom}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingVertical: spacing.md,
-                borderBottomWidth: usingCustom ? 0 : StyleSheet.hairlineWidth,
-                borderBottomColor: colors.border,
-              }}
-            >
-              <Text style={{ fontSize: 15, fontWeight: usingCustom ? "700" : "500", color: colors.onSurface }}>
-                Custom
-              </Text>
-              {usingCustom ? <Ionicons name="checkmark" size={18} color={colors.onSurface} /> : null}
-            </Pressable>
-
-            {usingCustom ? (
-              <>
-                {/* UNIT -- Weeks vs Months, the one thing History's custom
-                    adds over Expenses' (months-only). Switching resets the
-                    stepper's meaning, not its count. */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    gap: spacing.sm,
-                    justifyContent: "center",
-                    paddingTop: spacing.sm,
-                  }}
-                >
-                  {(["weeks", "months"] as CustomPeriodUnit[]).map((unit) => {
-                    const isActive = customUnit === unit;
-
-                    return (
-                      <Pressable
-                        key={unit}
-                        testID={`history-period-custom-unit-${unit}`}
-                        onPress={() => selectCustomUnit(unit)}
-                        hitSlop={{ top: 8, bottom: 8 }}
-                        style={{
-                          paddingHorizontal: spacing.md,
-                          minHeight: 30,
-                          borderRadius: radius.pill,
-                          backgroundColor: isActive ? colors.onSurface : "transparent",
-                          borderWidth: 1,
-                          borderColor: isActive ? colors.onSurface : colors.border,
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: "700",
-                            color: isActive ? colors.surface : colors.onSurface,
-                            textTransform: "capitalize",
-                          }}
-                        >
-                          {unit}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: spacing.lg,
-                    paddingVertical: spacing.md,
-                  }}
-                >
-                  <Pressable
-                    testID="history-period-custom-minus"
-                    onPress={() => adjustCustomCount(-1)}
-                    disabled={customCount <= 1}
-                    hitSlop={8}
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: radius.pill,
-                      backgroundColor: "transparent",
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      opacity: customCount <= 1 ? 0.4 : 1,
-                    }}
-                  >
-                    <Ionicons name="remove" size={18} color={colors.onSurface} />
-                  </Pressable>
-
-                  <Text
-                    style={{
-                      fontSize: 15,
-                      fontWeight: "700",
-                      color: colors.onSurface,
-                      minWidth: 110,
-                      textAlign: "center",
-                    }}
-                  >
-                    Last {customCount} {customUnit === "weeks" ? (customCount === 1 ? "week" : "weeks") : customCount === 1 ? "month" : "months"}
-                  </Text>
-
-                  <Pressable
-                    testID="history-period-custom-plus"
-                    onPress={() => adjustCustomCount(1)}
-                    disabled={customCount >= 12}
-                    hitSlop={8}
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: radius.pill,
-                      backgroundColor: "transparent",
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      opacity: customCount >= 12 ? 0.4 : 1,
-                    }}
-                  >
-                    <Ionicons name="add" size={18} color={colors.onSurface} />
-                  </Pressable>
-                </View>
-              </>
-            ) : null}
-
-            <Pressable
-              testID="history-period-done"
-              onPress={() => setPeriodPickerOpen(false)}
-              style={{
-                marginTop: spacing.md,
-                minHeight: 48,
-                borderRadius: radius.md,
-                backgroundColor: colors.onSurface,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.surface }}>Done</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      {/* LIST */}
       {items.length === 0 ? (
-        <View style={{ alignItems: "center", paddingVertical: spacing["3xl"] ?? 48, gap: spacing.sm }}>
-          <Ionicons name="time-outline" size={28} color={colors.onSurfaceTertiary} />
-          <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, textAlign: "center" }}>
-            {activeTab === "all"
-              ? `Nothing recorded${period.kind === "all" ? " yet" : ` in ${formatPeriodLabel(period).toLowerCase()}`}.`
-              : `No ${CATEGORY_TABS.find((t) => t.key === activeTab)?.label.toLowerCase()} recorded${period.kind === "all" ? " yet" : ` in ${formatPeriodLabel(period).toLowerCase()}`}.`}
-          </Text>
-          {period.kind !== "all" ? (
-            <Pressable testID="history-period-reset" onPress={() => selectPreset({ kind: "all" })} hitSlop={8}>
-              <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurface }}>Reset period</Text>
-            </Pressable>
-          ) : null}
-        </View>
+        <EmptyState
+          icon="time-outline"
+          message={period.kind === "all" ? "Nimic în istoric încă. Ce adaugi apare aici după 7 zile." : "Nimic în perioada aleasă."}
+          action={
+            period.kind !== "all" ? (
+              <Pressable testID="history-period-reset" onPress={() => selectPreset({ kind: "all" })} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: spacing.lg }}>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurface }}>Arată tot timpul</Text>
+              </Pressable>
+            ) : null
+          }
+        />
       ) : (
-        <View style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, overflow: "hidden" }}>
-          {items.map((item, index) => {
-            // Documents only -- locked (read-only) once archived or
-            // older than the dashboard's 7-day window. Still tappable:
-            // CarDocumentForm opens read-only instead of edit mode (see
-            // CarDashboard.tsx's openEntryForEdit), this just previews
-            // that with a lock instead of a chevron.
-            const locked = item.type === "document" && isDocumentLocked(item);
-
-            return (
-            <Pressable
-              key={`${item.type}-${item.id}`}
-              testID={`history-record-${item.type}-${item.id}`}
-              onPress={() => onRecordPress?.(item.type, item.id)}
-              disabled={!onRecordPress}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                paddingHorizontal: spacing.lg,
-                paddingVertical: spacing.md,
-                gap: spacing.md,
-                borderBottomWidth: index === items.length - 1 ? 0 : StyleSheet.hairlineWidth,
-                borderBottomColor: colors.border,
-              }}
-            >
-              <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: radius.md,
-                  // Same tinted-chip identity signal used everywhere else
-                  // in Car for "this row is a Fuel/Maintenance/Document/
-                  // Expense entry" -- the archived dimming below still
-                  // applies on top of it.
-                  backgroundColor: `${SPACE_IDENTITY_COLORS.car}1A`,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  opacity: item.archived ? 0.5 : 1,
-                }}
-              >
-                <Ionicons name={item.icon} size={17} color={SPACE_IDENTITY_COLORS.car} />
-
-                {item.statusDot && item.overdue ? (
-                  <View
-                    style={{
-                      position: "absolute",
-                      right: -4,
-                      bottom: -4,
-                      width: 14,
-                      height: 14,
-                      borderRadius: 7,
-                      backgroundColor: statusDotColor(item.statusDot, colors),
-                      borderWidth: 1.5,
-                      borderColor: colors.surfaceTertiary,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Text style={{ fontSize: 9.5, fontWeight: "900", color: colors.surface, lineHeight: 11 }}>
-                      !
-                    </Text>
-                  </View>
-                ) : item.statusDot ? (
-                  <View
-                    style={{
-                      position: "absolute",
-                      right: -2,
-                      bottom: -2,
-                      width: 9,
-                      height: 9,
-                      borderRadius: 4.5,
-                      backgroundColor: statusDotColor(item.statusDot, colors),
-                      // Matches this icon circle's own background
-                      // (colors.surfaceTertiary), so the dot reads as
-                      // "cut into" it, not floating.
-                      borderWidth: 1.5,
-                      borderColor: colors.surfaceTertiary,
-                    }}
+        groups.map((group) => (
+          <View key={group.key} style={{ gap: spacing.xs }}>
+            <SectionHeader title={group.label} muted />
+            <Group inset={68}>
+              {group.items.map((item) => (
+                <View key={`${item.type}-${item.id}`} testID={`history-record-${item.type}-${item.id}`}>
+                  <RecentRow
+                    {...item}
+                    subtitle={item.archived ? `${item.subtitle}, arhivat` : item.subtitle}
+                    colors={colors}
+                    spacing={spacing}
+                    onPress={onRecordPress ? () => onRecordPress(item.type, item.id) : undefined}
                   />
-                ) : null}
-              </View>
-
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <Text
-                    style={{
-                      fontSize: 14,
-                      fontWeight: "600",
-                      color: item.archived ? colors.onSurfaceTertiary : colors.onSurface,
-                    }}
-                    numberOfLines={1}
-                  >
-                    {item.title}
-                  </Text>
-
-                  {item.archived ? (
-                    <View
-                      style={{
-                        paddingHorizontal: 6,
-                        paddingVertical: 1,
-                        borderRadius: radius.pill ?? 999,
-                        backgroundColor: colors.surfaceTertiary,
-                      }}
-                    >
-                      <Text style={{ fontSize: 10, fontWeight: "700", color: colors.onSurfaceTertiary }}>
-                        ARCHIVED
-                      </Text>
-                    </View>
-                  ) : null}
                 </View>
-
-                <Text style={{ marginTop: 2, fontSize: 12, color: colors.onSurfaceTertiary }} numberOfLines={1}>
-                  {item.subtitle}
-                </Text>
-              </View>
-
-              {item.amount ? (
-                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurface }}>{item.amount}</Text>
-              ) : null}
-
-              {onRecordPress ? (
-                <Ionicons
-                  name={locked ? "lock-closed-outline" : "chevron-forward"}
-                  size={16}
-                  color={colors.onSurfaceTertiary}
-                />
-              ) : null}
-            </Pressable>
-            );
-          })}
-        </View>
+              ))}
+            </Group>
+          </View>
+        ))
       )}
     </ScrollView>
+
+    <CarPeriodSheet
+      visible={periodPickerOpen}
+      onClose={() => setPeriodPickerOpen(false)}
+      period={period}
+      usingCustom={usingCustom}
+      customUnit={customUnit}
+      customCount={customCount}
+      onPreset={selectPreset}
+      onCustom={selectCustom}
+      onCustomUnit={selectCustomUnit}
+      onCustomCount={adjustCustomCount}
+      testIDPrefix="history"
+    />
     </SwipeBackView>
   );
 }

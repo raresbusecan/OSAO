@@ -1,3 +1,4 @@
+import { roCount } from "@/lib/format";
 import type { CarData } from "@/components/spaces/car/car.data.types";
 import type { CarDocumentEntry, CarMaintenanceEntry } from "@/lib/spaces/car/car.types";
 import {
@@ -85,9 +86,9 @@ export function getCarExpenseRecords(carData: CarData, currentOdometer: number):
       id: entry.id,
       category: "fuel",
       icon: "water-outline",
-      categoryLabel: "Fuel",
-      title: entry.station?.trim() || "Fuel fill-up",
-      subtitle: entry.liters !== undefined ? `${entry.liters} L` : undefined,
+      categoryLabel: "Alimentare",
+      title: entry.station?.trim() || "Alimentare",
+      subtitle: entry.liters !== undefined ? `${entry.liters} l` : undefined,
       date: entry.date,
       amount: entry.total_paid,
     });
@@ -98,7 +99,7 @@ export function getCarExpenseRecords(carData: CarData, currentOdometer: number):
       id: entry.id,
       category: "maintenance",
       icon: "construct-outline",
-      categoryLabel: "Maintenance",
+      categoryLabel: "Service",
       title: entry.service,
       subtitle: entry.provider,
       date: entry.date,
@@ -135,11 +136,11 @@ export function getCarExpenseRecords(carData: CarData, currentOdometer: number):
       id: entry.id,
       category: "expense",
       icon: "receipt-outline",
-      categoryLabel: entry.category || "Expense",
+      categoryLabel: entry.category || "Cheltuială",
       // Category and title are both optional now (only Amount is
       // required, see CarExpenseForm.tsx) -- fall back so a blank one
       // never renders as an empty title.
-      title: entry.title || entry.category || "Expense",
+      title: entry.title || entry.category || "Cheltuială",
       subtitle: entry.provider,
       date: entry.date,
       amount: entry.amount,
@@ -231,14 +232,14 @@ export function filterRecordsByArchived(
 /** Short label for the period chip/heading -- "All time", "Last week",
  * "Last 3 months", "Last 1 month", "Last 2 years". */
 export function formatPeriodLabel(period: CarExpensePeriod): string {
-  if (period.kind === "all") return "All time";
+  if (period.kind === "all") return "Tot timpul";
   if (period.kind === "weeks") {
-    return period.count === 1 ? "Last week" : `Last ${period.count} weeks`;
+    return period.count === 1 ? "Ultima săptămână" : `Ultimele ${roCount(period.count, "săptămână", "săptămâni")}`;
   }
   if (period.kind === "months") {
-    return period.count === 1 ? "Last month" : `Last ${period.count} months`;
+    return period.count === 1 ? "Ultima lună" : `Ultimele ${roCount(period.count, "lună", "luni")}`;
   }
-  return period.count === 1 ? "Last year" : `Last ${period.count} years`;
+  return period.count === 1 ? "Ultimul an" : `Ultimii ${roCount(period.count, "an", "ani")}`;
 }
 
 // -------------------------------------------------------------------
@@ -280,7 +281,7 @@ export function getArchivedCarRecords(carData: CarData): CarArchivedRecord[] {
         icon: "document-text-outline",
         categoryLabel: entry.documentType,
         title: entry.title,
-        subtitle: entry.expiryDate ? `Expired ${entry.expiryDate}` : undefined,
+        subtitle: entry.expiryDate ? `expirat pe ${entry.expiryDate}` : undefined,
         date: entry.date,
         amount: entry.price,
         renewedByTitle: renewedBy?.title,
@@ -299,7 +300,7 @@ export function getArchivedCarRecords(carData: CarData): CarArchivedRecord[] {
         id: entry.id,
         category: "maintenance",
         icon: "construct-outline",
-        categoryLabel: "Maintenance",
+        categoryLabel: "Service",
         title: entry.service,
         subtitle: entry.provider,
         date: entry.date,

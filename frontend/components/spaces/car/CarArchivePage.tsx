@@ -1,8 +1,9 @@
 import React, { useMemo } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
+import { View, Text, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { TopBar, Identity, Group, Row, IconWell, EmptyState } from "@/components/ui/primitives";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import type { CarData } from "./car.data.types";
 import { getArchivedCarRecords } from "@/lib/spaces/car/calculations/expenses.calculations";
@@ -29,177 +30,53 @@ export type CarArchivePageProps = {
  * getArchivedCarRecords -- this component only renders it.
  */
 export function CarArchivePage({ carData, onBack, onRecordPress }: CarArchivePageProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing, isDark } = useTheme();
 
   const records = useMemo(() => getArchivedCarRecords(carData), [carData]);
+
+  const CAR = SPACE_IDENTITY_COLORS.car!;
+  const tint = spaceTextColor("car", isDark) ?? CAR;
 
   return (
     <SwipeBackView onBack={onBack}>
     <ScrollView
       testID="car-archive-page"
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{
-        paddingHorizontal: spacing.xl,
-        paddingBottom: 150,
-      }}
+      contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >
-      {/* HEADER */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: spacing.md,
-          paddingTop: spacing.md,
-          paddingBottom: spacing.xl,
-        }}
-      >
-        <Pressable
-          testID="archive-back"
-          onPress={onBack}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: radius.pill,
-            backgroundColor: "transparent",
-            borderWidth: 1,
-            borderColor: colors.border,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
-        </Pressable>
-
-        <View>
-          <Text
-            style={{
-              fontSize: 22,
-              fontWeight: "800",
-              color: colors.onSurface,
-              letterSpacing: -0.4,
-            }}
-          >
-            Archive
-          </Text>
-          <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>
-            Documents and maintenance replaced by a renewal
-          </Text>
-        </View>
-      </View>
+      <TopBar onBack={onBack} backTestID="archive-back" />
+      <Identity color={CAR} kicker="Mașină" title="Arhivă" subtitle="Documente și lucrări înlocuite la reînnoire" />
 
       {records.length === 0 ? (
-        <View
-          style={{
-            alignItems: "center",
-            paddingVertical: spacing["3xl"] ?? 48,
-            gap: spacing.sm,
-          }}
-        >
-          <Ionicons name="archive-outline" size={28} color={colors.onSurfaceTertiary} />
-          <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, textAlign: "center" }}>
-            Nothing archived yet. Renewing a document or maintenance entry from
-            a NEXT alert moves the old one here.
-          </Text>
-        </View>
+        <EmptyState icon="archive-outline" message="Nimic arhivat încă. Când reînnoiești un document sau o lucrare, cea veche ajunge aici." />
       ) : (
-        <View
-          style={{
-            backgroundColor: "transparent",
-            borderWidth: 1,
-            borderColor: colors.border,
-            borderRadius: radius.sm,
-            overflow: "hidden",
-          }}
-        >
-          {records.map((record, index) => {
-            // Every record on this page is already archived by
-            // construction (getArchivedCarRecords only returns those) --
-            // no need to run isDocumentLocked's date check here, just
-            // "is this a document" (maintenance stays editable, see the
-            // prop doc above).
+        <Group inset={68}>
+          {records.map((record) => {
             const locked = record.category === "document";
-
+            const renewed = record.renewedByTitle
+              ? `înlocuit de ${record.renewedByTitle}${record.renewedByDate ? `, ${record.renewedByDate}` : ""}`
+              : null;
             return (
-            <Pressable
-              key={`${record.category}-${record.id}`}
-              testID={`archive-record-${record.category}-${record.id}`}
-              onPress={() => onRecordPress?.(record.category, record.id)}
-              disabled={!onRecordPress}
-              style={{
-                paddingHorizontal: spacing.lg,
-                paddingVertical: spacing.md,
-                gap: 6,
-                borderBottomWidth: index === records.length - 1 ? 0 : StyleSheet.hairlineWidth,
-                borderBottomColor: colors.border,
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-                <View
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: radius.md,
-                    // Same tinted-chip identity signal as everywhere else
-                    // in Car -- the 0.6 opacity below already mutes it
-                    // appropriately for an archived/superseded record,
-                    // same as it muted the old neutral fill.
-                    backgroundColor: `${SPACE_IDENTITY_COLORS.car}1A`,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    opacity: 0.6,
-                  }}
-                >
-                  <Ionicons name={record.icon} size={17} color={SPACE_IDENTITY_COLORS.car} />
-                </View>
-
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurface }}>
-                    {record.title}
-                  </Text>
-                  <Text style={{ marginTop: 2, fontSize: 12, color: colors.onSurfaceTertiary }}>
-                    {record.categoryLabel} · {formatCarDate(record.date)}
-                    {record.subtitle ? ` · ${record.subtitle}` : ""}
-                  </Text>
-                </View>
-
-                {record.amount !== undefined ? (
-                  <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurfaceTertiary }}>
-                    {formatCarNumber(record.amount)} RON
-                  </Text>
-                ) : null}
-
-                {onRecordPress ? (
-                  <Ionicons
-                    name={locked ? "lock-closed-outline" : "chevron-forward"}
-                    size={14}
-                    color={colors.onSurfaceTertiary}
-                  />
-                ) : null}
-              </View>
-
-              {record.renewedByTitle ? (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
-                    marginLeft: 48,
-                  }}
-                >
-                  <Ionicons name="arrow-forward-outline" size={12} color={colors.onSurfaceTertiary} />
-                  <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>
-                    Renewed by {record.renewedByTitle}
-                    {record.renewedByDate ? ` · ${record.renewedByDate}` : ""}
-                  </Text>
-                </View>
-              ) : null}
-            </Pressable>
+              <Row
+                key={`${record.category}-${record.id}`}
+                testID={`archive-record-${record.category}-${record.id}`}
+                onPress={onRecordPress ? () => onRecordPress(record.category, record.id) : undefined}
+                leading={<IconWell icon={record.icon} color={CAR} tint={tint} />}
+                title={record.title}
+                subtitle={[record.categoryLabel, formatCarDate(record.date), renewed].filter(Boolean).join(", ")}
+                dim
+                trailing={
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    {record.amount !== undefined ? (
+                      <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurfaceTertiary }}>{formatCarNumber(record.amount)} lei</Text>
+                    ) : null}
+                    {locked ? <Ionicons name="lock-closed-outline" size={14} color={colors.onSurfaceTertiary} /> : null}
+                  </View>
+                }
+              />
             );
           })}
-        </View>
+        </Group>
       )}
     </ScrollView>
     </SwipeBackView>

@@ -1,8 +1,13 @@
 import React, { useMemo, useState } from "react";
-import { View, Text, ScrollView, Pressable, Switch, Modal, StyleSheet } from "react-native";
+import { View, Text, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { PressableScale } from "@/components/ui/PressableScale";
+import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+import { TopBar, Identity, Pill, SectionHeader, Group, Row, IconWell, EmptyState } from "@/components/ui/primitives";
+import { motion } from "@/lib/motion";
+import { CarPeriodSheet } from "./CarPeriodSheet";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import type { CarData } from "./car.data.types";
 import {
@@ -56,20 +61,6 @@ const CATEGORY_ORDER: CarExpenseCategory[] = [
 // Fixed presets -- "de la 0 luna, la 3 la 6 la 12 apoi la ani". A custom
 // 1-12 month count (see the stepper in the picker) covers anything in
 // between that isn't one of these.
-const PERIOD_PRESETS: { label: string; period: CarExpensePeriod }[] = [
-  { label: "All time", period: { kind: "all" } },
-  { label: "Last 3 months", period: { kind: "months", count: 3 } },
-  { label: "Last 6 months", period: { kind: "months", count: 6 } },
-  { label: "Last year", period: { kind: "months", count: 12 } },
-  { label: "Last 2 years", period: { kind: "years", count: 2 } },
-  { label: "Last 3 years", period: { kind: "years", count: 3 } },
-];
-
-function periodsEqual(a: CarExpensePeriod, b: CarExpensePeriod): boolean {
-  if (a.kind !== b.kind) return false;
-  if (a.kind === "all") return true;
-  return (a as { count: number }).count === (b as { count: number }).count;
-}
 
 /**
  * Every record that has actually cost this car money, in one place --
@@ -86,7 +77,7 @@ function periodsEqual(a: CarExpensePeriod, b: CarExpensePeriod): boolean {
  * that combination -- not just one filter applied at a time.
  */
 export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: CarExpensesPageProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing, radius, isDark, typography } = useTheme();
 
   // "Introdus" -- purchasePrice is always a number on a saved profile
   // (CarProfileForm defaults it to 0 rather than leaving it undefined),
@@ -217,842 +208,160 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
     .map((c) => byCategory.find((b) => b.category === c)?.label ?? c)
     .join(", ");
 
-  const renderRecordRow = (record: CarExpenseRecord, isLast: boolean) => (
-    <Pressable
-      key={`${record.category}-${record.id}`}
-      testID={`expense-record-${record.category}-${record.id}`}
-      onPress={() => onRecordPress?.(record.category, record.id)}
-      disabled={!onRecordPress}
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        paddingHorizontal: spacing.lg,
-        paddingVertical: spacing.md,
-        gap: spacing.md,
-        borderBottomWidth: isLast ? 0 : StyleSheet.hairlineWidth,
-        borderBottomColor: colors.border,
-      }}
-    >
-      <View
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: radius.md,
-          // Same tinted-chip identity signal used everywhere else in Car.
-          backgroundColor: `${SPACE_IDENTITY_COLORS.car}1A`,
-          alignItems: "center",
-          justifyContent: "center",
-          opacity: record.archived ? 0.5 : 1,
-        }}
-      >
-        <Ionicons name={record.icon} size={17} color={SPACE_IDENTITY_COLORS.car} />
+  const CAR = SPACE_IDENTITY_COLORS.car!;
+  const tint = spaceTextColor("car", isDark) ?? CAR;
+  const muted = colors.onSurfaceTertiary;
 
-        {record.statusDot && record.overdue ? (
-          <View
-            style={{
-              position: "absolute",
-              right: -4,
-              bottom: -4,
-              width: 14,
-              height: 14,
-              borderRadius: 7,
-              backgroundColor: statusDotColor(record.statusDot, colors),
-              borderWidth: 1.5,
-              borderColor: colors.surfaceTertiary,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ fontSize: 9.5, fontWeight: "900", color: colors.surface, lineHeight: 11 }}>
-              !
-            </Text>
-          </View>
-        ) : record.statusDot ? (
-          <View
-            style={{
-              position: "absolute",
-              right: -2,
-              bottom: -2,
-              width: 9,
-              height: 9,
-              borderRadius: 4.5,
-              backgroundColor: statusDotColor(record.statusDot, colors),
-              // Matches this icon circle's own background
-              // (colors.surfaceTertiary), so the dot reads as "cut into"
-              // it, not floating.
-              borderWidth: 1.5,
-              borderColor: colors.surfaceTertiary,
-            }}
-          />
-        ) : null}
+  const renderGroup = (title: string, records: CarExpenseRecord[], expanded: boolean, toggle: () => void, testID: string) => {
+    const visible = expanded ? records : records.slice(0, 5);
+    return (
+      <View style={{ gap: spacing.xs }}>
+        <SectionHeader
+          title={title}
+          muted
+          action={records.length > 5 ? { label: expanded ? "Arată mai puțin" : `Arată tot (${records.length})`, onPress: toggle, testID } : undefined}
+        />
+        <Group inset={68}>
+          {visible.map((record) => (
+            <Row
+              key={`${record.category}-${record.id}`}
+              testID={`expense-record-${record.category}-${record.id}`}
+              onPress={onRecordPress ? () => onRecordPress(record.category, record.id) : undefined}
+              leading={
+                <View>
+                  <IconWell icon={record.icon} color={CAR} tint={tint} />
+                  {record.statusDot ? (
+                    <View
+                      style={{
+                        position: "absolute",
+                        right: -3,
+                        bottom: -3,
+                        width: record.overdue ? 14 : 10,
+                        height: record.overdue ? 14 : 10,
+                        borderRadius: 7,
+                        backgroundColor: statusDotColor(record.statusDot, colors),
+                        borderWidth: 2,
+                        borderColor: colors.surfaceSecondary,
+                      }}
+                    />
+                  ) : null}
+                </View>
+              }
+              title={record.title}
+              subtitle={[record.categoryLabel, formatCarDate(record.date), record.subtitle, record.archived ? "arhivat" : null].filter(Boolean).join(", ")}
+              dim={record.archived}
+              trailing={<Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{formatCarNumber(record.amount)} lei</Text>}
+            />
+          ))}
+        </Group>
       </View>
-
-      <View style={{ flex: 1 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "600",
-              color: record.archived ? colors.onSurfaceTertiary : colors.onSurface,
-            }}
-          >
-            {record.title}
-          </Text>
-
-          {record.archived ? (
-            <View
-              style={{
-                paddingHorizontal: 6,
-                paddingVertical: 1,
-                borderRadius: radius.pill ?? 999,
-                backgroundColor: colors.surfaceTertiary,
-              }}
-            >
-              <Text style={{ fontSize: 10, fontWeight: "700", color: colors.onSurfaceTertiary }}>
-                ARCHIVED
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
-        <Text style={{ marginTop: 2, fontSize: 12, color: colors.onSurfaceTertiary }}>
-          {record.categoryLabel} · {formatCarDate(record.date)}
-          {record.subtitle ? ` · ${record.subtitle}` : ""}
-        </Text>
-      </View>
-
-      <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurface }}>
-        {formatCarNumber(record.amount)} RON
-      </Text>
-
-      {onRecordPress ? (
-        <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceTertiary} />
-      ) : null}
-    </Pressable>
-  );
+    );
+  };
 
   return (
     <SwipeBackView onBack={onBack}>
     <ScrollView
       testID="car-expenses-page"
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{
-        paddingHorizontal: spacing.xl,
-        paddingBottom: 150,
-      }}
+      contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >
-      {/* HEADER */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: spacing.md,
-          paddingTop: spacing.md,
-          paddingBottom: spacing.xl,
-        }}
-      >
-        <Pressable
-          testID="expenses-back"
-          onPress={onBack}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: radius.pill,
-            backgroundColor: "transparent",
-            borderWidth: 1,
-            borderColor: colors.border,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
-        </Pressable>
+      <TopBar onBack={onBack} backTestID="expenses-back" />
+      <Identity color={CAR} kicker="Mașină" title="Cheltuieli" subtitle="Tot ce a costat mașina, din toate formularele" />
 
-        <Text
-          style={{
-            fontSize: 22,
-            fontWeight: "800",
-            color: colors.onSurface,
-            letterSpacing: -0.4,
-          }}
-        >
-          Expenses
-        </Text>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+        <Pill
+          testID="expenses-period-trigger"
+          icon="calendar-outline"
+          label={formatPeriodLabel(period)}
+          active={period.kind !== "all"}
+          onPress={() => setPeriodPickerOpen(true)}
+        />
+        <Pill
+          testID="expenses-archived-toggle"
+          icon={includeArchived ? "archive" : "archive-outline"}
+          label={includeArchived ? "Cu arhivate" : "Fără arhivate"}
+          active={includeArchived}
+          onPress={() => setIncludeArchived((v) => !v)}
+        />
       </View>
 
-      {/* TOTAL */}
-      <View
-        style={{
-          backgroundColor: "transparent",
-          borderWidth: 1,
-          borderColor: colors.border,
-          borderRadius: radius.sm,
-          padding: spacing.lg,
-          marginBottom: spacing.lg,
-        }}
-      >
-        <View style={{ flexDirection: "row" }}>
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                fontSize: 12,
-                fontWeight: "700",
-                color: colors.onSurfaceTertiary,
-                marginBottom: 4,
-              }}
-            >
-              TOTAL SPENT
-            </Text>
-
-            <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-              <Text
-                style={{
-                  fontSize: 30,
-                  fontWeight: "800",
-                  color: colors.onSurface,
-                  letterSpacing: -0.6,
-                }}
-              >
-                {formatCarNumber(total)}
-              </Text>
-              <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurfaceTertiary }}>
-                RON
-              </Text>
-            </View>
-
-            <Text style={{ marginTop: 4, fontSize: 12, color: colors.onSurfaceTertiary }}>
-              {formatPeriodLabel(period)}
-              {!includeArchived ? " · archived excluded" : ""}
-              {activeCategories.size > 0 ? ` · ${categoryLabelsSelected}` : ""}
-            </Text>
+      <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>
+        <View style={{ gap: 2 }}>
+          <Text style={{ fontSize: 13, color: muted }}>
+            Total cheltuit{activeCategories.size > 0 ? `, ${categoryLabelsSelected.toLowerCase()}` : ""}
+          </Text>
+          <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
+            <AnimatedNumber value={total} style={{ ...typography.display, color: colors.onSurface }} />
+            <Text style={{ fontSize: 16, color: muted }}>lei</Text>
           </View>
-
           {hasPurchasePrice ? (
-            <>
-              <View
-                style={{
-                  width: StyleSheet.hairlineWidth,
-                  backgroundColor: colors.border,
-                  marginHorizontal: spacing.md,
-                }}
-              />
-
-              <View style={{ flex: 1 }} testID="car-overall-cost">
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "700",
-                    color: colors.onSurfaceTertiary,
-                    marginBottom: 4,
-                  }}
-                >
-                  OVERALL
-                </Text>
-
-                <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-                  <Text
-                    style={{
-                      fontSize: 30,
-                      fontWeight: "800",
-                      color: colors.onSurface,
-                      letterSpacing: -0.6,
-                    }}
-                  >
-                    {formatCarNumber(overall)}
-                  </Text>
-                  <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurfaceTertiary }}>
-                    RON
-                  </Text>
-                </View>
-
-                <Text style={{ marginTop: 4, fontSize: 12, color: colors.onSurfaceTertiary }}>
-                  {formatCarNumber(purchasePrice)} RON purchase
-                </Text>
-              </View>
-            </>
+            <Text testID="car-overall-cost" style={{ fontSize: 13, color: muted }}>
+              Cu tot cu prețul mașinii ({formatCarNumber(purchasePrice)} lei): {formatCarNumber(overall)} lei
+            </Text>
           ) : null}
         </View>
 
         {byCategory.length > 0 ? (
-          <View
-            style={{
-              flexDirection: "row",
-              flexWrap: "wrap",
-              gap: spacing.sm,
-              marginTop: spacing.md,
-              paddingTop: spacing.md,
-              borderTopWidth: StyleSheet.hairlineWidth,
-              borderTopColor: colors.border,
-            }}
-          >
-            {byCategory.map((entry, index) => {
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, paddingTop: spacing.md, borderTopWidth: 1, borderTopColor: colors.border }}>
+            {byCategory.map((entry) => {
               const isActive = activeCategories.has(entry.category);
-              // A 2-per-row wrap: the last item is alone on its row only
-              // when it would've started a fresh row by itself (even
-              // index, nothing after it) -- e.g. 1 or 3 categories present.
-              const isAlone = index === byCategory.length - 1 && index % 2 === 0;
-
               return (
-                <Pressable
+                <PressableScale
                   key={entry.category}
                   testID={`expense-filter-${entry.category}`}
                   onPress={() => toggleCategory(entry.category)}
+                  scaleTo={motion.scale.tile}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isActive }}
+                  accessibilityLabel={`${entry.label}: ${formatCarNumber(entry.amount)} lei`}
                   style={{
                     flexBasis: "48%",
                     flexGrow: 1,
-                    gap: 4,
+                    gap: 2,
                     padding: spacing.md,
-                    borderRadius: radius.md,
-                    backgroundColor: isActive ? colors.onSurface : colors.surfaceTertiary,
-                    alignItems: isAlone ? "center" : "flex-start",
+                    borderRadius: radius.control,
+                    backgroundColor: isActive ? `${CAR}29` : colors.surfaceTertiary,
+                    borderWidth: 1.5,
+                    borderColor: isActive ? CAR : "transparent",
                   }}
                 >
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    {isActive ? (
-                      <Ionicons name="checkmark" size={12} color={colors.surface} />
-                    ) : (
-                      <Ionicons name={entry.icon} size={12} color={colors.onSurfaceTertiary} />
-                    )}
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        fontWeight: "600",
-                        color: isActive ? colors.surface : colors.onSurfaceTertiary,
-                      }}
-                      numberOfLines={1}
-                    >
-                      {entry.label}
-                    </Text>
+                    <Ionicons name={isActive ? "checkmark-circle" : entry.icon} size={14} color={isActive ? tint : muted} />
+                    <Text style={{ fontSize: 13, color: isActive ? colors.onSurface : muted }} numberOfLines={1}>{entry.label}</Text>
                   </View>
-
-                  <Text
-                    style={{
-                      fontSize: 15,
-                      fontWeight: "800",
-                      color: isActive ? colors.surface : colors.onSurface,
-                    }}
-                    numberOfLines={1}
-                  >
-                    {formatCarNumber(entry.amount)} RON
-                  </Text>
-                </Pressable>
+                  <Text style={{ fontSize: 16, fontWeight: "600", color: colors.onSurface }} numberOfLines={1}>{formatCarNumber(entry.amount)} lei</Text>
+                </PressableScale>
               );
             })}
           </View>
         ) : null}
       </View>
 
-      {/* PERIOD (dropdown) + ARCHIVED toggle -- affect TOTAL SPENT, the
-          category breakdown chips above, and the list below. Never
-          OVERALL. */}
-      <View
-        style={{
-          backgroundColor: "transparent",
-          borderWidth: 1,
-          borderColor: colors.border,
-          borderRadius: radius.sm,
-          padding: spacing.lg,
-          marginBottom: spacing.lg,
-          gap: spacing.md,
-        }}
-      >
-        <Pressable
-          testID="expense-period-trigger"
-          onPress={() => setPeriodPickerOpen(true)}
-          accessibilityRole="button"
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-          }}
-        >
-          <Text style={{ fontSize: 13, fontWeight: "600", color: colors.onSurface }}>
-            Period
-          </Text>
-
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurface }}>
-              {formatPeriodLabel(period)}
-            </Text>
-            <Ionicons name="chevron-down" size={16} color={colors.onSurfaceTertiary} />
-          </View>
-        </Pressable>
-
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            paddingTop: spacing.md,
-            borderTopWidth: StyleSheet.hairlineWidth,
-            borderTopColor: colors.border,
-          }}
-        >
-          <Text style={{ fontSize: 13, fontWeight: "600", color: colors.onSurface }}>
-            Include archived
-          </Text>
-
-          <Switch
-            testID="expense-include-archived-toggle"
-            value={includeArchived}
-            onValueChange={setIncludeArchived}
-            trackColor={{ false: colors.surfaceTertiary, true: colors.brandPrimary }}
-          />
-        </View>
-      </View>
-
-      {/* PERIOD PICKER */}
-      <Modal
-        visible={periodPickerOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setPeriodPickerOpen(false)}
-      >
-        <View style={{ flex: 1, justifyContent: "flex-end" }}>
-          <Pressable
-            onPress={() => setPeriodPickerOpen(false)}
-            style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }}
-          />
-
-          <View
-            style={{
-              backgroundColor: colors.surface,
-              padding: spacing.xl,
-              gap: spacing.xs ?? 4,
-              borderTopLeftRadius: radius.lg,
-              borderTopRightRadius: radius.lg,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 18,
-                fontWeight: "800",
-                color: colors.onSurface,
-                marginBottom: spacing.sm,
-              }}
-            >
-              Period
-            </Text>
-
-            {PERIOD_PRESETS.map((preset) => {
-              const isActive = !usingCustom && periodsEqual(period, preset.period);
-
-              return (
-                <Pressable
-                  key={preset.label}
-                  testID={`expense-period-option-${preset.label}`}
-                  onPress={() => selectPreset(preset.period)}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingVertical: spacing.md,
-                    borderBottomWidth: StyleSheet.hairlineWidth,
-                    borderBottomColor: colors.border,
-                  }}
-                >
-                  <Text
-                    style={{
-                      fontSize: 15,
-                      fontWeight: isActive ? "700" : "500",
-                      color: colors.onSurface,
-                    }}
-                  >
-                    {preset.label}
-                  </Text>
-                  {isActive ? (
-                    <Ionicons name="checkmark" size={18} color={colors.onSurface} />
-                  ) : null}
-                </Pressable>
-              );
-            })}
-
-            <Pressable
-              testID="expense-period-option-custom"
-              onPress={selectCustom}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                paddingVertical: spacing.md,
-                borderBottomWidth: usingCustom ? 0 : StyleSheet.hairlineWidth,
-                borderBottomColor: colors.border,
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 15,
-                  fontWeight: usingCustom ? "700" : "500",
-                  color: colors.onSurface,
-                }}
-              >
-                Custom
-              </Text>
-              {usingCustom ? (
-                <Ionicons name="checkmark" size={18} color={colors.onSurface} />
-              ) : null}
-            </Pressable>
-
-            {usingCustom ? (
-              <>
-                {/* UNIT -- Weeks vs Months, same toggle as CarHistoryPage's
-                    custom period. Switching resets the stepper's unit,
-                    not its count. */}
-                <View
-                  style={{
-                    flexDirection: "row",
-                    gap: spacing.sm,
-                    justifyContent: "center",
-                    paddingTop: spacing.sm,
-                  }}
-                >
-                  {(["weeks", "months"] as const).map((unit) => {
-                    const isActive = customUnit === unit;
-
-                    return (
-                      <Pressable
-                        key={unit}
-                        testID={`expense-period-custom-unit-${unit}`}
-                        onPress={() => selectCustomUnit(unit)}
-                        hitSlop={{ top: 8, bottom: 8 }}
-                        style={{
-                          paddingHorizontal: spacing.md,
-                          minHeight: 30,
-                          borderRadius: radius.pill,
-                          backgroundColor: isActive ? colors.onSurface : "transparent",
-                          borderWidth: 1,
-                          borderColor: isActive ? colors.onSurface : colors.border,
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: "700",
-                            color: isActive ? colors.surface : colors.onSurface,
-                            textTransform: "capitalize",
-                          }}
-                        >
-                          {unit}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: spacing.lg,
-                    paddingVertical: spacing.md,
-                  }}
-                >
-                  <Pressable
-                    testID="expense-period-custom-minus"
-                    onPress={() => adjustCustomMonths(-1)}
-                    disabled={customMonths <= 1}
-                    hitSlop={8}
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: radius.pill,
-                      backgroundColor: "transparent",
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      opacity: customMonths <= 1 ? 0.4 : 1,
-                    }}
-                  >
-                    <Ionicons name="remove" size={18} color={colors.onSurface} />
-                  </Pressable>
-
-                  <Text
-                    style={{
-                      fontSize: 15,
-                      fontWeight: "700",
-                      color: colors.onSurface,
-                      minWidth: 110,
-                      textAlign: "center",
-                    }}
-                  >
-                    Last {customMonths}{" "}
-                    {customUnit === "weeks"
-                      ? customMonths === 1
-                        ? "week"
-                        : "weeks"
-                      : customMonths === 1
-                        ? "month"
-                        : "months"}
-                  </Text>
-
-                  <Pressable
-                    testID="expense-period-custom-plus"
-                    onPress={() => adjustCustomMonths(1)}
-                    disabled={customMonths >= 12}
-                    hitSlop={8}
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: radius.pill,
-                      backgroundColor: "transparent",
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      opacity: customMonths >= 12 ? 0.4 : 1,
-                    }}
-                  >
-                    <Ionicons name="add" size={18} color={colors.onSurface} />
-                  </Pressable>
-                </View>
-              </>
-            ) : null}
-
-            <Pressable
-              testID="expense-period-done"
-              onPress={() => setPeriodPickerOpen(false)}
-              style={{
-                marginTop: spacing.md,
-                minHeight: 48,
-                borderRadius: radius.md,
-                backgroundColor: colors.onSurface,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.surface }}>
-                Done
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      {/* LIST */}
       {allRecords.length === 0 ? (
-        <View
-          style={{
-            alignItems: "center",
-            paddingVertical: spacing["3xl"] ?? 48,
-            gap: spacing.sm,
-          }}
-        >
-          {/* Same identity glyph as the real Expense rows/form header
-              (already tinted) -- was left neutral here. */}
-          <Ionicons name="receipt-outline" size={28} color={SPACE_IDENTITY_COLORS.car} />
-          <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, textAlign: "center" }}>
-            No expenses recorded yet. Add Fuel, Maintenance, a Document or an
-            Expense from the menu to see them here.
-          </Text>
-        </View>
+        <EmptyState icon="receipt-outline" message="Nicio cheltuială înregistrată încă." />
       ) : filteredRecords.length === 0 ? (
-        <View
-          style={{
-            alignItems: "center",
-            paddingVertical: spacing["3xl"] ?? 48,
-            gap: spacing.sm,
-          }}
-        >
-          <Ionicons name="filter-outline" size={28} color={colors.onSurfaceTertiary} />
-          <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, textAlign: "center" }}>
-            {activeCategories.size > 0
-              ? `No ${categoryLabelsSelected.toLowerCase()} records in this period.`
-              : "No records in this period."}
-          </Text>
-          <Pressable
-            onPress={() => {
-              setActiveCategories(new Set());
-              selectPreset({ kind: "all" });
-              setIncludeArchived(true);
-            }}
-            hitSlop={8}
-          >
-            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurface }}>
-              Reset filters
-            </Text>
-          </Pressable>
-        </View>
+        <EmptyState icon="filter-outline" message="Nimic în această perioadă sau cu aceste filtre." />
       ) : (
         <>
-          {/* RECENT -- recorded today, nothing else. Same rule as the
-              dashboard: once today ends these rows just move down into
-              ALL below, no tag to remove. */}
-          {recentRecords.length > 0 ? (
-            <>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: spacing.sm,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: "700",
-                    letterSpacing: 0.6,
-                    color: colors.onSurfaceTertiary,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  Recent
-                </Text>
-
-                {recentRecords.length > 5 ? (
-                  <Pressable
-                    testID="expenses-recent-toggle"
-                    onPress={() => setRecentExpanded((v) => !v)}
-                    hitSlop={8}
-                    style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
-                  >
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: colors.onSurface }}>
-                      {recentExpanded ? "Show less" : "Show more"}
-                    </Text>
-                    <Ionicons
-                      name={recentExpanded ? "chevron-up" : "chevron-down"}
-                      size={11}
-                      color={colors.onSurfaceTertiary}
-                    />
-                  </Pressable>
-                ) : null}
-              </View>
-
-              <View
-                style={{
-                  backgroundColor: "transparent",
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: radius.sm,
-                  overflow: "hidden",
-                }}
-              >
-                {(recentExpanded ? recentRecords : recentRecords.slice(0, 5)).map((record, index, visible) =>
-                  renderRecordRow(record, index === visible.length - 1),
-                )}
-              </View>
-
-              {recentRecords.length > 5 ? (
-                <Pressable
-                  testID="expenses-recent-show-more"
-                  onPress={() => setRecentExpanded((v) => !v)}
-                  hitSlop={8}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 4,
-                    paddingVertical: spacing.sm,
-                    marginBottom: spacing.lg,
-                  }}
-                >
-                  <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurface }}>
-                    {recentExpanded ? "Show less" : `Show more (${recentRecords.length - 5})`}
-                  </Text>
-                  <Ionicons
-                    name={recentExpanded ? "chevron-up" : "chevron-down"}
-                    size={13}
-                    color={colors.onSurfaceTertiary}
-                  />
-                </Pressable>
-              ) : (
-                <View style={{ marginBottom: spacing.lg }} />
-              )}
-            </>
-          ) : null}
-
-          {olderRecords.length > 0 ? (
-            <>
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: spacing.sm,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontWeight: "700",
-                    letterSpacing: 0.6,
-                    color: colors.onSurfaceTertiary,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  All
-                </Text>
-
-                {olderRecords.length > 5 ? (
-                  <Pressable
-                    testID="expenses-all-toggle"
-                    onPress={() => setAllExpanded((v) => !v)}
-                    hitSlop={8}
-                    style={{ flexDirection: "row", alignItems: "center", gap: 3 }}
-                  >
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: colors.onSurface }}>
-                      {allExpanded ? "Show less" : "Show more"}
-                    </Text>
-                    <Ionicons
-                      name={allExpanded ? "chevron-up" : "chevron-down"}
-                      size={11}
-                      color={colors.onSurfaceTertiary}
-                    />
-                  </Pressable>
-                ) : null}
-              </View>
-
-              <View
-                style={{
-                  backgroundColor: "transparent",
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  borderRadius: radius.sm,
-                  overflow: "hidden",
-                }}
-              >
-                {(allExpanded ? olderRecords : olderRecords.slice(0, 5)).map((record, index, visible) =>
-                  renderRecordRow(record, index === visible.length - 1),
-                )}
-              </View>
-
-              {olderRecords.length > 5 ? (
-                <Pressable
-                  testID="expenses-all-show-more"
-                  onPress={() => setAllExpanded((v) => !v)}
-                  hitSlop={8}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 4,
-                    paddingVertical: spacing.sm,
-                  }}
-                >
-                  <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurface }}>
-                    {allExpanded ? "Show less" : `Show more (${olderRecords.length - 5})`}
-                  </Text>
-                  <Ionicons
-                    name={allExpanded ? "chevron-up" : "chevron-down"}
-                    size={13}
-                    color={colors.onSurfaceTertiary}
-                  />
-                </Pressable>
-              ) : null}
-            </>
-          ) : null}
+          {recentRecords.length > 0 ? renderGroup("Azi", recentRecords, recentExpanded, () => setRecentExpanded((v) => !v), "expenses-recent-show-more") : null}
+          {olderRecords.length > 0 ? renderGroup(recentRecords.length > 0 ? "Mai devreme" : "Înregistrări", olderRecords, allExpanded, () => setAllExpanded((v) => !v), "expenses-all-show-more") : null}
         </>
       )}
     </ScrollView>
+
+    <CarPeriodSheet
+      visible={periodPickerOpen}
+      onClose={() => setPeriodPickerOpen(false)}
+      period={period}
+      usingCustom={usingCustom}
+      customUnit={customUnit}
+      customCount={customMonths}
+      onPreset={selectPreset}
+      onCustom={selectCustom}
+      onCustomUnit={selectCustomUnit}
+      onCustomCount={adjustCustomMonths}
+      testIDPrefix="expenses"
+    />
     </SwipeBackView>
   );
 }

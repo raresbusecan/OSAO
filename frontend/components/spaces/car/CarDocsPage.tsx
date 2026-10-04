@@ -1,8 +1,9 @@
 import React, { useMemo } from "react";
-import { View, Text, ScrollView, Pressable, StyleSheet } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { ScrollView } from "react-native";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { TopBar, Identity, Group, Row, IconWell, Chip, EmptyState } from "@/components/ui/primitives";
+import { roCount } from "@/lib/format";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import type { CarData } from "./car.data.types";
 import { getDocumentStatus, type DocumentStatus } from "@/lib/spaces/car/calculations/dashboard.calculations";
@@ -20,10 +21,10 @@ export type CarDocsPageProps = {
 };
 
 function statusLabel(status: DocumentStatus, daysUntilExpiry: number | null): string {
-  if (status === "no_expiry") return "No expiry set";
-  if (status === "expired") return "Expired";
-  if (status === "expiring_soon") return `Expires in ${daysUntilExpiry} day${daysUntilExpiry === 1 ? "" : "s"}`;
-  return "Valid";
+  if (status === "no_expiry") return "Fără expirare";
+  if (status === "expired") return "Expirat";
+  if (status === "expiring_soon") return daysUntilExpiry === 0 ? "Expiră azi" : `Expiră în ${roCount(daysUntilExpiry ?? 0, "zi", "zile")}`;
+  return "Valabil";
 }
 
 function statusColor(status: DocumentStatus, colors: any): string {
@@ -46,7 +47,7 @@ function statusColor(status: DocumentStatus, colors: any): string {
  * renewal supersedes it (see CarDashboard.tsx's "renew" flow).
  */
 export function CarDocsPage({ carData, onBack, onRecordPress }: CarDocsPageProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing, isDark } = useTheme();
 
   const documents = useMemo(() => {
     return carData.documentEntries
@@ -55,124 +56,42 @@ export function CarDocsPage({ carData, onBack, onRecordPress }: CarDocsPageProps
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [carData.documentEntries]);
 
+  const CAR = SPACE_IDENTITY_COLORS.car!;
+  const tint = spaceTextColor("car", isDark) ?? CAR;
+
   return (
     <SwipeBackView onBack={onBack}>
     <ScrollView
       testID="car-docs-page"
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{
-        paddingHorizontal: spacing.xl,
-        paddingBottom: 150,
-      }}
+      contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >
-      {/* HEADER */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: spacing.md,
-          paddingTop: spacing.md,
-          paddingBottom: spacing.xl,
-        }}
-      >
-        <Pressable
-          testID="docs-back"
-          onPress={onBack}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: radius.pill,
-            backgroundColor: "transparent",
-            borderWidth: 1,
-            borderColor: colors.border,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
-        </Pressable>
-
-        <View>
-          <Text style={{ fontSize: 22, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.4 }}>
-            Docs
-          </Text>
-          <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>
-            RCA, ITP, road tax and anything else on file
-          </Text>
-        </View>
-      </View>
+      <TopBar onBack={onBack} backTestID="docs-back" />
+      <Identity color={CAR} kicker="Mașină" title="Documente" subtitle="RCA, ITP, rovinietă și orice altceva ai la dosar" />
 
       {documents.length === 0 ? (
-        <View style={{ alignItems: "center", paddingVertical: spacing["3xl"] ?? 48, gap: spacing.sm }}>
-          {/* Same identity glyph as the real rows two lines down (already
-              tinted) -- was left neutral here, the one moment it reads
-              differently depending on whether the list is empty. */}
-          <Ionicons name="document-text-outline" size={28} color={SPACE_IDENTITY_COLORS.car} />
-          <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, textAlign: "center" }}>
-            No documents on file yet. Add one from the + menu's Document category.
-          </Text>
-        </View>
+        <EmptyState icon="document-text-outline" message="Niciun document încă. Adaugă unul din butonul Document de pe pagina mașinii." />
       ) : (
-        <View style={{ backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, borderRadius: radius.sm, overflow: "hidden" }}>
-          {documents.map((doc, index) => (
-            <Pressable
-              key={doc.id}
-              testID={`docs-record-${doc.id}`}
-              onPress={() => onRecordPress?.(doc.id)}
-              disabled={!onRecordPress}
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: spacing.md,
-                paddingHorizontal: spacing.lg,
-                paddingVertical: spacing.md,
-                borderBottomWidth: index === documents.length - 1 ? 0 : StyleSheet.hairlineWidth,
-                borderBottomColor: colors.border,
-              }}
-            >
-              <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: radius.md,
-                  // Tinted with the Space's identity color, same as Quick
-                  // Actions/DUE SOON's chips -- this icon's whole job is
-                  // "this row is a document," the same identity signal.
-                  backgroundColor: `${SPACE_IDENTITY_COLORS.car}1A`,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons name="document-text-outline" size={17} color={SPACE_IDENTITY_COLORS.car} />
-              </View>
-
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurface }} numberOfLines={1}>
-                  {doc.title}
-                </Text>
-                <Text style={{ marginTop: 2, fontSize: 12, color: colors.onSurfaceTertiary }} numberOfLines={1}>
-                  {doc.documentType} · {formatCarDate(doc.date)}
-                </Text>
-                <Text style={{ marginTop: 2, fontSize: 12, fontWeight: "700", color: statusColor(doc.status, colors) }}>
-                  {statusLabel(doc.status, doc.daysUntilExpiry)}
-                </Text>
-              </View>
-
-              {doc.price !== undefined ? (
-                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurface }}>
-                  {formatCarNumber(doc.price)} RON
-                </Text>
-              ) : null}
-
-              {onRecordPress ? (
-                <Ionicons name="chevron-forward" size={14} color={colors.onSurfaceTertiary} />
-              ) : null}
-            </Pressable>
-          ))}
-        </View>
+        <Group inset={68}>
+          {documents.map((doc) => {
+            const tone = statusColor(doc.status, colors);
+            return (
+              <Row
+                key={doc.id}
+                testID={`docs-record-${doc.id}`}
+                onPress={onRecordPress ? () => onRecordPress(doc.id) : undefined}
+                leading={<IconWell icon="document-text-outline" color={CAR} tint={tint} />}
+                title={doc.title}
+                subtitle={[doc.documentType, formatCarDate(doc.date), doc.price !== undefined ? `${formatCarNumber(doc.price)} lei` : null].filter(Boolean).join(", ")}
+                trailing={
+                  doc.status === "valid" || doc.status === "no_expiry"
+                    ? <Chip label={statusLabel(doc.status, doc.daysUntilExpiry)} color={tone} filled={false} />
+                    : <Chip label={statusLabel(doc.status, doc.daysUntilExpiry)} color={tone} icon={doc.status === "expired" ? "alert-circle" : undefined} />
+                }
+              />
+            );
+          })}
+        </Group>
       )}
     </ScrollView>
     </SwipeBackView>
