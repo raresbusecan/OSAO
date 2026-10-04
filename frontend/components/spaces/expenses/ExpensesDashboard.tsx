@@ -97,14 +97,18 @@ export default function ExpensesDashboard({
     <SwipeBackView onBack={() => router.push("/spaces")}>
     <ScrollView
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
       contentContainerStyle={{
-        paddingHorizontal: spacing.xl,
+        paddingHorizontal: spacing.gutter,
+        paddingTop: spacing.md,
         paddingBottom: 100,
+        gap: spacing.section,
       }}
     >
       <ExpensesHeader space={space} onEdit={onEdit} />
 
       <ExpensesStats
+        entries={entries}
         allTimeTotal={allTimeTotal}
         thisMonthTotal={thisMonthTotal}
         onTotalPress={() => setDetailPageVisible(true)}

@@ -2,7 +2,10 @@ import React, { useState } from "react";
 import { View, Text, TextInput, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL } from "@/lib/spaces/spaceProfile";
+import { PressableScale } from "@/components/ui/PressableScale";
+import { Field, FieldButton } from "@/components/ui/primitives";
+import { motion } from "@/lib/motion";
 import { ExpenseDatePickerSheet } from "./ExpenseDatePickerSheet";
 
 export type ExpensesAddBarDraft = {
@@ -23,8 +26,8 @@ function todayIso(): string {
 function formatShortDate(iso: string): string {
   const d = new Date(iso);
   const now = new Date();
-  if (d.toDateString() === now.toDateString()) return "Astăzi";
-  return d.toLocaleDateString("ro-RO", { day: "numeric", month: "short" });
+  if (d.toDateString() === now.toDateString()) return "Azi";
+  return d.toLocaleDateString("ro-RO", { day: "numeric", month: "long" });
 }
 
 /**
@@ -59,8 +62,18 @@ export function ExpensesAddBar({ onAdd }: ExpensesAddBarProps) {
     reset();
   };
 
+  const TEAL = SPACE_IDENTITY_COLORS.expenses!;
+  const input = {
+    height: 52,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.control,
+    backgroundColor: colors.surfaceSecondary,
+    color: colors.onSurface,
+    fontSize: 15,
+  } as const;
+
   return (
-    <View style={{ marginBottom: spacing.xl, gap: spacing.sm }}>
+    <View style={{ gap: spacing.sm }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
         <TextInput
           testID="expenses-add-name"
@@ -68,26 +81,11 @@ export function ExpensesAddBar({ onAdd }: ExpensesAddBarProps) {
           onChangeText={setName}
           onSubmitEditing={submit}
           returnKeyType="done"
-          placeholder="What did you buy?"
+          placeholder="Ce ai cumpărat?"
           placeholderTextColor={colors.onSurfaceTertiary}
-          style={{
-            flex: 1,
-            // Without this, a flex item on web defaults to
-            // min-width: auto -- it refuses to shrink below its content's
-            // natural width instead of respecting the row's actual
-            // available space.
-            minWidth: 0,
-            height: 48,
-            paddingHorizontal: spacing.lg,
-            borderRadius: radius.sm,
-            backgroundColor: "transparent",
-            borderWidth: 1,
-            borderColor: colors.border,
-            color: colors.onSurface,
-            fontSize: 14,
-          }}
+          accessibilityLabel="Ce ai cumpărat"
+          style={{ ...input, flex: 1, minWidth: 0 }}
         />
-
         <TextInput
           testID="expenses-add-price"
           value={price}
@@ -95,97 +93,39 @@ export function ExpensesAddBar({ onAdd }: ExpensesAddBarProps) {
           onSubmitEditing={submit}
           returnKeyType="done"
           keyboardType="decimal-pad"
-          placeholder="Price"
+          placeholder="Preț"
           placeholderTextColor={colors.onSurfaceTertiary}
-          style={{
-            width: 78,
-            height: 48,
-            paddingHorizontal: spacing.md,
-            borderRadius: radius.sm,
-            backgroundColor: "transparent",
-            borderWidth: 1,
-            borderColor: colors.border,
-            color: colors.onSurface,
-            fontSize: 14,
-          }}
+          accessibilityLabel="Preț în lei"
+          style={{ ...input, width: 92, paddingHorizontal: spacing.md }}
         />
-
-        <Pressable
+        <PressableScale
           testID="expenses-add-button"
           onPress={submit}
           disabled={!canSubmit}
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: radius.sm,
-            // Expenses' identity color, same fill treatment as
-            // Grocery's own quick-add button. Fixed dark icon (not
-            // colors.surface/white): teal fails contrast against white
-            // (~2.5:1, under WCAG's 3:1 minimum for graphical objects),
-            // same issue Grocery's amber had.
-            backgroundColor: SPACE_IDENTITY_COLORS.expenses,
-            borderWidth: 0,
-            alignItems: "center",
-            justifyContent: "center",
-            opacity: canSubmit ? 1 : 0.5,
-          }}
+          scaleTo={motion.scale.control}
+          accessibilityRole="button"
+          accessibilityLabel="Adaugă cheltuiala"
+          style={{ width: 52, height: 52, borderRadius: radius.control, backgroundColor: canSubmit ? TEAL : `${TEAL}55`, alignItems: "center", justifyContent: "center" }}
         >
-          <Ionicons name="add" size={22} color="#111111" />
-        </Pressable>
+          <Ionicons name="add" size={24} color={SPACE_ON_FILL.expenses} />
+        </PressableScale>
       </View>
 
       <Pressable
         testID="expenses-add-toggle-details"
         onPress={() => setExpanded((v) => !v)}
-        style={{ flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start" }}
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        style={{ flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", minHeight: 40 }}
       >
-        <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurfaceTertiary }}>
-          {expanded ? "Ascunde detaliile" : "Adaugă detalii (dată, notă)"}
-        </Text>
-        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={12} color={colors.onSurfaceTertiary} />
+        <Ionicons name={expanded ? "remove" : "add"} size={15} color={colors.onSurfaceTertiary} />
+        <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>{expanded ? "Ascunde detaliile" : "Dată sau notă"}</Text>
       </Pressable>
 
       {expanded ? (
-        <View style={{ gap: spacing.sm, padding: spacing.md, borderRadius: radius.sm, backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border }}>
-          <Pressable
-            testID="expenses-add-date"
-            onPress={() => setDatePickerVisible(true)}
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "space-between",
-              height: 44,
-              paddingHorizontal: spacing.md,
-              borderRadius: radius.sm,
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}
-          >
-            <Text style={{ fontSize: 13.5, color: colors.onSurface }}>{formatShortDate(date)}</Text>
-            <Ionicons name="calendar-outline" size={16} color={colors.onSurfaceTertiary} />
-          </Pressable>
-
-          <TextInput
-            testID="expenses-add-notes"
-            value={notes}
-            onChangeText={setNotes}
-            placeholder="Notă (opțional)"
-            placeholderTextColor={colors.onSurfaceTertiary}
-            multiline
-            style={{
-              minHeight: 44,
-              paddingHorizontal: spacing.md,
-              paddingVertical: 10,
-              borderRadius: radius.sm,
-              backgroundColor: colors.surface,
-              borderWidth: 1,
-              borderColor: colors.border,
-              color: colors.onSurface,
-              fontSize: 13.5,
-              textAlignVertical: "top",
-            }}
-          />
+        <View style={{ gap: spacing.sm }}>
+          <FieldButton testID="expenses-add-date" label="Data" value={formatShortDate(date)} onPress={() => setDatePickerVisible(true)} />
+          <Field testID="expenses-add-notes" label="Notă (opțional)" value={notes} onChangeText={setNotes} placeholder="Orice detaliu util" multiline tone={TEAL} />
         </View>
       ) : null}
 

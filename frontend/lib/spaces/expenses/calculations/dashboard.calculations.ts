@@ -62,8 +62,8 @@ export function filterExpensesByPeriod(
 }
 
 export function formatExpensesPeriodLabel(period: ExpensesPeriod): string {
-  if (period.kind === "all") return "All time";
-  if (period.kind === "thisMonth") return "This month";
-  if (period.kind === "months") return period.count === 1 ? "Last month" : `Last ${period.count} months`;
-  return period.count === 1 ? "Last year" : `Last ${period.count} years`;
+  if (period.kind === "all") return "Tot timpul";
+  if (period.kind === "thisMonth") return "Luna asta";
+  if (period.kind === "months") return period.count === 1 ? "Ultima lună" : `Ultimele ${period.count} luni`;
+  return period.count === 1 ? "Ultimul an" : `Ultimii ${period.count} ani`;
 }

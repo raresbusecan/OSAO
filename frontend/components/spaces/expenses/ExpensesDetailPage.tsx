@@ -1,8 +1,11 @@
 import React, { useMemo, useState } from "react";
-import { View, Text, ScrollView, Pressable, Modal, StyleSheet } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, Text, ScrollView } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
+import { TopBar, Identity, Pill } from "@/components/ui/primitives";
+import { roCount } from "@/lib/format";
 import type { ExpensesData } from "./expenses.data.types";
 import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
 import { ExpensesListSection } from "./ExpensesListSection";
@@ -20,11 +23,11 @@ export type ExpensesDetailPageProps = {
 };
 
 const PERIOD_PRESETS: { label: string; period: ExpensesPeriod }[] = [
-  { label: "All time", period: { kind: "all" } },
-  { label: "This month", period: { kind: "thisMonth" } },
-  { label: "Last 3 months", period: { kind: "months", count: 3 } },
-  { label: "Last 6 months", period: { kind: "months", count: 6 } },
-  { label: "Last year", period: { kind: "years", count: 1 } },
+  { label: "Tot timpul", period: { kind: "all" } },
+  { label: "Luna asta", period: { kind: "thisMonth" } },
+  { label: "3 luni", period: { kind: "months", count: 3 } },
+  { label: "6 luni", period: { kind: "months", count: 6 } },
+  { label: "1 an", period: { kind: "years", count: 1 } },
 ];
 
 function periodsEqual(a: ExpensesPeriod, b: ExpensesPeriod): boolean {
@@ -44,10 +47,9 @@ function periodsEqual(a: ExpensesPeriod, b: ExpensesPeriod): boolean {
  * here -- period is the only axis.
  */
 export function ExpensesDetailPage({ expensesData, onBack, onEntryPress }: ExpensesDetailPageProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing, radius, typography } = useTheme();
 
   const [period, setPeriod] = useState<ExpensesPeriod>({ kind: "all" });
-  const [periodPickerOpen, setPeriodPickerOpen] = useState(false);
 
   const allTimeTotal = useMemo(() => getAllTimeExpensesTotal(expensesData), [expensesData]);
 
@@ -65,155 +67,32 @@ export function ExpensesDetailPage({ expensesData, onBack, onEntryPress }: Expen
     <ScrollView
       testID="expenses-detail-page"
       showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingHorizontal: spacing.xl, paddingBottom: 150 }}
+      contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >
-      {/* HEADER */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: spacing.md,
-          paddingTop: spacing.md,
-          paddingBottom: spacing.xl,
-        }}
-      >
-        <Pressable
-          testID="expenses-detail-back"
-          onPress={onBack}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: radius.pill,
-            backgroundColor: "transparent",
-            borderWidth: 1,
-            borderColor: colors.border,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.onSurface} />
-        </Pressable>
+      <TopBar onBack={onBack} backTestID="expenses-detail-back" />
+      <Identity color={SPACE_IDENTITY_COLORS.expenses} kicker="Cheltuieli" title="Toate cheltuielile" />
 
-        <Text style={{ fontSize: 22, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.4 }}>
-          Expenses
-        </Text>
-      </View>
-
-      {/* TOTAL */}
-      <View style={{ marginBottom: spacing.xl }}>
-        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-          <Text style={{ fontSize: 30, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.6 }}>
-            {filteredTotal.toLocaleString("en-US")}
-          </Text>
-          <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>RON</Text>
-        </View>
-        <Text style={{ marginTop: 2, fontSize: 12, color: colors.onSurfaceTertiary }}>
-          {formatExpensesPeriodLabel(period)} · {filteredEntries.length} entries
-        </Text>
-      </View>
-
-      {/* PERIOD -- same modal bottom-sheet trigger as CarExpensesPage/
-          CarHistoryPage/HomeSpendPage's own "Period" row. */}
-      <View
-        style={{
-          backgroundColor: "transparent",
-          borderWidth: 1,
-          borderColor: colors.border,
-          borderRadius: radius.sm,
-          padding: spacing.lg,
-          marginBottom: spacing.xl,
-        }}
-      >
-        <Pressable
-          testID="expenses-detail-period-trigger"
-          onPress={() => setPeriodPickerOpen(true)}
-          accessibilityRole="button"
-          style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}
-        >
-          <Text style={{ fontSize: 13, fontWeight: "600", color: colors.onSurface }}>Period</Text>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Text style={{ fontSize: 13, fontWeight: "700", color: colors.onSurface }}>
-              {formatExpensesPeriodLabel(period)}
-            </Text>
-            <Ionicons name="chevron-down" size={16} color={colors.onSurfaceTertiary} />
-          </View>
-        </Pressable>
-      </View>
-
-      {/* PERIOD PICKER */}
-      <Modal
-        visible={periodPickerOpen}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setPeriodPickerOpen(false)}
-      >
-        <View style={{ flex: 1, justifyContent: "flex-end" }}>
-          <Pressable
-            onPress={() => setPeriodPickerOpen(false)}
-            style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+        {PERIOD_PRESETS.map((preset) => (
+          <Pill
+            key={preset.label}
+            testID={`expenses-detail-period-option-${preset.label}`}
+            label={preset.label}
+            active={periodsEqual(period, preset.period)}
+            onPress={() => setPeriod(preset.period)}
           />
+        ))}
+      </ScrollView>
 
-          <View
-            style={{
-              backgroundColor: colors.surface,
-              padding: spacing.xl,
-              borderTopLeftRadius: radius.lg,
-              borderTopRightRadius: radius.lg,
-            }}
-          >
-            <Text style={{ fontSize: 18, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.sm }}>
-              Period
-            </Text>
-
-            {PERIOD_PRESETS.map((preset) => {
-              const isActive = periodsEqual(period, preset.period);
-              return (
-                <Pressable
-                  key={preset.label}
-                  testID={`expenses-detail-period-option-${preset.label}`}
-                  onPress={() => {
-                    setPeriod(preset.period);
-                    setPeriodPickerOpen(false);
-                  }}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    paddingVertical: spacing.md,
-                    borderBottomWidth: StyleSheet.hairlineWidth,
-                    borderBottomColor: colors.border,
-                  }}
-                >
-                  <Text style={{ fontSize: 15, fontWeight: isActive ? "700" : "500", color: colors.onSurface }}>
-                    {preset.label}
-                  </Text>
-                  {isActive ? <Ionicons name="checkmark" size={18} color={colors.onSurface} /> : null}
-                </Pressable>
-              );
-            })}
-
-            <Pressable
-              testID="expenses-detail-period-done"
-              onPress={() => setPeriodPickerOpen(false)}
-              style={{
-                marginTop: spacing.md,
-                minHeight: 48,
-                borderRadius: radius.md,
-                backgroundColor: colors.onSurface,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.surface }}>Done</Text>
-            </Pressable>
-          </View>
+      <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: 2 }}>
+        <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{formatExpensesPeriodLabel(period)}</Text>
+        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
+          <AnimatedNumber value={filteredTotal} style={{ ...typography.display, color: colors.onSurface }} />
+          <Text style={{ fontSize: 16, color: colors.onSurfaceTertiary }}>lei</Text>
         </View>
-      </Modal>
+        <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{roCount(filteredEntries.length, "cheltuială", "cheltuieli")}</Text>
+      </View>
 
-      {/* LIST */}
       <ExpensesListSection entries={filteredEntries} onEntryPress={onEntryPress} />
     </ScrollView>
     </SwipeBackView>

@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from "react";
-import { Modal, View, Text, Pressable } from "react-native";
+import { View, Text, Pressable } from "react-native";
+import { Sheet } from "@/components/ui/Sheet";
+import { Button, CircleButton } from "@/components/ui/primitives";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 
@@ -94,88 +96,44 @@ export function ExpenseDatePickerSheet({ value, onCancel, onSelect }: ExpenseDat
   const monthLabel = new Date(current.year, current.month, 1).toLocaleDateString("ro-RO", { month: "long", year: "numeric" });
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onCancel}>
-      <Pressable onPress={onCancel} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" }}>
-        <Pressable
-          onPress={(e) => e.stopPropagation()}
-          style={{
-            backgroundColor: colors.surface,
-            borderTopLeftRadius: radius.lg + 4,
-            borderTopRightRadius: radius.lg + 4,
-            padding: spacing.xl,
-          }}
-        >
-          <View
-            style={{
-              width: 36,
-              height: 4,
-              borderRadius: 2,
-              backgroundColor: colors.border,
-              alignSelf: "center",
-              marginBottom: spacing.lg,
-            }}
-          />
+    <Sheet
+      visible
+      onClose={onCancel}
+      title="Alege data"
+      footer={
+        <Button
+          variant="secondary"
+          label="Azi"
+          onPress={() => onSelect(today.toISOString())}
+        />
+      }
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <CircleButton icon="chevron-back" label="Luna trecută" onPress={() => goToIndex(index - 1)} disabled={index === 0} />
+        <Text style={{ fontSize: 17, fontWeight: "600", color: colors.onSurface, textTransform: "capitalize" }}>{monthLabel}</Text>
+        {/* Disabled on the current month -- an expense can't be dated
+            in the future. */}
+        <CircleButton icon="chevron-forward" label="Luna viitoare" onPress={() => goToIndex(index + 1)} disabled={index === currentMonthIndex} />
+      </View>
 
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.lg }}>
-            <Pressable onPress={() => goToIndex(index - 1)} hitSlop={12} accessibilityRole="button" accessibilityLabel="Previous month">
-              <Ionicons name="chevron-back" size={20} color={colors.onSurface} />
-            </Pressable>
-            <Text style={{ fontSize: 16, fontWeight: "800", color: colors.onSurface, textTransform: "capitalize" }}>
-              {monthLabel}
-            </Text>
-            {/* Disabled, not hidden, on the current month -- an expense
-                can't be dated in the future. */}
-            <Pressable
-              onPress={() => goToIndex(index + 1)}
-              disabled={index === currentMonthIndex}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel="Next month"
-            >
-              <Ionicons name="chevron-forward" size={20} color={index === currentMonthIndex ? colors.border : colors.onSurface} />
-            </Pressable>
-          </View>
-
-          <View style={{ flexDirection: "row", marginBottom: 4 }}>
-            {["D", "L", "M", "M", "J", "V", "S"].map((d, i) => (
-              <View key={i} style={{ flex: 1, alignItems: "center", paddingBottom: 6 }}>
-                <Text style={{ fontSize: 11, fontWeight: "700", color: colors.onSurfaceTertiary }}>{d}</Text>
-              </View>
-            ))}
-          </View>
-
-          <View style={{ marginBottom: spacing.lg }}>
-            <MonthGrid
-              year={current.year}
-              month={current.month}
-              selected={selected}
-              today={today}
-              onSelectDay={(d) => onSelect(d.toISOString())}
-              colors={colors}
-            />
-          </View>
-
-          <Pressable
-            onPress={() => {
-              onSelect(today.toISOString());
-              goToIndex(currentMonthIndex);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Today"
-            style={{
-              height: 48,
-              borderRadius: radius.sm,
-              borderWidth: 1,
-              borderColor: colors.border,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ fontSize: 13.5, fontWeight: "700", color: colors.onSurfaceTertiary }}>Astăzi</Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
-    </Modal>
+      <View>
+        <View style={{ flexDirection: "row", marginBottom: 4 }}>
+          {["D", "L", "M", "M", "J", "V", "S"].map((d, i) => (
+            <View key={i} style={{ flex: 1, alignItems: "center", paddingBottom: 6 }}>
+              <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>{d}</Text>
+            </View>
+          ))}
+        </View>
+        <MonthGrid
+                year={current.year}
+                month={current.month}
+                selected={selected}
+                today={today}
+                onSelectDay={(d) => onSelect(d.toISOString())}
+                colors={colors}
+              />
+      </View>
+    </Sheet>
   );
 }
 
@@ -219,9 +177,9 @@ function MonthGrid({
             {d != null ? (
               <View
                 style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 17,
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
                   alignItems: "center",
                   justifyContent: "center",
                   backgroundColor: isSelected ? colors.onSurface : "transparent",
@@ -233,7 +191,7 @@ function MonthGrid({
                 <Text
                   style={{
                     fontSize: 14,
-                    fontWeight: isSelected || isToday ? "800" : "500",
+                    fontWeight: isSelected || isToday ? "600" : "400",
                     color: isSelected ? colors.surface : colors.onSurface,
                   }}
                 >
