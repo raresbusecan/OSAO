@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState } from "react";
-import { Modal, View, Text, Pressable, FlatList, LayoutChangeEvent, NativeSyntheticEvent, NativeScrollEvent } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, Text, Pressable, FlatList, LayoutChangeEvent, NativeSyntheticEvent, NativeScrollEvent } from "react-native";
+import { Sheet } from "@/components/ui/Sheet";
+import { Button, CircleButton } from "@/components/ui/primitives";
 import { useTheme } from "@/lib/theme";
 
 export type HomeDatePickerSheetProps = {
@@ -45,7 +46,7 @@ function addMonths(y: number, m: number, delta: number): MonthKey {
  * ScrollView.scrollTo doesn't reliably land before the next gesture.
  * The chevrons underneath just scrollToIndex +-1, same list. */
 export function HomeDatePickerSheet({ value, onCancel, onSelect }: HomeDatePickerSheetProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { colors } = useTheme();
 
   // Index 0 is always the real current month, never a due date in the
   // past -- per "only forward from today" (see the disabled "Previous"
@@ -128,103 +129,59 @@ export function HomeDatePickerSheet({ value, onCancel, onSelect }: HomeDatePicke
   const monthLabel = new Date(current.year, current.month, 1).toLocaleDateString("ro-RO", { month: "long", year: "numeric" });
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onCancel}>
-      <Pressable onPress={onCancel} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" }}>
-        <Pressable
-          onPress={(e) => e.stopPropagation()}
-          style={{
-            backgroundColor: colors.surface,
-            borderTopLeftRadius: radius.lg + 4,
-            borderTopRightRadius: radius.lg + 4,
-            padding: spacing.xl,
-          }}
-        >
-          <View
-            style={{
-              width: 36,
-              height: 4,
-              borderRadius: 2,
-              backgroundColor: colors.border,
-              alignSelf: "center",
-              marginBottom: spacing.lg,
-            }}
-          />
+    <Sheet
+      visible
+      onClose={onCancel}
+      title="Alege o dată"
+      footer={<Button variant="secondary" label="Fără dată" onPress={() => onSelect(undefined)} />}
+    >
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        {/* Disabled, not hidden, at index 0 -- nothing before the
+            current month to page back to. */}
+        <CircleButton icon="chevron-back" label="Luna trecută" onPress={() => goToIndex(index - 1)} disabled={index === 0} />
+        <Text style={{ fontSize: 17, fontWeight: "600", color: colors.onSurface, textTransform: "capitalize" }}>{monthLabel}</Text>
+        <CircleButton icon="chevron-forward" label="Luna viitoare" onPress={() => goToIndex(index + 1)} />
+      </View>
 
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.lg }}>
-            {/* Disabled, not hidden, at index 0 -- there's nothing before
-                the current month to page back to. */}
-            <Pressable
-              onPress={() => goToIndex(index - 1)}
-              disabled={index === 0}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel="Previous month"
-            >
-              <Ionicons name="chevron-back" size={20} color={index === 0 ? colors.border : colors.onSurface} />
-            </Pressable>
-            <Text style={{ fontSize: 16, fontWeight: "800", color: colors.onSurface, textTransform: "capitalize" }}>
-              {monthLabel}
-            </Text>
-            <Pressable onPress={() => goToIndex(index + 1)} hitSlop={12} accessibilityRole="button" accessibilityLabel="Next month">
-              <Ionicons name="chevron-forward" size={20} color={colors.onSurface} />
-            </Pressable>
-          </View>
+      <View>
+        <View style={{ flexDirection: "row", marginBottom: 4 }}>
+          {["D", "L", "M", "M", "J", "V", "S"].map((d, i) => (
+            <View key={i} style={{ flex: 1, alignItems: "center", paddingBottom: 6 }}>
+              <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>{d}</Text>
+            </View>
+          ))}
+        </View>
 
-          <View style={{ flexDirection: "row", marginBottom: 4 }}>
-            {["D", "L", "M", "M", "J", "V", "S"].map((d, i) => (
-              <View key={i} style={{ flex: 1, alignItems: "center", paddingBottom: 6 }}>
-                <Text style={{ fontSize: 11, fontWeight: "700", color: colors.onSurfaceTertiary }}>{d}</Text>
-              </View>
-            ))}
-          </View>
-
-          <View onLayout={handleLayout} style={{ marginBottom: spacing.lg, height: 6 * ((pageWidth || 1) / 7) }}>
-            {pageWidth > 0 ? (
-              <FlatList
-                ref={listRef}
-                data={months}
-                keyExtractor={(m) => `${m.year}-${m.month}`}
-                horizontal
-                pagingEnabled
-                showsHorizontalScrollIndicator={false}
-                initialScrollIndex={initialIndex}
-                getItemLayout={(_, i) => ({ length: pageWidth, offset: pageWidth * i, index: i })}
-                onScroll={handleScroll}
-                scrollEventThrottle={32}
-                renderItem={({ item }) => (
-                  <View style={{ width: pageWidth }}>
-                    <MonthGrid
-                      year={item.year}
-                      month={item.month}
-                      selected={selected}
-                      today={today}
-                      onSelectDay={(d) => onSelect(d.toISOString())}
-                      colors={colors}
-                    />
-                  </View>
-                )}
-              />
-            ) : null}
-          </View>
-
-          <Pressable
-            onPress={() => onSelect(undefined)}
-            accessibilityRole="button"
-            accessibilityLabel="No due date"
-            style={{
-              height: 48,
-              borderRadius: radius.md,
-              borderWidth: 1,
-              borderColor: colors.border,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ fontSize: 13.5, fontWeight: "700", color: colors.onSurfaceTertiary }}>Fără dată</Text>
-          </Pressable>
-        </Pressable>
-      </Pressable>
-    </Modal>
+        <View onLayout={handleLayout} style={{ height: 6 * ((pageWidth || 1) / 7) }}>
+          {pageWidth > 0 ? (
+            <FlatList
+              ref={listRef}
+              data={months}
+              keyExtractor={(m) => `${m.year}-${m.month}`}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              initialScrollIndex={initialIndex}
+              getItemLayout={(_, i) => ({ length: pageWidth, offset: pageWidth * i, index: i })}
+              onScroll={handleScroll}
+              scrollEventThrottle={32}
+              renderItem={({ item }) => (
+                <View style={{ width: pageWidth }}>
+                  <MonthGrid
+                    year={item.year}
+                    month={item.month}
+                    selected={selected}
+                    today={today}
+                    onSelectDay={(d) => onSelect(d.toISOString())}
+                    colors={colors}
+                  />
+                </View>
+              )}
+            />
+          ) : null}
+        </View>
+      </View>
+    </Sheet>
   );
 }
 
@@ -266,9 +223,9 @@ function MonthGrid({
             {d != null ? (
               <View
                 style={{
-                  width: 34,
-                  height: 34,
-                  borderRadius: 17,
+                  width: 38,
+                  height: 38,
+                  borderRadius: 19,
                   alignItems: "center",
                   justifyContent: "center",
                   backgroundColor: isSelected ? colors.onSurface : "transparent",
@@ -278,8 +235,8 @@ function MonthGrid({
               >
                 <Text
                   style={{
-                    fontSize: 14,
-                    fontWeight: isSelected || isToday ? "800" : "500",
+                    fontSize: 15,
+                    fontWeight: isSelected || isToday ? "600" : "400",
                     color: isSelected ? colors.surface : colors.onSurface,
                   }}
                 >

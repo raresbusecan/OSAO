@@ -1,35 +1,14 @@
-import React, { useRef, useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  Switch,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  Modal,
-  Animated,
-} from "react-native";
-import { PanGestureHandler, State } from "react-native-gesture-handler";
-import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import React, { useState } from "react";
+import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
 import { confirmAction } from "@/lib/confirm";
+import { Sheet } from "@/components/ui/Sheet";
+import { Button, Field, FieldButton, Segmented, ToggleRow } from "@/components/ui/primitives";
+import { roDate } from "@/lib/format";
 
 import type { HomeTaskEntry } from "@/lib/spaces/home/home.types";
 import { HomeDatePickerSheet } from "@/components/spaces/home/HomeDatePickerSheet";
 
-// Bottom sheet with drag-to-dismiss, same recipe as ExpenseEditModal/
-// HomeSupplyRestockSheet/HomeCategoryPage's CategoryFormSheet -- per
-// explicit user request, Add/Edit Task should match those instead of
-// being its own full-page screen. Classic PanGestureHandler + React
-// Native Animated (not react-native-reanimated's Gesture.Pan()/worklet
-// system, confirmed live to do nothing in this project's Expo Go install).
-const DISMISS_DISTANCE = 120;
-const DISMISS_VELOCITY = 800;
-
-const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+const HOME = SPACE_IDENTITY_COLORS.home!;
 
 type HomeTaskFormProps = {
   onCancel: () => void;
@@ -40,598 +19,145 @@ type HomeTaskFormProps = {
   onDelete?: () => void;
 };
 
-export default function HomeTaskForm({
-  onCancel,
-  onSave,
-  entry,
-  onDelete,
-}: HomeTaskFormProps) {
+/**
+ * Add / edit a Home task -- the shared Sheet (spring in, drag the handle
+ * down to dismiss). Due date is optional (not every task needs a
+ * deadline) and picked from a day grid, so it's always a valid ISO
+ * string or undefined. Price is never asked here, only when the task is
+ * resolved (HomeTaskResolveSheet) -- the real cost isn't known yet.
+ */
+export default function HomeTaskForm({ onCancel, onSave, entry, onDelete }: HomeTaskFormProps) {
   const isEditing = entry !== undefined;
 
-  const { colors, spacing, radius } = useTheme();
-
   const [title, setTitle] = useState(entry?.title ?? "");
-  // Unlike Car's forms, a task's due date is optional -- not every task
-  // needs a deadline, so this starts unset for a new task instead of
-  // defaulting to today. Picked via HomeDatePickerSheet (a day grid, not
-  // typed text), so this is already a valid ISO string or undefined --
-  // no format parsing/validation needed for it anymore.
   const [dueDate, setDueDate] = useState<string | undefined>(entry?.dueDate);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [isPurchase, setIsPurchase] = useState(entry?.isPurchase ?? false);
   const [isRecurring, setIsRecurring] = useState(entry?.isRecurring ?? false);
-  const [recurrenceFrequency, setRecurrenceFrequency] = useState<HomeTaskEntry["recurrenceFrequency"]>(
-    entry?.recurrenceFrequency,
-  );
+  const [recurrenceFrequency, setRecurrenceFrequency] = useState<HomeTaskEntry["recurrenceFrequency"]>(entry?.recurrenceFrequency);
   const [notes, setNotes] = useState(entry?.notes ?? "");
-
-  const [focusedField, setFocusedField] = useState<string | null>(null);
   const [error, setError] = useState("");
-
-  const translateY = useRef(new Animated.Value(0)).current;
-
-  const onHandleGestureEvent = Animated.event(
-    [{ nativeEvent: { translationY: translateY } }],
-    { useNativeDriver: true },
-  );
-
-  const onHandleStateChange = (event: {
-    nativeEvent: { state: number; translationY: number; velocityY: number };
-  }) => {
-    const { state, translationY, velocityY } = event.nativeEvent;
-    if (state !== State.END && state !== State.CANCELLED && state !== State.FAILED) return;
-
-    const pastThreshold = translationY > DISMISS_DISTANCE || velocityY > DISMISS_VELOCITY;
-    if (pastThreshold) {
-      Animated.timing(translateY, {
-        toValue: 600,
-        duration: 200,
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (finished) onCancel();
-      });
-    } else {
-      Animated.spring(translateY, {
-        toValue: 0,
-        useNativeDriver: true,
-        damping: 20,
-        stiffness: 200,
-      }).start();
-    }
-  };
-
-  // Clamped at 0 -- the handle can't be dragged UP past the sheet's own
-  // resting position, only down to dismiss.
-  const clampedTranslateY = translateY.interpolate({
-    inputRange: [0, 600],
-    outputRange: [0, 600],
-    extrapolateLeft: "clamp",
-  });
-
-  // Backdrop fades out in step with the drag instead of staying flatly
-  // opaque until the sheet's already gone.
-  const backdropOpacity = translateY.interpolate({
-    inputRange: [0, DISMISS_DISTANCE],
-    outputRange: [1, 0],
-    extrapolate: "clamp",
-  });
 
   const handleSave = () => {
     setError("");
-
     if (!title.trim()) {
-      setError("Please enter a title.");
+      setError("Dă un nume task-ului.");
       return;
     }
-
     if (isRecurring && !recurrenceFrequency) {
       setError("Alege cât de des se repetă task-ul.");
       return;
     }
 
-    const entryToSave: HomeTaskEntry = {
+    onSave({
       id: entry?.id ?? `task-${Date.now()}`,
       title: title.trim(),
       dueDate,
       completed: entry?.completed ?? false,
       completedAt: entry?.completedAt,
       isPurchase,
-      // Price is only ever set from the resolve sheet, never here -- the
-      // real cost usually isn't known until the task is actually done.
+      // Price is only ever set from the resolve sheet, never here.
       price: entry?.price,
       isRecurring,
       recurrenceFrequency: isRecurring ? recurrenceFrequency : undefined,
       notes: notes.trim() || undefined,
       // Preserved, never derived from this form -- only resolveTask
-      // appends to this (see HomeDashboard.tsx). An unrelated edit
-      // (title, notes) must not wipe out every past resolve's price.
+      // appends to this (see HomeDashboard.tsx).
       spendHistory: entry?.spendHistory,
-    };
-
-    onSave(entryToSave);
+    });
   };
 
   const handleDelete = async () => {
-    const confirmed = await confirmAction(
-      "Delete task",
-      "This entry will be permanently deleted.",
-      { confirmLabel: "Delete", destructive: true },
-    );
-
-    if (confirmed) {
-      onDelete?.();
-    }
+    const confirmed = await confirmAction("Ștergi task-ul?", "Se șterge definitiv.", { confirmLabel: "Șterge", destructive: true });
+    if (confirmed) onDelete?.();
   };
 
   return (
-    <Modal visible transparent animationType="slide" onRequestClose={onCancel}>
-      <KeyboardAvoidingView
-        style={{ flex: 1, justifyContent: "flex-end" }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <AnimatedPressable
-          onPress={onCancel}
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)", opacity: backdropOpacity }}
-        />
-        <Animated.View
-          style={{
-            backgroundColor: colors.surface,
-            borderTopLeftRadius: radius.lg,
-            borderTopRightRadius: radius.lg,
-            maxHeight: "85%",
-            transform: [{ translateY: clampedTranslateY }],
-          }}
-        >
-          <PanGestureHandler
-            activeOffsetY={10}
-            failOffsetY={-10}
-            onGestureEvent={onHandleGestureEvent}
-            onHandlerStateChange={onHandleStateChange}
-          >
-            <Animated.View style={{ height: 56, alignItems: "center", justifyContent: "center" }}>
-              <View
-                style={{
-                  width: 36,
-                  height: 4,
-                  borderRadius: 2,
-                  backgroundColor: colors.border,
-                }}
-              />
-            </Animated.View>
-          </PanGestureHandler>
-
-          <ScrollView
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{
-              paddingHorizontal: spacing.xl,
-              paddingBottom: spacing.xl,
-            }}
-          >
-            {/* Header */}
-
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: spacing.xl,
-              }}
-            >
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                  <View
-                    style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: radius.md,
-                      // Same tinted-chip identity signal as the Space header
-                      // avatar (HomeHeader.tsx) -- this form makes a Home
-                      // entry, same identity, not a state/nav element.
-                      backgroundColor: `${SPACE_IDENTITY_COLORS.home}1A`,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Ionicons name="checkmark-circle-outline" size={19} color={SPACE_IDENTITY_COLORS.home} />
-                  </View>
-
-                  <Text
-                    style={{
-                      fontSize: 22,
-                      fontWeight: "800",
-                      color: colors.onSurface,
-                      letterSpacing: -0.3,
-                    }}
-                  >
-                    {isEditing ? "Edit Task" : "Add Task"}
-                  </Text>
-                </View>
-
-                <Text style={{ marginTop: 6, fontSize: 13, color: colors.onSurfaceTertiary }}>
-                  {isEditing ? "Update this task" : "A quick thing to do around the house"}
-                </Text>
-              </View>
-
-              <Pressable
-                onPress={onCancel}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel="Close task form"
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: radius.pill,
-                  backgroundColor: "transparent",
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons name="close" size={20} color={colors.onSurfaceTertiary} />
-              </Pressable>
-            </View>
-
-            {/* Title */}
-
-            <FormField
-              label="Title"
-              value={title}
-              onChangeText={setTitle}
-              placeholder="e.g. Scoate gunoiul"
-              required
-              colors={colors}
-              spacing={spacing}
-              radius={radius}
-              fieldName="title"
-              focusedField={focusedField}
-              onFocus={setFocusedField}
-              onBlur={() => setFocusedField(null)}
-            />
-
-            {/* Due date -- optional, unlike every Car date field. A day-grid
-                picker (HomeDatePickerSheet), not typed text -- no format to
-                get wrong. */}
-
-            <View style={{ marginBottom: spacing.xl }}>
-              <Text style={{ marginBottom: spacing.sm, fontSize: 12, fontWeight: "700", color: colors.onSurfaceTertiary }}>
-                Due date
-              </Text>
-              <Pressable
-                onPress={() => setDatePickerVisible(true)}
-                accessibilityRole="button"
-                accessibilityLabel="Choose due date"
-                style={{
-                  minHeight: 52,
-                  borderRadius: radius.sm,
-                  backgroundColor: colors.surfaceSecondary,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  paddingHorizontal: spacing.md,
-                }}
-              >
-                <Text style={{ fontSize: 15, color: dueDate ? colors.onSurface : colors.onSurfaceTertiary }}>
-                  {dueDate
-                    ? new Date(dueDate).toLocaleDateString("ro-RO", { day: "numeric", month: "long", year: "numeric" })
-                    : "Fără dată (opțional)"}
-                </Text>
-                <Ionicons name="calendar-outline" size={18} color={colors.onSurfaceTertiary} />
-              </Pressable>
-            </View>
-
-            {datePickerVisible ? (
-              <HomeDatePickerSheet
-                value={dueDate}
-                onCancel={() => setDatePickerVisible(false)}
-                onSelect={(picked) => {
-                  setDueDate(picked);
-                  setDatePickerVisible(false);
-                }}
-              />
-            ) : null}
-
-            {/* Purchase toggle -- price itself is never asked here, only at
-                resolution (HomeTaskResolveSheet), since the real cost usually
-                isn't known yet. */}
-
-            <View
-              style={{
-                borderRadius: radius.sm,
-                backgroundColor: colors.surfaceSecondary,
-                borderWidth: 1.5,
-                borderColor: isPurchase ? colors.onSurface : colors.border,
-                padding: spacing.md,
-                marginBottom: spacing.xl,
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1 }}>
-                  <View
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.surfaceTertiary,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Ionicons name="cart-outline" size={16} color={colors.onSurface} />
-                  </View>
-                  <Text style={{ fontSize: 14.5, fontWeight: "700", color: colors.onSurface }}>
-                    Implică o cumpărare
-                  </Text>
-                </View>
-                <Switch
-                  value={isPurchase}
-                  onValueChange={setIsPurchase}
-                  trackColor={{ false: colors.surfaceTertiary, true: colors.brandPrimary }}
-                />
-              </View>
-              <Text style={{ fontSize: 11.5, color: colors.onSurfaceTertiary, marginTop: spacing.sm, lineHeight: 16 }}>
-                Vei putea introduce prețul când marchezi task-ul ca rezolvat — nu acum.
-              </Text>
-            </View>
-
-            {/* Recurring toggle -- a recurring task never archives when
-                resolved; it logs the occurrence and stays active, ready for
-                next time. Only a non-recurring task archives on resolve. */}
-
-            <View
-              style={{
-                borderRadius: radius.sm,
-                backgroundColor: colors.surfaceSecondary,
-                borderWidth: 1.5,
-                borderColor: isRecurring ? colors.onSurface : colors.border,
-                padding: spacing.md,
-                marginBottom: spacing.xl,
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flex: 1 }}>
-                  <View
-                    style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: radius.md,
-                      backgroundColor: colors.surfaceTertiary,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Ionicons name="repeat-outline" size={16} color={colors.onSurface} />
-                  </View>
-                  <Text style={{ fontSize: 14.5, fontWeight: "700", color: colors.onSurface }}>
-                    Task recurent
-                  </Text>
-                </View>
-                <Switch
-                  value={isRecurring}
-                  onValueChange={setIsRecurring}
-                  trackColor={{ false: colors.surfaceTertiary, true: colors.brandPrimary }}
-                />
-              </View>
-              <Text style={{ fontSize: 11.5, color: colors.onSurfaceTertiary, marginTop: spacing.sm, lineHeight: 16 }}>
-                {isRecurring
-                  ? "Nu se arhivează la rezolvare — rămâne activ, gata pentru data următoare."
-                  : "Se arhivează imediat ce e marcat ca rezolvat."}
-              </Text>
-
-              {isRecurring ? (
-                <View style={{ flexDirection: "row", gap: spacing.sm, marginTop: spacing.md }}>
-                  {(
-                    [
-                      { key: "daily", label: "Zilnic" },
-                      { key: "weekly", label: "Săptămânal" },
-                      { key: "monthly", label: "Lunar" },
-                    ] as const
-                  ).map((option) => {
-                    const selected = recurrenceFrequency === option.key;
-                    return (
-                      <Pressable
-                        key={option.key}
-                        onPress={() => setRecurrenceFrequency(option.key)}
-                        hitSlop={{ top: 4, bottom: 4 }}
-                        style={{
-                          flex: 1,
-                          minHeight: 40,
-                          borderRadius: radius.pill,
-                          backgroundColor: selected ? colors.onSurface : colors.surfaceTertiary,
-                          borderWidth: 1,
-                          borderColor: selected ? colors.onSurface : colors.border,
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 12,
-                            fontWeight: "700",
-                            color: selected ? colors.surface : colors.onSurface,
-                          }}
-                        >
-                          {option.label}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
-                </View>
-              ) : null}
-            </View>
-
-            {/* Notes */}
-
-            <FormField
-              label="Notes"
-              value={notes}
-              onChangeText={setNotes}
-              placeholder="Optional notes"
-              multiline
-              colors={colors}
-              spacing={spacing}
-              radius={radius}
-              fieldName="notes"
-              focusedField={focusedField}
-              onFocus={setFocusedField}
-              onBlur={() => setFocusedField(null)}
-            />
-
-            {/* Error */}
-
-            {error ? (
-              <View
-                style={{
-                  marginTop: spacing.sm,
-                  padding: spacing.md,
-                  borderRadius: radius.sm,
-                  backgroundColor: colors.surfaceSecondary,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                }}
-              >
-                <Text style={{ fontSize: 13, color: colors.onSurface }}>{error}</Text>
-              </View>
-            ) : null}
-
-            {/* Save */}
-
-            <Pressable
-              onPress={handleSave}
-              accessibilityRole="button"
-              accessibilityLabel="Save task"
-              style={{
-                marginTop: spacing.xl,
-                minHeight: 52,
-                borderRadius: radius.md,
-                backgroundColor: colors.onSurface,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "800", color: colors.surface }}>
-                {isEditing ? "Save Changes" : "Save Task"}
-              </Text>
-            </Pressable>
-
-            {/* Cancel */}
-
-            <Pressable
-              onPress={onCancel}
-              accessibilityRole="button"
-              accessibilityLabel="Cancel task"
-              style={{
-                marginTop: spacing.sm,
-                minHeight: 48,
-                borderRadius: radius.md,
-                borderWidth: 1,
-                borderColor: colors.error,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>Cancel</Text>
-            </Pressable>
-
-            {isEditing && onDelete ? (
-              <Pressable
-                onPress={handleDelete}
-                accessibilityRole="button"
-                accessibilityLabel="Delete task"
-                style={{
-                  marginTop: spacing.sm,
-                  minHeight: 48,
-                  borderRadius: radius.md,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>Delete Entry</Text>
-              </Pressable>
-            ) : null}
-          </ScrollView>
-        </Animated.View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
-type FormFieldProps = {
-  label: string;
-  value: string;
-  onChangeText: (value: string) => void;
-  placeholder: string;
-  multiline?: boolean;
-  required?: boolean;
-  colors: any;
-  spacing: any;
-  radius: any;
-  fieldName: string;
-  focusedField: string | null;
-  onFocus: (field: string) => void;
-  onBlur: () => void;
-};
-
-function FormField({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  multiline = false,
-  required = false,
-  colors,
-  spacing,
-  radius,
-  fieldName,
-  focusedField,
-  onFocus,
-  onBlur,
-}: FormFieldProps) {
-  const isFocused = focusedField === fieldName;
-
-  return (
-    <View style={{ marginBottom: spacing.xl }}>
-      <Text style={{ marginBottom: spacing.sm, fontSize: 12, fontWeight: "700", color: colors.onSurfaceTertiary }}>
-        {label}
-        {required ? <Text style={{ color: colors.error }}> *</Text> : null}
-      </Text>
-
-      <View
-        style={{
-          minHeight: multiline ? 90 : 52,
-          borderRadius: radius.sm,
-          backgroundColor: colors.surfaceSecondary,
-          borderWidth: isFocused ? 2 : 1,
-          borderColor: isFocused ? colors.onSurface : colors.border,
-          flexDirection: "row",
-          // "flex-start" left the TextInput sized to its own single-line
-          // content (~20px) inside a visually 90px-tall box -- the rest
-          // of the box was just empty padding, untappable and
-          // untypeable. "stretch" makes the input actually fill the
-          // whole box's height, so tapping anywhere in it focuses it.
-          alignItems: multiline ? "stretch" : "center",
-          paddingHorizontal: spacing.md,
-          paddingVertical: multiline ? spacing.md : 0,
+    <Sheet
+      visible
+      onClose={onCancel}
+      title={isEditing ? "Editează task-ul" : "Task nou"}
+      subtitle={isEditing ? undefined : "Un lucru de făcut prin casă"}
+      icon="checkmark-circle-outline"
+      tone={HOME}
+      footer={
+        <>
+          <Button testID="home-task-save" label={isEditing ? "Salvează" : "Adaugă task-ul"} tone={SPACE_BUTTON_FILL.home} onPress={handleSave} />
+          {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge task-ul" onPress={handleDelete} /> : null}
+        </>
+      }
+    >
+      <Field
+        testID="home-task-title"
+        label="Ce trebuie făcut"
+        value={title}
+        onChangeText={(t) => {
+          setTitle(t);
+          if (error) setError("");
         }}
+        placeholder="ex. Scoate gunoiul"
+        tone={HOME}
+        error={error && !title.trim() ? error : null}
+      />
+
+      <FieldButton
+        label="Termen (opțional)"
+        value={dueDate ? roDate(dueDate, { withYear: true }) : null}
+        placeholder="Fără dată"
+        onPress={() => setDatePickerVisible(true)}
+      />
+
+      <ToggleRow
+        icon="cart-outline"
+        label="Implică o cumpărare"
+        hint="Prețul îl introduci când îl marchezi ca rezolvat."
+        value={isPurchase}
+        onChange={setIsPurchase}
+        tone={HOME}
+      />
+
+      <ToggleRow
+        icon="repeat-outline"
+        label="Se repetă"
+        hint={isRecurring ? "Rămâne activ după rezolvare, gata pentru data următoare." : "Se arhivează când îl rezolvi."}
+        value={isRecurring}
+        onChange={setIsRecurring}
+        tone={HOME}
       >
-        <TextInput
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor={colors.onSurfaceTertiary}
-          multiline={multiline}
-          textAlignVertical={multiline ? "top" : "center"}
-          onFocus={() => onFocus(fieldName)}
-          onBlur={onBlur}
-          style={[
-            { flex: 1, fontSize: 15, color: colors.onSurface, paddingVertical: 0, borderWidth: 0 },
-            Platform.OS === "web" && ({ outlineStyle: "none" } as any),
+        <Segmented
+          options={[
+            { key: "daily", label: "Zilnic" },
+            { key: "weekly", label: "Săptămânal" },
+            { key: "monthly", label: "Lunar" },
           ]}
+          value={(recurrenceFrequency ?? "") as "daily" | "weekly" | "monthly"}
+          onChange={(k) => {
+            setRecurrenceFrequency(k);
+            if (error) setError("");
+          }}
         />
-      </View>
-    </View>
+      </ToggleRow>
+
+      <Field
+        label="Notițe (opțional)"
+        value={notes}
+        onChangeText={setNotes}
+        placeholder="Orice detaliu util"
+        multiline
+        tone={HOME}
+        error={error && title.trim() ? error : null}
+      />
+
+      {datePickerVisible ? (
+        <HomeDatePickerSheet
+          value={dueDate}
+          onCancel={() => setDatePickerVisible(false)}
+          onSelect={(picked) => {
+            setDueDate(picked);
+            setDatePickerVisible(false);
+          }}
+        />
+      ) : null}
+    </Sheet>
   );
 }

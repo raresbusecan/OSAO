@@ -271,11 +271,10 @@ export default function HomeDashboard({
       const wasOnSuppliesPage = suppliesPageVisible;
       setActiveCategory(null);
       closeAllSubViews();
-      if (wasOnSuppliesPage) {
-        setSupplyFormVisible(true);
-      } else {
-        setSuppliesPageVisible(true);
-      }
+      // The supply form is a sheet over the Supplies page, so the page
+      // stays open underneath either way.
+      setSuppliesPageVisible(true);
+      if (wasOnSuppliesPage) setSupplyFormVisible(true);
       return;
     }
     // A different category entirely -- close every Task/Supplies
@@ -624,20 +623,6 @@ export default function HomeDashboard({
     supplies: onSupplyDelete,
   };
 
-  if (supplyFormVisible) {
-    return (
-      <HomeSupplyForm
-        entry={editingSupplyEntry ?? undefined}
-        onCancel={() => {
-          setSupplyFormVisible(false);
-          setEditingSupplyEntry(null);
-        }}
-        onSave={handleSupplyFormSave}
-        onDelete={editingSupplyEntry ? handleSupplyFormDelete : undefined}
-      />
-    );
-  }
-
   if (suppliesPageVisible) {
     return (
       <>
@@ -655,6 +640,17 @@ export default function HomeDashboard({
           onRestock={handleSupplyRestock}
           onDelete={handleSupplyRowDelete}
         />
+        {supplyFormVisible ? (
+          <HomeSupplyForm
+            entry={editingSupplyEntry ?? undefined}
+            onCancel={() => {
+              setSupplyFormVisible(false);
+              setEditingSupplyEntry(null);
+            }}
+            onSave={handleSupplyFormSave}
+            onDelete={editingSupplyEntry ? handleSupplyFormDelete : undefined}
+          />
+        ) : null}
         {restockSheetEntry ? (
           <HomeSupplyRestockSheet
             entry={restockSheetEntry}

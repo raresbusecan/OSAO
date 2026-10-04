@@ -558,3 +558,51 @@ export function EmptyState({ icon, title, message, action }: { icon: IconName; t
     </View>
   );
 }
+
+/** An on/off row on the raised layer: optional icon, label, optional
+ * hint under it, and a switch drawn in the screen's tone. `children`
+ * render under the row while it's on (e.g. a frequency picker). */
+export function ToggleRow({
+  label,
+  hint,
+  icon,
+  value,
+  onChange,
+  tone,
+  testID,
+  children,
+}: {
+  label: string;
+  hint?: string | null;
+  icon?: IconName;
+  value: boolean;
+  onChange: (next: boolean) => void;
+  tone?: string;
+  testID?: string;
+  children?: React.ReactNode;
+}) {
+  const { colors, spacing, radius } = useTheme();
+  const on = tone ?? colors.success;
+  return (
+    <View style={{ borderRadius: radius.control, backgroundColor: colors.surfaceTertiary, overflow: "hidden" }}>
+      <Pressable
+        testID={testID}
+        onPress={() => onChange(!value)}
+        accessibilityRole="switch"
+        accessibilityState={{ checked: value }}
+        accessibilityLabel={label}
+        style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 56, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm + 2 }}
+      >
+        {icon ? <Ionicons name={icon} size={18} color={value ? on : colors.onSurfaceTertiary} /> : null}
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 15, color: colors.onSurface }}>{label}</Text>
+          {hint ? <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, marginTop: 2, lineHeight: 18 }}>{hint}</Text> : null}
+        </View>
+        <View style={{ width: 46, height: 28, borderRadius: 14, padding: 3, backgroundColor: value ? on : colors.control, alignItems: value ? "flex-end" : "flex-start" }}>
+          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#FFFFFF" }} />
+        </View>
+      </Pressable>
+      {value && children ? <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md }}>{children}</View> : null}
+    </View>
+  );
+}
