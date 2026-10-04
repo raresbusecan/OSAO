@@ -1,3 +1,4 @@
+import { maintenanceLabel } from "@/lib/spaces/car/maintenanceLabels";
 import type { CarData } from "@/components/spaces/car/car.data.types";
 import { roCount, roDate, roNumber } from "@/lib/format";
 import type { CarNextItem } from "@/components/spaces/car/car.ui.types";
@@ -502,7 +503,7 @@ export function getUpcomingItems(
     items.push({
       id: `maint-${entry.id}`,
       icon: "construct-outline",
-      title: entry.service,
+      title: maintenanceLabel(entry.service),
       subtitle,
       right,
       urgency: equivalentDays,

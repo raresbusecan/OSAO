@@ -1,3 +1,4 @@
+import { maintenanceLabel } from "@/lib/spaces/car/maintenanceLabels";
 import { roCount } from "@/lib/format";
 import type { CarData } from "@/components/spaces/car/car.data.types";
 import type { CarDocumentEntry, CarMaintenanceEntry } from "@/lib/spaces/car/car.types";
@@ -100,7 +101,7 @@ export function getCarExpenseRecords(carData: CarData, currentOdometer: number):
       category: "maintenance",
       icon: "construct-outline",
       categoryLabel: "Service",
-      title: entry.service,
+      title: maintenanceLabel(entry.service),
       subtitle: entry.provider,
       date: entry.date,
       amount: entry.price,
@@ -301,11 +302,11 @@ export function getArchivedCarRecords(carData: CarData): CarArchivedRecord[] {
         category: "maintenance",
         icon: "construct-outline",
         categoryLabel: "Service",
-        title: entry.service,
+        title: maintenanceLabel(entry.service),
         subtitle: entry.provider,
         date: entry.date,
         amount: entry.price,
-        renewedByTitle: renewedBy?.service,
+        renewedByTitle: renewedBy ? maintenanceLabel(renewedBy.service) : undefined,
         renewedByDate: renewedBy?.date,
       });
     });

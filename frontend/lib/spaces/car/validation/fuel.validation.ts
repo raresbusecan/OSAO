@@ -25,21 +25,21 @@ export function validateFuelEntry(
   if (!hasPrice) {
     return {
       valid: false,
-      error: "Please enter the price.",
+      error: "Introdu prețul.",
     };
   }
 
   if (hasLiters && entry.liters! <= 0) {
     return {
       valid: false,
-      error: "Please enter a valid number of liters.",
+      error: "Introdu un număr valid de litri.",
     };
   }
 
   if (hasPrice && entry.total_paid! <= 0) {
     return {
       valid: false,
-      error: "Please enter a valid total amount paid.",
+      error: "Introdu o sumă plătită validă.",
     };
   }
 
@@ -47,7 +47,7 @@ export function validateFuelEntry(
     if (entry.odometer! <= 0) {
       return {
         valid: false,
-        error: "Please enter a valid odometer value.",
+        error: "Introdu un kilometraj valid.",
       };
     }
 
@@ -57,7 +57,7 @@ export function validateFuelEntry(
     ) {
       return {
         valid: false,
-        error: `Odometer cannot be lower than the previous value (${previousEntry.odometer} km).`,
+        error: `Kilometrajul nu poate fi mai mic decât cel anterior (${previousEntry.odometer} km).`,
       };
     }
   }
@@ -68,7 +68,7 @@ export function validateFuelEntry(
   ) {
     return {
       valid: false,
-      error: "Tank level before must be between 0% and 100%.",
+      error: "Nivelul de dinainte trebuie să fie între 0% și 100%.",
     };
   }
 
@@ -78,7 +78,7 @@ export function validateFuelEntry(
   ) {
     return {
       valid: false,
-      error: "Tank level after must be between 0% and 100%.",
+      error: "Nivelul de după trebuie să fie între 0% și 100%.",
     };
   }
 
@@ -90,7 +90,7 @@ export function validateFuelEntry(
     return {
       valid: false,
       error:
-        "Tank level after refueling cannot be lower than the level before refueling.",
+        "Nivelul după alimentare nu poate fi mai mic decât cel de dinainte.",
     };
   }
 
@@ -102,7 +102,7 @@ export function validateFuelEntry(
     return {
       valid: false,
       error:
-        "Tank level before refueling cannot be higher than the previous recorded level after refueling.",
+        "Nivelul de dinainte nu poate fi mai mare decât nivelul de după, de la alimentarea anterioară.",
     };
   }
 

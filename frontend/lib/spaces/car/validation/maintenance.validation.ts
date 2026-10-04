@@ -12,7 +12,7 @@ export function validateMaintenanceEntry(
   if (!entry.service.trim()) {
     return {
       valid: false,
-      error: "Please enter the service type.",
+      error: "Introdu tipul lucrării.",
     };
   }
 
@@ -21,7 +21,7 @@ export function validateMaintenanceEntry(
   if (!entry.underWarranty && entry.price <= 0) {
     return {
       valid: false,
-      error: "Please enter a valid price.",
+      error: "Introdu un preț valid.",
     };
   }
 
@@ -34,14 +34,14 @@ export function validateMaintenanceEntry(
   if (entry.service === "Oil Change" && (entry.odometer === undefined || entry.odometer <= 0)) {
     return {
       valid: false,
-      error: "Please enter the odometer reading.",
+      error: "Introdu kilometrajul.",
     };
   }
 
   if (entry.odometer !== undefined && entry.odometer <= 0) {
     return {
       valid: false,
-      error: "Please enter a valid odometer value.",
+      error: "Introdu un kilometraj valid.",
     };
   }
 
@@ -53,14 +53,14 @@ export function validateMaintenanceEntry(
     return {
       valid: false,
       error:
-        "Next service mileage must be greater than the current odometer.",
+        "Kilometrajul următorului service trebuie să fie mai mare decât cel actual.",
     };
   }
 
   if (entry.nextServiceDate && !isValidDateInput(entry.nextServiceDate)) {
     return {
       valid: false,
-      error: "Next service date must use the format DD.MM.YYYY.",
+      error: "Data următorului service trebuie scrisă ca ZZ.LL.AAAA.",
     };
   }
 

@@ -11,6 +11,7 @@ import { PressableScale } from "@/components/ui/PressableScale";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { CircleButton, Pill, Segmented, SectionHeader, Group, Chip, IconWell, TopBar, Identity } from "@/components/ui/primitives";
 import { formatCarDate } from "./utils/carFormatters";
+import { maintenanceLabel } from "@/lib/spaces/car/maintenanceLabels";
 
 import {
     View,
@@ -379,7 +380,7 @@ export default function CarDashboard({
         if (wasRenewal) {
             notifyAction(
                 "Salvat",
-                `${entry.service} a fost salvat. Mementoul pentru cel anterior a dispărut și rămâne în istoric.`,
+                `${maintenanceLabel(entry.service)} a fost salvat. Mementoul pentru cel anterior a dispărut și rămâne în istoric.`,
             );
         }
     };
@@ -573,15 +574,12 @@ export default function CarDashboard({
      * =========================================================
      */
 
-    if (fuelFormVisible) {
-        return (
-            <View
-                style={{
-                    flex: 1,
-                    backgroundColor: colors.surface,
-                }}
-            >
-                <CarFuelForm
+    // The 4 entry forms open as sheets OVER whatever is showing (the
+    // dashboard or a sub-page like Documente/Istoric that opened one for
+    // edit) instead of replacing it -- closeAllForms() never touches the
+    // page flags, so the page underneath is still the right one.
+    const formOverlay = fuelFormVisible ? (
+        <CarFuelForm
                     vehicle={vehicleForForms}
                     fuelEntries={carData.fuelEntries}
                     entry={editingFuelEntry ?? undefined}
@@ -592,19 +590,8 @@ export default function CarDashboard({
                     onSave={handleFuelSave}
                     onDelete={editingFuelEntry ? handleFuelDelete : undefined}
                 />
-            </View>
-        );
-    }
-
-    if (maintenanceFormVisible) {
-        return (
-            <View
-                style={{
-                    flex: 1,
-                    backgroundColor: colors.surface,
-                }}
-            >
-                <CarMaintenanceForm
+    ) : maintenanceFormVisible ? (
+        <CarMaintenanceForm
                     entry={editingMaintenanceEntry ?? undefined}
                     renewFrom={maintenanceRenewFrom ?? undefined}
                     onCancel={() => {
@@ -615,19 +602,8 @@ export default function CarDashboard({
                     onSave={handleMaintenanceSave}
                     onDelete={editingMaintenanceEntry ? handleMaintenanceDelete : undefined}
                 />
-            </View>
-        );
-    }
-
-    if (documentFormVisible) {
-        return (
-            <View
-                style={{
-                    flex: 1,
-                    backgroundColor: colors.surface,
-                }}
-            >
-                <CarDocumentForm
+    ) : documentFormVisible ? (
+        <CarDocumentForm
                     entry={editingDocumentEntry ?? undefined}
                     renewFrom={documentRenewFrom ?? undefined}
                     readOnly={documentReadOnly}
@@ -640,20 +616,8 @@ export default function CarDashboard({
                     onSave={handleDocumentSave}
                     onDelete={editingDocumentEntry ? handleDocumentDelete : undefined}
                 />
-            </View>
-        );
-    }
-
-
-    if (expenseFormVisible) {
-        return (
-            <View
-                style={{
-                    flex: 1,
-                    backgroundColor: colors.surface,
-                }}
-            >
-                <CarExpenseForm
+    ) : expenseFormVisible ? (
+        <CarExpenseForm
                     entry={editingExpenseEntry ?? undefined}
                     onCancel={() => {
                         setExpenseFormVisible(false);
@@ -662,233 +626,240 @@ export default function CarDashboard({
                     onSave={handleExpenseSave}
                     onDelete={editingExpenseEntry ? handleExpenseDelete : undefined}
                 />
-            </View>
-        );
-    }
+    ) : null;
 
-    if (expensesPageVisible) {
+    const renderPage = () => {
+        if (expensesPageVisible) {
+            return (
+                <View
+                    style={{
+                        flex: 1,
+                        backgroundColor: colors.surface,
+                    }}
+                >
+                    <CarExpensesPage
+                        carData={carData}
+                        profile={profile}
+                        onBack={() => setExpensesPageVisible(false)}
+                        onRecordPress={(category, id) => openEntryForEdit(category, id)}
+                    />
+                </View>
+            );
+        }
+
+        if (docsPageVisible) {
+            return (
+                <View
+                    style={{
+                        flex: 1,
+                        backgroundColor: colors.surface,
+                    }}
+                >
+                    <CarDocsPage
+                        carData={carData}
+                        onBack={() => setDocsPageVisible(false)}
+                        onRecordPress={(id) => openEntryForEdit("document", id)}
+                    />
+                </View>
+            );
+        }
+
+        if (archivePageVisible) {
+            return (
+                <View
+                    style={{
+                        flex: 1,
+                        backgroundColor: colors.surface,
+                    }}
+                >
+                    <CarArchivePage
+                        carData={carData}
+                        onBack={() => setArchivePageVisible(false)}
+                        onRecordPress={(category, id) => openEntryForEdit(category, id)}
+                    />
+                </View>
+            );
+        }
+
+        if (historyPageVisible) {
+            return (
+                <View
+                    style={{
+                        flex: 1,
+                        backgroundColor: colors.surface,
+                    }}
+                >
+                    <CarHistoryPage
+                        carData={carData}
+                        initialTab={historyInitialTab}
+                        onBack={() => setHistoryPageVisible(false)}
+                        onRecordPress={(type, id) => openEntryForEdit(type, id)}
+                    />
+                </View>
+            );
+        }
+
+        /*
+         * =========================================================
+         * DASHBOARD
+         * =========================================================
+         */
+
+        const carTint = spaceTextColor("car", isDark) ?? SPACE_IDENTITY_COLORS.car!;
+        const carFill = SPACE_IDENTITY_COLORS.car!;
+        const muted = colors.onSurfaceTertiary;
+        const tabLabel = CATEGORY_TABS.find((t) => t.key === activeTab)?.label.toLowerCase();
+
         return (
-            <View
-                style={{
-                    flex: 1,
-                    backgroundColor: colors.surface,
-                }}
-            >
-                <CarExpensesPage
-                    carData={carData}
-                    profile={profile}
-                    onBack={() => setExpensesPageVisible(false)}
-                    onRecordPress={(category, id) => openEntryForEdit(category, id)}
-                />
-            </View>
+            <>
+                <SwipeBackView onBack={() => router.push("/spaces")}>
+                <ScrollView
+                    showsVerticalScrollIndicator={false}
+                    contentContainerStyle={{
+                        paddingHorizontal: spacing.gutter,
+                        paddingTop: spacing.md,
+                        paddingBottom: 100,
+                        gap: spacing.section,
+                    }}
+                >
+                    {/* TOP BAR -- back to Spaces, edit this car. */}
+                    <TopBar onBack={() => router.push("/spaces")}>
+                        <CircleButton testID="space-edit" icon="create-outline" label="Editează mașina" onPress={handleEdit} />
+                    </TopBar>
+
+                    {/* IDENTITY -- kind dot + label, the car's own name, then
+                        its model from the saved profile (never a hardcoded
+                        example car). Docs/Archive/History sit right under it:
+                        one destination each, always visible. */}
+                    <View style={{ gap: spacing.md }}>
+                        <Identity color={carFill} kicker="Mașină" title={space?.name || "Mașina mea"} subtitle={vehicleSubtitle || null} />
+                        <View style={{ flexDirection: "row", gap: spacing.sm }}>
+                            <Pill testID="car-docs-open" icon="document-text-outline" label="Documente" onPress={() => setDocsPageVisible(true)} />
+                            <Pill testID="car-archive-open" icon="archive-outline" label="Arhivă" onPress={() => setArchivePageVisible(true)} />
+                            <Pill
+                                testID="car-history-open"
+                                icon="time-outline"
+                                label="Istoric"
+                                onPress={() => {
+                                    setHistoryInitialTab("all");
+                                    setHistoryPageVisible(true);
+                                }}
+                            />
+                        </View>
+                    </View>
+
+                    {/* HERO -- odometer as the headline number; this month's
+                        spend (tap -> Expenses page, the one place for "what
+                        this car has cost") and average consumption under it. */}
+                    <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.lg }}>
+                        <View style={{ gap: 2 }}>
+                            <Text style={{ fontSize: 13, color: muted }}>Kilometraj</Text>
+                            <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
+                                <AnimatedNumber value={currentOdometer} style={{ ...typography.display, color: colors.onSurface }} />
+                                <Text style={{ fontSize: 16, color: muted }}>km</Text>
+                            </View>
+                        </View>
+                        <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.md + 2 }}>
+                            <PressableScale
+                                testID="car-expenses-stat"
+                                onPress={() => setExpensesPageVisible(true)}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Luna asta: ${thisMonthExpenses} lei. Vezi cheltuielile`}
+                                style={{ flex: 1, gap: 2 }}
+                            >
+                                <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+                                    <Text style={{ fontSize: 13, color: muted }}>Luna asta</Text>
+                                    <Ionicons name="chevron-forward" size={13} color={muted} />
+                                </View>
+                                <Text style={{ fontSize: 18, fontWeight: "600", color: colors.onSurface }}>
+                                    {thisMonthExpenses.toLocaleString("ro-RO")} lei
+                                </Text>
+                            </PressableScale>
+                            <View style={{ flex: 1, gap: 2 }}>
+                                <Text style={{ fontSize: 13, color: muted }}>Consum mediu</Text>
+                                <Text style={{ fontSize: 18, fontWeight: "600", color: colors.onSurface }}>
+                                    {averageConsumption != null
+                                        ? `${averageConsumption.toLocaleString("ro-RO", { maximumFractionDigits: 1 })} l/100`
+                                        : "—"}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+
+                    {/* QUICK ACTIONS -- the one way into each form. */}
+                    <CarQuickActions actions={carCategories} onAction={handleCarAction} />
+
+                    {/* DUE SOON -- documents/maintenance coming up, each with
+                        its urgency chip (see InfoRow / getDocumentUrgencyTier). */}
+                    {nextItems.length > 0 && (
+                        <View style={{ gap: spacing.sm }}>
+                            <SectionHeader title="Urmează" />
+                            <Group inset={68}>
+                                {nextItems.map((item) => (
+                                    <InfoRow key={item.id} {...item} tint={carTint} onPress={() => handleNextItemPress(item)} />
+                                ))}
+                            </Group>
+                        </View>
+                    )}
+
+                    {/* CATEGORY FILTER + RECENT (today) / last 7 days. Older
+                        entries aren't gone -- they're in History. */}
+                    <View style={{ gap: spacing.md }}>
+                        <Segmented options={CATEGORY_TABS} value={activeTab} onChange={setActiveTab} testIDPrefix="car-tab" />
+
+                        {recentItems.length > 0 && (
+                            <EntryGroup
+                                title="Azi"
+                                items={recentItems}
+                                expanded={recentExpanded}
+                                onToggle={() => setRecentExpanded((v) => !v)}
+                                onItemPress={handleRecentItemPress}
+                                testID="car-recent-show-more"
+                            />
+                        )}
+
+                        {olderItems.length > 0 ? (
+                            <EntryGroup
+                                title="Ultimele 7 zile"
+                                items={olderItems}
+                                expanded={allExpanded}
+                                onToggle={() => setAllExpanded((v) => !v)}
+                                onItemPress={handleRecentItemPress}
+                                testID="car-all-show-more"
+                            />
+                        ) : recentItems.length === 0 ? (
+                            <View style={{ alignItems: "center", paddingVertical: spacing.xl, gap: spacing.sm }}>
+                                <Ionicons name={hasOlderThanWeek ? "time-outline" : "file-tray-outline"} size={26} color={muted} />
+                                <Text style={{ fontSize: 14, color: muted, textAlign: "center" }}>
+                                    {hasOlderThanWeek
+                                        ? `Nimic în ultimele 7 zile${activeTab === "all" ? "" : ` la ${tabLabel}`}.`
+                                        : activeTab === "all"
+                                            ? "Nimic înregistrat încă. Adaugă o alimentare sau un service de mai sus."
+                                            : `Nicio înregistrare la ${tabLabel} încă.`}
+                                </Text>
+                                {hasOlderThanWeek ? (
+                                    <PressableScale
+                                        testID="car-empty-see-history"
+                                        onPress={() => openHistoryFor(activeTab)}
+                                        accessibilityRole="button"
+                                        style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: spacing.lg }}
+                                    >
+                                        <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurface }}>Vezi istoricul</Text>
+                                    </PressableScale>
+                                ) : null}
+                            </View>
+                        ) : null}
+                    </View>
+                </ScrollView>
+                </SwipeBackView>
+            </>
         );
-    }
-
-    if (docsPageVisible) {
-        return (
-            <View
-                style={{
-                    flex: 1,
-                    backgroundColor: colors.surface,
-                }}
-            >
-                <CarDocsPage
-                    carData={carData}
-                    onBack={() => setDocsPageVisible(false)}
-                    onRecordPress={(id) => openEntryForEdit("document", id)}
-                />
-            </View>
-        );
-    }
-
-    if (archivePageVisible) {
-        return (
-            <View
-                style={{
-                    flex: 1,
-                    backgroundColor: colors.surface,
-                }}
-            >
-                <CarArchivePage
-                    carData={carData}
-                    onBack={() => setArchivePageVisible(false)}
-                    onRecordPress={(category, id) => openEntryForEdit(category, id)}
-                />
-            </View>
-        );
-    }
-
-    if (historyPageVisible) {
-        return (
-            <View
-                style={{
-                    flex: 1,
-                    backgroundColor: colors.surface,
-                }}
-            >
-                <CarHistoryPage
-                    carData={carData}
-                    initialTab={historyInitialTab}
-                    onBack={() => setHistoryPageVisible(false)}
-                    onRecordPress={(type, id) => openEntryForEdit(type, id)}
-                />
-            </View>
-        );
-    }
-
-    /*
-     * =========================================================
-     * DASHBOARD
-     * =========================================================
-     */
-
-    const carTint = spaceTextColor("car", isDark) ?? SPACE_IDENTITY_COLORS.car!;
-    const carFill = SPACE_IDENTITY_COLORS.car!;
-    const muted = colors.onSurfaceTertiary;
-    const tabLabel = CATEGORY_TABS.find((t) => t.key === activeTab)?.label.toLowerCase();
+    };
 
     return (
         <>
-            <SwipeBackView onBack={() => router.push("/spaces")}>
-            <ScrollView
-                showsVerticalScrollIndicator={false}
-                contentContainerStyle={{
-                    paddingHorizontal: spacing.gutter,
-                    paddingTop: spacing.md,
-                    paddingBottom: 100,
-                    gap: spacing.section,
-                }}
-            >
-                {/* TOP BAR -- back to Spaces, edit this car. */}
-                <TopBar onBack={() => router.push("/spaces")}>
-                    <CircleButton testID="space-edit" icon="create-outline" label="Editează mașina" onPress={handleEdit} />
-                </TopBar>
-
-                {/* IDENTITY -- kind dot + label, the car's own name, then
-                    its model from the saved profile (never a hardcoded
-                    example car). Docs/Archive/History sit right under it:
-                    one destination each, always visible. */}
-                <View style={{ gap: spacing.md }}>
-                    <Identity color={carFill} kicker="Mașină" title={space?.name || "Mașina mea"} subtitle={vehicleSubtitle || null} />
-                    <View style={{ flexDirection: "row", gap: spacing.sm }}>
-                        <Pill testID="car-docs-open" icon="document-text-outline" label="Documente" onPress={() => setDocsPageVisible(true)} />
-                        <Pill testID="car-archive-open" icon="archive-outline" label="Arhivă" onPress={() => setArchivePageVisible(true)} />
-                        <Pill
-                            testID="car-history-open"
-                            icon="time-outline"
-                            label="Istoric"
-                            onPress={() => {
-                                setHistoryInitialTab("all");
-                                setHistoryPageVisible(true);
-                            }}
-                        />
-                    </View>
-                </View>
-
-                {/* HERO -- odometer as the headline number; this month's
-                    spend (tap -> Expenses page, the one place for "what
-                    this car has cost") and average consumption under it. */}
-                <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.lg }}>
-                    <View style={{ gap: 2 }}>
-                        <Text style={{ fontSize: 13, color: muted }}>Kilometraj</Text>
-                        <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-                            <AnimatedNumber value={currentOdometer} style={{ ...typography.display, color: colors.onSurface }} />
-                            <Text style={{ fontSize: 16, color: muted }}>km</Text>
-                        </View>
-                    </View>
-                    <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.md + 2 }}>
-                        <PressableScale
-                            testID="car-expenses-stat"
-                            onPress={() => setExpensesPageVisible(true)}
-                            accessibilityRole="button"
-                            accessibilityLabel={`Luna asta: ${thisMonthExpenses} lei. Vezi cheltuielile`}
-                            style={{ flex: 1, gap: 2 }}
-                        >
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-                                <Text style={{ fontSize: 13, color: muted }}>Luna asta</Text>
-                                <Ionicons name="chevron-forward" size={13} color={muted} />
-                            </View>
-                            <Text style={{ fontSize: 18, fontWeight: "600", color: colors.onSurface }}>
-                                {thisMonthExpenses.toLocaleString("ro-RO")} lei
-                            </Text>
-                        </PressableScale>
-                        <View style={{ flex: 1, gap: 2 }}>
-                            <Text style={{ fontSize: 13, color: muted }}>Consum mediu</Text>
-                            <Text style={{ fontSize: 18, fontWeight: "600", color: colors.onSurface }}>
-                                {averageConsumption != null
-                                    ? `${averageConsumption.toLocaleString("ro-RO", { maximumFractionDigits: 1 })} l/100`
-                                    : "—"}
-                            </Text>
-                        </View>
-                    </View>
-                </View>
-
-                {/* QUICK ACTIONS -- the one way into each form. */}
-                <CarQuickActions actions={carCategories} onAction={handleCarAction} />
-
-                {/* DUE SOON -- documents/maintenance coming up, each with
-                    its urgency chip (see InfoRow / getDocumentUrgencyTier). */}
-                {nextItems.length > 0 && (
-                    <View style={{ gap: spacing.sm }}>
-                        <SectionHeader title="Urmează" />
-                        <Group inset={68}>
-                            {nextItems.map((item) => (
-                                <InfoRow key={item.id} {...item} tint={carTint} onPress={() => handleNextItemPress(item)} />
-                            ))}
-                        </Group>
-                    </View>
-                )}
-
-                {/* CATEGORY FILTER + RECENT (today) / last 7 days. Older
-                    entries aren't gone -- they're in History. */}
-                <View style={{ gap: spacing.md }}>
-                    <Segmented options={CATEGORY_TABS} value={activeTab} onChange={setActiveTab} testIDPrefix="car-tab" />
-
-                    {recentItems.length > 0 && (
-                        <EntryGroup
-                            title="Azi"
-                            items={recentItems}
-                            expanded={recentExpanded}
-                            onToggle={() => setRecentExpanded((v) => !v)}
-                            onItemPress={handleRecentItemPress}
-                            testID="car-recent-show-more"
-                        />
-                    )}
-
-                    {olderItems.length > 0 ? (
-                        <EntryGroup
-                            title="Ultimele 7 zile"
-                            items={olderItems}
-                            expanded={allExpanded}
-                            onToggle={() => setAllExpanded((v) => !v)}
-                            onItemPress={handleRecentItemPress}
-                            testID="car-all-show-more"
-                        />
-                    ) : recentItems.length === 0 ? (
-                        <View style={{ alignItems: "center", paddingVertical: spacing.xl, gap: spacing.sm }}>
-                            <Ionicons name={hasOlderThanWeek ? "time-outline" : "file-tray-outline"} size={26} color={muted} />
-                            <Text style={{ fontSize: 14, color: muted, textAlign: "center" }}>
-                                {hasOlderThanWeek
-                                    ? `Nimic în ultimele 7 zile${activeTab === "all" ? "" : ` la ${tabLabel}`}.`
-                                    : activeTab === "all"
-                                        ? "Nimic înregistrat încă. Adaugă o alimentare sau un service de mai sus."
-                                        : `Nicio înregistrare la ${tabLabel} încă.`}
-                            </Text>
-                            {hasOlderThanWeek ? (
-                                <PressableScale
-                                    testID="car-empty-see-history"
-                                    onPress={() => openHistoryFor(activeTab)}
-                                    accessibilityRole="button"
-                                    style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: spacing.lg }}
-                                >
-                                    <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurface }}>Vezi istoricul</Text>
-                                </PressableScale>
-                            ) : null}
-                        </View>
-                    ) : null}
-                </View>
-            </ScrollView>
-            </SwipeBackView>
+            {renderPage()}
+            {formOverlay}
         </>
     );
 }

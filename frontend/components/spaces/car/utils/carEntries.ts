@@ -1,3 +1,4 @@
+import { maintenanceLabel } from "@/lib/spaces/car/maintenanceLabels";
 import type { CarRecentItem } from "./carEntries.types";
 
 import {
@@ -94,7 +95,7 @@ export const buildCarRecentItems = ({
       id: entry.id,
       type: "maintenance" as const,
       icon: "construct-outline" as const,
-      title: entry.service,
+      title: maintenanceLabel(entry.service),
       subtitle:
         entry.odometer !== undefined
           ? `${formatCarDate(entry.date)}, ${formatCarNumber(entry.odometer)} km`

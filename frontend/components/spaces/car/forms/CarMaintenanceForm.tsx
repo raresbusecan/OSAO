@@ -1,17 +1,13 @@
 import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  Switch,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from "react-native";
+import { View, Text, TextInput, Pressable, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
+import { Sheet } from "@/components/ui/Sheet";
+import { Button, Field, ToggleRow } from "@/components/ui/primitives";
+import { maintenanceLabel } from "@/lib/spaces/car/maintenanceLabels";
+
+const CAR = SPACE_IDENTITY_COLORS.car!;
 import { confirmAction } from "@/lib/confirm";
 
 import type { CarMaintenanceEntry } from "@/lib/spaces/car/car.types";
@@ -229,7 +225,7 @@ export default function CarMaintenanceForm({
     setError("");
 
     if (!isValidDateInput(date)) {
-      setError("Date must use the format DD.MM.YYYY.");
+      setError("Data trebuie scrisă ca ZZ.LL.AAAA.");
       return;
     }
 
@@ -237,7 +233,7 @@ export default function CarMaintenanceForm({
 
     if (isBatchMode) {
       if (activeServices.length === 0) {
-        setError("Please select or enter at least one service.");
+        setError("Alege sau scrie cel puțin o lucrare.");
         return;
       }
 
@@ -262,7 +258,7 @@ export default function CarMaintenanceForm({
 
         const result = validateMaintenanceEntry(draft);
         if (!result.valid) {
-          setError(`${line.name}: ${result.error ?? "Please check the entered values."}`);
+          setError(`${maintenanceLabel(line.name)}: ${result.error ?? "Verifică valorile introduse."}`);
           return;
         }
 
@@ -299,7 +295,7 @@ export default function CarMaintenanceForm({
     const result = validateMaintenanceEntry(draftEntry);
 
     if (!result.valid) {
-      setError(result.error ?? "Please check the entered values.");
+      setError(result.error ?? "Verifică valorile introduse.");
       return;
     }
 
@@ -314,138 +310,38 @@ export default function CarMaintenanceForm({
   };
 
   const handleDelete = async () => {
-    const confirmed = await confirmAction(
-      "Delete maintenance entry",
-      "This entry will be permanently deleted.",
-      { confirmLabel: "Delete", destructive: true },
-    );
-
-    if (confirmed) {
-      onDelete?.();
-    }
+    const confirmed = await confirmAction("Ștergi lucrarea?", "Se șterge definitiv.", { confirmLabel: "Șterge", destructive: true });
+    if (confirmed) onDelete?.();
   };
 
+
+  const saveLabel = isEditing
+    ? "Salvează"
+    : isBatchMode && activeServices.length > 1
+      ? `Salvează ${activeServices.length} lucrări`
+      : "Salvează service-ul";
+
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={
-        Platform.OS === "ios" ? "padding" : undefined
+    <Sheet
+      visible
+      onClose={onCancel}
+      title={isEditing ? "Editează service-ul" : isRenewing ? "Reînnoiește" : "Service nou"}
+      subtitle={isBatchMode ? "Tot ce s-a făcut la vizita asta" : undefined}
+      icon="construct-outline"
+      tone={CAR}
+      footer={
+        <>
+          <Button testID="car-maintenance-save" label={saveLabel} tone={SPACE_BUTTON_FILL.car} onPress={handleSave} />
+          {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge lucrarea" onPress={handleDelete} /> : null}
+        </>
       }
     >
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{
-          paddingHorizontal: spacing.xl,
-          paddingTop: spacing.xl,
-          paddingBottom: spacing.xl,
-        }}
-      >
-        {/* Header */}
-
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: spacing.xl,
-          }}
-        >
-          <View style={{ flex: 1 }}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: spacing.sm,
-              }}
-            >
-              <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: radius.md,
-                  // Same tinted-chip identity signal as the main
-                  // dashboard's own Maintenance icons.
-                  backgroundColor: `${SPACE_IDENTITY_COLORS.car}1A`,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons
-                  name="construct-outline"
-                  size={19}
-                  color={SPACE_IDENTITY_COLORS.car}
-                />
-              </View>
-
-              <Text
-                style={{
-                  fontSize: 22,
-                  fontWeight: "800",
-                  color: colors.onSurface,
-                  letterSpacing: -0.3,
-                }}
-              >
-                {isEditing ? "Edit Maintenance" : "Add Maintenance"}
-              </Text>
-            </View>
-
-            <Text
-              style={{
-                marginTop: 6,
-                fontSize: 13,
-                color: colors.onSurfaceTertiary,
-              }}
-            >
-              {isEditing
-                ? "Update this service or repair"
-                : isBatchMode
-                  ? "Record everything done in this visit"
-                  : "Record a service or repair"}
-            </Text>
-          </View>
-
-          <Pressable
-            onPress={onCancel}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Close maintenance form"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: radius.pill,
-              backgroundColor: "transparent",
-              borderWidth: 1,
-              borderColor: colors.border,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Ionicons
-              name="close"
-              size={20}
-              color={colors.onSurfaceTertiary}
-            />
-          </Pressable>
-        </View>
-
+      <View>
         {isRenewing ? (
-          <View
-            style={{
-              flexDirection: "row",
-              gap: spacing.sm,
-              padding: spacing.md,
-              borderRadius: radius.sm,
-              backgroundColor: "transparent",
-              borderWidth: 1,
-              borderColor: colors.border,
-              marginBottom: spacing.lg,
-            }}
-          >
+          <View style={{ flexDirection: "row", gap: spacing.sm, padding: spacing.md, borderRadius: radius.control, backgroundColor: colors.surfaceTertiary, marginBottom: spacing.lg }}>
             <Ionicons name="information-circle-outline" size={18} color={colors.onSurfaceTertiary} />
-            <Text style={{ flex: 1, fontSize: 12, color: colors.onSurfaceTertiary, lineHeight: 17 }}>
-              Creating a new record -- your previous {renewFrom?.service || "service"} entry
-              stays in your history, not overwritten.
+            <Text style={{ flex: 1, fontSize: 13, color: colors.onSurfaceTertiary, lineHeight: 18 }}>
+              Creezi o înregistrare nouă. {renewFrom?.service ? maintenanceLabel(renewFrom.service) : "Lucrarea"} de dinainte rămâne în istoric, nu e suprascrisă.
             </Text>
           </View>
         ) : null}
@@ -457,12 +353,11 @@ export default function CarMaintenanceForm({
         <Text
           style={{
             marginBottom: spacing.sm,
-            fontSize: 12,
-            fontWeight: "700",
+            fontSize: 13,
             color: colors.onSurfaceTertiary,
           }}
         >
-          {isBatchMode ? "Quick Select (pick as many as you did)" : "Quick Select"}
+          {isBatchMode ? "Ce s-a făcut (alege oricâte)" : "Tip"}
         </Text>
 
         <View
@@ -489,17 +384,13 @@ export default function CarMaintenanceForm({
                 key={type}
                 onPress={() => (isBatchMode ? handleTypePress(type) : setService(type))}
                 hitSlop={4}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
                 style={{
-                  paddingHorizontal: spacing.md,
+                  paddingHorizontal: spacing.md + 2,
                   minHeight: 40,
                   borderRadius: radius.pill,
-                  backgroundColor: selected
-                    ? colors.onSurface
-                    : "transparent",
-                  borderWidth: 1,
-                  borderColor: selected
-                    ? colors.onSurface
-                    : colors.border,
+                  backgroundColor: selected ? CAR : colors.surfaceTertiary,
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 6,
@@ -507,21 +398,19 @@ export default function CarMaintenanceForm({
                 }}
               >
                 {isBatchMode && selected && !isRepeatable ? (
-                  <Ionicons name="checkmark" size={13} color={colors.surface} />
+                  <Ionicons name="checkmark" size={13} color="#FFFFFF" />
                 ) : null}
                 {isBatchMode && isRepeatable ? (
-                  <Ionicons name="add" size={13} color={selected ? colors.surface : colors.onSurface} />
+                  <Ionicons name="add" size={13} color={selected ? "#FFFFFF" : colors.onSurface} />
                 ) : null}
                 <Text
                   style={{
-                    fontSize: 12,
-                    fontWeight: "700",
-                    color: selected
-                      ? colors.surface
-                      : colors.onSurface,
+                    fontSize: 13,
+                    fontWeight: selected ? "600" : "500",
+                    color: selected ? "#FFFFFF" : colors.onSurface,
                   }}
                 >
-                  {type}
+                  {maintenanceLabel(type)}
                   {isRepeatable && count > 0 ? ` (${count})` : ""}
                 </Text>
               </Pressable>
@@ -532,10 +421,10 @@ export default function CarMaintenanceForm({
         {/* Date -- shared across every service in this visit. */}
 
         <FormField
-          label="Date"
+          label="Data"
           value={date}
           onChangeText={setDate}
-          placeholder="DD.MM.YYYY"
+          placeholder="ZZ.LL.AAAA"
           colors={colors}
           spacing={spacing}
           radius={radius}
@@ -547,10 +436,10 @@ export default function CarMaintenanceForm({
 
         {!isBatchMode ? (
           <FormField
-            label="Service"
+            label="Lucrare"
             value={service}
             onChangeText={setService}
-            placeholder="e.g. Oil change"
+            placeholder="ex. Schimb ulei"
             required
             colors={colors}
             spacing={spacing}
@@ -574,7 +463,7 @@ export default function CarMaintenanceForm({
                 color: colors.onSurfaceTertiary,
               }}
             >
-              Other
+              Altceva
             </Text>
             <View style={{ flexDirection: "row", gap: spacing.sm }}>
               <View style={{ flex: 1 }}>
@@ -583,7 +472,7 @@ export default function CarMaintenanceForm({
                   hideLabel
                   value={customService}
                   onChangeText={setCustomService}
-                  placeholder="e.g. Windshield wiper"
+                  placeholder="ex. Ștergătoare"
                   colors={colors}
                   spacing={spacing}
                   radius={radius}
@@ -597,14 +486,12 @@ export default function CarMaintenanceForm({
                 onPress={addCustomLine}
                 disabled={!customService.trim()}
                 accessibilityRole="button"
-                accessibilityLabel="Add other service"
+                accessibilityLabel="Adaugă lucrarea"
                 style={{
                   width: 52,
                   height: 52,
-                  borderRadius: radius.sm,
-                  backgroundColor: customService.trim() ? colors.onSurface : "transparent",
-                  borderWidth: 1,
-                  borderColor: customService.trim() ? colors.onSurface : colors.border,
+                  borderRadius: radius.control,
+                  backgroundColor: customService.trim() ? CAR : colors.surfaceTertiary,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
@@ -612,7 +499,7 @@ export default function CarMaintenanceForm({
                 <Ionicons
                   name="add"
                   size={22}
-                  color={customService.trim() ? colors.surface : colors.onSurfaceTertiary}
+                  color={customService.trim() ? "#FFFFFF" : colors.onSurfaceTertiary}
                 />
               </Pressable>
             </View>
@@ -622,10 +509,10 @@ export default function CarMaintenanceForm({
         {/* Description -- shared, one note about the whole visit. */}
 
         <FormField
-          label="Description"
+          label="Descriere (opțional)"
           value={description}
           onChangeText={setDescription}
-          placeholder="e.g. Engine oil and oil filter replaced"
+          placeholder="ex. Ulei și filtru de ulei schimbate"
           colors={colors}
           spacing={spacing}
           radius={radius}
@@ -648,12 +535,12 @@ export default function CarMaintenanceForm({
 
             {!underWarranty ? (
               <FormField
-                label="Price"
+                label="Preț"
                 value={price}
                 onChangeText={setPrice}
-                placeholder="e.g. 380"
+                placeholder="ex. 380"
                 keyboardType="decimal-pad"
-                suffix="RON"
+                suffix="lei"
                 required
                 colors={colors}
                 spacing={spacing}
@@ -674,10 +561,10 @@ export default function CarMaintenanceForm({
             single- and batch-mode with the same check. */}
 
         <FormField
-          label="Odometer"
+          label="Kilometraj"
           value={odometer}
           onChangeText={setOdometer}
-          placeholder="e.g. 123580"
+          placeholder="ex. 123580"
           keyboardType="number-pad"
           suffix="km"
           required={activeServices.some((l) => l.name === "Oil Change")}
@@ -693,10 +580,10 @@ export default function CarMaintenanceForm({
         {/* Provider -- shared. */}
 
         <FormField
-          label="Provider"
+          label="Service auto (opțional)"
           value={provider}
           onChangeText={setProvider}
-          placeholder="e.g. BMW Service"
+          placeholder="ex. Service BMW"
           colors={colors}
           spacing={spacing}
           radius={radius}
@@ -713,10 +600,10 @@ export default function CarMaintenanceForm({
                 dashboard.calculations.ts: whichever comes first wins). */}
 
             <FormField
-              label="Next Service (km)"
+              label="Următorul service (km)"
               value={nextServiceOdometer}
               onChangeText={setNextServiceOdometer}
-              placeholder="e.g. 133580"
+              placeholder="ex. 133580"
               keyboardType="number-pad"
               suffix="km"
               colors={colors}
@@ -734,26 +621,23 @@ export default function CarMaintenanceForm({
                   flexDirection: "row",
                   gap: spacing.sm,
                   padding: spacing.md,
-                  borderRadius: radius.sm,
-                  backgroundColor: "transparent",
-                  borderWidth: 1,
-                  borderColor: colors.border,
+                  borderRadius: radius.control,
+                  backgroundColor: colors.surfaceTertiary,
                   marginBottom: spacing.xl,
                 }}
               >
                 <Ionicons name="time-outline" size={18} color={colors.onSurfaceTertiary} />
                 <Text style={{ flex: 1, fontSize: 12, color: colors.onSurfaceTertiary, lineHeight: 17 }}>
-                  {service} is reminded by time automatically -- next due{" "}
-                  {autoNextServiceDate ?? `${autoDateIntervalMonths} months from the Date above`}
-                  , no need to set it yourself.
+                  {maintenanceLabel(service)} se reamintește automat după timp: următorul pe{" "}
+                  {autoNextServiceDate ?? `peste ${autoDateIntervalMonths} luni de la data de mai sus`}. Nu trebuie să-l setezi tu.
                 </Text>
               </View>
             ) : (
               <FormField
-                label="Next Service (date)"
+                label="Următorul service (dată)"
                 value={nextServiceDate}
                 onChangeText={setNextServiceDate}
-                placeholder="DD.MM.YYYY"
+                placeholder="ZZ.LL.AAAA"
                 colors={colors}
                 spacing={spacing}
                 radius={radius}
@@ -780,10 +664,10 @@ export default function CarMaintenanceForm({
               <View
                 key={line.id}
                 style={{
-                  marginBottom: spacing.xl,
+                  marginBottom: spacing.lg,
                   padding: spacing.lg,
-                  borderRadius: radius.lg,
-                  borderWidth: 1,
+                  borderRadius: radius.card,
+                  borderWidth: 1.5,
                   borderColor: colors.border,
                 }}
               >
@@ -800,13 +684,13 @@ export default function CarMaintenanceForm({
                     <TextInput
                       value={line.name}
                       onChangeText={(v) => renameLine(line.id, v)}
-                      placeholder="Service name"
+                      placeholder="Numele lucrării"
                       placeholderTextColor={colors.onSurfaceTertiary}
                       style={[
                         {
                           flex: 1,
-                          fontSize: 14,
-                          fontWeight: "800",
+                          fontSize: 15,
+                          fontWeight: "600",
                           color: colors.onSurface,
                           paddingVertical: 4,
                           borderBottomWidth: 1,
@@ -818,12 +702,12 @@ export default function CarMaintenanceForm({
                   ) : (
                     <Text
                       style={{
-                        fontSize: 14,
-                        fontWeight: "800",
+                        fontSize: 15,
+                        fontWeight: "600",
                         color: colors.onSurface,
                       }}
                     >
-                      {line.name}
+                      {maintenanceLabel(line.name)}
                     </Text>
                   )}
 
@@ -831,7 +715,7 @@ export default function CarMaintenanceForm({
                     onPress={() => removeLine(line.id)}
                     hitSlop={10}
                     accessibilityRole="button"
-                    accessibilityLabel={`Remove ${line.name}`}
+                    accessibilityLabel={`Scoate ${maintenanceLabel(line.name)}`}
                   >
                     <Ionicons name="close-circle-outline" size={18} color={colors.error} />
                   </Pressable>
@@ -847,12 +731,12 @@ export default function CarMaintenanceForm({
 
                 {!detail.underWarranty ? (
                   <FormField
-                    label="Price"
+                    label="Preț"
                     value={detail.price}
                     onChangeText={(v) => updateDetail(line.id, { price: v })}
-                    placeholder="e.g. 380"
+                    placeholder="ex. 380"
                     keyboardType="decimal-pad"
-                    suffix="RON"
+                    suffix="lei"
                     required
                     colors={colors}
                     spacing={spacing}
@@ -867,10 +751,10 @@ export default function CarMaintenanceForm({
                 {line.isCustom ? null : (
                   <>
                     <FormField
-                      label="Next Service (km)"
+                      label="Următorul service (km)"
                       value={detail.nextKm}
                       onChangeText={(v) => updateDetail(line.id, { nextKm: v })}
-                      placeholder="e.g. 133580"
+                      placeholder="ex. 133580"
                       keyboardType="number-pad"
                       suffix="km"
                       colors={colors}
@@ -889,24 +773,21 @@ export default function CarMaintenanceForm({
                           gap: spacing.sm,
                           padding: spacing.md,
                           borderRadius: radius.sm,
-                          backgroundColor: "transparent",
-                          borderWidth: 1,
-                          borderColor: colors.border,
+                          backgroundColor: colors.surfaceTertiary,
                         }}
                       >
                         <Ionicons name="time-outline" size={18} color={colors.onSurfaceTertiary} />
                         <Text style={{ flex: 1, fontSize: 12, color: colors.onSurfaceTertiary, lineHeight: 17 }}>
-                          {line.name} is reminded by time automatically -- next due{" "}
-                          {autoDate ?? `${intervalMonths} months from the Date above`}, no need to
-                          set it yourself.
+                          {maintenanceLabel(line.name)} se reamintește automat după timp: următorul pe{" "}
+                          {autoDate ?? `peste ${intervalMonths} luni de la data de mai sus`}. Nu trebuie să-l setezi tu.
                         </Text>
                       </View>
                     ) : (
                       <FormField
-                        label="Next Service (date)"
+                        label="Următorul service (dată)"
                         value={detail.nextDate}
                         onChangeText={(v) => updateDetail(line.id, { nextDate: v })}
-                        placeholder="DD.MM.YYYY"
+                        placeholder="ZZ.LL.AAAA"
                         colors={colors}
                         spacing={spacing}
                         radius={radius}
@@ -923,113 +804,13 @@ export default function CarMaintenanceForm({
           })
         )}
 
-        {/* Error */}
-
         {error ? (
-          <View
-            style={{
-              marginTop: spacing.sm,
-              padding: spacing.md,
-              borderRadius: radius.sm,
-              backgroundColor: "transparent",
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 13,
-                color: colors.onSurface,
-              }}
-            >
-              {error}
-            </Text>
+          <View style={{ padding: spacing.md, borderRadius: radius.control, backgroundColor: `${colors.error}14` }}>
+            <Text style={{ fontSize: 14, color: colors.error }}>{error}</Text>
           </View>
         ) : null}
-
-        {/* Save */}
-
-        <Pressable
-          onPress={handleSave}
-          accessibilityRole="button"
-          accessibilityLabel="Save maintenance"
-          style={{
-            marginTop: spacing.xl,
-            minHeight: 52,
-            borderRadius: radius.md,
-            backgroundColor: colors.onSurface,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "800",
-              color: colors.surface,
-            }}
-          >
-            {isEditing
-              ? "Save Changes"
-              : isBatchMode && activeServices.length > 1
-                ? `Save ${activeServices.length} Entries`
-                : "Save Maintenance"}
-          </Text>
-        </Pressable>
-
-        {/* Cancel */}
-
-        <Pressable
-          onPress={onCancel}
-          accessibilityRole="button"
-          accessibilityLabel="Cancel maintenance"
-          style={{
-            marginTop: spacing.sm,
-            minHeight: 48,
-            borderRadius: radius.md,
-            borderWidth: 1,
-            borderColor: colors.error,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "700",
-              color: colors.error,
-            }}
-          >
-            Cancel
-          </Text>
-        </Pressable>
-
-        {isEditing && onDelete ? (
-          <Pressable
-            onPress={handleDelete}
-            accessibilityRole="button"
-            accessibilityLabel="Delete maintenance entry"
-            style={{
-              marginTop: spacing.sm,
-              minHeight: 48,
-              borderRadius: radius.md,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "700",
-                color: colors.error,
-              }}
-            >
-              Delete Entry
-            </Text>
-          </Pressable>
-        ) : null}
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </View>
+    </Sheet>
   );
 }
 
@@ -1041,9 +822,7 @@ export default function CarMaintenanceForm({
 function WarrantyToggle({
   value,
   onValueChange,
-  colors,
   spacing,
-  radius,
 }: {
   value: boolean;
   onValueChange: (value: boolean) => void;
@@ -1052,27 +831,8 @@ function WarrantyToggle({
   radius: any;
 }) {
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: spacing.md,
-        borderRadius: radius.sm,
-        backgroundColor: "transparent",
-        borderWidth: 1,
-        borderColor: colors.border,
-        marginBottom: spacing.xl,
-      }}
-    >
-      <Text style={{ fontSize: 13, fontWeight: "600", color: colors.onSurface }}>
-        Under warranty / free
-      </Text>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        trackColor={{ false: colors.surfaceTertiary, true: colors.brandPrimary }}
-      />
+    <View style={{ marginBottom: spacing.lg }}>
+      <ToggleRow icon="shield-checkmark-outline" label="În garanție / gratuit" hint={value ? "Se salvează cu preț 0." : null} value={value} onChange={onValueChange} tone={CAR} />
     </View>
   );
 }
@@ -1085,12 +845,11 @@ type FormFieldProps = {
   keyboardType?: "default" | "decimal-pad" | "number-pad";
   suffix?: string;
   multiline?: boolean;
-  /** Shows a red "*" next to the label -- only for fields that are
-   * actually required to save (see validateMaintenanceEntry). */
+  /** Kept for call-site compatibility; the label carries "(opțional)"
+   * on optional fields instead of a red star on required ones. */
   required?: boolean;
-  /** Skips the label row and the outer bottom margin -- for a field
-   * that's already labeled by a wrapper (e.g. the "Other" input sitting
-   * next to its own Add button). */
+  /** Skips the label and the bottom margin -- for a field already
+   * labeled by a wrapper (the "Altceva" input next to its Add button). */
   hideLabel?: boolean;
   colors: any;
   spacing: any;
@@ -1101,99 +860,20 @@ type FormFieldProps = {
   onBlur: () => void;
 };
 
-function FormField({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  keyboardType = "default",
-  suffix,
-  multiline = false,
-  required = false,
-  hideLabel = false,
-  colors,
-  spacing,
-  radius,
-  fieldName,
-  focusedField,
-  onFocus,
-  onBlur,
-}: FormFieldProps) {
-  const isFocused = focusedField === fieldName;
-
+/** The shared Field in the car's tone, with this form's spacing. */
+function FormField({ label, value, onChangeText, placeholder, keyboardType = "default", suffix, multiline = false, hideLabel = false, spacing }: FormFieldProps) {
   return (
-    <View style={{ marginBottom: hideLabel ? 0 : spacing.xl }}>
-      {!hideLabel ? (
-        <Text
-          style={{
-            marginBottom: spacing.sm,
-            fontSize: 12,
-            fontWeight: "700",
-            color: colors.onSurfaceTertiary,
-          }}
-        >
-          {label}
-          {required ? <Text style={{ color: colors.error }}> *</Text> : null}
-        </Text>
-      ) : null}
-
-      <View
-        style={{
-          minHeight: multiline ? 90 : 52,
-          borderRadius: radius.sm,
-          backgroundColor: "transparent",
-          borderWidth: isFocused ? 2 : 1,
-          borderColor: isFocused
-            ? colors.onSurface
-            : colors.border,
-          flexDirection: "row",
-          // "stretch" so a multiline field's TextInput fills the whole
-          // box height -- otherwise only its top ~20px was tappable.
-          alignItems: multiline
-            ? "stretch"
-            : "center",
-          paddingHorizontal: spacing.md,
-          paddingVertical: multiline
-            ? spacing.md
-            : 0,
-        }}
-      >
-        <TextInput
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor={
-            colors.onSurfaceTertiary
-          }
-          keyboardType={keyboardType}
-          multiline={multiline}
-          textAlignVertical={
-            multiline ? "top" : "center"
-          }
-          onFocus={() => onFocus(fieldName)}
-          onBlur={onBlur}
-          style={[{
-            flex: 1,
-            fontSize: 15,
-            color: colors.onSurface,
-            paddingVertical: 0,
-            borderWidth: 0,
-          }, Platform.OS === "web" && { outlineStyle: "none" } as any]}
-        />
-
-        {suffix ? (
-          <Text
-            style={{
-              marginLeft: spacing.sm,
-              fontSize: 12,
-              fontWeight: "700",
-              color: colors.onSurfaceTertiary,
-            }}
-          >
-            {suffix}
-          </Text>
-        ) : null}
-      </View>
+    <View style={{ marginBottom: hideLabel ? 0 : spacing.lg }}>
+      <Field
+        label={hideLabel ? undefined : label}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        keyboardType={keyboardType}
+        suffix={suffix}
+        multiline={multiline}
+        tone={CAR}
+      />
     </View>
   );
 }

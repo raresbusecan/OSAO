@@ -1,16 +1,12 @@
 import React, { useState } from "react";
-import {
-  View,
-  Text,
-  TextInput,
-  Pressable,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-} from "react-native";
+import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
+import { Sheet } from "@/components/ui/Sheet";
+import { Button, Field, Pill } from "@/components/ui/primitives";
+
+const CAR = SPACE_IDENTITY_COLORS.car!;
 import { confirmAction } from "@/lib/confirm";
 
 import type { CarDocumentEntry } from "@/lib/spaces/car/car.types";
@@ -68,7 +64,6 @@ export default function CarDocumentForm({
   const [price, setPrice] = useState(entry?.price !== undefined ? String(entry.price) : "");
   const [notes, setNotes] = useState(entry?.notes ?? "");
 
-  const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const [error, setError] = useState("");
 
@@ -87,7 +82,7 @@ export default function CarDocumentForm({
       : undefined;
 
     if (!documentType.trim()) {
-      setError("Please select a document type.");
+      setError("Alege tipul documentului.");
       return;
     }
 
@@ -97,13 +92,13 @@ export default function CarDocumentForm({
         Number.isNaN(priceValue) ||
         priceValue < 0)
     ) {
-      setError("Please enter a valid price.");
+      setError("Introdu un preț valid.");
       return;
     }
 
     if (issueDate && !isValidDate(issueDate)) {
       setError(
-        "Issue date must use the format DD.MM.YYYY.",
+        "Data emiterii trebuie scrisă ca ZZ.LL.AAAA.",
       );
       return;
     }
@@ -114,13 +109,13 @@ export default function CarDocumentForm({
     // dashboard.calculations.ts. A document truly without one (rare --
     // most have SOME validity window) just isn't trackable that way.
     if (!expiryDate.trim()) {
-      setError("Please enter the expiry date.");
+      setError("Introdu data expirării.");
       return;
     }
 
     if (!isValidDate(expiryDate)) {
       setError(
-        "Expiry date must use the format DD.MM.YYYY.",
+        "Data expirării trebuie scrisă ca ZZ.LL.AAAA.",
       );
       return;
     }
@@ -131,7 +126,7 @@ export default function CarDocumentForm({
       parseDate(expiryDate) < parseDate(issueDate)
     ) {
       setError(
-        "Expiry date cannot be before the issue date.",
+        "Data expirării nu poate fi înaintea celei de emitere.",
       );
       return;
     }
@@ -153,564 +148,83 @@ export default function CarDocumentForm({
   };
 
   const handleDelete = async () => {
-    const confirmed = await confirmAction(
-      "Delete document",
-      "This entry will be permanently deleted.",
-      { confirmLabel: "Delete", destructive: true },
-    );
-
-    if (confirmed) {
-      onDelete?.();
-    }
+    const confirmed = await confirmAction("Ștergi documentul?", "Se șterge definitiv.", { confirmLabel: "Șterge", destructive: true });
+    if (confirmed) onDelete?.();
   };
 
+  // TEMP (testing only, kept from before): archived documents are
+  // otherwise fully locked, but deletion is allowed so wrongly-archived
+  // test entries can be cleaned up.
+  const canDelete = isEditing && onDelete && (!readOnly || entry?.archived);
+
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={
-        Platform.OS === "ios" ? "padding" : undefined
+    <Sheet
+      visible
+      onClose={onCancel}
+      title={readOnly ? title || "Document" : isEditing ? "Editează documentul" : isRenewing ? "Reînnoiește documentul" : "Document nou"}
+      subtitle={readOnly ? "Doar citire" : undefined}
+      icon="document-text-outline"
+      tone={CAR}
+      footer={
+        <>
+          {!readOnly ? (
+            <Button testID="car-document-save" label={isEditing ? "Salvează" : "Salvează documentul"} tone={SPACE_BUTTON_FILL.car} onPress={handleSave} />
+          ) : (
+            <Button variant="secondary" label="Închide" onPress={onCancel} />
+          )}
+          {canDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge documentul" onPress={handleDelete} /> : null}
+        </>
       }
     >
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{
-          paddingHorizontal: spacing.xl,
-          paddingTop: spacing.xl,
-          paddingBottom: spacing.xl,
-        }}
-      >
-        {/* Header */}
+      {isRenewing ? (
+        <Notice icon="information-circle-outline">
+          Creezi o înregistrare nouă pentru reînnoire. {renewFrom?.documentType || "Documentul"} vechi rămâne în istoric, nu e suprascris.
+        </Notice>
+      ) : null}
+      {readOnly ? (
+        <Notice icon="lock-closed-outline">
+          Documentul a fost înlocuit de o reînnoire, așa că e blocat: o înregistrare arhivată rămâne exact cum a fost salvată.
+        </Notice>
+      ) : null}
 
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: spacing.xl,
-          }}
-        >
-          <View style={{ flex: 1 }}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: spacing.sm,
-              }}
-            >
-              <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: radius.md,
-                  // Same tinted-chip identity signal as the main
-                  // dashboard's own Document icons.
-                  backgroundColor: `${SPACE_IDENTITY_COLORS.car}1A`,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons
-                  name="document-text-outline"
-                  size={19}
-                  color={SPACE_IDENTITY_COLORS.car}
-                />
-              </View>
-
-              <Text
-                style={{
-                  fontSize: 22,
-                  fontWeight: "800",
-                  color: colors.onSurface,
-                  letterSpacing: -0.3,
-                }}
-              >
-                {readOnly ? "Document" : isEditing ? "Edit Document" : "Add Document"}
-              </Text>
-            </View>
-
-            <Text
-              style={{
-                marginTop: 6,
-                fontSize: 13,
-                color: colors.onSurfaceTertiary,
-              }}
-            >
-              {readOnly
-                ? "Read-only -- see below"
-                : isEditing
-                  ? "Update this document"
-                  : "Record a vehicle document"}
-            </Text>
-          </View>
-
-          <Pressable
-            onPress={onCancel}
-            hitSlop={10}
-            accessibilityRole="button"
-            accessibilityLabel="Close document form"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: radius.pill,
-              backgroundColor: "transparent",
-              borderWidth: 1,
-              borderColor: colors.border,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Ionicons
-              name="close"
-              size={20}
-              color={colors.onSurfaceTertiary}
-            />
-          </Pressable>
+      <View style={{ gap: 6 }}>
+        <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Tip document</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+          {DOCUMENT_TYPES.map((type) => (
+            <Pill key={type} label={type} active={documentType === type} tone={CAR} onPress={readOnly ? undefined : () => handleTypeSelect(type)} />
+          ))}
         </View>
+      </View>
 
-        {isRenewing ? (
-          <View
-            style={{
-              flexDirection: "row",
-              gap: spacing.sm,
-              padding: spacing.md,
-              borderRadius: radius.sm,
-              backgroundColor: "transparent",
-              borderWidth: 1,
-              borderColor: colors.border,
-              marginBottom: spacing.lg,
-            }}
-          >
-            <Ionicons name="information-circle-outline" size={18} color={colors.onSurfaceTertiary} />
-            <Text style={{ flex: 1, fontSize: 12, color: colors.onSurfaceTertiary, lineHeight: 17 }}>
-              Creating a new record for this renewal -- your previous{" "}
-              {renewFrom?.documentType || "document"} stays in your history, not overwritten.
-            </Text>
-          </View>
-        ) : null}
-
-        {readOnly ? (
-          <View
-            style={{
-              flexDirection: "row",
-              gap: spacing.sm,
-              padding: spacing.md,
-              borderRadius: radius.sm,
-              backgroundColor: "transparent",
-              borderWidth: 1,
-              borderColor: colors.border,
-              marginBottom: spacing.lg,
-            }}
-          >
-            <Ionicons name="lock-closed-outline" size={18} color={colors.onSurfaceTertiary} />
-            <Text style={{ flex: 1, fontSize: 12, color: colors.onSurfaceTertiary, lineHeight: 17 }}>
-              This document was replaced by a renewal, so it's locked -- an archived record stays exactly as filed.
-            </Text>
-          </View>
-        ) : null}
-
-        {/* Document Type */}
-
-        <Text
-          style={{
-            marginBottom: spacing.sm,
-            fontSize: 12,
-            fontWeight: "700",
-            color: colors.onSurfaceTertiary,
-          }}
-        >
-          Document Type
-          <Text style={{ color: colors.error }}> *</Text>
-        </Text>
-
-        <View
-          style={{
-            flexDirection: "row",
-            flexWrap: "wrap",
-            gap: spacing.sm,
-            marginBottom: spacing.lg,
-          }}
-        >
-          {DOCUMENT_TYPES.map((type) => {
-            const selected = documentType === type;
-
-            return (
-              <Pressable
-                key={type}
-                onPress={readOnly ? undefined : () => handleTypeSelect(type)}
-                disabled={readOnly}
-                hitSlop={4}
-                style={{
-                  paddingHorizontal: spacing.md,
-                  minHeight: 40,
-                  borderRadius: radius.pill,
-                  backgroundColor: selected
-                    ? colors.onSurface
-                    : "transparent",
-                  borderWidth: 1,
-                  borderColor: selected
-                    ? colors.onSurface
-                    : colors.border,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  opacity: readOnly && !selected ? 0.5 : 1,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 12,
-                    fontWeight: "700",
-                    color: selected
-                      ? colors.surface
-                      : colors.onSurface,
-                  }}
-                >
-                  {type}
-                </Text>
-              </Pressable>
-            );
-          })}
+      <Field label="Titlu" value={title} onChangeText={setTitle} placeholder="ex. RCA 2026" tone={CAR} editable={!readOnly} />
+      <Field label="Emitent (opțional)" value={issuer} onChangeText={setIssuer} placeholder="ex. Allianz" tone={CAR} editable={!readOnly} />
+      <View style={{ flexDirection: "row", gap: spacing.md }}>
+        <View style={{ flex: 1 }}>
+          <Field label="Emis pe (opțional)" value={issueDate} onChangeText={setIssueDate} placeholder="ZZ.LL.AAAA" tone={CAR} editable={!readOnly} />
         </View>
+        <View style={{ flex: 1 }}>
+          <Field label="Expiră pe" value={expiryDate} onChangeText={setExpiryDate} placeholder="ZZ.LL.AAAA" tone={CAR} editable={!readOnly} />
+        </View>
+      </View>
+      <Field label="Preț (opțional)" value={price} onChangeText={setPrice} placeholder="ex. 650" keyboardType="decimal-pad" suffix="lei" tone={CAR} editable={!readOnly} />
+      <Field label="Notițe (opțional)" value={notes} onChangeText={setNotes} placeholder="Orice detaliu util" multiline tone={CAR} editable={!readOnly} />
 
-        {/* Title */}
-
-        <FormField
-          label="Title"
-          value={title}
-          onChangeText={setTitle}
-          placeholder="e.g. RCA 2026"
-          colors={colors}
-          spacing={spacing}
-          radius={radius}
-          fieldName="title"
-          focusedField={focusedField}
-          onFocus={setFocusedField}
-          onBlur={() => setFocusedField(null)}
-          disabled={readOnly}
-        />
-
-        {/* Issuer */}
-
-        <FormField
-          label="Issuer"
-          value={issuer}
-          onChangeText={setIssuer}
-          placeholder="e.g. Allianz"
-          colors={colors}
-          spacing={spacing}
-          radius={radius}
-          fieldName="issuer"
-          focusedField={focusedField}
-          onFocus={setFocusedField}
-          onBlur={() => setFocusedField(null)}
-          disabled={readOnly}
-        />
-
-        {/* Issue Date */}
-
-        <FormField
-          label="Issue Date"
-          value={issueDate}
-          onChangeText={setIssueDate}
-          placeholder="DD.MM.YYYY"
-          keyboardType="default"
-          colors={colors}
-          spacing={spacing}
-          radius={radius}
-          fieldName="issueDate"
-          focusedField={focusedField}
-          onFocus={setFocusedField}
-          onBlur={() => setFocusedField(null)}
-          disabled={readOnly}
-        />
-
-        {/* Expiry Date */}
-
-        <FormField
-          label="Expiry Date"
-          value={expiryDate}
-          onChangeText={setExpiryDate}
-          placeholder="DD.MM.YYYY"
-          keyboardType="default"
-          required
-          colors={colors}
-          spacing={spacing}
-          radius={radius}
-          fieldName="expiryDate"
-          focusedField={focusedField}
-          onFocus={setFocusedField}
-          onBlur={() => setFocusedField(null)}
-          disabled={readOnly}
-        />
-
-        {/* Price */}
-
-        <FormField
-          label="Price"
-          value={price}
-          onChangeText={setPrice}
-          placeholder="e.g. 650"
-          keyboardType="decimal-pad"
-          suffix="RON"
-          colors={colors}
-          spacing={spacing}
-          radius={radius}
-          fieldName="price"
-          focusedField={focusedField}
-          onFocus={setFocusedField}
-          onBlur={() => setFocusedField(null)}
-          disabled={readOnly}
-        />
-
-        {/* Notes */}
-
-        <FormField
-          label="Notes"
-          value={notes}
-          onChangeText={setNotes}
-          placeholder="Optional notes"
-          colors={colors}
-          spacing={spacing}
-          radius={radius}
-          multiline
-          fieldName="notes"
-          focusedField={focusedField}
-          onFocus={setFocusedField}
-          onBlur={() => setFocusedField(null)}
-          disabled={readOnly}
-        />
-
-        {/* Error */}
-
-        {error ? (
-          <View
-            style={{
-              marginTop: spacing.sm,
-              padding: spacing.md,
-              borderRadius: radius.sm,
-              backgroundColor: "transparent",
-              borderWidth: 1,
-              borderColor: colors.border,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 13,
-                color: colors.onSurface,
-              }}
-            >
-              {error}
-            </Text>
-          </View>
-        ) : null}
-
-        {/* Save -- hidden entirely while readOnly, not just disabled;
-            there's nothing valid to submit. */}
-
-        {!readOnly ? (
-          <Pressable
-            onPress={handleSave}
-            accessibilityRole="button"
-            accessibilityLabel="Save document"
-            style={{
-              marginTop: spacing.xl,
-              minHeight: 52,
-              borderRadius: radius.md,
-              backgroundColor: colors.onSurface,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "800",
-                color: colors.surface,
-              }}
-            >
-              {isEditing ? "Save Changes" : "Save Document"}
-            </Text>
-          </Pressable>
-        ) : null}
-
-        {/* Cancel / Close -- same dismiss handler either way, just
-            relabeled so "Close" doesn't imply there was anything to
-            discard. */}
-
-        <Pressable
-          onPress={onCancel}
-          accessibilityRole="button"
-          accessibilityLabel={readOnly ? "Close document" : "Cancel document"}
-          style={{
-            marginTop: readOnly ? spacing.xl : spacing.sm,
-            minHeight: 48,
-            borderRadius: radius.md,
-            borderWidth: 1,
-            borderColor: readOnly ? colors.border : colors.error,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <Text
-            style={{
-              fontSize: 14,
-              fontWeight: "700",
-              color: readOnly ? colors.onSurface : colors.error,
-            }}
-          >
-            {readOnly ? "Close" : "Cancel"}
-          </Text>
-        </Pressable>
-
-        {/* TEMP (testing only): archived documents are otherwise fully
-            locked, but deletion is allowed here too for now so wrongly-
-            archived test entries can be cleaned up. History-locked (>7
-            days old, not archived) still hides this -- only archived. */}
-        {isEditing && onDelete && (!readOnly || entry?.archived) ? (
-          <Pressable
-            onPress={handleDelete}
-            accessibilityRole="button"
-            accessibilityLabel="Delete document"
-            style={{
-              marginTop: spacing.sm,
-              minHeight: 48,
-              borderRadius: radius.md,
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 14,
-                fontWeight: "700",
-                color: colors.error,
-              }}
-            >
-              Delete Entry
-            </Text>
-          </Pressable>
-        ) : null}
-      </ScrollView>
-    </KeyboardAvoidingView>
+      {error ? (
+        <View style={{ padding: spacing.md, borderRadius: radius.control, backgroundColor: `${colors.error}14` }}>
+          <Text style={{ fontSize: 14, color: colors.error }}>{error}</Text>
+        </View>
+      ) : null}
+    </Sheet>
   );
 }
 
-type FormFieldProps = {
-  label: string;
-  value: string;
-  onChangeText: (value: string) => void;
-  placeholder: string;
-  keyboardType?: "default" | "decimal-pad";
-  suffix?: string;
-  multiline?: boolean;
-  /** Read-only mode (see the `readOnly` form prop) -- dims the field and
-   * blocks typing, the input still shows its saved value. */
-  disabled?: boolean;
-  /** Shows a red "*" next to the label -- only for fields actually
-   * required to save (see handleSave). */
-  required?: boolean;
-  colors: any;
-  spacing: any;
-  radius: any;
-  fieldName: string;
-  focusedField: string | null;
-  onFocus: (field: string) => void;
-  onBlur: () => void;
-};
-
-function FormField({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  keyboardType = "default",
-  suffix,
-  multiline = false,
-  disabled = false,
-  required = false,
-  colors,
-  spacing,
-  radius,
-  fieldName,
-  focusedField,
-  onFocus,
-  onBlur,
-}: FormFieldProps) {
-  const isFocused = focusedField === fieldName;
-
+/** Small info line on the raised layer (renewal / locked notices). */
+function Notice({ icon, children }: { icon: React.ComponentProps<typeof Ionicons>["name"]; children: React.ReactNode }) {
+  const { colors, spacing, radius } = useTheme();
   return (
-    <View style={{ marginBottom: spacing.xl }}>
-      <Text
-        style={{
-          marginBottom: spacing.sm,
-          fontSize: 12,
-          fontWeight: "700",
-          color: colors.onSurfaceTertiary,
-        }}
-      >
-        {label}
-        {required ? <Text style={{ color: colors.error }}> *</Text> : null}
-      </Text>
-
-      <View
-        style={{
-          minHeight: multiline ? 90 : 52,
-          borderRadius: radius.sm,
-          backgroundColor: "transparent",
-          borderWidth: isFocused ? 2 : 1,
-          borderColor: isFocused
-            ? colors.onSurface
-            : colors.border,
-          flexDirection: "row",
-          // "stretch" so a multiline field's TextInput fills the whole
-          // box height -- otherwise only its top ~20px was tappable.
-          alignItems: multiline
-            ? "stretch"
-            : "center",
-          paddingHorizontal: spacing.md,
-          paddingVertical: multiline
-            ? spacing.md
-            : 0,
-          opacity: disabled ? 0.6 : 1,
-        }}
-      >
-        <TextInput
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          editable={!disabled}
-          placeholderTextColor={
-            colors.onSurfaceTertiary
-          }
-          keyboardType={keyboardType}
-          multiline={multiline}
-          textAlignVertical={
-            multiline ? "top" : "center"
-          }
-          onFocus={() => onFocus(fieldName)}
-          onBlur={onBlur}
-          style={[{
-            flex: 1,
-            fontSize: 15,
-            color: colors.onSurface,
-            paddingVertical: 0,
-            borderWidth: 0,
-          }, Platform.OS === "web" && { outlineStyle: "none" } as any]}
-        />
-
-        {suffix ? (
-          <Text
-            style={{
-              marginLeft: spacing.sm,
-              fontSize: 12,
-              fontWeight: "700",
-              color: colors.onSurfaceTertiary,
-            }}
-          >
-            {suffix}
-          </Text>
-        ) : null}
-      </View>
+    <View style={{ flexDirection: "row", gap: spacing.sm, padding: spacing.md, borderRadius: radius.control, backgroundColor: colors.surfaceTertiary }}>
+      <Ionicons name={icon} size={18} color={colors.onSurfaceTertiary} />
+      <Text style={{ flex: 1, fontSize: 13, color: colors.onSurfaceTertiary, lineHeight: 18 }}>{children}</Text>
     </View>
   );
 }
