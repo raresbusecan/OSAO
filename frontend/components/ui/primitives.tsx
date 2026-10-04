@@ -42,7 +42,7 @@ export function CircleButton({
   disabled?: boolean;
 }) {
   const { colors } = useTheme();
-  const isBack = icon === "chevron-back";
+  const isBack = icon === "chevron-back" || icon === "chevron-forward";
   const iconColor = tone ? colors.surface : isBack ? colors.onSurface : colors.onSurfaceTertiary;
   return (
     <PressableScale
