@@ -1,20 +1,21 @@
 import React, { useState } from "react";
-import {
-  View, Text, TextInput, Pressable, StyleSheet, KeyboardAvoidingView,
-  Platform, ScrollView, ActivityIndicator, Keyboard, TouchableWithoutFeedback,
-} from "react-native";
-import { useRouter, Link } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
+import { View, Text, Pressable } from "react-native";
+import { useRouter } from "expo-router";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/providers/auth";
+import { Button, Field } from "@/components/ui/primitives";
+import { AuthShell, AuthSwitch, PasswordField } from "@/components/auth/AuthShell";
 
-const HERO_LIGHT = "https://images.unsplash.com/photo-1483366774565-c783b9f70e2c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMjh8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwYWJzdHJhY3QlMjBhcmNoaXRlY3R1cmUlMjBjYWxtJTIwbGlnaHR8ZW58MHx8fHwxNzg2MzU0NzkxfDA&ixlib=rb-4.1.0&q=85";
-const HERO_DARK = "https://images.unsplash.com/photo-1526289034009-0240ddb68ce3?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTN8MHwxfHNlYXJjaHwxfHxjYWxtJTIwbWluaW1hbCUyMGFic3RyYWN0JTIwYXJjaGl0ZWN0dXJlJTIwZGFya3xlbnwwfHx8fDE3ODYzNTQ4MDZ8MA&ixlib=rb-4.1.0&q=85";
+// The backend's validation messages are still English (Laravel's
+// default locale); the one every user hits gets a Romanian line here.
+function loginError(message?: string): string {
+  if (!message) return "Nu te-am putut autentifica. Încearcă din nou.";
+  if (/credentials are incorrect/i.test(message)) return "Emailul sau parola nu se potrivesc.";
+  return message;
+}
 
 export default function Login() {
-  const { colors, spacing, radius, isDark } = useTheme();
+  const { colors, spacing } = useTheme();
   const { signIn } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -23,127 +24,57 @@ export default function Login() {
   const [err, setErr] = useState<string | null>(null);
 
   const submit = async () => {
+    if (!email || !password) return;
     setErr(null); setBusy(true);
     try {
       await signIn(email.trim(), password);
       router.replace("/(tabs)/home");
     } catch (e: any) {
-      setErr(e?.message || "Login failed");
+      setErr(loginError(e?.message));
     } finally { setBusy(false); }
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.surface }} testID="login-screen">
-      <View style={StyleSheet.absoluteFill}>
-        <Image
-          source={{ uri: isDark ? HERO_DARK : HERO_LIGHT }}
-          style={{ width: "100%", height: "55%" }}
-          contentFit="cover"
+    <AuthShell testID="login-screen" title="orgOS" subtitle="Mașina, casa, cumpărăturile și banii tăi, într-un singur loc.">
+      <View style={{ gap: 14 }}>
+        <Field
+          testID="login-email-input"
+          label="Email"
+          value={email}
+          onChangeText={setEmail}
+          placeholder="nume@exemplu.ro"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="email"
+          textContentType="emailAddress"
+          returnKeyType="next"
         />
-        <LinearGradient
-          colors={["transparent", colors.surface]}
-          locations={[0.15, 0.55]}
-          style={StyleSheet.absoluteFill}
+        <PasswordField
+          testID="login-password-input"
+          label="Parolă"
+          value={password}
+          onChangeText={setPassword}
+          autoComplete="current-password"
+          textContentType="password"
+          returnKeyType="go"
+          onSubmitEditing={submit}
+          error={err}
         />
-      </View>
-      <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={{ flex: 1 }}
+        <Pressable
+          testID="login-goto-forgot-password"
+          onPress={() => router.push("/(auth)/forgot-password")}
+          accessibilityRole="button"
+          style={{ alignSelf: "flex-end", minHeight: 44, justifyContent: "center" }}
         >
-            <ScrollView
-              contentContainerStyle={{ flexGrow: 1, justifyContent: "flex-end", padding: spacing.xl, gap: spacing.lg }}
-              keyboardShouldPersistTaps="handled"
-            >
-              <View style={{ gap: spacing.xs, marginBottom: spacing.lg }}>
-                <Text style={{ fontSize: 34, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.5 }}>
-                  orgOS
-                </Text>
-                <Text style={{ fontSize: 15, color: colors.onSurfaceTertiary }}>
-                  Your personal command center. Capture anything.
-                </Text>
-              </View>
+          <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>Ai uitat parola?</Text>
+        </Pressable>
+      </View>
 
-              <View style={{ gap: spacing.md }}>
-                <TextInput
-                  testID="login-email-input"
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="Email"
-                  placeholderTextColor={colors.onSurfaceTertiary}
-                  accessibilityLabel="Email"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={{
-                    backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, color: colors.onSurface,
-                    borderRadius: radius.sm, paddingHorizontal: spacing.lg, paddingVertical: 14, fontSize: 16,
-                  }}
-                />
-                <TextInput
-                  testID="login-password-input"
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Password"
-                  placeholderTextColor={colors.onSurfaceTertiary}
-                  accessibilityLabel="Password"
-                  secureTextEntry
-                  style={{
-                    backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, color: colors.onSurface,
-                    borderRadius: radius.sm, paddingHorizontal: spacing.lg, paddingVertical: 14, fontSize: 16,
-                  }}
-                />
-                {err ? (
-                  <Text testID="login-error" style={{ color: colors.error, fontSize: 13 }}>{err}</Text>
-                ) : null}
-
-                <Link href="/(auth)/forgot-password" asChild>
-                  <Pressable
-                    testID="login-goto-forgot-password"
-                    accessibilityRole="button"
-                    accessibilityLabel="Forgot password"
-                    style={{ alignSelf: "flex-end" }}
-                  >
-                    <Text style={{ color: colors.onSurfaceTertiary, fontSize: 13, fontWeight: "600" }}>
-                      Forgot password?
-                    </Text>
-                  </Pressable>
-                </Link>
-              </View>
-
-              <Pressable
-                testID="login-submit-button"
-                onPress={submit}
-                disabled={busy || !email || !password}
-                accessibilityRole="button"
-                accessibilityLabel="Sign in"
-                accessibilityState={{ busy, disabled: busy || !email || !password }}
-                style={{
-                  backgroundColor: colors.brandPrimary,
-                  opacity: busy || !email || !password ? 0.5 : 1,
-                  paddingVertical: 16, borderRadius: radius.sm, alignItems: "center",
-                }}
-              >
-                {busy ? <ActivityIndicator color={colors.onBrandPrimary} /> : (
-                  <Text style={{ color: colors.onBrandPrimary, fontWeight: "700", fontSize: 16 }}>Sign in</Text>
-                )}
-              </Pressable>
-
-              <Link href="/(auth)/register" asChild>
-                <Pressable
-                  testID="login-goto-register"
-                  accessibilityRole="button"
-                  accessibilityLabel="Create an account"
-                  style={{ alignItems: "center", paddingVertical: spacing.md }}
-                >
-                  <Text style={{ color: colors.onSurfaceTertiary, fontSize: 14 }}>
-                    New here? <Text style={{ color: colors.onSurface, fontWeight: "600" }}>Create an account</Text>
-                  </Text>
-                </Pressable>
-              </Link>
-            </ScrollView>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
-    </View>
+      <View style={{ gap: spacing.sm }}>
+        <Button testID="login-submit-button" label="Intră în cont" onPress={submit} loading={busy} disabled={!email || !password} />
+        <AuthSwitch testID="login-goto-register" prompt="Nu ai cont?" action="Creează unul" onPress={() => router.push("/(auth)/register")} />
+      </View>
+    </AuthShell>
   );
 }

@@ -452,10 +452,13 @@ export function Field({
   hint,
   style,
   big,
+  right,
   ...input
 }: TextInputProps & {
   label?: string;
   suffix?: string;
+  /** A control at the input's end (e.g. a show-password eye). */
+  right?: React.ReactNode;
   tone?: string;
   error?: string | null;
   hint?: string | null;
@@ -495,6 +498,7 @@ export function Field({
           ]}
         />
         {suffix ? <Text style={{ fontSize: 15, color: colors.onSurfaceTertiary, marginLeft: 8 }}>{suffix}</Text> : null}
+        {right}
       </View>
       {error ? <Text style={{ fontSize: 13, color: colors.error }}>{error}</Text> : hint ? <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{hint}</Text> : null}
     </View>
