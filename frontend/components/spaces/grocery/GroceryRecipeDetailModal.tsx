@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Pressable, Modal, ScrollView, StyleSheet } from "react-native";
+import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import type { Recipe, RecipeMatch } from "@/lib/spaces/grocery/recipeMatching";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { Sheet } from "@/components/ui/Sheet";
+import { Button, Chip, Group, Row, SectionHeader } from "@/components/ui/primitives";
 
 export type GroceryRecipeDetailModalProps = {
   visible: boolean;
@@ -42,7 +45,7 @@ export function GroceryRecipeDetailModal({
   onClose,
   onAddMissing,
 }: GroceryRecipeDetailModalProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing } = useTheme();
   const [snapshot, setSnapshot] = useState<{ recipe: Recipe; match: RecipeMatch; otherTags: string[] } | null>(null);
 
   useEffect(() => {
@@ -53,138 +56,65 @@ export function GroceryRecipeDetailModal({
 
   const complete = snapshot.match.missingIngredients.length === 0;
 
+  const GROC = SPACE_IDENTITY_COLORS.grocery!;
+  const have = snapshot.match.matchedIngredients.length;
+  const total = snapshot.recipe.ingredients.length;
+  const meta = [
+    snapshot.recipe.timeMinutes ? `${snapshot.recipe.timeMinutes} min` : null,
+    snapshot.recipe.difficulty ? DIFFICULTY[String(snapshot.recipe.difficulty).toLowerCase()] ?? snapshot.recipe.difficulty : null,
+  ].filter(Boolean).join(", ");
+
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        <Pressable onPress={onClose} style={{ ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.4)" }} />
-
-        <View
-          style={{
-            backgroundColor: colors.surface,
-            borderTopLeftRadius: radius.lg,
-            borderTopRightRadius: radius.lg,
-            maxHeight: "85%",
-          }}
-        >
-          <ScrollView contentContainerStyle={{ padding: spacing.xl }}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "flex-start",
-                justifyContent: "space-between",
-                marginBottom: spacing.md,
-              }}
-            >
-              <Text style={{ flex: 1, fontSize: 20, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.3, marginRight: spacing.md }}>
-                {snapshot.recipe.title}
-              </Text>
-
-              <Pressable
-                testID="recipe-detail-close"
-                onPress={onClose}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: radius.pill,
-                  backgroundColor: "transparent",
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons name="close" size={18} color={colors.onSurfaceTertiary} />
-              </Pressable>
-            </View>
-
-            <View style={{ flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 6, marginBottom: spacing.lg }}>
-              {snapshot.recipe.timeMinutes ? (
-                <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>{snapshot.recipe.timeMinutes} min</Text>
-              ) : null}
-              {snapshot.recipe.difficulty ? (
-                <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>&middot; {snapshot.recipe.difficulty}</Text>
-              ) : null}
-              <Text style={{ fontSize: 12, fontWeight: "700", color: complete ? colors.success : colors.onSurfaceTertiary }}>
-                &middot; {complete ? "You have everything" : `${snapshot.match.matchedIngredients.length}/${snapshot.recipe.ingredients.length} ingredients you have`}
-              </Text>
-            </View>
-
-            {snapshot.otherTags.length > 0 ? (
-              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: spacing.lg }}>
-                {snapshot.otherTags.map((tag) => (
-                  <View
-                    key={tag}
-                    style={{
-                      paddingHorizontal: spacing.sm,
-                      minHeight: 24,
-                      borderRadius: radius.pill,
-                      backgroundColor: "transparent",
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    <Text style={{ fontSize: 11, fontWeight: "700", color: colors.onSurfaceTertiary }}>{tag}</Text>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-
-            <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.5, color: colors.onSurfaceTertiary, marginBottom: spacing.sm }}>
-              INGREDIENTS
-            </Text>
-            {snapshot.recipe.ingredients.map((ingredient) => {
-              const have = snapshot.match.matchedIngredients.includes(ingredient.name);
-              return (
-                <View key={ingredient.name} style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, marginBottom: 4 }}>
-                  <Ionicons
-                    name={have ? "checkmark-circle" : "ellipse-outline"}
-                    size={14}
-                    color={have ? colors.success : colors.onSurfaceTertiary}
-                  />
-                  <Text style={{ fontSize: 13, color: colors.onSurface }}>{ingredient.name}</Text>
-                </View>
-              );
-            })}
-
-            {!complete && onAddMissing ? (
-              <Pressable
-                testID={`recipe-detail-add-missing-${snapshot.recipe.id}`}
-                onPress={onAddMissing}
-                hitSlop={6}
-                style={{
-                  alignSelf: "flex-start",
-                  paddingHorizontal: spacing.md,
-                  minHeight: 32,
-                  borderRadius: radius.pill,
-                  backgroundColor: "transparent",
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginTop: spacing.md,
-                  marginBottom: spacing.md,
-                }}
-              >
-                <Text style={{ fontSize: 12, fontWeight: "700", color: colors.onSurface }}>Add missing to list</Text>
-              </Pressable>
-            ) : null}
-
-            <Text style={{ fontSize: 12, fontWeight: "800", letterSpacing: 0.5, color: colors.onSurfaceTertiary, marginTop: spacing.sm, marginBottom: spacing.sm }}>
-              STEPS
-            </Text>
-            {snapshot.recipe.steps.map((step, index) => (
-              <Text key={index} style={{ fontSize: 13, color: colors.onSurface, lineHeight: 19, marginBottom: 4 }}>
-                {index + 1}. {step}
-              </Text>
-            ))}
-          </ScrollView>
-        </View>
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title={snapshot.recipe.title}
+      subtitle={meta || undefined}
+      icon="restaurant-outline"
+      tone={GROC}
+      footer={
+        !complete && onAddMissing ? (
+          <Button testID={`recipe-detail-add-missing-${snapshot.recipe.id}`} icon="add" label={`Adaugă pe listă ce lipsește (${total - have})`} tone={GROC} onPress={onAddMissing} />
+        ) : undefined
+      }
+    >
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+        <Chip label={complete ? "Ai tot ce trebuie" : `Ai ${have} din ${total} ingrediente`} color={complete ? colors.success : colors.onSurfaceTertiary} filled={complete} />
+        {snapshot.otherTags.map((tag) => (
+          <Chip key={tag} label={tag} color={colors.onSurfaceTertiary} filled={false} />
+        ))}
       </View>
-    </Modal>
+
+      <View style={{ gap: spacing.sm }}>
+        <SectionHeader title="Ingrediente" />
+        <Group inset={48}>
+          {snapshot.recipe.ingredients.map((ingredient) => {
+            const ok = snapshot.match.matchedIngredients.includes(ingredient.name);
+            return (
+              <Row
+                key={ingredient.name}
+                leading={<Ionicons name={ok ? "checkmark-circle" : "ellipse-outline"} size={20} color={ok ? colors.success : colors.control} />}
+                title={ingredient.name}
+                dim={!ok}
+              />
+            );
+          })}
+        </Group>
+      </View>
+
+      <View style={{ gap: spacing.sm }}>
+        <SectionHeader title="Pași" />
+        {snapshot.recipe.steps.map((step, index) => (
+          <View key={index} style={{ flexDirection: "row", gap: spacing.md }}>
+            <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 13, fontWeight: "600", color: colors.onSurface }}>{index + 1}</Text>
+            </View>
+            <Text style={{ flex: 1, fontSize: 15, color: colors.onSurface, lineHeight: 22 }}>{step}</Text>
+          </View>
+        ))}
+      </View>
+    </Sheet>
   );
 }
+
+const DIFFICULTY: Record<string, string> = { easy: "ușor", medium: "mediu", hard: "dificil" };

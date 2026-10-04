@@ -1,8 +1,11 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, Pressable, Modal, KeyboardAvoidingView, Platform, StyleSheet, ScrollView } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { Sheet } from "@/components/ui/Sheet";
+import { Group, Row, Chip, Field, Button } from "@/components/ui/primitives";
 import type { SpaceMember } from "@/lib/spaces/grocery/grocery.types";
 
 export type SpaceMembersModalProps = {
@@ -35,7 +38,7 @@ export type SpaceMembersModalProps = {
  * bug.
  */
 export function SpaceMembersModal({ visible, onClose, isOwner, owner, members, onAdd, onRemove }: SpaceMembersModalProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing } = useTheme();
   const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
@@ -73,100 +76,45 @@ export function SpaceMembersModal({ visible, onClose, isOwner, owner, members, o
     }
   };
 
+  const GROC = SPACE_IDENTITY_COLORS.grocery!;
+  const people = [...(owner ? [{ ...owner, isOwner: true }] : []), ...members.map((m) => ({ ...m, isOwner: false }))];
+
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <Pressable onPress={onClose} style={{ ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.4)" }} />
-
-        <View
-          style={{
-            width: "100%",
-            maxWidth: 380,
-            maxHeight: "80%",
-            borderRadius: radius.lg,
-            backgroundColor: colors.surface,
-            padding: spacing.xl,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing.lg }}>
-            <Text style={{ fontSize: 17, fontWeight: "800", color: colors.onSurface }}>People</Text>
-
-            <Pressable
-              testID="space-members-close"
-              onPress={onClose}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-              style={{
-                width: 32,
-                height: 32,
-                borderRadius: radius.pill,
-                backgroundColor: "transparent",
-                borderWidth: 1,
-                borderColor: colors.border,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Ionicons name="close" size={18} color={colors.onSurfaceTertiary} />
-            </Pressable>
-          </View>
-
-          <ScrollView showsVerticalScrollIndicator={false} style={{ marginBottom: spacing.lg }}>
-            {owner ? (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.sm }}>
-                <Avatar id={owner.id} name={owner.name} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurface }}>{owner.name}</Text>
-                  <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>{owner.email}</Text>
-                </View>
-                <Text style={{ fontSize: 11, fontWeight: "800", letterSpacing: 0.5, color: colors.onSurfaceTertiary, textTransform: "uppercase" }}>
-                  Owner
-                </Text>
-              </View>
-            ) : null}
-
-            {members.map((member) => (
-              <View
-                key={member.id}
-                style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.sm }}
-              >
-                <Avatar id={member.id} name={member.name} />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurface }}>{member.name}</Text>
-                  <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>{member.email}</Text>
-                </View>
-
-                {isOwner ? (
+    <>
+      <Sheet visible={visible} onClose={onClose} title="Cine vede lista" icon="people-outline" tone={GROC}>
+        <Group inset={62}>
+          {people.map((person) => (
+            <Row
+              key={person.id}
+              leading={<Avatar id={person.id} name={person.name} />}
+              title={person.name}
+              subtitle={person.email}
+              trailing={
+                person.isOwner ? (
+                  <Chip label="Proprietar" color={colors.onSurfaceTertiary} filled={false} />
+                ) : isOwner ? (
                   <Pressable
-                    testID={`space-members-remove-${member.id}`}
-                    onPress={() => setPendingRemoval(member)}
-                    disabled={removingId === member.id}
-                    hitSlop={10}
+                    testID={`space-members-remove-${person.id}`}
+                    onPress={() => setPendingRemoval(person)}
+                    disabled={removingId === person.id}
                     accessibilityRole="button"
-                    accessibilityLabel={`Remove ${member.name}`}
-                    style={{ opacity: removingId === member.id ? 0.4 : 1 }}
+                    accessibilityLabel={`Scoate-l pe ${person.name}`}
+                    style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", opacity: removingId === person.id ? 0.4 : 1 }}
                   >
-                    <Ionicons name="close-circle-outline" size={20} color={colors.error} />
+                    <Ionicons name="remove-circle-outline" size={22} color={colors.error} />
                   </Pressable>
-                ) : null}
-              </View>
-            ))}
+                ) : null
+              }
+            />
+          ))}
+        </Group>
+        {members.length === 0 ? <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>Nu ai adăugat pe nimeni încă.</Text> : null}
 
-            {members.length === 0 ? (
-              <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, paddingVertical: spacing.sm }}>
-                No one else has been added yet.
-              </Text>
-            ) : null}
-          </ScrollView>
-
-          {isOwner ? (
-            <>
-              <View style={{ flexDirection: "row", gap: spacing.sm }}>
-                <TextInput
+        {isOwner ? (
+          <View style={{ gap: spacing.sm }}>
+            <View style={{ flexDirection: "row", gap: spacing.sm, alignItems: "flex-start" }}>
+              <View style={{ flex: 1 }}>
+                <Field
                   testID="space-members-email-input"
                   value={email}
                   onChangeText={(text) => {
@@ -174,132 +122,37 @@ export function SpaceMembersModal({ visible, onClose, isOwner, owner, members, o
                     if (error) setError(null);
                   }}
                   onSubmitEditing={handleAdd}
-                  returnKeyType="done"
-                  placeholder="Their email"
-                  placeholderTextColor={colors.onSurfaceTertiary}
-                  autoCapitalize="none"
+                  placeholder="Emailul persoanei"
                   keyboardType="email-address"
-                  style={{
-                    flex: 1,
-                    minHeight: 48,
-                    paddingHorizontal: spacing.md,
-                    borderRadius: radius.sm,
-                    backgroundColor: "transparent",
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    color: colors.onSurface,
-                    fontSize: 14,
-                  }}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  tone={GROC}
+                  error={error}
+                  hint={error ? null : "Trebuie să aibă deja cont cu acest email."}
                 />
-
-                <Pressable
-                  testID="space-members-add"
-                  onPress={handleAdd}
-                  disabled={saving || !email.trim()}
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: radius.sm,
-                    backgroundColor: colors.onSurface,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    opacity: saving || !email.trim() ? 0.5 : 1,
-                  }}
-                >
-                  <Ionicons name="add" size={22} color={colors.surface} />
-                </Pressable>
               </View>
-
-              {error ? (
-                <Text style={{ marginTop: spacing.sm, fontSize: 12, color: colors.error }}>{error}</Text>
-              ) : (
-                <Text style={{ marginTop: spacing.sm, fontSize: 12, color: colors.onSurfaceTertiary }}>
-                  They need an existing account under that email.
-                </Text>
-              )}
-            </>
-          ) : null}
-        </View>
-      </KeyboardAvoidingView>
-
-      {/* REMOVE CONFIRMATION -- its own popup on top of everything
-          above, same nesting pattern as GroceryProductModal's "new
-          category" popup. Three ways out, not the usual confirm/cancel:
-          what happens to this person's own products on the list is a
-          real choice, not a detail to bury in a single "Remove" button. */}
-      <Modal
-        visible={!!pendingRemoval}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPendingRemoval(null)}
-      >
-        <KeyboardAvoidingView
-          style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
-          <Pressable
-            onPress={() => setPendingRemoval(null)}
-            style={{ ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.4)" }}
-          />
-
-          <View
-            style={{
-              width: "100%",
-              maxWidth: 360,
-              borderRadius: radius.lg,
-              backgroundColor: colors.surface,
-              padding: spacing.xl,
-            }}
-          >
-            <Text style={{ fontSize: 17, fontWeight: "800", color: colors.onSurface, marginBottom: spacing.sm }}>
-              Remove {pendingRemoval?.name}?
-            </Text>
-            <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, marginBottom: spacing.lg, lineHeight: 20 }}>
-              They won&apos;t see this list anymore. What about the products they already added to it?
-            </Text>
-
-            <Pressable
-              testID="space-members-remove-keep-items"
-              onPress={() => pendingRemoval && handleRemove(pendingRemoval.id, false)}
-              style={{
-                minHeight: 52,
-                borderRadius: radius.sm,
-                backgroundColor: colors.onSurface,
-                alignItems: "center",
-                justifyContent: "center",
-                marginBottom: spacing.sm,
-              }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "800", color: colors.error }}>Remove person, keep products</Text>
-            </Pressable>
-
-            <Pressable
-              testID="space-members-remove-and-items"
-              onPress={() => pendingRemoval && handleRemove(pendingRemoval.id, true)}
-              style={{
-                minHeight: 52,
-                borderRadius: radius.sm,
-                backgroundColor: "transparent",
-                borderWidth: 1,
-                borderColor: colors.border,
-                alignItems: "center",
-                justifyContent: "center",
-                marginBottom: spacing.sm,
-              }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "800", color: colors.error }}>Remove person and their products</Text>
-            </Pressable>
-
-            <Pressable
-              testID="space-members-remove-cancel"
-              onPress={() => setPendingRemoval(null)}
-              style={{ minHeight: 48, alignItems: "center", justifyContent: "center" }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>Cancel</Text>
-            </Pressable>
+              <Button testID="space-members-add" label="Invită" tone={GROC} onPress={handleAdd} loading={saving} disabled={!email.trim()} />
+            </View>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
-    </Modal>
+        ) : null}
+      </Sheet>
+
+      <Sheet
+        visible={!!pendingRemoval}
+        onClose={() => setPendingRemoval(null)}
+        centered
+        icon="person-remove-outline"
+        tone={colors.error}
+        title={`Îl scoți pe ${pendingRemoval?.name ?? ""}?`}
+        subtitle="Nu va mai vedea lista. Ce faci cu produsele pe care le-a adăugat?"
+        footer={
+          <>
+            <Button testID="space-members-remove-keep-items" variant="destructive" label="Scoate persoana, păstrează produsele" onPress={() => pendingRemoval && handleRemove(pendingRemoval.id, false)} />
+            <Button testID="space-members-remove-and-items" variant="destructive" label="Scoate persoana și produsele ei" onPress={() => pendingRemoval && handleRemove(pendingRemoval.id, true)} />
+            <Button variant="ghost" label="Renunță" onPress={() => setPendingRemoval(null)} />
+          </>
+        }
+      />
+    </>
   );
 }

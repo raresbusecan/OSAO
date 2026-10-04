@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, TextInput, Pressable, Modal, ScrollView, KeyboardAvoidingView, Platform, StyleSheet } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, Text, type TextInput } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { confirmAction } from "@/lib/confirm";
-import type { GroceryCategory, GroceryItem } from "@/lib/spaces/grocery/grocery.types";
+import { groceryCategoryLabel, type GroceryCategory, type GroceryItem } from "@/lib/spaces/grocery/grocery.types";
+import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { Sheet } from "@/components/ui/Sheet";
+import { Button, Field } from "@/components/ui/primitives";
 import { matchIngredientCategory, useIngredientReferences } from "@/lib/spaces/grocery/ingredientLookup";
 
 export type GroceryProductModalProps = {
@@ -84,7 +86,7 @@ export function GroceryProductModal({
   const handleSave = () => {
     const trimmedName = name.trim();
     if (!trimmedName) {
-      setError("Please enter a product name.");
+      setError("Scrie numele produsului.");
       return;
     }
 
@@ -92,7 +94,7 @@ export function GroceryProductModal({
     const trimmedPrice = price.trim().replace(",", ".");
     const priceValue = trimmedPrice ? Number(trimmedPrice) : undefined;
     if (trimmedPrice && (Number.isNaN(priceValue) || (priceValue as number) < 0)) {
-      setError("Please enter a valid price.");
+      setError("Introdu un preț valid.");
       return;
     }
 
@@ -111,7 +113,7 @@ export function GroceryProductModal({
     setUnit("");
     setPrice("");
     setError("");
-    setSuccessMessage(`"${trimmedName}" added.`);
+    setSuccessMessage(`„${trimmedName}” a fost adăugat.`);
     nameInputRef.current?.focus();
 
     if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
@@ -129,253 +131,53 @@ export function GroceryProductModal({
   };
 
   const handleDelete = async () => {
-    const confirmed = await confirmAction(
-      "Delete product",
-      `Remove "${item?.name}" from your shopping list?`,
-      { confirmLabel: "Delete", destructive: true },
-    );
-
-    if (confirmed) {
-      onDelete?.();
-    }
+    const confirmed = await confirmAction("Ștergi produsul?", `Scoți „${item?.name}” de pe listă?`, { confirmLabel: "Șterge", destructive: true });
+    if (confirmed) onDelete?.();
   };
 
+
+  const GROC = SPACE_IDENTITY_COLORS.grocery!;
+
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView
-        style={{ flex: 1, justifyContent: "flex-end" }}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <Pressable onPress={onClose} style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.4)" }} />
-
-        <View
-          style={{
-            backgroundColor: colors.surface,
-            borderTopLeftRadius: radius.lg,
-            borderTopRightRadius: radius.lg,
-            maxHeight: "85%",
-          }}
-        >
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ padding: spacing.xl }}
-          >
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                marginBottom: spacing.lg,
-              }}
-            >
-              <Text style={{ fontSize: 20, fontWeight: "800", color: colors.onSurface, letterSpacing: -0.3 }}>
-                {isEditing ? "Edit Product" : "Add Product"}
-              </Text>
-
-              <Pressable
-                onPress={onClose}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel="Close"
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: radius.pill,
-                  backgroundColor: "transparent",
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons name="close" size={18} color={colors.onSurfaceTertiary} />
-              </Pressable>
-            </View>
-
-            {/* Name -- the only required field; Enter saves directly,
-                matching "as few steps as possible" for a quick add. */}
-            <Field label="Name" required colors={colors} spacing={spacing}>
-              <TextInput
-                ref={nameInputRef}
-                testID="grocery-modal-name"
-                value={name}
-                onChangeText={handleNameChange}
-                onSubmitEditing={handleSave}
-                returnKeyType="done"
-                autoFocus
-                placeholder="e.g. Carrots"
-                placeholderTextColor={colors.onSurfaceTertiary}
-                style={{
-                  minHeight: 48,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.sm,
-                  backgroundColor: "transparent",
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  color: colors.onSurface,
-                  fontSize: 15,
-                }}
-              />
-            </Field>
-
-            {/* Amount + Unit -- optional, side by side ("1" + "kg"). */}
-            <View style={{ flexDirection: "row", gap: spacing.sm }}>
-              <View style={{ flex: 1 }}>
-                <Field label="Amount" colors={colors} spacing={spacing}>
-                  <TextInput
-                    testID="grocery-modal-amount"
-                    value={amount}
-                    onChangeText={setAmount}
-                    placeholder="e.g. 1"
-                    keyboardType="default"
-                    placeholderTextColor={colors.onSurfaceTertiary}
-                    style={{
-                      minHeight: 48,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.sm,
-                      backgroundColor: "transparent",
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      color: colors.onSurface,
-                      fontSize: 15,
-                    }}
-                  />
-                </Field>
-              </View>
-
-              <View style={{ flex: 1 }}>
-                <Field label="Unit" colors={colors} spacing={spacing}>
-                  <TextInput
-                    testID="grocery-modal-unit"
-                    value={unit}
-                    onChangeText={setUnit}
-                    placeholder="e.g. kg"
-                    placeholderTextColor={colors.onSurfaceTertiary}
-                    style={{
-                      minHeight: 48,
-                      paddingHorizontal: spacing.md,
-                      borderRadius: radius.sm,
-                      backgroundColor: "transparent",
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      color: colors.onSurface,
-                      fontSize: 15,
-                    }}
-                  />
-                </Field>
-              </View>
-            </View>
-
-            {/* Price -- optional, RON. Nothing downstream reads it yet
-                (no mandatory validation beyond "must be a valid
-                non-negative number" if filled in); it's here ahead of
-                the planned basket-cost total and budget sync. */}
-            <Field label="Price (RON)" colors={colors} spacing={spacing}>
-              <TextInput
-                testID="grocery-modal-price"
-                value={price}
-                onChangeText={setPrice}
-                placeholder="e.g. 12.50"
-                keyboardType="decimal-pad"
-                placeholderTextColor={colors.onSurfaceTertiary}
-                style={{
-                  minHeight: 48,
-                  paddingHorizontal: spacing.md,
-                  borderRadius: radius.sm,
-                  backgroundColor: "transparent",
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  color: colors.onSurface,
-                  fontSize: 15,
-                }}
-              />
-            </Field>
-
-            {successMessage ? (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: spacing.sm,
-                  marginBottom: spacing.md,
-                  padding: spacing.md,
-                  borderRadius: radius.md,
-                  backgroundColor: colors.success + "1A",
-                }}
-              >
-                <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-                <Text style={{ fontSize: 13, fontWeight: "600", color: colors.success }}>{successMessage}</Text>
-              </View>
-            ) : null}
-
-            {error ? (
-              <View
-                style={{
-                  marginBottom: spacing.md,
-                  padding: spacing.md,
-                  borderRadius: radius.sm,
-                  backgroundColor: "transparent",
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                }}
-              >
-                <Text style={{ fontSize: 13, color: colors.onSurface }}>{error}</Text>
-              </View>
-            ) : null}
-
-            <Pressable
-              testID="grocery-modal-save"
-              onPress={handleSave}
-              style={{
-                minHeight: 52,
-                borderRadius: radius.sm,
-                backgroundColor: colors.onSurface,
-                alignItems: "center",
-                justifyContent: "center",
-                marginBottom: spacing.sm,
-              }}
-            >
-              <Text style={{ fontSize: 14, fontWeight: "800", color: colors.surface }}>
-                {isEditing ? "Save Changes" : "Add Product"}
-              </Text>
-            </Pressable>
-
-            {isEditing && onDelete ? (
-              <Pressable
-                testID="grocery-modal-delete"
-                onPress={handleDelete}
-                style={{ minHeight: 48, alignItems: "center", justifyContent: "center" }}
-              >
-                <Text style={{ fontSize: 14, fontWeight: "700", color: colors.error }}>Delete Product</Text>
-              </Pressable>
-            ) : null}
-          </ScrollView>
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title={isEditing ? "Editează produsul" : "Produs nou"}
+      icon="cart-outline"
+      tone={GROC}
+      footer={
+        <>
+          <Button testID="grocery-product-save" label={isEditing ? "Salvează" : "Adaugă pe listă"} tone={GROC} onPress={handleSave} />
+          {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge produsul" onPress={handleDelete} /> : null}
+        </>
+      }
+    >
+      <Field
+        testID="grocery-product-name"
+        label="Produs"
+        value={name}
+        onChangeText={handleNameChange}
+        placeholder="ex. Morcovi"
+        autoFocus={!isEditing}
+        tone={GROC}
+        hint={name.trim() ? `Categorie: ${groceryCategoryLabel(category)}` : null}
+      />
+      <View style={{ flexDirection: "row", gap: spacing.md }}>
+        <View style={{ flex: 1 }}>
+          <Field label="Cantitate" value={amount} onChangeText={setAmount} placeholder="ex. 1" keyboardType="decimal-pad" tone={GROC} />
         </View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
+        <View style={{ flex: 1 }}>
+          <Field label="Unitate" value={unit} onChangeText={setUnit} placeholder="ex. kg" tone={GROC} />
+        </View>
+      </View>
+      <Field label="Preț (opțional)" value={price} onChangeText={setPrice} placeholder="ex. 12,50" keyboardType="decimal-pad" suffix="lei" tone={GROC} />
 
-function Field({
-  label,
-  required,
-  colors,
-  spacing,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  colors: any;
-  spacing: any;
-  children: React.ReactNode;
-}) {
-  return (
-    <View style={{ marginBottom: spacing.lg }}>
-      <Text style={{ marginBottom: spacing.sm, fontSize: 12, fontWeight: "700", color: colors.onSurfaceTertiary }}>
-        {label}
-        {required ? <Text style={{ color: colors.error }}> *</Text> : null}
-      </Text>
-      {children}
-    </View>
+      {successMessage ? <Text style={{ fontSize: 14, fontWeight: "500", color: colors.success }}>{successMessage}</Text> : null}
+      {error ? (
+        <View style={{ padding: spacing.md, borderRadius: radius.control, backgroundColor: `${colors.error}14` }}>
+          <Text style={{ fontSize: 14, color: colors.error }}>{error}</Text>
+        </View>
+      ) : null}
+    </Sheet>
   );
 }

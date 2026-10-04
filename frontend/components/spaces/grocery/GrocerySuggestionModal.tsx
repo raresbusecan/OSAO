@@ -1,8 +1,13 @@
 import React, { useState } from "react";
-import { View, Text, Pressable, Modal, ScrollView, TextInput, StyleSheet } from "react-native";
+import { View, Text, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL } from "@/lib/spaces/spaceProfile";
+import { Sheet } from "@/components/ui/Sheet";
+import { Button } from "@/components/ui/primitives";
+import { PressableScale } from "@/components/ui/PressableScale";
+import { motion } from "@/lib/motion";
+import { roCount } from "@/lib/format";
 
 export type SupplySuggestion = {
   /** The Home supply's own item id -- carried through so the added
@@ -40,75 +45,26 @@ export type GrocerySuggestionModalProps = {
  * is tapped (see handleFinishShopping). Auto-closes once nothing is
  * left to suggest -- see GroceryDashboard's useEffect.
  */
+/** Home supplies probably running low, offered while shopping -- the
+ * shared Sheet, one row per supply with an editable quantity and a "+". */
 export function GrocerySuggestionModal({ visible, suggestions, onAdd, onClose }: GrocerySuggestionModalProps) {
-  const { colors, spacing, radius } = useTheme();
-
+  const { spacing } = useTheme();
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: spacing.xl }}>
-        <Pressable onPress={onClose} style={{ ...StyleSheet.absoluteFill, backgroundColor: "rgba(0,0,0,0.4)" }} />
-
-        <View
-          style={{
-            width: "100%",
-            maxWidth: 380,
-            maxHeight: "80%",
-            borderRadius: radius.lg,
-            backgroundColor: colors.surface,
-            padding: spacing.xl,
-          }}
-        >
-          <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 4 }}>
-            <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-              <View
-                style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: radius.md,
-                  backgroundColor: `${SPACE_IDENTITY_COLORS.grocery}1A`,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
-                <Ionicons name="basket-outline" size={16} color={SPACE_IDENTITY_COLORS.grocery} />
-              </View>
-              <Text style={{ fontSize: 17, fontWeight: "800", color: colors.onSurface }}>Probabil pe terminate</Text>
-            </View>
-
-            <Pressable
-              onPress={onClose}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel="Close"
-              style={{ width: 32, height: 32, borderRadius: radius.pill, backgroundColor: "transparent", borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }}
-            >
-              <Ionicons name="close" size={18} color={colors.onSurfaceTertiary} />
-            </Pressable>
-          </View>
-
-          <Text style={{ fontSize: 12.5, color: colors.onSurfaceTertiary, marginBottom: spacing.lg, lineHeight: 17 }}>
-            Pe baza tiparului tău de cumpărare din Home → Supplies, s-ar putea să ai nevoie de:
-          </Text>
-
-          <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
-            <View style={{ gap: spacing.sm }}>
-              {suggestions.map((s) => (
-                <SuggestionRow key={s.id} suggestion={s} onAdd={onAdd} />
-              ))}
-            </View>
-          </ScrollView>
-
-          <Pressable
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel="Nu acum"
-            style={{ marginTop: spacing.lg, minHeight: 48, borderRadius: radius.sm, borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" }}
-          >
-            <Text style={{ fontSize: 14, fontWeight: "700", color: colors.onSurface }}>Nu acum</Text>
-          </Pressable>
-        </View>
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title="Probabil pe terminate"
+      subtitle="Din ritmul în care cumperi proviziile din Casă"
+      icon="basket-outline"
+      tone={SPACE_IDENTITY_COLORS.grocery}
+      footer={<Button variant="secondary" label="Nu acum" onPress={onClose} />}
+    >
+      <View style={{ gap: spacing.sm }}>
+        {suggestions.map((s) => (
+          <SuggestionRow key={s.id} suggestion={s} onAdd={onAdd} />
+        ))}
       </View>
-    </Modal>
+    </Sheet>
   );
 }
 
@@ -121,6 +77,7 @@ function SuggestionRow({
 }) {
   const { colors, spacing, radius } = useTheme();
   const [quantity, setQuantity] = useState(String(suggestion.defaultQuantity || 1));
+  const GROC = SPACE_IDENTITY_COLORS.grocery!;
 
   const handleAdd = () => {
     const value = Number(quantity.replace(",", "."));
@@ -128,70 +85,33 @@ function SuggestionRow({
   };
 
   return (
-    <View
-      style={{
-        flexDirection: "row",
-        alignItems: "center",
-        gap: spacing.sm,
-        padding: spacing.md,
-        borderRadius: radius.sm,
-        backgroundColor: "transparent",
-        borderWidth: 1,
-        borderColor: colors.border,
-      }}
-    >
+    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.md, borderRadius: radius.control, backgroundColor: colors.surfaceTertiary }}>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontSize: 14.5, fontWeight: "700", color: colors.onSurface }} numberOfLines={1}>
-          {suggestion.name}
-        </Text>
-        <Text style={{ fontSize: 11.5, color: colors.onSurfaceTertiary, marginTop: 2 }}>
-          {suggestion.overdueByDays > 0 ? `Probabil de ~${suggestion.overdueByDays} zile` : "Chiar acum, după tipar"}
+        <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>{suggestion.name}</Text>
+        <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, marginTop: 2 }}>
+          {suggestion.overdueByDays > 0 ? `Probabil de ~${roCount(suggestion.overdueByDays, "zi", "zile")}` : "Cam acum, după ritmul tău"}
         </Text>
       </View>
-
-      <View
-        style={{
-          width: 52,
-          height: 36,
-          borderRadius: radius.sm,
-          backgroundColor: colors.surface,
-          borderWidth: 1,
-          borderColor: colors.border,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
+      <View style={{ flexDirection: "row", alignItems: "center", height: 40, borderRadius: radius.inner, backgroundColor: colors.surfaceSecondary, paddingHorizontal: spacing.sm }}>
         <TextInput
           value={quantity}
           onChangeText={setQuantity}
           keyboardType="decimal-pad"
           textAlign="center"
-          style={[
-            { width: "100%", fontSize: 13.5, fontWeight: "700", color: colors.onSurface, paddingVertical: 0 },
-            { outlineStyle: "none" } as any,
-          ]}
+          accessibilityLabel={`Cantitate ${suggestion.name}`}
+          style={[{ width: 36, fontSize: 15, fontWeight: "600", color: colors.onSurface, paddingVertical: 0 }, { outlineStyle: "none" } as any]}
         />
+        <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }} numberOfLines={1}>{suggestion.unit}</Text>
       </View>
-      <Text style={{ fontSize: 11, color: colors.onSurfaceTertiary, width: 30 }} numberOfLines={1}>
-        {suggestion.unit}
-      </Text>
-
-      <Pressable
+      <PressableScale
         onPress={handleAdd}
-        hitSlop={4}
+        scaleTo={motion.scale.control}
         accessibilityRole="button"
-        accessibilityLabel={`Add ${suggestion.name}`}
-        style={{
-          width: 36,
-          height: 36,
-          borderRadius: radius.pill,
-          backgroundColor: colors.onSurface,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
+        accessibilityLabel={`Adaugă ${suggestion.name}`}
+        style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: GROC, alignItems: "center", justifyContent: "center" }}
       >
-        <Ionicons name="add" size={18} color={colors.surface} />
-      </Pressable>
+        <Ionicons name="add" size={20} color={SPACE_ON_FILL.grocery} />
+      </PressableScale>
     </View>
   );
 }
