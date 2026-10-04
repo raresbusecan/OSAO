@@ -7,7 +7,7 @@ import { api } from "@/lib/api";
 import { REFRESH_EVENT } from "./_layout";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { notifyAction, confirmAction } from "@/lib/confirm";
-import { detectSpaceType, SPACE_IDENTITY_COLORS, CUSTOM_EVENT_COLOR } from "@/lib/spaces/spaceProfile";
+import { detectSpaceType, SPACE_IDENTITY_COLORS, CUSTOM_EVENT_COLOR, spaceTextColor } from "@/lib/spaces/spaceProfile";
 import { Sheet } from "@/components/ui/Sheet";
 import {
   PageTitle, CircleButton, SectionHeader, Group, Row, IconWell, Chip, Pill, Button, Field, ToggleRow, Segmented, EmptyState,
@@ -52,7 +52,7 @@ function agendaSubtitle(item: any): string {
 }
 
 export default function CalendarScreen() {
-  const { colors, spacing, radius } = useTheme();
+  const { colors, spacing, radius, isDark } = useTheme();
   const router = useRouter();
   // Deep-link from TodoCarouselSheet's "Deschide" on a custom_event
   // to-do -- jumps straight to that event's day instead of always
@@ -219,7 +219,9 @@ export default function CalendarScreen() {
           <Group>
             {selectedItems.map((it: any) => {
               const isCustom = !it.space;
-              const overdue = !it.is_projected && selected < todayKey;
+              // A past personal event (last week's birthday) isn't "late" --
+              // only Space items still open after their day are.
+              const overdue = !isCustom && !it.is_projected && selected < todayKey;
               return (
                 <Row
                   key={`${it.id}-${it.due_at}`}
@@ -259,7 +261,7 @@ export default function CalendarScreen() {
                     key={it.id}
                     testID={`recurring-item-${it.id}`}
                     onPress={() => { setY(dueDate.getFullYear()); setM(dueDate.getMonth()); setSelected(ymd(dueDate)); }}
-                    leading={<IconWell icon="repeat" color={color} />}
+                    leading={<IconWell icon="repeat" color={color} tint={spaceTextColor(it.space ? detectSpaceType(it.space, null) : "custom", isDark) ?? color} />}
                     title={it.title}
                     subtitle={capitalize([it.space ? it.space.name : "Personal", freq].join(", "))}
                     trailing={
@@ -296,7 +298,7 @@ export default function CalendarScreen() {
         icon="sparkles-outline"
         tone={CUSTOM_EVENT_COLOR}
         footer={openEvent ? (
-          <Button testID="event-delete" variant="destructive" icon="trash-outline" label="Șterge evenimentul" onPress={() => deleteCustomEvent(openEvent)} />
+          <Button testID="event-delete" variant="ghost" icon="trash-outline" label="Șterge evenimentul" onPress={() => deleteCustomEvent(openEvent)} />
         ) : null}
       >
         {openEvent ? (

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { roDate } from "@/lib/format";
 import { ScrollView, View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
@@ -7,7 +8,7 @@ import { confirmAction, notifyAction } from "@/lib/confirm";
 import { severityColor, type SeverityTier } from "@/lib/statusColors";
 import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
 import { PressableScale } from "@/components/ui/PressableScale";
-import { IconWell } from "@/components/ui/primitives";
+import { IconWell, readableOn } from "@/components/ui/primitives";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 
 import type { HomeData } from "./home.data.types";
@@ -50,7 +51,8 @@ import {
 } from "@/lib/spaces/home/calculations/dashboard.calculations";
 import type { HomeProfile } from "@/lib/spaces/spaceProfile";
 
-type CategoryBadge = { count: number; severity: SeverityTier } | null;
+/** `severity` null = a neutral count (grey) -- red stays reserved for overdue. */
+type CategoryBadge = { count: number; severity: SeverityTier | null } | null;
 /** One dot per urgency tier instead of a single combined number -- per
  * explicit user request, every category tile that has a due-date-based
  * urgency concept (Task-uri/Mentenanță/Recurente -- Cheltuieli has no
@@ -63,25 +65,13 @@ type CategoryBadge = { count: number; severity: SeverityTier } | null;
 type TierDots = { tier: RecurringWarningTier; count: number }[];
 
 /** A small filled count on a category tile -- urgency tier or badge
- * color, with black/white ink picked for contrast (readableTextOn). */
+ * color, with black/white ink picked for contrast (readableOn). */
 function CountDot({ count, color }: { count: number; color: string }) {
   return (
     <View style={{ minWidth: 20, height: 20, paddingHorizontal: 5, borderRadius: 10, backgroundColor: color, alignItems: "center", justifyContent: "center" }}>
-      <Text style={{ fontSize: 11, fontWeight: "600", color: readableTextOn(color) }}>{count}</Text>
+      <Text style={{ fontSize: 11, fontWeight: "600", color: readableOn(color) }}>{count}</Text>
     </View>
   );
-}
-
-/** Black or white, whichever contrasts more with a dot's hex background --
- * a fixed white failed on caution yellow (#FFD600, ~1.4:1) and on dark
- * mode's light-gray "yellow" tier. WCAG relative-luminance formula. */
-function readableTextOn(hex: string): string {
-  const channel = (i: number) => {
-    const c = parseInt(hex.slice(1 + i * 2, 3 + i * 2), 16) / 255;
-    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
-  };
-  const lum = 0.2126 * channel(0) + 0.7152 * channel(1) + 0.0722 * channel(2);
-  return 1.05 / (lum + 0.05) >= (lum + 0.05) / 0.05 ? "#FFFFFF" : "#000000";
 }
 
 export type HomeDashboardProps = {
@@ -208,7 +198,7 @@ export default function HomeDashboard({
   const lowSupplyCount = homeData.supplyEntries.filter(
     (entry) => getSupplyRestockEstimate(entry)?.isLow,
   ).length;
-  const supplyBadge: CategoryBadge = lowSupplyCount > 0 ? { count: lowSupplyCount, severity: "critical" } : null;
+  const supplyBadge: CategoryBadge = lowSupplyCount > 0 ? { count: lowSupplyCount, severity: null } : null;
 
   // Documents deliberately excluded here too -- no tile for it until it
   // has real utility (file upload).
@@ -399,7 +389,7 @@ export default function HomeDashboard({
     });
 
     if (entry.isRecurring) {
-      const label = new Date(nextDue!).toLocaleDateString("ro-RO", { day: "numeric", month: "short" });
+      const label = roDate(nextDue!);
       notifyAction("Bifat", `${entry.title} rămâne activ — următoarea dată: ${label}.`);
     }
   };
@@ -461,7 +451,7 @@ export default function HomeDashboard({
     const resolved = category.resolveEntry(existing);
     const staysActive = !!resolved.nextDueDate;
     const nextDueLabel = staysActive
-      ? new Date(resolved.nextDueDate).toLocaleDateString("ro-RO", { day: "numeric", month: "short", year: "numeric" })
+      ? roDate(resolved.nextDueDate)
       : null;
 
     const confirmed = await confirmAction(
@@ -515,7 +505,7 @@ export default function HomeDashboard({
     });
 
     const label = resolved.nextDueDate
-      ? new Date(resolved.nextDueDate).toLocaleDateString("ro-RO", { day: "numeric", month: "short", year: "numeric" })
+      ? roDate(resolved.nextDueDate)
       : null;
     notifyAction("Rezolvat", label ? `Rămâne activ — următoarea dată: ${label}.` : "Rezolvat.");
     setMaintenanceResolveEntry(null);
@@ -880,7 +870,7 @@ export default function HomeDashboard({
                 <IconWell icon={tile.icon} color={SPACE_IDENTITY_COLORS.home!} tint={homeTint} size={34} />
                 <View style={{ flexDirection: "row", gap: 4 }}>
                   {tile.badge ? (
-                    <CountDot count={tile.badge.count} color={severityColor(tile.badge.severity, colors)} />
+                    <CountDot count={tile.badge.count} color={tile.badge.severity ? severityColor(tile.badge.severity, colors) : colors.surfaceTertiary} />
                   ) : null}
                   {tile.dots.map(({ tier, count }) => (
                     <CountDot key={tier} count={count} color={recurringWarningTierColor(tier, colors)} />

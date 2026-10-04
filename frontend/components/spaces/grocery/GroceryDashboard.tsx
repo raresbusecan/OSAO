@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL } from "@/lib/spaces/spaceProfile";
 import { CircleButton, TopBar, Identity, Button } from "@/components/ui/primitives";
+import { roCount } from "@/lib/format";
 import { confirmAction, notifyAction } from "@/lib/confirm";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/auth";
@@ -832,7 +833,7 @@ export default function GroceryDashboard({
             <Text style={{ fontSize: 14, color: muted }}>
               {otherPeopleCount === 0
                 ? "Doar tu. Invită pe cineva"
-                : `Împărțită cu ${otherPeopleCount} ${otherPeopleCount === 1 ? "persoană" : "persoane"}`}
+                : `Împărțită cu ${roCount(otherPeopleCount, "persoană", "persoane")}`}
             </Text>
           </PressableScale>
         </View>

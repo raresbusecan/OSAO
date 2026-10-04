@@ -7,7 +7,7 @@ import { PressableScale } from "@/components/ui/PressableScale";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { TopBar, Identity, Pill, SectionHeader, Group, Row, IconWell, EmptyState } from "@/components/ui/primitives";
 import { motion } from "@/lib/motion";
-import { lei, roDate } from "@/lib/format";
+import { lei, roCount, roDate } from "@/lib/format";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import type { HomeData } from "./home.data.types";
 import type { HomeProfile } from "@/lib/spaces/spaceProfile";
@@ -225,7 +225,7 @@ export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: Home
       ) : (
         <View style={{ gap: spacing.sm }}>
           <SectionHeader
-            title={`${filteredRecords.length} ${filteredRecords.length === 1 ? "înregistrare" : "înregistrări"}`}
+            title={roCount(filteredRecords.length, "înregistrare", "înregistrări")}
             muted
             action={filteredRecords.length > 8 ? { label: listExpanded ? "Arată mai puțin" : "Arată tot", onPress: () => setListExpanded((v) => !v), testID: "home-spend-show-more" } : undefined}
           />

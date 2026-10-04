@@ -93,6 +93,7 @@ export function HomeSuppliesPage({ homeData, onBack, onAdd, onEdit, onRestock, o
                           scaleTo={motion.scale.control}
                           accessibilityRole="button"
                           accessibilityLabel={`Am cumpărat ${entry.name}`}
+                          hitSlop={{ top: 2, bottom: 2 }}
                           style={{
                             paddingHorizontal: spacing.md,
                             height: 40,

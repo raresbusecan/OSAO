@@ -93,7 +93,7 @@ export function ExpensesDetailPage({ expensesData, onBack, onEntryPress }: Expen
         <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{roCount(filteredEntries.length, "cheltuială", "cheltuieli")}</Text>
       </View>
 
-      <ExpensesListSection entries={filteredEntries} onEntryPress={onEntryPress} />
+      <ExpensesListSection entries={filteredEntries} onEntryPress={onEntryPress} emptyMessage="Nicio cheltuială în perioada asta." />
     </ScrollView>
     </SwipeBackView>
   );

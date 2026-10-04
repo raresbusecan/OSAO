@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { roDate } from "@/lib/format";
 import { View, Text, TextInput, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
@@ -27,7 +28,7 @@ function formatShortDate(iso: string): string {
   const d = new Date(iso);
   const now = new Date();
   if (d.toDateString() === now.toDateString()) return "Azi";
-  return d.toLocaleDateString("ro-RO", { day: "numeric", month: "long" });
+  return roDate(d);
 }
 
 /**
@@ -116,7 +117,7 @@ export function ExpensesAddBar({ onAdd }: ExpensesAddBarProps) {
         onPress={() => setExpanded((v) => !v)}
         accessibilityRole="button"
         accessibilityState={{ expanded }}
-        style={{ flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", minHeight: 40 }}
+        style={{ flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", minHeight: 44 }}
       >
         <Ionicons name={expanded ? "remove" : "add"} size={15} color={colors.onSurfaceTertiary} />
         <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>{expanded ? "Ascunde detaliile" : "Dată sau notă"}</Text>

@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { roDate } from "@/lib/format";
 import { confirmAction } from "@/lib/confirm";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
@@ -17,7 +18,7 @@ function formatShortDate(iso: string): string {
   const d = new Date(iso);
   const now = new Date();
   if (d.toDateString() === now.toDateString()) return "Azi";
-  return d.toLocaleDateString("ro-RO", { day: "numeric", month: "long", year: "numeric" });
+  return roDate(d);
 }
 
 /**

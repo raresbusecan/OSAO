@@ -15,6 +15,16 @@ import { PressableScale } from "./PressableScale";
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
+/**
+ * Which layer the current subtree sits on, so a Group/Row/Segmented can
+ * step one layer up from it: on the page they're cards (surfaceSecondary);
+ * inside a Sheet -- itself surfaceSecondary -- they'd vanish, so they
+ * become surfaceTertiary; inside a ToggleRow (tertiary) a Segmented's
+ * track goes back to the darker track tone. Sheet and ToggleRow provide it.
+ */
+export type SurfaceLevel = "page" | "card" | "raised";
+export const SurfaceLevelContext = React.createContext<SurfaceLevel>("page");
+
 const hexToRgba = (hex: string, alpha: number) => {
   const h = hex.replace("#", "");
   const r = parseInt(h.slice(0, 2), 16);
@@ -154,9 +164,10 @@ export function Card({ children, style, padded = true }: { children: React.React
  * text-only row, 68 after a 40px icon well, 54 after a checkbox. */
 export function Group({ children, style, inset = 16 }: { children: React.ReactNode; style?: StyleProp<ViewStyle>; inset?: number }) {
   const { colors, radius } = useTheme();
+  const level = React.useContext(SurfaceLevelContext);
   const items = React.Children.toArray(children).filter(Boolean);
   return (
-    <View style={[{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card, overflow: "hidden" }, style]}>
+    <View style={[{ backgroundColor: level === "card" ? colors.surfaceTertiary : colors.surfaceSecondary, borderRadius: radius.card, overflow: "hidden" }, style]}>
       {items.map((child, i) => (
         <View key={i}>
           {i > 0 ? <View style={{ height: 1, marginLeft: inset, backgroundColor: colors.border }} /> : null}
@@ -203,6 +214,7 @@ export function Row({
   dim?: boolean;
 }) {
   const { colors, spacing } = useTheme();
+  const onCard = React.useContext(SurfaceLevelContext) === "card";
   const content = (
     <>
       {leading}
@@ -229,7 +241,7 @@ export function Row({
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
     minHeight: 58,
-    backgroundColor: colors.surfaceSecondary,
+    backgroundColor: onCard ? colors.surfaceTertiary : colors.surfaceSecondary,
   };
   if (!onPress && !onLongPress) return <View testID={testID} style={style}>{content}</View>;
   return (
@@ -238,7 +250,7 @@ export function Row({
       onPress={onPress}
       onLongPress={onLongPress}
       scaleTo={1}
-      pressedStyle={{ backgroundColor: colors.surfaceTertiary }}
+      pressedStyle={{ backgroundColor: onCard ? colors.segmentActive : colors.surfaceTertiary }}
       accessibilityRole="button"
       accessibilityLabel={title}
       style={style}
@@ -331,8 +343,9 @@ export function Segmented<K extends string>({
   testIDPrefix?: string;
 }) {
   const { colors, radius } = useTheme();
+  const level = React.useContext(SurfaceLevelContext);
   return (
-    <View style={{ flexDirection: "row", gap: 4, backgroundColor: colors.segmentTrack, borderRadius: radius.md, padding: 4 }}>
+    <View style={{ flexDirection: "row", gap: 4, backgroundColor: level === "card" ? colors.surfaceTertiary : colors.segmentTrack, borderRadius: radius.md, padding: 4 }}>
       {options.map((o) => {
         const on = o.key === value;
         return (
@@ -606,7 +619,11 @@ export function ToggleRow({
           <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#FFFFFF" }} />
         </View>
       </Pressable>
-      {value && children ? <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md }}>{children}</View> : null}
+      {value && children ? (
+        <SurfaceLevelContext.Provider value="raised">
+          <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md }}>{children}</View>
+        </SurfaceLevelContext.Provider>
+      ) : null}
     </View>
   );
 }

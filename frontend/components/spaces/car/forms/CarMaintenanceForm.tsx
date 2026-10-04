@@ -390,7 +390,7 @@ export default function CarMaintenanceForm({
                   paddingHorizontal: spacing.md + 2,
                   minHeight: 40,
                   borderRadius: radius.pill,
-                  backgroundColor: selected ? CAR : colors.surfaceTertiary,
+                  backgroundColor: selected ? SPACE_BUTTON_FILL.car : colors.surfaceTertiary,
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 6,
@@ -458,8 +458,7 @@ export default function CarMaintenanceForm({
             <Text
               style={{
                 marginBottom: spacing.sm,
-                fontSize: 12,
-                fontWeight: "700",
+                fontSize: 13,
                 color: colors.onSurfaceTertiary,
               }}
             >

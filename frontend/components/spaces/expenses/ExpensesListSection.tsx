@@ -10,11 +10,14 @@ import { capitalize, lei, roDate } from "@/lib/format";
 export type ExpensesListSectionProps = {
   entries: ExpenseEntry[];
   onEntryPress?: (entry: ExpenseEntry) => void;
+  /** Empty-state line -- the dashboard points at its add bar; a filtered
+   * page (no add bar) says the period is empty instead. */
+  emptyMessage?: string;
 };
 
 /** Every expense, newest first, grouped by month ("Octombrie"), each
  * month on its own card with its own total. */
-export function ExpensesListSection({ entries, onEntryPress }: ExpensesListSectionProps) {
+export function ExpensesListSection({ entries, onEntryPress, emptyMessage }: ExpensesListSectionProps) {
   const { colors, spacing, isDark } = useTheme();
   const tint = spaceTextColor("expenses", isDark) ?? SPACE_IDENTITY_COLORS.expenses!;
 
@@ -37,7 +40,7 @@ export function ExpensesListSection({ entries, onEntryPress }: ExpensesListSecti
   }, [entries]);
 
   if (entries.length === 0) {
-    return <EmptyState icon="receipt-outline" title="Nicio cheltuială încă" message="Scrie mai sus ce ai cumpărat și cât a costat." />;
+    return <EmptyState icon="receipt-outline" title="Nicio cheltuială încă" message={emptyMessage ?? "Scrie mai sus ce ai cumpărat și cât a costat."} />;
   }
 
   return (

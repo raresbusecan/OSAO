@@ -78,7 +78,7 @@ file storage yet).
   recurring/supplies-adjacent). `initialEditId` prop pre-opens a row
   for edit (used by the deep-link).
 - `HomeTasksPage.tsx`, `HomeTaskResolveSheet.tsx`,
-  `HomeTaskArchivePage.tsx`, `HomeRecurringWarningsPage.tsx`,
+  `HomeArchivePage.tsx`, `HomeRecurringWarningsPage.tsx`,
   `HomeRestanteCard.tsx` (main-page Restanțe summary, opens the
   warnings page),
   `HomeSuppliesPage.tsx`, `HomeSupplyRestockSheet.tsx`,
@@ -87,7 +87,9 @@ file storage yet).
 - `forms/HomeTaskForm.tsx`, `HomeSupplyForm.tsx`.
 - `lib/spaces/home/homeItems.ts`, `lib/spaces/home/calculations/`.
 - Dead: `index.ts` (barrel — re-exports mostly-live components, delete
-  only the barrel).
+  only the barrel); `HomeTaskArchivePage.tsx` and
+  `HomeMaintenanceArchivePage.tsx` (superseded by `HomeArchivePage.tsx`,
+  zero importers, still pre-redesign styling).
 
 **Grocery** (`components/spaces/grocery/`) — lists, smart list,
 recipes, sharing.

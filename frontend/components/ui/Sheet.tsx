@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { useReducedMotion } from "@/lib/motion";
-import { CircleButton } from "./primitives";
+import { CircleButton, readableOn, SurfaceLevelContext } from "./primitives";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 const DISMISS_DISTANCE = 120;
@@ -124,7 +124,7 @@ function SheetBody({ onClose, title, subtitle, icon, tone, footer, children, hid
                 <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
                   {icon ? (
                     <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: tone ?? colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}>
-                      <Ionicons name={icon} size={19} color={tone ? "#FFFFFF" : colors.onSurface} />
+                      <Ionicons name={icon} size={19} color={tone ? readableOn(tone) : colors.onSurface} />
                     </View>
                   ) : null}
                   <View style={{ flex: 1 }}>
@@ -144,7 +144,7 @@ function SheetBody({ onClose, title, subtitle, icon, tone, footer, children, hid
           contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.sm, paddingBottom: footer ? spacing.md : spacing.sm, gap: spacing.lg }}
           style={{ flexGrow: 0 }}
         >
-          {children}
+          <SurfaceLevelContext.Provider value="card">{children}</SurfaceLevelContext.Provider>
         </ScrollView>
         {footer ? <View style={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.sm, gap: spacing.sm }}>{footer}</View> : null}
       </Animated.View>

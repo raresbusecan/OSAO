@@ -3,7 +3,7 @@ import { View, Text, ScrollView, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
-import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL } from "@/lib/spaces/spaceProfile";
+import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
 import { Sheet } from "@/components/ui/Sheet";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { TopBar, Identity, Segmented, Pill, SectionHeader, Button, EmptyState } from "@/components/ui/primitives";
@@ -457,7 +457,7 @@ export function GroceryRecipesPage({
                   <Pressable
                     testID={`grocery-recipes-delete-${list.id}`}
                     onPress={() => onDeleteList(list)}
-                    hitSlop={{ top: 10, bottom: 10, right: 10, left: 4 }}
+                    hitSlop={{ top: 10, bottom: 10, right: 10, left: 10 }}
                     accessibilityRole="button"
                     accessibilityLabel={`Șterge lista ${list.name}`}
                     style={{ width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(26,18,6,0.12)" }}
@@ -493,6 +493,7 @@ export function GroceryRecipesPage({
                 testID="grocery-recipes-add-selected"
                 icon="cart-outline"
                 label={`Pune pe listă (${selectedRecipeIds.size})`}
+                tone={SPACE_BUTTON_FILL.grocery}
                 onPress={handleAddSelectedRecipes}
                 disabled={!targetListId}
               />

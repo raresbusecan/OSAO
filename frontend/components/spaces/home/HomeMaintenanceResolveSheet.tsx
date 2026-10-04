@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { roDate } from "@/lib/format";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
 import { Sheet } from "@/components/ui/Sheet";
@@ -39,11 +40,7 @@ export function HomeMaintenanceResolveSheet({ entry, onCancel, onResolve }: Home
     entry.recurrenceFrequency ?? "monthly",
     entry.recurrenceInterval ?? 1,
   );
-  const nextDueLabel = new Date(nextDueDate).toLocaleDateString("ro-RO", {
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  const nextDueLabel = roDate(nextDueDate);
 
   const handleResolve = () => {
     if (!price.trim()) {

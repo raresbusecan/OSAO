@@ -169,7 +169,7 @@ export default function Spaces() {
 
   const confirmDeleteSpace = async (spaceItem: any) => {
     const confirmed = await confirmAction(
-      `Ștergi „${spaceItem.name}"?`,
+      `Ștergi „${spaceItem.name}”?`,
       "Tot ce e în el se șterge definitiv și nu se poate anula.",
       { confirmLabel: "Șterge", destructive: true },
     );

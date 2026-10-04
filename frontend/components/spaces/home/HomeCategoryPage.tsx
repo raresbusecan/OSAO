@@ -9,8 +9,8 @@ import { HomeDatePickerSheet } from "./HomeDatePickerSheet";
 import { confirmAction } from "@/lib/confirm";
 import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
 import { Sheet } from "@/components/ui/Sheet";
-import { TopBar, CircleButton, Identity, Field, FieldButton, Segmented, Button } from "@/components/ui/primitives";
-import { roDate } from "@/lib/format";
+import { TopBar, CircleButton, Identity, Field, FieldButton, Segmented, Button, ToggleRow } from "@/components/ui/primitives";
+import { roCount, roDate } from "@/lib/format";
 import type { HomeIcon } from "./home.ui.types";
 
 const HOME = SPACE_IDENTITY_COLORS.home!;
@@ -162,7 +162,7 @@ export function HomeCategoryPage({
         <CircleButton testID="category-add-row" icon="add" label={submitLabel} tone={HOME} onPress={() => setFormExpanded(true)} />
       </TopBar>
 
-      <Identity color={HOME} kicker="Casă" title={title} subtitle={rows.length > 0 ? `${rows.length} ${rows.length === 1 ? "înregistrare" : "înregistrări"}` : null} />
+      <Identity color={HOME} kicker="Casă" title={title} subtitle={rows.length > 0 ? roCount(rows.length, "înregistrare", "înregistrări") : null} />
 
       <HomeCategorySection
         title="Toate"
@@ -247,29 +247,14 @@ function CategoryField({
   const label = optional && field.type !== "toggle" ? `${field.label} (opțional)` : field.label;
 
   if (field.type === "toggle") {
-    const on = value === "true";
     return (
-      <Pressable
+      <ToggleRow
         testID={`category-field-${field.key}`}
-        onPress={() => onChange(on ? "false" : "true")}
-        accessibilityRole="switch"
-        accessibilityState={{ checked: on }}
-        accessibilityLabel={field.label}
-        style={{
-          minHeight: 52,
-          paddingHorizontal: spacing.lg,
-          borderRadius: radius.control,
-          backgroundColor: colors.surfaceTertiary,
-          flexDirection: "row",
-          alignItems: "center",
-          justifyContent: "space-between",
-        }}
-      >
-        <Text style={{ fontSize: 15, color: colors.onSurface }}>{field.label}</Text>
-        <View style={{ width: 46, height: 28, borderRadius: 14, padding: 3, backgroundColor: on ? HOME : colors.control, alignItems: on ? "flex-end" : "flex-start" }}>
-          <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: "#FFFFFF" }} />
-        </View>
-      </Pressable>
+        label={field.label}
+        value={value === "true"}
+        onChange={(next) => onChange(next ? "true" : "false")}
+        tone={HOME}
+      />
     );
   }
 

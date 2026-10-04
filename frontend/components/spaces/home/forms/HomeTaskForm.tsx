@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { Text } from "react-native";
+import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
 import { confirmAction } from "@/lib/confirm";
 import { Sheet } from "@/components/ui/Sheet";
@@ -29,6 +31,7 @@ type HomeTaskFormProps = {
 export default function HomeTaskForm({ onCancel, onSave, entry, onDelete }: HomeTaskFormProps) {
   const isEditing = entry !== undefined;
 
+  const { colors } = useTheme();
   const [title, setTitle] = useState(entry?.title ?? "");
   const [dueDate, setDueDate] = useState<string | undefined>(entry?.dueDate);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
@@ -136,6 +139,7 @@ export default function HomeTaskForm({ onCancel, onSave, entry, onDelete }: Home
             if (error) setError("");
           }}
         />
+        {error && title.trim() ? <Text style={{ marginTop: 6, fontSize: 13, color: colors.error }}>{error}</Text> : null}
       </ToggleRow>
 
       <Field
@@ -145,7 +149,6 @@ export default function HomeTaskForm({ onCancel, onSave, entry, onDelete }: Home
         placeholder="Orice detaliu util"
         multiline
         tone={HOME}
-        error={error && title.trim() ? error : null}
       />
 
       {datePickerVisible ? (
