@@ -328,9 +328,9 @@ export default function HomeDashboard({
     if (!decoded) return;
 
     const confirmed = await confirmAction(
-      "Delete entry",
-      "Are you sure you want to delete this? This can't be undone.",
-      { confirmLabel: "Delete", destructive: true },
+      "Ștergi intrarea?",
+      "Se șterge definitiv.",
+      { confirmLabel: "Șterge", destructive: true },
     );
     if (!confirmed) return;
     deleteHandlers[decoded.categoryKey](decoded.entryId);
@@ -353,9 +353,9 @@ export default function HomeDashboard({
   // same permanent delete without going through that form first.
   const handleTaskRowDelete = async (entry: HomeTaskEntry) => {
     const confirmed = await confirmAction(
-      "Delete task",
-      "This entry will be permanently deleted.",
-      { confirmLabel: "Delete", destructive: true },
+      "Ștergi sarcina?",
+      `„${entry.title}” se șterge definitiv.`,
+      { confirmLabel: "Șterge", destructive: true },
     );
     if (!confirmed) return;
     onTaskDelete(entry.id);
@@ -579,9 +579,9 @@ export default function HomeDashboard({
   // handleSupplyFormDelete, which confirms inside the form itself).
   const handleSupplyRowDelete = async (entry: HomeSupplyEntry) => {
     const confirmed = await confirmAction(
-      "Delete entry",
-      "This entry will be permanently deleted.",
-      { confirmLabel: "Delete", destructive: true },
+      "Ștergi produsul?",
+      `„${entry.name}” se șterge definitiv din provizii.`,
+      { confirmLabel: "Șterge", destructive: true },
     );
     if (!confirmed) return;
     onSupplyDelete(entry.id);

@@ -1068,9 +1068,9 @@ export default function SpaceDetail() {
     // called from anywhere (see the comment above this function) --
     // fixed in place so it's correct whenever it does get wired up.
     const confirmed = await confirmAction(
-      "Delete space",
-      `Are you sure you want to delete "${space?.name || "this space"}"?`,
-      { confirmLabel: "Delete", destructive: true },
+      "Ștergi spațiul?",
+      `„${space?.name || "Spațiul"}” și tot ce e în el se șterg definitiv.`,
+      { confirmLabel: "Șterge", destructive: true },
     );
     if (!confirmed) return;
 
@@ -1078,7 +1078,7 @@ export default function SpaceDetail() {
       await api.deleteSpace(id);
       router.back();
     } catch (error: any) {
-      notifyAction("Could not delete space", error?.message || "Something went wrong.");
+      notifyAction("Nu am putut șterge spațiul", error?.message || "A apărut o eroare.");
     }
   }, [id, router, space]);
 
