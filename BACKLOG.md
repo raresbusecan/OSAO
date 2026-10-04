@@ -4,6 +4,107 @@ Small, non-urgent tasks to pick up later. Not ordered by priority unless
 noted — just a running list so ideas don't get lost mid-session. Add new
 ones under "Open", move finished ones to "Done" with the date.
 
+## Prioritized queue -- redesign + seeded-account verification (2026-10-04)
+
+One task per entry, ordered by severity: P1 = shows the user wrong data,
+P2 = needs the user's decision on a definition before coding, P3 =
+visual/UX polish. Work top-down. All found on branch `feat/redesign`
+with the seeded account (user 4), checked against the DB. Each is
+`[from: seeded-account design + data verification, feat/redesign]`
+unless noted.
+
+### P1-1 · Two status vocabularies for "resolved" (`done` vs `completed`)
+
+Home space writes and reads `status: "done"` (`frontend/lib/spaces/home/homeItems.ts:118,144,266,286`); Dashboard/Calendar/Budget only exclude `completed`/`archived` (`DashboardController.php:58,73`, `CalendarController.php:81,112`, `BudgetController.php:81,354`). Effects: a finished Casă task (item 640 "Test") shows on Acasă as "Restant 12 zile"; a task ticked ✓ in "De făcut" (`TodoCarouselSheet.tsx:93`, writes `completed`) stays open inside Casă. Fix: pick one value (likely `completed`), migrate existing `done` rows, update both mappers, and have the backend treat the other value as resolved during the transition.
+
+### P1-2 · Acasă / "De făcut" classify days in UTC
+
+`DashboardController` builds `$now` in the user's timezone but tests `$item->due_at->isToday()` / `lt($now)` on a UTC-tagged date. A task due today (local) lands in "Restante", tomorrow's in "Azi" -- Calendar and Casă classify the same items correctly. Fix: convert `due_at` to `$now`'s timezone before `isToday()`/comparisons (same pattern CalendarController uses).
+
+### P1-3 · "De făcut" ✓ bypasses Home's own resolve flow
+
+`TodoCarouselSheet.tsx:139-150` resolves with a bare `status: completed` (one tap, no confirm, no undo). For `home_task`/`home_recurring` that skips Home's price sheet and the next-date advance, so a recurring task/bill is closed for good instead of rolling forward. Pre-existing (the old carousel did the same). Fix: route each type through its own resolve logic, or open the Space's resolve sheet; add undo.
+
+### P1-4 · Car document expiry computed at 23:59 UTC
+
+`Item::effectiveDueAt()` returns `Carbon::createFromFormat('d.m.Y', $expiry)->endOfDay()` in UTC = 02:59 the next day in Bucharest. RCA reads "în 6 zile" on Mașină but "în 7 zile" in "De făcut". Fix: build the date in the user's timezone (or compare date-only).
+
+### P1-5 · Decimal amounts arrive as strings and render unformatted
+
+API decimals come back as `"450.00"`; `lei()` (`frontend/lib/format.ts:24`) calls `toLocaleString` on the string and returns it unchanged -> "450.00 lei din 1500.00 lei" (Economii on Acasă `home.tsx:354-355` and Buget). Fix: `Number(n)` inside `lei()`/`roNumber()`; audit other raw-API amounts.
+
+### P1-6 · "De făcut" group headers and row chips disagree
+
+Groups come from the server (UTC, see P1-2), row chips from the client (`TodoCarouselSheet.tsx` `daysFromToday`), and `daysUntil` in `dashboard.calculations.ts:27` uses `Math.ceil` on milliseconds. Under "Restante" a row says "Azi"; under "Azi" rows say "Mâine". Fix: one local-calendar-day helper feeding headers, chips and every "în N zile" label; rows under "Azi" drop the redundant chip.
+
+### P2-1 · Decide: what "Cheltuit" means (Acasă 0 lei vs Buget 725 lei)
+
+Buget counts Casă's scheduled `home_recurring` bills as their monthly-equivalent (725 lei = 45 weekly + 80 + 150 + 100 + 200 monthly) inside "Cheltuit"; Acasă and Casă count only paid records (0 lei in October). Proposal (design-lead): "Cheltuit" = paid only, everywhere; scheduled = "de plătit" -> Buget hero `0 lei · din 14.670 lei` + `+ 725 lei de plătit (plăți recurente)`; Casă row `0 / 140 lei` with a warning note `725 lei de plătit vor depăși bugetul cu 585 lei`.
+
+### P2-2 · Decide: how an unpaid recurring bill is shown
+
+A monthly bill unpaid since 28 Sep is "Restant 5 zile" in Casă, "următoarea pe 28 octombrie" in Calendar/Buget, and absent from Acasă (Dashboard/Calendar project to the next occurrence). Proposal: an occurrence doesn't advance until paid; every screen shows the oldest unpaid date (Casă `Restant 5 zile`; Calendar/Acasă red `Restantă · 28 sept.`; Buget `Lunar · restantă din 28 septembrie`; listed in Acasă "De făcut").
+
+### P2-3 · Decide: one count per Space for "what's due" (Casă shows 10 / 11 / 13)
+
+Tiles on Acasă/Spații say "10 de făcut" (Dashboard rules), Casă hero "Urmează 11", Casă card "Restanțe (13)" -- the card also counts items due in 2 and 4 days. Proposal: "Restant" = due before today (local) and unresolved, nothing else; tiles show the most severe tier (`9 restante` / `2 azi` / `La zi`); Casă card renamed `Scadențe (13)` with columns `9 Restante · 1 Azi · 2 1-2 zile · 1 3-4 zile`; page title `Scadențe`; hero stat becomes tappable `Restante 9`. Also align which types count server- and client-side (Dashboard excludes one-off `home_maintenance` and `home_document`, Casă includes them).
+
+### P2-4 · Decide: what belongs in "Plăți recurente"
+
+Acasă, Calendar and Buget list recurring TASKS without an amount ("[SEED] Due in 2 days, recurring") under "Plăți recurente". Proposal: only recurring items with amount > 0; recurring tasks stay in "De făcut"/agenda. Same row everywhere: IconWell repeat in the Space color, subtitle `{Spațiu} · {Frecvență}`, trailing amount over short date. Calendar: limit to the visible month (`Plăți recurente în octombrie` + month total).
+
+### P2-5 · Decide: count km-overdue car maintenance as "de făcut"
+
+Mașină shows "Schimb ulei · Depășit cu 500 km" but BMW's tile says "1 de făcut" (only RCA) and it's absent from "De făcut". Proposal: count it, sort first under Restante, same chip `Depășit cu 500 km` everywhere. Needs backend support (km-based items aren't date-based).
+
+### P2-6 · Decide: Grocery tile says "La zi" with 19 items to buy
+
+Proposal: `19 de cumpărat`. Needs a per-space summary field from the backend.
+
+### P2-7 · Decide: "Task" / "Task-uri" wording
+
+English loanword against the Romanian-only rule (`HomeRecurringWarningsPage.tsx:38`, `HomeDashboard.tsx:210`, `HomeTasksPage.tsx:90`, `HomeArchivePage.tsx:33`, `spaces.tsx:43`). design-lead suggests "Sarcini".
+
+### P2-8 · Decide: three mockup deviations from the first design pass
+
+(a) Casă tile order: board has Task-uri first plus a dashed "Adaugă" tile (new entry point); (b) "Fără cost" button on the maintenance resolve sheet; (c) Rețete grid hidden behind "Arată N rețete" + two-level filter, board shows the grid immediately. `[from: design verify of feat/redesign 8cf9a2e..HEAD]`
+
+### P3-1 · "De făcut" sheet rows are cramped
+
+Chip + 40px check button take ~half the row (`TodoCarouselSheet.tsx:134-151`); titles wrap, 11 items ≈ 2.5 screens. Move status into the subtitle (`Mogosesti · Restant 12 zile`, status part colored); `Row` (`primitives.tsx:205`) needs `subtitle?: string | ReactNode`.
+
+### P3-2 · Casă "Urmează" wording and overlap
+
+`HomeNextSection.tsx:38` / `dashboard.calculations.ts:36,40`: `restant de N zile` -> `Restant N zile`, `a expirat acum N zile` -> `Expirat de N zile` (also fixes the two-line wrap). After P2-3, "Urmează" should only hold documents and items outside the 4-day window -- never what the Scadențe card already counts.
+
+### P3-3 · Restanțe card vs page tier labels
+
+Card says "2 zile"/"4 zile" (`HomeRestanteCard.tsx:23-24`), page says "În 1-2 zile"/"În 3-4 zile". Card -> `1-2 zile` / `3-4 zile`.
+
+### P3-4 · Buget space rows stack up to 4 notes
+
+`budget.tsx:243-248`: show at most 2 notes, one line each (`Cea mai mare în sept.: {titlu}, {sumă}`, title cut ~18 chars).
+
+### P3-5 · Cumpărături row details
+
+(a) Adder's avatar on every row of a solo list (`GroceryDashboard.tsx:939`) -- only when `otherPeopleCount > 0` and the adder isn't you; (b) "5 pcs" / "5" / "1" (`GroceryItemRow.tsx:128`) -> display `buc.`; (c) "Estimat 10 lei" from 2 of 19 priced items (`:907`) -> `Estimat 10 lei · 2 din 19 cu preț`.
+
+### P3-6 · RingProgress web warning "Invalid DOM property transform-origin"
+
+`RingProgress.tsx:52-53,113-114`: replace `rotation="-90" origin=…` with `transform={\`rotate(-90 ${center} ${center})\`}`. Shows as a red dev toast on Buget (web only).
+
+### P3-7 · Car forms take typed dates
+
+`CarFuelForm:228`, `CarExpenseForm:144`, `CarDocumentForm:203/206`, `CarMaintenanceForm:427` use free text "ZZ.LL.AAAA"; every other form uses a picker. Swap to FieldButton + one shared date sheet (merge `HomeDatePickerSheet` and `ExpenseDatePickerSheet`). `[from: design verify of feat/redesign 8cf9a2e..HEAD]`
+
+### P3-8 · Acasă "De făcut" reads as a wall of red; date format rule
+
+Header total `De făcut (11) · 9 restante`; dates short (`5 oct.`) in trailing columns, long (`5 octombrie`) in subtitles -- Acasă bill rows break this.
+
+### P3-9 · Design-system suggestions (no defect)
+
+`Disclosure` primitive for the three hand-rolled "Mai multe detalii" toggles (and use it in HomeTaskForm/ExpenseEditModal/CarMaintenanceForm); one period selector across the three Cheltuieli pages; resolve-sheet copy (entry name as title, "Marchezi ca rezolvat" as subtitle); maintenance interval as a Field with the unit as suffix; undo toast instead of confirm for resolve/delete. `[from: design verify of feat/redesign 8cf9a2e..HEAD]`
+
 ## Found along the way (not yet fixed)
 
 Things noticed while working on something else — not the task at hand,
@@ -16,10 +117,6 @@ found.
 ### Redesign follow-ups needing a decision or a device (2026-10-04)
 
 From design-lead's verification of the redesign (phase 0-1), not done because they change behavior or need a real phone: (C) pin Grocery's quick-add bar above the tab bar with keyboard avoidance -- on a 20-item list it's off-screen today (departs from the mockup); (D) `Haptics.selectionAsync()` on ticking a grocery item (expo-haptics is installed, works in Expo Go) -- a new feedback channel; (E) Home tab's space tiles say "La zi" when there are no to-dos/spend -- per-type figures (km, restanțe, "de luat") need backend summary fields. Device checks: the native font shim (lib/globalFont.native.ts) -- Plex actually applied, nested `<Text>` inheriting its parent's weight; the tab bar keeping "Spații" lit inside a Space. Done in the same pass (no decision needed): sign-out moved from Home's header into Settings behind a confirmation (matches the approved Settings mockup), Grocery "Golește" relabelled "Debifează tot". `[from: design verify of feat/redesign phase 0-1]`
-
-### Redesign phase 2+ design-verify leftovers (2026-10-04)
-
-design-lead's review of `8cf9a2e..HEAD` -- the clear defects were fixed in the same pass (sheet icon contrast, maintenance chips, task-form error placement, grey Provizii badge, past personal events not "Restant", calendar icon tint, expenses filtered empty state, touch targets, roCount/roDate/ToggleRow reuse, raised Group/Row/Segmented inside sheets via `SurfaceLevelContext`, grocery button tone, quote, readableOn reuse, dead archive pages documented). Still open: (1) "De făcut" sheet resolves `home_task`/`home_recurring` with a bare `status: completed` -- no price sheet, no next-date advance, no undo (pre-existing: the old carousel did the same); frontend-lead should route it through Home's own resolve flow. (2) Car forms take dates as typed "ZZ.LL.AAAA" (`CarFuelForm`, `CarExpenseForm`, `CarDocumentForm`, `CarMaintenanceForm`) while every other form uses a picker sheet -- swap to FieldButton + a shared date sheet (merge `HomeDatePickerSheet`/`ExpenseDatePickerSheet`). (3) Decisions for the user: Casă tile order + dashed "Adaugă" tile from the board; "Fără cost" on the maintenance resolve sheet; Rețete grid hidden behind "Arată N rețete". (4) Suggestions: a `Disclosure` primitive for the three "Mai multe detalii" toggles; one period selector across the three Cheltuieli pages; resolve-sheet copy (entry name as title); maintenance interval as a Field with the unit as suffix; undo toast instead of confirm for resolve/delete. `[from: design verify of feat/redesign 8cf9a2e..HEAD]`
 
 ### Backend validation/auth messages are still English (2026-10-04)
 
