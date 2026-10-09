@@ -42,6 +42,39 @@ class AppServiceProvider extends ServiceProvider
             return Limit::perMinute(10)->by($request->ip());
         });
 
+        // POST /api/auth/apple/nonce -- issued once per Apple sign-in
+        // attempt. Own bucket (not 'auth'), so a nonce fetch doesn't eat
+        // the 5/min login budget; still capped per IP.
+        RateLimiter::for('apple-nonce', function ($request) {
+            return Limit::perMinute(20)->by($request->ip());
+        });
+
+        // GET /open/{screen} (routes/web.php) -- the public landing page
+        // for auth-email links. Cheap and harmless, but unauthenticated,
+        // so still capped per IP.
+        RateLimiter::for('open-link', function ($request) {
+            return Limit::perMinute(30)->by($request->ip());
+        });
+
+        // POST /email/verification-notification (resend the registration
+        // verification email) -- per user, 1/min + 6/hour, so the
+        // "Retrimite emailul" button can't be used to spam an inbox (or
+        // burn the SMTP provider's 300/day free quota). The 429 body is
+        // Romanian and carries retry_after (seconds) so the frontend can
+        // show a cooldown; the Retry-After header is set too.
+        RateLimiter::for('verification-notification', function ($request) {
+            $key = 'verify-resend:' . ($request->user()?->id ?: $request->ip());
+            $respond = fn ($request, array $headers) => response()->json([
+                'message' => 'Ai cerut deja un email de confirmare. Mai încearcă peste puțin timp.',
+                'retry_after' => (int) ($headers['Retry-After'] ?? 60),
+            ], 429, $headers);
+
+            return [
+                Limit::perMinute(1)->by($key . ':m')->response($respond),
+                Limit::perHour(6)->by($key . ':h')->response($respond),
+            ];
+        });
+
         // Everything behind auth:sanctum -- a much looser cap than 'auth'
         // above, since a normal session fires several requests on every
         // screen open (Dashboard/Budget/Calendar all load together). This

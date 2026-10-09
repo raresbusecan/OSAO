@@ -89,7 +89,7 @@ import {
 } from "@/lib/spaces/car/calculations/dashboard.calculations";
 
 export default function SpaceDetail() {
-  const { id, itemId, itemType } = useLocalSearchParams<{ id: string; itemId?: string; itemType?: string }>();
+  const { id, itemId, itemType, action } = useLocalSearchParams<{ id: string; itemId?: string; itemType?: string; action?: string }>();
 
   const { colors } = useTheme();
   const router = useRouter();
@@ -97,6 +97,9 @@ export default function SpaceDetail() {
   const [carData, setCarData] = useState<CarData>(initialCarData);
   const [homeData, setHomeData] = useState<HomeData>(initialHomeData);
   const [expensesData, setExpensesData] = useState<ExpensesData>(initialExpensesData);
+  // Calendar purchases the Cheltuieli space lists read-only (spent and,
+  // this month, planned) -- see api.calendarPurchases.
+  const [calendarPurchases, setCalendarPurchases] = useState<ExpenseEntry[]>([]);
   const [space, setSpace] = useState<any>(null);
   const [profile, setProfile] = useState<SpaceProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -136,6 +139,7 @@ export default function SpaceDetail() {
     setCarData(initialCarData);
     setHomeData(initialHomeData);
     setExpensesData(initialExpensesData);
+    setCalendarPurchases([]);
   }
 
   /*
@@ -783,7 +787,7 @@ export default function SpaceDetail() {
           ? current.taskEntries.map((e) => (e.id === entry.id ? previous! : e))
           : current.taskEntries.filter((e) => e.id !== entry.id),
       }));
-      notifyAction("Nu am putut salva task-ul", error?.message || "A apărut o eroare.");
+      notifyAction("Nu am putut salva sarcina", error?.message || "A apărut o eroare.");
     }
   };
 
@@ -800,7 +804,7 @@ export default function SpaceDetail() {
       if (removed) {
         setHomeData((current) => ({ ...current, taskEntries: [removed, ...current.taskEntries] }));
       }
-      notifyAction("Nu am putut șterge task-ul", error?.message || "A apărut o eroare.");
+      notifyAction("Nu am putut șterge sarcina", error?.message || "A apărut o eroare.");
     }
   };
 
@@ -897,6 +901,21 @@ export default function SpaceDetail() {
           setExpensesData({ entries });
         } catch (error) {
           console.error("[EXPENSES ITEMS] failed to load:", error);
+        }
+        try {
+          const r = await api.calendarPurchases();
+          setCalendarPurchases(
+            (r.purchases || []).map((p) => ({
+              id: `ev-${p.id}-${p.due_at.slice(0, 10)}`,
+              name: p.title,
+              price: Number(p.amount) || 0,
+              date: p.due_at,
+              source: "calendar" as const,
+              planned: p.planned,
+            })),
+          );
+        } catch (error) {
+          console.error("[EXPENSES CALENDAR] failed to load:", error);
         }
       }
     } catch (error) {
@@ -1216,7 +1235,13 @@ export default function SpaceDetail() {
           onMaintenanceDelete={handleMaintenanceDelete}
           onDocumentDelete={handleDocumentDelete}
           onExpenseDelete={handleExpenseDelete}
-          initialOpenEntry={itemType === "car_document" && itemId ? { type: "document", id: itemId } : null}
+          initialOpenEntry={
+            itemId && itemType === "car_document"
+              ? { type: "document", id: itemId, renew: action === "renew" }
+              : itemId && itemType === "car_maintenance"
+                ? { type: "maintenance", id: itemId }
+                : null
+          }
         />
 
         <CarProfileForm
@@ -1270,8 +1295,8 @@ export default function SpaceDetail() {
           onTaskDelete={handleHomeTaskDelete}
           onTaskReorder={handleHomeTaskReorder}
           initialOpenItem={
-            (itemType === "home_task" || itemType === "home_recurring" || itemType === "home_maintenance") && itemId
-              ? { type: itemType, id: itemId }
+            (itemType === "home_task" || itemType === "home_recurring" || itemType === "home_maintenance" || itemType === "home_document") && itemId
+              ? { type: itemType, id: itemId, resolve: action === "resolve" }
               : null
           }
         />
@@ -1350,6 +1375,7 @@ export default function SpaceDetail() {
           key={`${space.id}-${visitId}`}
           space={space}
           expensesData={expensesData}
+          calendarEntries={calendarPurchases}
           onEdit={handleEdit}
           onEntrySave={handleExpenseEntrySave}
           onEntryDelete={handleExpenseEntryDelete}

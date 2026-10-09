@@ -107,3 +107,13 @@ export function AuthNotice({ icon, tone, title, message, testID }: { icon: keyof
     </View>
   );
 }
+
+/** The ?email= of an auth-email deep link. Expo Router parses the query
+ * with URLSearchParams, which turns a "+" into a space -- so a
+ * plus-addressed email (nume+orgos@gmail.com) arrives as "nume orgos@..."
+ * even when the link encoded it as %2B. An email never contains a space,
+ * so putting the "+" back is safe. */
+export function linkEmail(raw?: string | string[]): string | undefined {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  return v ? v.trim().replace(/ /g, "+") : undefined;
+}

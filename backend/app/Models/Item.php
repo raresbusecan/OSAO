@@ -41,7 +41,24 @@ class Item extends Model
         'grocery_trip',
         'expense_item',
         'custom_event',
+        // A loan/credit instalment (Cheltuieli's "Credite" section) -- see
+        // CREDIT_TYPE below.
+        'expense_credit',
     ];
+
+    /** A credit (loan) whose monthly rate is paid from the "Credit" jar of
+     * the income split (Buget din venit, 2026-10), never from Necesități:
+     * deliberately in NONE of SPENDING_TYPES / SPENDING_TYPE_SPACE /
+     * RECURRING_TYPE_SPACE / ACTIONABLE_TYPES, so no per-space total,
+     * Dashboard total or "De făcut" query picks it up by accident. One row
+     * per credit: space_id = the Expenses space, amount = monthly rate,
+     * recurrence = 'monthly', due_at = next due date (server-computed by
+     * ItemController from metadata.day_of_month), metadata
+     * {day_of_month 1-31, end_date 'YYYY-MM-DD' (last instalment),
+     * linked_space_id car/home space id | null -- a label only}.
+     * Read through scopeActiveCredits; shown as a reminder (no paid/restant
+     * state) on its day by CalendarController and DashboardController. */
+    public const CREDIT_TYPE = 'expense_credit';
 
     /** Item types whose `amount` counts as real spending -- used to
      * compute Budget's per-category `spent` and the dashboard's Monthly
@@ -85,10 +102,11 @@ class Item extends Model
         'expense_item',
         // A custom calendar event with its "implică o cumpărare" toggle
         // on (see CalendarController/calendar.tsx) -- e.g. "buy Maria a
-        // 200 RON birthday gift". Counts as an Expenses-space cost the
-        // same way expense_item does; a plain reminder-only event never
-        // sets `amount`, so it naturally contributes 0 here (SUM skips
-        // nulls) without needing its own exclusion.
+        // 200 RON birthday gift". Counts as an Expenses-space cost, but
+        // NOT as a plain due_at sum: App\Services\EventSpend makes it
+        // "planned" until its day, spent from then on, and counts every
+        // occurrence of a repeating one -- Budget and Dashboard exclude
+        // custom_event from their SQL sums and add EventSpend instead.
         'custom_event',
     ];
 
@@ -158,6 +176,13 @@ class Item extends Model
         'home_maintenance',
     ];
 
+    /** Every status that means "no longer open". `completed` is the
+     * canonical value; `done` is what the Home space wrote for resolved
+     * tasks/maintenance before 2026-10 (frontend homeItems.ts) and still
+     * exists in stored rows, so every "still open?" filter must exclude
+     * both or a finished Casă task resurfaces as overdue on Acasă. */
+    public const CLOSED_STATUSES = ['completed', 'done', 'archived'];
+
     protected $fillable = [
         'user_id',
         'space_id',
@@ -173,6 +198,7 @@ class Item extends Model
         'category',
         'recurrence',
         'metadata',
+        'guilt_free',
     ];
 
     protected $casts = [
@@ -180,7 +206,108 @@ class Item extends Model
         'completed_at' => 'datetime',
         'amount' => 'decimal:2',
         'metadata' => 'array',
+        'guilt_free' => 'boolean',
     ];
+
+    // So a freshly created model serializes `guilt_free: false` too (the DB
+    // default isn't read back after an insert).
+    protected $attributes = [
+        'guilt_free' => false,
+    ];
+
+    /** Types that may carry the "Bani fără vină" flag (items.guilt_free):
+     * everything that rolls into a space's budget -- the dated spending
+     * types plus the recurring ones (e.g. a Netflix home_recurring). A
+     * flagged record leaves its space's spent/limit/avg and counts against
+     * the guilt-free jar instead (BudgetController). Never a credit. */
+    public static function guiltFreeTypes(): array
+    {
+        return array_values(array_unique([...self::SPENDING_TYPES, ...array_keys(self::RECURRING_TYPE_SPACE)]));
+    }
+
+    /** Credits still being paid in $month: open, and whose last instalment
+     * (metadata.end_date) falls on/after the first of that month -- so a
+     * credit ending on the 5th still counts in its last month, and stops
+     * counting automatically from the next one. Not user-scoped (callers
+     * add that). $month should carry the user's zone. */
+    public function scopeActiveCredits(Builder $query, Carbon $month): Builder
+    {
+        return $query->where('type', self::CREDIT_TYPE)
+            ->whereNotIn('status', self::CLOSED_STATUSES)
+            ->where('metadata->end_date', '>=', $month->copy()->startOfMonth()->toDateString());
+    }
+
+    /** A credit's due date inside $month (any day of it, user's zone):
+     * metadata.day_of_month clamped to that month's length (31 -> 30 in
+     * April, 28/29 in February), start of day. Null if the credit has no
+     * valid day or that date is past its end_date. */
+    public function creditDueIn(Carbon $month): ?Carbon
+    {
+        $day = (int) ($this->metadata['day_of_month'] ?? 0);
+        if ($this->type !== self::CREDIT_TYPE || $day < 1 || $day > 31) {
+            return null;
+        }
+        $due = $month->copy()->startOfMonth();
+        $due->day(min($day, $due->daysInMonth));
+        $end = $this->creditEndDate($month->getTimezone()->getName());
+
+        return $end && $due->gt($end) ? null : $due;
+    }
+
+    /** metadata.end_date (the last instalment's day) as end of that day in
+     * $tz, or null if missing/unparseable. */
+    public function creditEndDate(string $tz): ?Carbon
+    {
+        $end = $this->metadata['end_date'] ?? null;
+        if (!is_string($end) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $end)) {
+            return null;
+        }
+        try {
+            return Carbon::createFromFormat('Y-m-d', $end, $tz)->endOfDay();
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /** Instalments still ahead from $now (today's included) through
+     * end_date -- 0 once the last one has passed. */
+    public function creditRemainingRates(Carbon $now): int
+    {
+        $today = $now->copy()->startOfDay();
+        $cursor = $now->copy()->startOfMonth();
+        $count = 0;
+        for ($i = 0; $i < 600; $i++) {
+            $day = (int) ($this->metadata['day_of_month'] ?? 0);
+            $end = $this->creditEndDate($now->getTimezone()->getName());
+            if ($day < 1 || !$end || $cursor->gt($end)) {
+                break;
+            }
+            $due = $this->creditDueIn($cursor);
+            if ($due && $due->gte($today)) {
+                $count++;
+            }
+            $cursor->addMonthNoOverflow();
+        }
+
+        return $count;
+    }
+
+    /** The next due date on/after $now (start of day, user's zone), or
+     * null once the credit is finished. */
+    public function creditNextDue(Carbon $now): ?Carbon
+    {
+        $today = $now->copy()->startOfDay();
+        $cursor = $now->copy()->startOfMonth();
+        for ($i = 0; $i < 2; $i++) {
+            $due = $this->creditDueIn($cursor);
+            if ($due && $due->gte($today)) {
+                return $due;
+            }
+            $cursor->addMonthNoOverflow();
+        }
+
+        return null;
+    }
 
     public function user(): BelongsTo
     {
@@ -206,13 +333,69 @@ class Item extends Model
      * "overdue" regardless of how far away its real expiry actually was.
      * Falls back to due_at if expiryDate is missing or unparseable.
      */
-    public function effectiveDueAt(): ?Carbon
+    /** A ONE-OFF home_maintenance visit is only a log -- unless Casă set a
+     * "next due" date on it (metadata.nextDueDate), which makes it a real
+     * deadline: Casă counts it as restant, so Acasă and Calendar must too.
+     * Returned in the app zone (it's assigned to the datetime-cast due_at). */
+    public function maintenanceNextDue(): ?Carbon
+    {
+        if ($this->type !== 'home_maintenance' || $this->recurrence) {
+            return null;
+        }
+        $next = $this->metadata['nextDueDate'] ?? null;
+        if (!is_string($next) || $next === '') {
+            return null;
+        }
+        try {
+            return Carbon::parse($next)->setTimezone(config('app.timezone'));
+        } catch (\Exception $e) {
+            return null;
+        }
+    }
+
+    /** Car documents replaced by a renewal: same space + documentType,
+     * and another record expiring later. A renewal made BEFORE the old
+     * one expires leaves the old one active (it's still valid until
+     * then), so without this it kept showing up in "De făcut" next to
+     * its own renewal -- the Car screen already hides it the same way
+     * (isDocumentSuperseded in lib/spaces/car/calculations). */
+    public static function supersededCarDocumentIds(int $userId): array
+    {
+        $docs = self::where('user_id', $userId)
+            ->where('type', 'car_document')
+            ->get(['id', 'space_id', 'metadata'])
+            ->map(function (self $d) {
+                $exp = $d->metadata['expiryDate'] ?? null;
+                $ts = is_string($exp) && preg_match('/^\d{2}\.\d{2}\.\d{4}$/', $exp)
+                    ? Carbon::createFromFormat('d.m.Y', $exp)->startOfDay()->timestamp
+                    : null;
+
+                return ['id' => $d->id, 'key' => $d->space_id . '|' . ($d->metadata['documentType'] ?? ''), 'ts' => $ts];
+            })
+            ->filter(fn ($d) => $d['ts'] !== null);
+
+        return $docs
+            ->filter(fn ($d) => $docs->contains(fn ($o) => $o['id'] !== $d['id'] && $o['key'] === $d['key'] && $o['ts'] > $d['ts']))
+            ->pluck('id')
+            ->all();
+    }
+
+    public function effectiveDueAt(?string $tz = null): ?Carbon
     {
         if ($this->type === 'car_document') {
             $expiry = $this->metadata['expiryDate'] ?? null;
             if (is_string($expiry) && preg_match('/^\d{2}\.\d{2}\.\d{4}$/', $expiry)) {
                 try {
-                    return Carbon::createFromFormat('d.m.Y', $expiry)->endOfDay();
+                    // The expiry is a calendar date in the USER's zone --
+                    // end of that day there, not 23:59 UTC (= 02:59 the
+                    // next day in Bucharest, which made RCA read "în 7
+                    // zile" on Acasă but "în 6 zile" on Mașină).
+                    // Back to the app zone before returning: callers assign
+                    // this to the datetime-cast due_at, which drops the
+                    // zone and re-reads the wall-clock time as UTC.
+                    return Carbon::createFromFormat('d.m.Y', $expiry, $tz ?? config('app.timezone'))
+                        ->endOfDay()
+                        ->setTimezone(config('app.timezone'));
                 } catch (\Exception $e) {
                     // Malformed despite matching the regex (e.g. day 31 in
                     // a 30-day month) -- fall through to due_at below.

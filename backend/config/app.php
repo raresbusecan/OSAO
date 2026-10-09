@@ -72,6 +72,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | App deep-link base
+    |--------------------------------------------------------------------------
+    |
+    | Email links never point at the app directly (mail clients don't make
+    | exp:// / orgos:// links clickable) -- they point at this backend's
+    | own /open/{screen} page (routes/web.php, OpenAppController), which
+    | redirects to "{deep_link_base}/{screen}?token=..&email=..".
+    | Expo Go:   exp://<frontend-tunnel-host>/--   (dev.ps1 writes it)
+    | Own build: orgos://                          (frontend/app.json's
+    |                                               expo.scheme)
+    |
+    */
+
+    'deep_link_base' => env('APP_DEEP_LINK_BASE', 'orgos://'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

@@ -81,7 +81,7 @@ export function SpaceMembersModal({ visible, onClose, isOwner, owner, members, o
 
   return (
     <>
-      <Sheet visible={visible} onClose={onClose} title="Cine vede lista" icon="people-outline" tone={GROC}>
+      <Sheet info="grocery.members" visible={visible} onClose={onClose} title="Cine vede lista" icon="people-outline" tone={GROC}>
         <Group inset={62}>
           {people.map((person) => (
             <Row

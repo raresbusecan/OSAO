@@ -23,10 +23,10 @@ class UserFactory extends Factory
      */
     public function definition(): array
     {
-        // Only `name`, `email`, `password` exist on the `users` table in
-        // this app's schema (see migrations/..._create_users_table.php) —
-        // no `email_verified_at`/`remember_token` columns, unlike Laravel's
-        // stock User migration.
+        // No `remember_token` column in this app's schema, unlike
+        // Laravel's stock User migration. `email_verified_at` exists since
+        // 2026_10_08_000003 (nullable) -- left null here, i.e. a factory
+        // user is UNVERIFIED unless a test sets it.
         return [
             'name' => fake()->name(),
             'email' => fake()->unique()->safeEmail(),

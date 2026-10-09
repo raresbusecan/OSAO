@@ -12,6 +12,8 @@ export type CarVehicle = {
 export type CarFuelEntry = {
   id: string;
   date: string;
+  /** items.guilt_free -- counted against the "Bani fără vină" jar. */
+  guiltFree?: boolean;
   liters?: number;
   total_paid?: number;
   odometer?: number;
@@ -23,6 +25,8 @@ export type CarFuelEntry = {
 export type CarMaintenanceEntry = {
   id: string;
   date: string;
+  /** items.guilt_free -- counted against the "Bani fără vină" jar. */
+  guiltFree?: boolean;
   service: string;
   description: string;
   price: number;
@@ -54,6 +58,8 @@ export type CarMaintenanceEntry = {
 export type CarDocumentEntry = {
   id: string;
   date: string;
+  /** items.guilt_free -- counted against the "Bani fără vină" jar. */
+  guiltFree?: boolean;
   documentType: string;
   title: string;
   issuer?: string;
@@ -74,6 +80,8 @@ export type CarDocumentEntry = {
 export type CarExpenseEntry = {
   id: string;
   date: string;
+  /** items.guilt_free -- counted against the "Bani fără vină" jar. */
+  guiltFree?: boolean;
   category: string;
   title: string;
   amount: number;

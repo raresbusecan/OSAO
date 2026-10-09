@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { DateField } from "@/components/ui/DateField";
 import { View, Text, TextInput, Pressable, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
@@ -6,6 +7,7 @@ import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProf
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field, ToggleRow } from "@/components/ui/primitives";
 import { maintenanceLabel } from "@/lib/spaces/car/maintenanceLabels";
+import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 
 const CAR = SPACE_IDENTITY_COLORS.car!;
 import { confirmAction } from "@/lib/confirm";
@@ -202,6 +204,8 @@ export default function CarMaintenanceForm({
 
   // ---- Shared fields (apply to the whole visit, every service in it) ----
   const [description, setDescription] = useState(entry?.description ?? "");
+  // One flag for the whole visit (applies to every line in batch mode).
+  const [guiltFree, setGuiltFree] = useState(!!entry?.guiltFree);
   const [odometer, setOdometer] = useState(entry ? String(entry.odometer) : "");
   const [provider, setProvider] = useState(entry?.provider ?? renewFrom?.provider ?? "");
 
@@ -225,7 +229,7 @@ export default function CarMaintenanceForm({
     setError("");
 
     if (!isValidDateInput(date)) {
-      setError("Data trebuie scrisă ca ZZ.LL.AAAA.");
+      setError("Alege data.");
       return;
     }
 
@@ -272,6 +276,7 @@ export default function CarMaintenanceForm({
           id: `maintenance-${Date.now()}-${index}`,
           date: dateIso,
           ...draft,
+          guiltFree,
         });
       });
 
@@ -304,6 +309,7 @@ export default function CarMaintenanceForm({
       date: parseDateInput(date) ?? entry?.date ?? new Date().toISOString(),
       ...draftEntry,
       renewedFromId: isRenewing ? renewFrom?.sourceId : entry?.renewedFromId,
+      guiltFree,
     };
 
     onSave(entryToSave);
@@ -325,6 +331,7 @@ export default function CarMaintenanceForm({
     <Sheet
       visible
       onClose={onCancel}
+      info="car.maintenanceForm"
       title={isEditing ? "Editează service-ul" : isRenewing ? "Reînnoiește" : "Service nou"}
       subtitle={isBatchMode ? "Tot ce s-a făcut la vizita asta" : undefined}
       icon="construct-outline"
@@ -420,19 +427,7 @@ export default function CarMaintenanceForm({
 
         {/* Date -- shared across every service in this visit. */}
 
-        <FormField
-          label="Data"
-          value={date}
-          onChangeText={setDate}
-          placeholder="ZZ.LL.AAAA"
-          colors={colors}
-          spacing={spacing}
-          radius={radius}
-          fieldName="date"
-          focusedField={focusedField}
-          onFocus={setFocusedField}
-          onBlur={() => setFocusedField(null)}
-        />
+        <DateField testID="car-maint-date" label="Data" value={date} onChange={setDate} range="past" />
 
         {!isBatchMode ? (
           <FormField
@@ -632,19 +627,7 @@ export default function CarMaintenanceForm({
                 </Text>
               </View>
             ) : (
-              <FormField
-                label="Următorul service (dată)"
-                value={nextServiceDate}
-                onChangeText={setNextServiceDate}
-                placeholder="ZZ.LL.AAAA"
-                colors={colors}
-                spacing={spacing}
-                radius={radius}
-                fieldName="nextServiceDate"
-                focusedField={focusedField}
-                onFocus={setFocusedField}
-                onBlur={() => setFocusedField(null)}
-              />
+              <DateField testID="car-maint-next-date" label="Următorul service (dată)" value={nextServiceDate} onChange={setNextServiceDate} range="future" clearable />
             )}
           </>
         ) : (
@@ -782,19 +765,7 @@ export default function CarMaintenanceForm({
                         </Text>
                       </View>
                     ) : (
-                      <FormField
-                        label="Următorul service (dată)"
-                        value={detail.nextDate}
-                        onChangeText={(v) => updateDetail(line.id, { nextDate: v })}
-                        placeholder="ZZ.LL.AAAA"
-                        colors={colors}
-                        spacing={spacing}
-                        radius={radius}
-                        fieldName={`nextDate-${line.id}`}
-                        focusedField={focusedField}
-                        onFocus={setFocusedField}
-                        onBlur={() => setFocusedField(null)}
-                      />
+                      <DateField label="Următorul service (dată)" value={detail.nextDate} onChange={(v) => updateDetail(line.id, { nextDate: v })} range="future" clearable />
                     )}
                   </>
                 )}
@@ -802,6 +773,8 @@ export default function CarMaintenanceForm({
             );
           })
         )}
+
+        <GuiltFreeToggle value={guiltFree} onChange={setGuiltFree} tone={CAR} testID="car-maintenance-guilt-free" />
 
         {error ? (
           <View style={{ padding: spacing.md, borderRadius: radius.control, backgroundColor: `${colors.error}14` }}>

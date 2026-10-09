@@ -48,6 +48,89 @@ class RecurrenceProjector
         return $n > 0 ? $n : 1;
     }
 
+    // A fixed day of the month the item is due on (metadata.day_of_month,
+    // 1-31 -- today only expense_credit sets it), or null. Monthly steps
+    // re-clamp to min(day, daysInMonth) every cycle: addMonthsNoOverflow
+    // alone turns a 31st into 28 Feb and then STAYS on the 28th forever
+    // (31 Jan -> 28 Feb -> 28 Mar), the day-31 drift a credit can't have.
+    private static function anchorDay(Item $item): ?int
+    {
+        if (self::step($item->recurrence)['add'] !== 'addMonthsNoOverflow') {
+            return null;
+        }
+        $day = (int) ($item->metadata['day_of_month'] ?? 0);
+
+        return $day >= 1 && $day <= 31 ? $day : null;
+    }
+
+    // One step of $n cycles ('add' or 'sub'), on $c itself.
+    private static function move(Carbon $c, array $step, string $dir, int $n, ?int $anchorDay): Carbon
+    {
+        $c->{$step[$dir]}($n);
+        if ($anchorDay !== null) {
+            $c->day(min($anchorDay, $c->daysInMonth));
+        }
+
+        return $c;
+    }
+
+    /** Types whose stored due_at only moves when the user resolves the
+     * current occurrence (Casă advances it on "rezolvat") -- an unpaid
+     * bill stays due on its original date instead of silently rolling
+     * forward to next month. */
+    private const HELD_TYPES = ['home_recurring', 'home_task'];
+
+    // Stepping happens in the USER's zone ($now/$start carry it): adding
+    // a month to a UTC instant drifts across a DST change -- a bill due
+    // 00:00 Bucharest in September (21:00 UTC) landed on 23:00 the day
+    // BEFORE once Bucharest left summer time on 25 October. Results go
+    // back to the app zone because callers assign them to the
+    // datetime-cast due_at, which drops the zone.
+    private static function inZone($value, Carbon $ref): Carbon
+    {
+        return Carbon::parse($value)->setTimezone($ref->getTimezone());
+    }
+
+    private static function out(Carbon $c): Carbon
+    {
+        return $c->copy()->setTimezone(config('app.timezone'));
+    }
+
+    // The occurrence that is due RIGHT NOW from the user's point of view:
+    // for a held type that's its stored due_at, even if it's already in
+    // the past (that's what makes it "restant"); for a recurring
+    // maintenance visit it's the next date Casă computed
+    // (metadata.nextDueDate); everything else (e.g. a birthday) just
+    // projects to the next occurrence. Dashboard, Calendar and Budget
+    // all use this so the same bill reads the same everywhere.
+    public static function currentDue(Item $item, Carbon $now): array
+    {
+        $step = self::step($item->recurrence);
+        $n = self::interval($item);
+
+        if (in_array($item->type, self::HELD_TYPES, true) && $item->due_at) {
+            $due = self::inZone($item->due_at, $now);
+            if ($due->lt($now)) {
+                return ['due' => self::out($due), 'cycle_start' => self::out($due->copy()->{$step['sub']}($n))];
+            }
+        }
+
+        if ($item->type === 'home_maintenance') {
+            $next = $item->metadata['nextDueDate'] ?? null;
+            if (is_string($next) && $next !== '') {
+                try {
+                    $due = self::inZone($next, $now);
+
+                    return ['due' => self::out($due), 'cycle_start' => self::out($due->copy()->{$step['sub']}($n))];
+                } catch (\Exception $e) {
+                    // fall through to the plain projection
+                }
+            }
+        }
+
+        return self::nextOccurrence($item, $now);
+    }
+
     // The single NEXT occurrence relative to $now -- if the stored
     // due_at is still in the future, that IS the next occurrence
     // (nothing to fast-forward); if it's in the past, steps forward
@@ -57,39 +140,45 @@ class RecurrenceProjector
     {
         $step = self::step($item->recurrence);
         $n = self::interval($item);
-        $cursor = Carbon::parse($item->due_at);
+        $anchorDay = self::anchorDay($item);
+        $cursor = self::inZone($item->due_at, $now);
         $iterations = 0;
 
         while ($cursor->lt($now) && $iterations < 600) {
-            $cursor->{$step['add']}($n);
+            self::move($cursor, $step, 'add', $n, $anchorDay);
             $iterations++;
         }
 
-        return ['due' => $cursor, 'cycle_start' => $cursor->copy()->{$step['sub']}($n)];
+        return ['due' => self::out($cursor), 'cycle_start' => self::out(self::move($cursor->copy(), $step, 'sub', $n, $anchorDay))];
     }
 
     // Every occurrence that falls inside [$start, $end] -- a weekly
     // item can land more than once in the same window; that's correct,
     // not a bug. Used for the calendar's month-by-month day grid, where
-    // a single "next occurrence" isn't enough.
+    // a single "next occurrence" isn't enough. The fast-forward and the
+    // enumeration have SEPARATE caps -- they used to share one counter,
+    // so a very old weekly item could spend most of it just catching up
+    // to $start and then list only part of the requested month.
     public static function occurrencesBetween(Item $item, Carbon $start, Carbon $end): array
     {
         $step = self::step($item->recurrence);
         $n = self::interval($item);
-        $cursor = Carbon::parse($item->due_at);
+        $anchorDay = self::anchorDay($item);
+        $cursor = self::inZone($item->due_at, $start);
         $occurrences = [];
-        $iterations = 0;
 
-        while ($cursor->lt($start) && $iterations < 600) {
-            $cursor->{$step['add']}($n);
-            $iterations++;
+        $skipped = 0;
+        while ($cursor->lt($start) && $skipped < 5000) {
+            self::move($cursor, $step, 'add', $n, $anchorDay);
+            $skipped++;
         }
 
-        while ($cursor->lte($end) && $iterations < 660) {
-            $cycleStart = $cursor->copy()->{$step['sub']}($n);
-            $occurrences[] = ['due' => $cursor->copy(), 'cycle_start' => $cycleStart];
-            $cursor->{$step['add']}($n);
-            $iterations++;
+        $listed = 0;
+        while ($cursor->lte($end) && $listed < 60) {
+            $cycleStart = self::move($cursor->copy(), $step, 'sub', $n, $anchorDay);
+            $occurrences[] = ['due' => self::out($cursor), 'cycle_start' => self::out($cycleStart)];
+            self::move($cursor, $step, 'add', $n, $anchorDay);
+            $listed++;
         }
 
         return $occurrences;

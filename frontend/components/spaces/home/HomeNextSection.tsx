@@ -35,12 +35,12 @@ export function HomeNextSection({ items, onItemPress, onItemResolve, onItemDelet
 
   return (
     <View style={{ gap: spacing.sm }}>
-      <SectionHeader title="Urmează" />
+      <SectionHeader title="Urmează" info="home.next" />
       <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card, overflow: "hidden" }}>
         {items.map((item, index) => {
           const canResolve = !String(item.id).startsWith("doc-");
           const text = item.subtitle ?? "";
-          const tone = /^(restant|a expirat)/.test(text) ? colors.error : /azi$/.test(text) ? colors.warning : null;
+          const tone = /^(restant|expirat)/.test(text) ? colors.error : /azi$/.test(text) ? colors.warning : null;
 
           const row = (
             <PressableScale
@@ -73,7 +73,10 @@ export function HomeNextSection({ items, onItemPress, onItemResolve, onItemDelet
               {index > 0 ? <View style={{ height: 1, marginLeft: 68, backgroundColor: colors.border }} /> : null}
               {onItemDelete ? (
                 <SwipeRow
-                  onResolve={canResolve && onItemResolve ? () => onItemResolve(item) : undefined}
+                  // A document's swipe-right renews it (the caller's pop-up).
+                  onResolve={onItemResolve ? () => onItemResolve(item) : undefined}
+                  resolveIcon={canResolve ? "checkmark" : "refresh"}
+                  resolveLabel={canResolve ? "Rezolvă" : "Reînnoiește"}
                   onDelete={() => onItemDelete(item)}
                   cornerRadius={0}
                   colors={colors}

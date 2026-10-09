@@ -5,7 +5,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { useReducedMotion } from "@/lib/motion";
-import { CircleButton, readableOn, SurfaceLevelContext } from "./primitives";
+import { CircleButton, InfoButton, readableOn, SurfaceLevelContext } from "./primitives";
+import type { HelpKey } from "@/lib/help";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 const DISMISS_DISTANCE = 120;
@@ -28,6 +29,8 @@ export type SheetProps = {
   hideClose?: boolean;
   /** Center the header (small confirm/resolve sheets). */
   centered?: boolean;
+  /** "ⓘ" next to the title: how this form/sheet works (lib/help.ts). */
+  info?: HelpKey;
   testID?: string;
 };
 
@@ -54,7 +57,7 @@ export function Sheet(props: SheetProps) {
   );
 }
 
-function SheetBody({ onClose, title, subtitle, icon, tone, footer, children, hideClose, centered, testID }: SheetProps) {
+function SheetBody({ onClose, title, subtitle, icon, tone, footer, children, hideClose, centered, info, testID }: SheetProps) {
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
@@ -117,7 +120,10 @@ function SheetBody({ onClose, title, subtitle, icon, tone, footer, children, hid
                       <Ionicons name={icon} size={26} color={tone ?? colors.onSurface} />
                     </View>
                   ) : null}
-                  <Text style={{ fontSize: 20, fontWeight: "600", color: colors.onSurface, textAlign: "center" }}>{title}</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                    <Text style={{ fontSize: 20, fontWeight: "600", color: colors.onSurface, textAlign: "center", flexShrink: 1 }}>{title}</Text>
+                    {info ? <InfoButton topic={info} /> : null}
+                  </View>
                   {subtitle ? <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, textAlign: "center", lineHeight: 20, maxWidth: 320 }}>{subtitle}</Text> : null}
                 </View>
               ) : (
@@ -128,7 +134,10 @@ function SheetBody({ onClose, title, subtitle, icon, tone, footer, children, hid
                     </View>
                   ) : null}
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 20, fontWeight: "600", color: colors.onSurface }} numberOfLines={2}>{title}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                      <Text style={{ fontSize: 20, fontWeight: "600", color: colors.onSurface, flexShrink: 1 }} numberOfLines={2}>{title}</Text>
+                      {info ? <InfoButton topic={info} /> : null}
+                    </View>
                     {subtitle ? <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{subtitle}</Text> : null}
                   </View>
                   {!hideClose ? <CircleButton icon="close" label="Închide" onPress={close} /> : null}

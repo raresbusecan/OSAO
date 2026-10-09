@@ -2,10 +2,12 @@ import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL as string;
+/** The backend origin (no /api) -- social login opens `${BACKEND_URL}/auth/<provider>/redirect` in a browser. */
+export const BACKEND_URL = BASE;
 const TOKEN_KEY = "lifeos_token";
 
 // Web fallback because expo-secure-store isn't supported on web preview
-async function setToken(token: string) {
+export async function setToken(token: string) {
   console.log("[AUTH] setToken called:", token ? `${token.slice(0, 3)}...` : "EMPTY");
 
   if (Platform.OS === "web") {
@@ -56,6 +58,16 @@ function getDeviceTimezone(): string {
   } catch {
     return "UTC";
   }
+}
+
+export type ApiError = Error & { status?: number; body?: any };
+
+/** The most specific human message in an API error: the first
+ * errors.<field>[0] of a 422 when `field` is given, else the server's
+ * own message, else `fallback`. Server messages are Romanian already. */
+export function apiErrorMessage(e: any, fallback: string, field?: string): string {
+  const fieldMsg = field ? e?.body?.errors?.[field]?.[0] : null;
+  return (typeof fieldMsg === "string" && fieldMsg) || (typeof e?.message === "string" && e.message && !/^Request failed|^Network request failed|^Failed to fetch/i.test(e.message) ? e.message : null) || fallback;
 }
 
 async function request<T = any>(
@@ -116,15 +128,14 @@ async function request<T = any>(
   }
 
   if (!res.ok) {
+    // Laravel's default throttle body ("Too Many Attempts.") reads as a
+    // system error, not guidance -- replaced with Romanian. A limiter
+    // that sends its own message (e.g. 'verification-notification',
+    // Romanian + retry_after) is passed through as-is.
+    const throttleDefault =
+      res.status === 429 && (!body?.message || /^too many attempts/i.test(String(body.message)));
     const msg =
-      // Laravel's raw throttle message ("Too Many Attempts.") reads as
-      // a system error, not guidance -- most jarring on a flow someone
-      // is already frustrated in (e.g. recovering a forgotten
-      // password after a couple of failed logins). English to match
-      // every other string in the auth screens that surface it (the
-      // app's mixed-language copy elsewhere is a known, separate
-      // issue -- not one to add to here).
-      (res.status === 429 && "Too many attempts. Please wait a minute and try again.") ||
+      (throttleDefault && "Prea multe încercări. Așteaptă un minut și încearcă din nou.") ||
       body?.message ||
       body?.error ||
       body?.errors ||
@@ -132,12 +143,15 @@ async function request<T = any>(
 
     const err = new Error(
       typeof msg === "string" ? msg : JSON.stringify(msg),
-    ) as Error & { status?: number };
+    ) as ApiError;
     // Carried so callers (see providers/auth.tsx) can tell "the server said
     // this token is invalid" (401) apart from "the request didn't make it"
     // (a flaky tunnel/network hiccup, no status at all) -- those need very
     // different handling, and before this only the message string survived.
     err.status = res.status;
+    // The parsed JSON body, for callers that need more than the message
+    // (a 422's errors.<field>[0], a 429's retry_after).
+    err.body = body;
     throw err;
   }
 
@@ -243,6 +257,26 @@ export const api = {
     });
   },
 
+  // Registration email verification -- the token comes from the link in
+  // VerifyEmailNotification (opened as /verify-email?token&email). Public:
+  // the token is the proof, not a session. 422 errors.token[0] =
+  // invalid/used or expired (Romanian).
+  verifyEmail: async (email: string, token: string) => {
+    return request<{ message: string; email_verified_at: string }>("/email/verify", {
+      method: "POST",
+      body: JSON.stringify({ email, token }),
+    });
+  },
+
+  // "Retrimite emailul" (unverified banner). Auth'd. already_verified:true
+  // = verified elsewhere meanwhile -- refresh the user. 429 carries
+  // body.retry_after (seconds); 503 = mail could not be sent.
+  resendVerification: async () => {
+    return request<{ message: string; already_verified: boolean }>("/email/verification-notification", {
+      method: "POST",
+    });
+  },
+
   confirmEmailChange: async (email: string, token: string) => {
     return request<{ message: string; email: string }>("/confirm-email", {
       method: "POST",
@@ -260,7 +294,7 @@ export const api = {
   // read as `undefined` for the rest of the app, everywhere (Grocery's
   // "is this me" checks included), until the next fresh login.
   me: async () => {
-    const r = await request<{ user: { id: number; name: string; email: string; created_at: string } }>("/user");
+    const r = await request<{ user: { id: number; name: string; email: string; created_at: string; email_verified_at: string | null; providers?: string[]; has_password?: boolean; tours?: Record<string, { status: "done" | "skipped"; v: number; at?: string }> | null } }>("/user");
     return r.user;
   },
 
@@ -277,13 +311,85 @@ export const api = {
         total: number;
         sources: { spaceName: string; icon: string; amount: number }[];
       };
+      /** Grocery items not yet in the cart, per space id. */
+      toBuy?: Record<string, number>;
+      /** Items to buy per shopping list, with the list's own title. */
+      toBuyLists?: { list_id: string; space_id: number | string; title: string; count: number; items: { title: string; quantity: string | null }[] }[];
+      /** Casă supplies probably running out, per space id. */
+      lowSupplies?: Record<string, number>;
+      /** One line of facts per car (Acasă's car card). */
+      cars?: {
+        space_id: number | string;
+        name: string;
+        odometer: number | null;
+        next_service: { title: string; at_km: number; km_left: number } | null;
+        next_document: { title: string; expiry: string } | null;
+      }[];
     }>("/dashboard"),
+
+  // The Acasă card arrangement (lib/dashboard/layout.ts) -- null = never
+  // customized, show the default.
+  getDashboardLayout: () => request<{ layout: unknown }>("/dashboard/layout"),
+  saveDashboardLayout: (layout: unknown[] | null) =>
+    request<{ layout: unknown }>("/dashboard/layout", { method: "PUT", body: JSON.stringify({ layout }) }),
+
+  // First-use tours (lib/tours.ts): which guide this user finished or
+  // skipped. Both answer the whole map; callers merge it into the auth
+  // user (useAuth().updateUser({ tours })).
+  markTour: (key: string, status: "done" | "skipped", version: number) =>
+    request<{ tours: Record<string, { status: "done" | "skipped"; v: number; at: string }> }>(`/user/tours/${encodeURIComponent(key)}`, {
+      method: "PUT",
+      body: JSON.stringify({ status, version }),
+    }),
+  resetTours: () => request<{ tours: Record<string, never> }>("/user/tours", { method: "DELETE" }),
 
   // Grouped by day ('YYYY-MM-DD') for the given month ('YYYY-MM') --
   // everything with a due_at the caller can see (own items + items in any
   // space they're accessible in). See CalendarController::index.
   calendar: (month: string) =>
     request<{ days: Record<string, any[]>; recurring: any[] }>(`/calendar?month=${month}`),
+  // Every occurrence of a Calendar event with "Implică o cumpărare", up to
+  // the end of this month; `planned` = its day hasn't come yet. The
+  // Cheltuieli space lists them so its totals match Buget's (EventSpend).
+  calendarPurchases: () =>
+    request<{ purchases: { id: number; title: string; amount: number; due_at: string; planned: boolean; recurrence: string | null }[] }>("/calendar/purchases"),
+
+  // Social login (lib/socialAuth.ts). None of these store the token --
+  // the caller hands { user, token } to useAuth().signInWithToken.
+  // GET /auth/providers: which provider buttons to show (Google/Facebook
+  // are hidden until their credentials are configured on the server).
+  authProviders: () =>
+    request<{ apple: boolean; google: boolean; facebook: boolean }>("/auth/providers"),
+
+  // Sign in with Apple: the identity token from expo-apple-authentication;
+  // full_name only on the first authorization (Apple never sends it again).
+  // created = a new orgOS account was made just now.
+  authApple: (identityToken: string, nonce: string, fullName?: { given?: string | null; family?: string | null } | null) =>
+    request<{ user: any; token: string; created: boolean }>("/auth/apple", {
+      method: "POST",
+      body: JSON.stringify({ identity_token: identityToken, nonce, ...(fullName ? { full_name: fullName } : {}) }),
+    }),
+
+  // One-time nonce for the next Apple sign-in (replay protection): passed
+  // raw to AppleAuthentication.signInAsync and back to POST /auth/apple.
+  authAppleNonce: () =>
+    request<{ nonce: string }>("/auth/apple/nonce", { method: "POST" }),
+
+  // Social-only account (user.has_password === false): set a first
+  // password, no current password needed.
+  setPassword: (password: string, confirmation: string) =>
+    request<{ message: string }>("/profile/password/set", {
+      method: "POST",
+      body: JSON.stringify({ password, password_confirmation: confirmation }),
+    }),
+
+  // Google/Facebook: the one-time code the backend's /auth/<p>/callback
+  // put on the app deep link (single use, ~2 minutes).
+  authExchange: (code: string) =>
+    request<{ user: any; token: string; created: boolean }>("/auth/exchange", {
+      method: "POST",
+      body: JSON.stringify({ code }),
+    }),
 
   logout: async () => {
     try {
@@ -321,8 +427,26 @@ createSpace: (body: {
    * detectSpaceType, which reads this first (before name/icon) so
    * renaming a space later can never change what kind it is. */
   type?: string;
+  /** Car/home only: bought "în rate". The server creates the space, finds
+   * the first Cheltuieli space (or creates one named "Default") and adds
+   * this expense_credit linked to the new space -- all in one transaction
+   * (422 `errors["credit.*"]` and nothing created on a bad credit). */
+  credit?: { title: string; amount: number; day_of_month: number; end_date: string };
+  /** Car/home: the profile, same body as saveCarProfile/saveHomeProfile
+   * (carProfileToApiBody/homeProfileToApiBody), created in the SAME
+   * transaction -- a bad profile 422s (`errors["profile.<field>"]`) and
+   * leaves no space behind. Edits still go through save*Profile. */
+  profile?: Record<string, unknown>;
 }) =>
-  request("/spaces", {
+  request<{
+    space: any;
+    /** Only when `profile` was sent. */
+    profile?: any;
+    /** Only when `credit` was sent. */
+    credit?: any;
+    expenses_space?: any;
+    expenses_space_created?: boolean;
+  }>("/spaces", {
     method: "POST",
     body: JSON.stringify(body),
   }),
@@ -527,9 +651,44 @@ saveHomeProfile: (
       spending: Record<string, { this_month: number; last_month: number; avg_last_3_months: number }>;
       biggest: Record<string, { title: string; amount: number; from_last_month: boolean } | null>;
       recurring: Record<string, number>;
+      /** Calendar purchases still ahead this month per label (inside `spent`). */
+      planned?: Record<string, number>;
       recurringBills: any[];
       savingsGoal: { target_amount: number; current_amount: number; target_date: string | null } | null;
+      /** Buget din venit -- null until PUT /budget/plan ran once. */
+      plan: { monthly_income: number; split: { needs: number; guilt_free: number; third: number; short_term: number; long_term: number } } | null;
+      necessities: { envelope: number | null; avg_last_3_months: number };
+      guiltFree: { budget: number | null; spent: number; planned: number; count: number };
+      credit: {
+        budget: number | null;
+        rates: number;
+        count: number;
+        items: { id: number; title: string; amount: number; day_of_month: number; end_date: string; linked_space_id: number | null; remaining_rates: number; next_due: string | null }[];
+      };
+      /** Suggested per-space split of the needs envelope (labels "Car"...), null without a plan. */
+      suggested: Record<string, number> | null;
     }>("/budget"),
+
+  /** Monthly net income + the 5-jar split (ints summing to 100; 422 "Procentele trebuie să adune 100%." otherwise). */
+  saveBudgetPlan: (body: { monthly_income: number; split: { needs: number; guilt_free: number; third: number; short_term: number; long_term: number } }) =>
+    request<{ plan: { monthly_income: number; split: Record<string, number> }; budget_plan_set_at: string; savingsGoal: any }>("/budget/plan", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+
+  /** Bulk-set several space limits in one transaction ("Reîmparte"). */
+  saveBudgetLimits: (limits: { category: string; monthly_limit: number }[]) =>
+    request<{ message: string; limits: { category: string; monthly_limit: number }[] }>("/budget/limits", {
+      method: "PUT",
+      body: JSON.stringify({ limits }),
+    }),
+
+  /** "Bani fără vină": 4 months (oldest first, current last) + this month's flagged records. */
+  getGuiltFree: () =>
+    request<{
+      months: { month: string; budget: number | null; spent: number; planned: number }[];
+      items: { id: number | string; type: string; title: string; amount: number | null; currency: string | null; due_at: string | null; guilt_free: boolean; space_id: number | null; label: string; recurring?: boolean; recurrence?: string | null; planned?: boolean }[];
+    }>("/budget/guilt-free"),
 
   saveBudgetLimit: (body: { category: string; monthly_limit: number }) =>
     request("/budget/limits", {
@@ -546,8 +705,10 @@ saveHomeProfile: (
     request<{
       category: string;
       months: { year: number; month: number; label: string; total: number }[];
-      items: { id: number | string; type: string; title: string; amount: number | null; currency: string | null; due_at: string | null }[];
+      items: { id: number | string; type: string; title: string; amount: number | null; currency: string | null; due_at: string | null; planned?: boolean; guilt_free?: boolean }[];
       recurring_monthly: number;
+      /** This month's Calendar purchases still ahead (inside this month's total). */
+      planned?: number;
     }>(`/budget/spaces/${encodeURIComponent(category)}`),
 
   saveSavingsGoal: (body: { target_amount: number; current_amount: number; target_date?: string | null }) =>

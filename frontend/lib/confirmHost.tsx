@@ -5,14 +5,18 @@ import { useTheme } from "@/lib/theme";
 import { useReducedMotion } from "@/lib/motion";
 import { Button } from "@/components/ui/primitives";
 
+export type DialogChoice = { key: string; label: string; secondary?: boolean };
+
 type DialogRequest = {
-  kind: "confirm" | "notify";
+  kind: "confirm" | "notify" | "choice";
   title: string;
   message: string;
   confirmLabel?: string;
   cancelLabel?: string;
   destructive?: boolean;
-  resolve: (value: boolean) => void;
+  /** kind "choice": stacked full-width buttons, then "Renunță". */
+  choices?: DialogChoice[];
+  resolve: (value: any) => void;
 };
 
 // Set by the one <ConfirmHost /> mounted at the app root (see
@@ -42,11 +46,37 @@ export function showConfirmDialog(req: {
   });
 }
 
+/** Several answers to one question (e.g. "Rezolvă cu datele salvate" /
+ * "Modifică informațiile"); resolves the picked key, or null if dismissed. */
+export function showChoiceDialog(req: { title: string; message: string; choices: DialogChoice[] }): Promise<string | null> {
+  return new Promise((resolve) => {
+    if (!currentHandler) {
+      resolve(null);
+      return;
+    }
+    currentHandler({ ...req, kind: "choice", resolve });
+  });
+}
+
 /** confirm.ts's web path for a plain info notice -- no resolve value
  * anyone reads, just an OK button that dismisses it. */
 export function showNotifyDialog(title: string, message: string): void {
   if (!currentHandler) return;
   currentHandler({ kind: "notify", title, message, resolve: () => {} });
+}
+
+/* Whether a dialog is on screen right now -- lib/useAutoTour.ts waits for
+ * it to close before starting a first-use tour (never two Modals at once). */
+let dialogOpen = false;
+const dialogListeners = new Set<() => void>();
+export function isDialogOpen(): boolean {
+  return dialogOpen;
+}
+export function subscribeDialog(listener: () => void): () => void {
+  dialogListeners.add(listener);
+  return () => {
+    dialogListeners.delete(listener);
+  };
 }
 
 /**
@@ -71,10 +101,17 @@ export function ConfirmHost() {
     };
   }, []);
 
+  const open = !!request;
+  useEffect(() => {
+    dialogOpen = open;
+    dialogListeners.forEach((l) => l());
+  }, [open]);
+
   if (!request) return null;
 
-  const close = (value: boolean) => {
-    request.resolve(value);
+  const close = (value: any) => {
+    // A dismissed choice dialog answers null, not false.
+    request.resolve(request.kind === "choice" && value === false ? null : value);
     setRequest(null);
   };
 
@@ -88,7 +125,7 @@ export function ConfirmHost() {
 /** 2026-10 redesign: a centered card with a tinted icon (trash for a
  * destructive confirm), the question, then Cancel / Confirm side by
  * side. Fades and lifts in; skipped under reduced motion. */
-function Dialog({ request, close }: { request: DialogRequest; close: (value: boolean) => void }) {
+function Dialog({ request, close }: { request: DialogRequest; close: (value: any) => void }) {
   const { colors, spacing, radius } = useTheme();
   const reduced = useReducedMotion();
   const appear = useRef(new Animated.Value(reduced ? 1 : 0)).current;
@@ -131,7 +168,14 @@ function Dialog({ request, close }: { request: DialogRequest; close: (value: boo
           ) : null}
         </View>
 
-        {request.kind === "confirm" ? (
+        {request.kind === "choice" ? (
+          <View style={{ gap: spacing.sm }}>
+            {(request.choices ?? []).map((c) => (
+              <Button key={c.key} testID={`confirm-host-choice-${c.key}`} compact variant={c.secondary ? "secondary" : "primary"} label={c.label} onPress={() => close(c.key)} />
+            ))}
+            <Button testID="confirm-host-cancel" compact variant="ghost" label={request.cancelLabel ?? "Renunță"} onPress={() => close(null)} />
+          </View>
+        ) : request.kind === "confirm" ? (
           <View style={{ flexDirection: "row", gap: spacing.sm }}>
             <View style={{ flex: 1 }}>
               <Button testID="confirm-host-cancel" compact variant="secondary" label={request.cancelLabel ?? "Renunță"} onPress={() => close(false)} />

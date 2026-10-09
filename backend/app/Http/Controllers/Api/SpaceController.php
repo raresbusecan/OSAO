@@ -4,8 +4,13 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use App\Models\Item;
 use App\Models\Space;
 use App\Models\User;
+use App\Support\ItemBudgetRules;
+use App\Support\SpaceProfileRules;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 
 class SpaceController extends Controller
 {
@@ -56,13 +61,162 @@ class SpaceController extends Controller
             // its icon) can never change what kind of space it is. See
             // spaceProfile.ts's detectSpaceType.
             'type' => ['nullable', 'string', 'max:50'],
+            // Optional, car/home only: the Car/Home profile, same shape and
+            // rules as PUT /spaces/{id}/car-profile|home-profile
+            // (App\Support\SpaceProfileRules), so creating a car/home is ONE
+            // request -- a failed profile used to leave a profile-less space
+            // behind (and a retry duplicated it).
+            'profile' => ['sometimes', 'nullable', 'array'],
+            // Optional, car/home only: the space was bought "în rate". Its
+            // monthly rate becomes an expense_credit in the user's
+            // Cheltuieli space (see createLinkedCredit below).
+            'credit' => ['sometimes', 'nullable', 'array'],
+            'credit.title' => ['required_with:credit', 'string', 'max:255'],
+            'credit.amount' => ['required_with:credit'],
+            'credit.day_of_month' => ['required_with:credit'],
+            'credit.end_date' => ['required_with:credit'],
+        ], [
+            'credit.title.required_with' => 'Scrie un nume pentru credit.',
+            'credit.title.max' => 'Numele creditului e prea lung.',
+            'credit.amount.required_with' => 'Rata lunară trebuie să fie mai mare decât 0.',
+            'credit.day_of_month.required_with' => 'Ziua de plată trebuie să fie între 1 și 31.',
+            'credit.end_date.required_with' => 'Data ultimei rate este obligatorie (AAAA-LL-ZZ).',
         ]);
-        $space = $request->user()->spaces()->create($validated);
+        $credit = !empty($validated['credit']) ? $validated['credit'] : null;
+        $profileInput = array_key_exists('profile', $validated) && $validated['profile'] !== null ? $validated['profile'] : null;
+        unset($validated['credit'], $validated['profile']);
+        $kind = $validated['type'] ?? null;
+
+        // Everything that can be checked without writing is checked first.
+        $profile = null;
+        if ($profileInput !== null) {
+            $rules = SpaceProfileRules::for($kind);
+            if ($rules === null) {
+                return $this->creditError(['profile' => ['Doar o mașină sau o casă are profil.']]);
+            }
+            $v = Validator::make($profileInput, $rules, SpaceProfileRules::messages());
+            if ($v->fails()) {
+                $errors = [];
+                foreach ($v->errors()->toArray() as $field => $messages) {
+                    $errors['profile.' . $field] = $messages;
+                }
+                return $this->creditError($errors);
+            }
+            $profile = $v->validated();
+        }
+        if ($credit !== null) {
+            if (!in_array($kind, ['car', 'home'], true)) {
+                return $this->creditError(['credit' => ['Doar o mașină sau o casă poate fi cumpărată în rate.']]);
+            }
+            if (trim((string) $credit['title']) === '') {
+                return $this->creditError(['credit.title' => ['Scrie un nume pentru credit.']]);
+            }
+        }
+
+        // One transaction: the space, its profile, the Cheltuieli space
+        // (reused or a new "Default") and the credit land together or not
+        // at all.
+        $result = null;
+        DB::beginTransaction();
+        try {
+            $space = $request->user()->spaces()->create($validated);
+            if ($profile !== null) {
+                $relation = $kind === 'car' ? $space->carProfile() : $space->homeProfile();
+                $relation->create($profile);
+            }
+            if ($credit !== null) {
+                $result = $this->createLinkedCredit($request->user(), $space, $credit);
+                if (isset($result['errors'])) {
+                    DB::rollBack();
+                    return $this->creditError($result['errors']);
+                }
+            }
+            DB::commit();
+        } catch (\Throwable $e) {
+            DB::rollBack();
+            throw $e;
+        }
+
+        $space->load(['carProfile', 'homeProfile']);
         $space->is_owner = true;
-        return response()->json([
+        $body = [
             'message' => 'Space created successfully.',
             'space' => $space,
-        ], 201);
+        ];
+        if ($profile !== null) {
+            $body['profile'] = $kind === 'car' ? $space->carProfile : $space->homeProfile;
+        }
+        if ($result !== null) {
+            $result['expenses_space']->is_owner = true;
+            $body['credit'] = $result['credit'];
+            $body['expenses_space'] = $result['expenses_space'];
+            $body['expenses_space_created'] = $result['expenses_space_created'];
+        }
+        return response()->json($body, 201);
+    }
+
+    /** The user's first Cheltuieli space in grid order (same ORDER BY as
+     * index()), or a new one named "Default" -- created like the Spaces
+     * tab's Cheltuieli template (receipt icon, teal). Only `type =
+     * 'expenses'` counts: a legacy untyped space can't be told apart
+     * server-side (the frontend guesses from name/icon), so it's never
+     * picked. Then the expense_credit, linked to $space, through the same
+     * rules as POST /items (App\Support\ItemBudgetRules). Returns
+     * ['errors' => [...]] (keys prefixed `credit.`) on a rule violation --
+     * the caller rolls back. */
+    private function createLinkedCredit(User $user, Space $space, array $credit): array
+    {
+        $expenses = $user->spaces()
+            ->where('type', 'expenses')
+            ->orderByRaw('sort_order IS NULL')
+            ->orderBy('sort_order')
+            ->latest()
+            ->first();
+        $created = false;
+        if (!$expenses) {
+            $expenses = $user->spaces()->create([
+                'name' => 'Default',
+                'icon' => 'receipt-outline',
+                'color' => '#14B8A6',
+                'type' => 'expenses',
+            ]);
+            $created = true;
+        }
+
+        $data = [
+            'type' => Item::CREDIT_TYPE,
+            'space_id' => $expenses->id,
+            'title' => trim((string) $credit['title']),
+            'amount' => $credit['amount'],
+            'metadata' => [
+                'day_of_month' => $credit['day_of_month'],
+                'end_date' => $credit['end_date'],
+                'linked_space_id' => $space->id,
+            ],
+        ];
+        $errors = ItemBudgetRules::errors($user, $data, null);
+        if ($errors) {
+            $prefixed = [];
+            foreach ($errors as $field => $messages) {
+                $prefixed['credit.' . preg_replace('/^metadata\./', '', $field)] = $messages;
+            }
+            return ['errors' => $prefixed];
+        }
+
+        $data['user_id'] = $user->id;
+        $item = Item::create($data);
+
+        return [
+            'credit' => $item,
+            'expenses_space' => $expenses,
+            'expenses_space_created' => $created,
+        ];
+    }
+
+    /** Romanian 422 in the shape lib/api.ts reads (`message` = first error). */
+    private function creditError(array $errors)
+    {
+        return response()->json(['message' => array_values($errors)[0][0], 'errors' => $errors], 422);
     }
 
     /**
@@ -156,14 +310,7 @@ class SpaceController extends Controller
             ->spaces()
             ->findOrFail($id);
 
-        $validated = $request->validate([
-            'make' => ['required', 'string', 'max:100'],
-            'model' => ['required', 'string', 'max:100'],
-            'color' => ['nullable', 'string', 'max:50'],
-            'year' => ['required', 'integer', 'min:1900', 'max:2100'],
-            'purchase_price' => ['required', 'numeric', 'min:0'],
-            'tank_capacity' => ['required', 'numeric', 'gt:0'],
-        ]);
+        $validated = $request->validate(SpaceProfileRules::car(), SpaceProfileRules::messages());
 
         $profile = $space->carProfile()->updateOrCreate(
             ['space_id' => $space->id],
@@ -186,12 +333,7 @@ class SpaceController extends Controller
             ->spaces()
             ->findOrFail($id);
 
-        $validated = $request->validate([
-            'county' => ['required', 'string', 'max:100'],
-            'city' => ['required', 'string', 'max:100'],
-            'ownership' => ['required', 'string', 'in:bought,inherited'],
-            'purchase_price' => ['nullable', 'numeric', 'min:0'],
-        ]);
+        $validated = $request->validate(SpaceProfileRules::home(), SpaceProfileRules::messages());
 
         $profile = $space->homeProfile()->updateOrCreate(
             ['space_id' => $space->id],

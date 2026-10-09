@@ -11,11 +11,10 @@ import { addRecurrenceInterval } from "@/components/spaces/home/homeCategoryConf
 export type HomeMaintenanceResolveSheetProps = {
   entry: HomeMaintenanceEntry;
   onCancel: () => void;
-  /** Always a real, non-zero price -- unlike Tasks, every Maintenance
-   * entry already has one (the form field is required), so there's no
-   * "resolve without a price" escape hatch here, just confirming or
-   * correcting the amount this cycle actually cost. */
-  onResolve: (price: number) => void;
+  /** This visit's price, or null for "Fără cost" (a warranty visit, a
+   * free check) -- resolves without logging any spend and keeps the
+   * entry's usual price for next time. */
+  onResolve: (price: number | null) => void;
 };
 
 /**
@@ -59,12 +58,18 @@ export function HomeMaintenanceResolveSheet({ entry, onCancel, onResolve }: Home
     <Sheet
       visible
       onClose={onCancel}
+      info="home.resolve"
       centered
       icon="checkmark"
       tone={colors.success}
-      title={`${entry.service}: rezolvat`}
-      subtitle={`Cât a costat de data asta? Următoarea e programată pe ${nextDueLabel}.`}
-      footer={<Button label="Confirmă" tone={SPACE_BUTTON_FILL.home} onPress={handleResolve} />}
+      title={entry.service}
+      subtitle={`Marchezi ca rezolvat. Cât a costat de data asta? Următoarea: ${nextDueLabel}.`}
+      footer={
+        <>
+          <Button label="Confirmă" tone={SPACE_BUTTON_FILL.home} onPress={handleResolve} />
+          <Button testID="maintenance-resolve-free" variant="ghost" label="Fără cost" onPress={() => onResolve(null)} />
+        </>
+      }
     >
       <Field
         value={price}

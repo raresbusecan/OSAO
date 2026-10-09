@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, ScrollView, Pressable } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { View, Text, ScrollView } from "react-native";
 import { useTheme } from "@/lib/theme";
+import type { HelpKey } from "@/lib/help";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import { HomeCategorySection, type HomeCategoryRow } from "./HomeCategorySection";
 import { parseLeadingNumber, type HomeCategoryField } from "./homeCategoryConfig";
@@ -11,12 +11,15 @@ import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProf
 import { Sheet } from "@/components/ui/Sheet";
 import { TopBar, CircleButton, Identity, Field, FieldButton, Segmented, Button, ToggleRow } from "@/components/ui/primitives";
 import { roCount, roDate } from "@/lib/format";
+import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 import type { HomeIcon } from "./home.ui.types";
 
 const HOME = SPACE_IDENTITY_COLORS.home!;
 
 export type HomeCategoryPageProps = {
   title: string;
+  /** "ⓘ" on the page title and the form: how this category works. */
+  info?: HelpKey;
   /** Shown as a tinted identity-color chip next to the title -- same
    * glyph each category's own rows already use (see
    * homeCategoryConfig.ts's `icon`), so the page you land on visually
@@ -43,6 +46,22 @@ export type HomeCategoryPageProps = {
    * row for edit on mount, same as tapping it, instead of leaving the
    * user to find it themselves among the rest of "Existing". */
   initialEditId?: string | null;
+  /** "Editează" from the record sheet while this page is open -- opens
+   * the form for that row; a new nonce reopens it even for the same id. */
+  editRequest?: { id: string; n: number } | null;
+  /** Tap on a row: the record preview (instead of the edit form). */
+  onRowPreview?: (id: string) => void;
+  /** Long press on a row: the record's action sheet. */
+  onRowActions?: (id: string) => void;
+  /** Opened from Casă's quick-add buttons -- start with the add form up. */
+  startWithForm?: boolean;
+  /** Only the form sheet, over whatever screen is behind (Casă's main
+   * view) -- closing or saving it calls onBack. */
+  formOnly?: boolean;
+  /** false = rows have no swipe actions. */
+  swipeable?: boolean;
+  /** Documents: swipe right = the renewal pop-up. */
+  onRenew?: (id: string) => void;
 };
 
 /**
@@ -65,14 +84,22 @@ export function HomeCategoryPage({
   onResolve,
   getEditValues,
   initialEditId,
+  startWithForm,
+  swipeable,
+  onRenew,
+  info,
+  editRequest,
+  onRowPreview,
+  onRowActions,
+  formOnly,
 }: HomeCategoryPageProps) {
-  const { colors, spacing, radius, typography } = useTheme();
+  const { spacing } = useTheme();
   const [values, setValues] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [datePickerFor, setDatePickerFor] = useState<string | null>(null);
   // The form (add or edit) opens as a bottom sheet, triggered either by
   // the "+ Add X" row or by tapping an existing entry to edit it.
-  const [formExpanded, setFormExpanded] = useState(false);
+  const [formExpanded, setFormExpanded] = useState(!!startWithForm || !!formOnly);
 
   const isFieldVisible = (field: HomeCategoryField) =>
     !field.showWhen || values[field.showWhen] === "true";
@@ -83,6 +110,11 @@ export function HomeCategoryPage({
   // "invalid number" too would just show two contradictory reasons for
   // the same disabled button.
   const isFieldInvalid = (field: HomeCategoryField) => {
+    if (field.notBefore) {
+      const v = values[field.key];
+      const other = values[field.notBefore];
+      return !!v && !!other && new Date(v).getTime() < new Date(other).getTime();
+    }
     if (!field.nonNegativeNumber) return false;
     const raw = values[field.key] || "";
     if (!raw.trim()) return false;
@@ -106,6 +138,7 @@ export function HomeCategoryPage({
   const closeForm = () => {
     reset();
     setFormExpanded(false);
+    if (formOnly) onBack();
   };
 
   const submit = () => {
@@ -129,6 +162,16 @@ export function HomeCategoryPage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialEditId]);
 
+  // A new edit request (its nonce changed) opens the form for that row --
+  // adjusted during render rather than in an effect.
+  const [seenEditRequest, setSeenEditRequest] = useState(editRequest?.n);
+  if (editRequest && editRequest.n !== seenEditRequest) {
+    setSeenEditRequest(editRequest.n);
+    setEditingId(editRequest.id);
+    setValues(getEditValues(editRequest.id));
+    setFormExpanded(true);
+  }
+
   const remove = async (id: string | number) => {
     const confirmed = await confirmAction(
       "Ștergi înregistrarea?",
@@ -151,43 +194,16 @@ export function HomeCategoryPage({
     closeForm();
   };
 
-  return (
-    <>
-    <SwipeBackView onBack={onBack}>
-    <ScrollView
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
-    >
-      <TopBar onBack={onBack} backTestID="category-back">
-        <CircleButton testID="category-add-row" icon="add" label={submitLabel} tone={HOME} onPress={() => setFormExpanded(true)} />
-      </TopBar>
-
-      <Identity color={HOME} kicker="Casă" title={title} subtitle={rows.length > 0 ? roCount(rows.length, "înregistrare", "înregistrări") : null} />
-
-      <HomeCategorySection
-        title="Toate"
-        rows={rows}
-        emptyLabel={`${emptyLabel} Adaugă una cu „+”.`}
-        onRowPress={startEdit}
-        onRowDelete={remove}
-        onRowResolve={onResolve ? (id) => onResolve(String(id)) : undefined}
-      />
-
-      {rows.length > 0 ? (
-        <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, textAlign: "center" }}>
-          {onResolve ? "Glisează dreapta ca să rezolvi, stânga ca să ștergi." : "Glisează spre stânga ca să ștergi."}
-        </Text>
-      ) : null}
-    </ScrollView>
-    </SwipeBackView>
-
+  const formSheet = (
     <Sheet
       visible={formExpanded}
       onClose={closeForm}
-      title={editingId ? `Editează: ${title.toLowerCase()}` : submitLabel}
+      // "Adaugă factura" -> "Editează factura" (singular, from the category's own label).
+      title={editingId ? submitLabel.replace(/^Adaugă/, "Editează") : submitLabel}
       icon={icon}
       tone={HOME}
       testID="category-form"
+      info={info}
       footer={
         <>
           <Button testID="category-submit" label={editingId ? "Salvează" : submitLabel} tone={SPACE_BUTTON_FILL.home} onPress={submit} disabled={!canSubmit} />
@@ -205,6 +221,7 @@ export function HomeCategoryPage({
           key={field.key}
           field={field}
           value={values[field.key]}
+          suffix={field.suffix?.(values)}
           invalid={isFieldInvalid(field)}
           onChange={(v) => setValues((current) => ({ ...current, [field.key]: v }))}
           onOpenDate={() => setDatePickerFor(field.key)}
@@ -224,6 +241,39 @@ export function HomeCategoryPage({
         />
       ) : null}
     </Sheet>
+  );
+
+  if (formOnly) return formSheet;
+
+  return (
+    <>
+    <SwipeBackView onBack={onBack}>
+    <ScrollView
+      showsVerticalScrollIndicator={false}
+      contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
+    >
+      <TopBar onBack={onBack} backTestID="category-back">
+        <CircleButton testID="category-add-row" icon="add" label={submitLabel} tone={HOME} onPress={() => setFormExpanded(true)} />
+      </TopBar>
+
+      <Identity color={HOME} kicker="Casă" title={title} info={info} subtitle={rows.length > 0 ? roCount(rows.length, "înregistrare", "înregistrări") : null} />
+
+      <HomeCategorySection
+        title="Toate"
+        rows={rows}
+        emptyLabel={`${emptyLabel} Adaugă una cu „+”.`}
+        onRowPress={onRowPreview ? (id) => onRowPreview(String(id)) : startEdit}
+        onRowLongPress={onRowActions ? (id) => onRowActions(String(id)) : undefined}
+        // No swipe on documents: they're renewed/edited, not swiped away.
+        onRowDelete={swipeable === false ? undefined : remove}
+        onRowResolve={onResolve ? (id) => onResolve(String(id)) : undefined}
+        onRowRenew={onRenew ? (id) => onRenew(String(id)) : undefined}
+      />
+
+    </ScrollView>
+    </SwipeBackView>
+
+    {formSheet}
     </>
   );
 }
@@ -232,12 +282,14 @@ export function HomeCategoryPage({
 function CategoryField({
   field,
   value,
+  suffix,
   invalid,
   onChange,
   onOpenDate,
 }: {
   field: HomeCategoryField;
   value: string | undefined;
+  suffix?: string;
   invalid: boolean;
   onChange: (value: string) => void;
   onOpenDate: () => void;
@@ -245,6 +297,17 @@ function CategoryField({
   const { colors, spacing, radius } = useTheme();
   const optional = field.required === false;
   const label = optional && field.type !== "toggle" ? `${field.label} (opțional)` : field.label;
+
+  if (field.type === "guiltFree") {
+    return (
+      <GuiltFreeToggle
+        testID={`category-field-${field.key}`}
+        value={value === "true"}
+        onChange={(next) => onChange(next ? "true" : "false")}
+        tone={HOME}
+      />
+    );
+  }
 
   if (field.type === "toggle") {
     return (
@@ -260,13 +323,16 @@ function CategoryField({
 
   if (field.type === "date") {
     return (
-      <FieldButton
-        testID={`category-field-${field.key}`}
-        label={label}
-        value={value ? roDate(value, { withYear: true }) : null}
-        placeholder="Alege o dată"
-        onPress={onOpenDate}
-      />
+      <View style={{ gap: 6 }}>
+        <FieldButton
+          testID={`category-field-${field.key}`}
+          label={label}
+          value={value ? roDate(value, { withYear: true }) : null}
+          placeholder="Alege o dată"
+          onPress={onOpenDate}
+        />
+        {invalid ? <Text style={{ fontSize: 13, color: colors.error }}>Nu poate fi înaintea datei de emitere.</Text> : null}
+      </View>
     );
   }
 
@@ -293,6 +359,7 @@ function CategoryField({
       onChangeText={onChange}
       placeholder={field.placeholder}
       keyboardType={field.keyboardType === "numeric" || field.nonNegativeNumber ? "decimal-pad" : "default"}
+      suffix={suffix}
       tone={HOME}
       error={invalid ? "Introdu un număr valid, nu negativ." : null}
     />

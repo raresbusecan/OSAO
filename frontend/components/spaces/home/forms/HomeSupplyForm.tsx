@@ -63,6 +63,7 @@ export default function HomeSupplyForm({ onCancel, onSave, entry, onDelete }: Ho
     <Sheet
       visible
       onClose={onCancel}
+      info="home.supplyForm"
       title={isEditing ? "Editează provizia" : "Provizie nouă"}
       subtitle={isEditing ? undefined : "Ceva ce ții mereu în casă"}
       icon="basket-outline"

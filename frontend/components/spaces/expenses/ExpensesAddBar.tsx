@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL } from "@/lib/spaces/spaceProfile";
 import { PressableScale } from "@/components/ui/PressableScale";
-import { Field, FieldButton } from "@/components/ui/primitives";
+import { Field, FieldButton, Disclosure } from "@/components/ui/primitives";
 import { motion } from "@/lib/motion";
 import { ExpenseDatePickerSheet } from "./ExpenseDatePickerSheet";
 
@@ -112,16 +112,7 @@ export function ExpensesAddBar({ onAdd }: ExpensesAddBarProps) {
         </PressableScale>
       </View>
 
-      <Pressable
-        testID="expenses-add-toggle-details"
-        onPress={() => setExpanded((v) => !v)}
-        accessibilityRole="button"
-        accessibilityState={{ expanded }}
-        style={{ flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", minHeight: 44 }}
-      >
-        <Ionicons name={expanded ? "remove" : "add"} size={15} color={colors.onSurfaceTertiary} />
-        <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>{expanded ? "Ascunde detaliile" : "Dată sau notă"}</Text>
-      </Pressable>
+      <Disclosure testID="expenses-add-toggle-details" label="Dată sau notă" open={expanded} onToggle={() => setExpanded((v) => !v)} />
 
       {expanded ? (
         <View style={{ gap: spacing.sm }}>

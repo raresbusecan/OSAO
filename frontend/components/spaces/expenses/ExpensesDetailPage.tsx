@@ -20,14 +20,16 @@ export type ExpensesDetailPageProps = {
   expensesData: ExpensesData;
   onBack: () => void;
   onEntryPress: (entry: ExpenseEntry) => void;
+  onEntryDelete?: (entry: ExpenseEntry) => void;
 };
 
 const PERIOD_PRESETS: { label: string; period: ExpensesPeriod }[] = [
-  { label: "Tot timpul", period: { kind: "all" } },
+  // Same labels, same order as Casă's and Mașină's Cheltuieli pages.
   { label: "Luna asta", period: { kind: "thisMonth" } },
   { label: "3 luni", period: { kind: "months", count: 3 } },
   { label: "6 luni", period: { kind: "months", count: 6 } },
   { label: "1 an", period: { kind: "years", count: 1 } },
+  { label: "Tot timpul", period: { kind: "all" } },
 ];
 
 function periodsEqual(a: ExpensesPeriod, b: ExpensesPeriod): boolean {
@@ -46,7 +48,7 @@ function periodsEqual(a: ExpensesPeriod, b: ExpensesPeriod): boolean {
  * Car/Home's multi-category chip grids, so there's no category filter
  * here -- period is the only axis.
  */
-export function ExpensesDetailPage({ expensesData, onBack, onEntryPress }: ExpensesDetailPageProps) {
+export function ExpensesDetailPage({ expensesData, onBack, onEntryPress, onEntryDelete }: ExpensesDetailPageProps) {
   const { colors, spacing, radius, typography } = useTheme();
 
   const [period, setPeriod] = useState<ExpensesPeriod>({ kind: "all" });
@@ -70,7 +72,7 @@ export function ExpensesDetailPage({ expensesData, onBack, onEntryPress }: Expen
       contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >
       <TopBar onBack={onBack} backTestID="expenses-detail-back" />
-      <Identity color={SPACE_IDENTITY_COLORS.expenses} kicker="Cheltuieli" title="Toate cheltuielile" />
+      <Identity color={SPACE_IDENTITY_COLORS.expenses} kicker="Cheltuieli" title="Toate cheltuielile" info="expenses.space" />
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
         {PERIOD_PRESETS.map((preset) => (
@@ -93,7 +95,7 @@ export function ExpensesDetailPage({ expensesData, onBack, onEntryPress }: Expen
         <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{roCount(filteredEntries.length, "cheltuială", "cheltuieli")}</Text>
       </View>
 
-      <ExpensesListSection entries={filteredEntries} onEntryPress={onEntryPress} emptyMessage="Nicio cheltuială în perioada asta." />
+      <ExpensesListSection entries={filteredEntries} onEntryPress={onEntryPress} onEntryDelete={onEntryDelete} emptyMessage="Nicio cheltuială în perioada asta." />
     </ScrollView>
     </SwipeBackView>
   );

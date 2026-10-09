@@ -8,15 +8,19 @@ import { motion } from "@/lib/motion";
 
 export type HomeStatsProps = {
   thisMonthExpenses: number;
-  upcomingCount: number;
+  /** Past-due and unresolved -- the same number as the Scadențe card's
+   * "Restante" column and this space's tile on Acasă/Spații. */
+  overdueCount: number;
+  /** Opens the Scadențe page. */
+  onOverduePress?: () => void;
   /** Opens HomeSpendPage -- the whole space's spend, not just this
    * month's total. */
   onSpendPress?: () => void;
 };
 
 /** The Home space's hero card: this month's spend (tap -> spend page)
- * and how many things are coming up, side by side. */
-export function HomeStats({ thisMonthExpenses, upcomingCount, onSpendPress }: HomeStatsProps) {
+ * and how many things are past due (tap -> Scadențe), side by side. */
+export function HomeStats({ thisMonthExpenses, overdueCount, onOverduePress, onSpendPress }: HomeStatsProps) {
   const { colors, spacing, radius } = useTheme();
   const muted = colors.onSurfaceTertiary;
   const big = { fontSize: 24, fontWeight: "600" as const, letterSpacing: -0.5, color: colors.onSurface };
@@ -41,10 +45,21 @@ export function HomeStats({ thisMonthExpenses, upcomingCount, onSpendPress }: Ho
           <Text style={{ fontSize: 15, color: muted }}>lei</Text>
         </View>
       </PressableScale>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={{ fontSize: 13, color: muted }}>Urmează</Text>
-        <AnimatedNumber value={upcomingCount} style={big} />
-      </View>
+      <PressableScale
+        testID="home-overdue-stat"
+        onPress={onOverduePress}
+        disabled={!onOverduePress}
+        scaleTo={motion.scale.tile}
+        accessibilityRole="button"
+        accessibilityLabel={`Restante: ${overdueCount}. Vezi scadențele`}
+        style={{ flex: 1, gap: 2 }}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+          <Text style={{ fontSize: 13, color: muted }}>Restante</Text>
+          {onOverduePress ? <Ionicons name="chevron-forward" size={13} color={muted} /> : null}
+        </View>
+        <AnimatedNumber value={overdueCount} style={{ ...big, color: overdueCount > 0 ? colors.error : colors.onSurface }} />
+      </PressableScale>
     </View>
   );
 }

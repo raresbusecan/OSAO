@@ -65,8 +65,8 @@ export const SPACE_IDENTITY_COLORS: Partial<Record<SpaceKind, string>> = {
  * gets a lighter tint in dark mode and a deeper one in light mode, same
  * hue. Fills (bars, buttons, dots) keep using SPACE_IDENTITY_COLORS. */
 const SPACE_TEXT_COLORS: Record<"dark" | "light", Partial<Record<SpaceKind | "custom", string>>> = {
-  dark: { car: "#6FA5F8", home: "#B37BF5", grocery: "#F5B13D", expenses: "#3DD3BF", custom: "#EC4899" },
-  light: { car: "#2563EB", home: "#7E22CE", grocery: "#B45309", expenses: "#0F766E", custom: "#BE185D" },
+  dark: { car: "#6FA5F8", home: "#B37BF5", grocery: "#F5B13D", expenses: "#3DD3BF", custom: "#A3E635" },
+  light: { car: "#2563EB", home: "#7E22CE", grocery: "#B45309", expenses: "#0F766E", custom: "#4D7C0F" },
 };
 
 /** `"custom"` = a calendar event with no space (CUSTOM_EVENT_COLOR). */
@@ -106,8 +106,11 @@ export const SPACE_KIND_LABEL: Partial<Record<SpaceKind, string>> = {
  * deliberately NOT in a space: a custom calendar event created with no
  * space_id (see calendar.tsx). Kept here rather than re-declared per
  * screen so Calendar, Home's "De făcut" breakdown and its carousel all
- * agree on the same pink instead of three independent copies of it. */
-export const CUSTOM_EVENT_COLOR = "#EC4899";
+ * agree on the same color instead of three independent copies of it.
+ * Lime (2026-10-05, was pink #EC4899): a hue no space, status or the
+ * calendar's red heat uses -- the pink event dot got mixed up with the
+ * red "restant" dot. */
+export const CUSTOM_EVENT_COLOR = "#84CC16";
 
 /** backend/app/Http/Controllers/Api/SpaceController.php's car_profile shape. */
 export function carProfileFromApi(raw: any): CarProfile | null {

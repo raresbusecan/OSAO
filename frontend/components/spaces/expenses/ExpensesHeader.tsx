@@ -20,7 +20,7 @@ export function ExpensesHeader({ space, onEdit }: ExpensesHeaderProps) {
       <TopBar onBack={() => router.push("/spaces")}>
         {onEdit ? <CircleButton testID="space-edit" icon="create-outline" label="Editează spațiul" onPress={onEdit} /> : null}
       </TopBar>
-      <Identity color={SPACE_IDENTITY_COLORS.expenses} kicker="Cheltuieli" title={space?.name || "Cheltuieli"} />
+      <Identity color={SPACE_IDENTITY_COLORS.expenses} kicker="Cheltuieli" title={space?.name || "Cheltuieli"} info="expenses.space" />
     </View>
   );
 }

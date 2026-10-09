@@ -1,4 +1,7 @@
 import React, { useMemo } from "react";
+import { SwipeRow } from "@/components/spaces/SwipeRow";
+import { parseDocDate } from "@/lib/dashboard/documentRenewal";
+import type { CarDocumentEntry } from "@/lib/spaces/car/car.types";
 import { ScrollView } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
@@ -18,6 +21,10 @@ export type CarDocsPageProps = {
    * Archive's job); this page never locks on age the way the old
    * RECENT/ALL mix used to. */
   onRecordPress?: (id: string) => void;
+  /** Swipe right -- the renewal pop-up (CarDashboard). */
+  onRenew?: (entry: CarDocumentEntry) => void;
+  /** Swipe left -- delete, after a confirmation (CarDashboard). */
+  onDelete?: (entry: CarDocumentEntry) => void;
 };
 
 function statusLabel(status: DocumentStatus, daysUntilExpiry: number | null): string {
@@ -46,14 +53,23 @@ function statusColor(status: DocumentStatus, colors: any): string {
  * as it's current, full stop, and moves to Archive only once an actual
  * renewal supersedes it (see CarDashboard.tsx's "renew" flow).
  */
-export function CarDocsPage({ carData, onBack, onRecordPress }: CarDocsPageProps) {
+/** "12.09.2025 – 11.09.2026", or "până pe 11.09.2026" without an issue date. */
+function validityLabel(issue?: string, expiry?: string): string | null {
+  if (issue && expiry) return `${issue} – ${expiry}`;
+  if (expiry) return `până pe ${expiry}`;
+  return "fără dată de expirare";
+}
+
+export function CarDocsPage({ carData, onBack, onRecordPress, onRenew, onDelete }: CarDocsPageProps) {
   const { colors, spacing, isDark } = useTheme();
 
   const documents = useMemo(() => {
     return carData.documentEntries
       .filter((entry) => !entry.archived)
       .map((entry) => ({ ...entry, ...getDocumentStatus(entry) }))
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      // Soonest expiry first -- the VALIDITY dates are what matter for a
+      // document, never the day it was typed into the app.
+      .sort((a, b) => (parseDocDate(a.expiryDate)?.getTime() ?? Infinity) - (parseDocDate(b.expiryDate)?.getTime() ?? Infinity));
   }, [carData.documentEntries]);
 
   const CAR = SPACE_IDENTITY_COLORS.car!;
@@ -67,7 +83,7 @@ export function CarDocsPage({ carData, onBack, onRecordPress }: CarDocsPageProps
       contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >
       <TopBar onBack={onBack} backTestID="docs-back" />
-      <Identity color={CAR} kicker="Mașină" title="Documente" subtitle="RCA, ITP, rovinietă și orice altceva ai la dosar" />
+      <Identity color={CAR} kicker="Mașină" title="Documente" subtitle="RCA, ITP, rovinietă și orice altceva ai la dosar" info="car.docs" />
 
       {documents.length === 0 ? (
         <EmptyState icon="document-text-outline" message="Niciun document încă. Adaugă unul din butonul Document de pe pagina mașinii." />
@@ -76,19 +92,28 @@ export function CarDocsPage({ carData, onBack, onRecordPress }: CarDocsPageProps
           {documents.map((doc) => {
             const tone = statusColor(doc.status, colors);
             return (
-              <Row
+              <SwipeRow
                 key={doc.id}
+                cornerRadius={0}
+                colors={colors}
+                onResolve={onRenew ? () => onRenew(doc) : undefined}
+                resolveIcon="refresh"
+                resolveLabel="Reînnoiește"
+                onDelete={onDelete ? () => onDelete(doc) : undefined}
+              >
+              <Row
                 testID={`docs-record-${doc.id}`}
                 onPress={onRecordPress ? () => onRecordPress(doc.id) : undefined}
                 leading={<IconWell icon="document-text-outline" color={CAR} tint={tint} />}
                 title={doc.title}
-                subtitle={[doc.documentType, formatCarDate(doc.date), doc.price !== undefined ? `${formatCarNumber(doc.price)} lei` : null].filter(Boolean).join(", ")}
+                subtitle={[doc.documentType, validityLabel(doc.issueDate, doc.expiryDate), doc.price !== undefined ? `${formatCarNumber(doc.price)} lei` : null].filter(Boolean).join(", ")}
                 trailing={
                   doc.status === "valid" || doc.status === "no_expiry"
                     ? <Chip label={statusLabel(doc.status, doc.daysUntilExpiry)} color={tone} filled={false} />
                     : <Chip label={statusLabel(doc.status, doc.daysUntilExpiry)} color={tone} icon={doc.status === "expired" ? "alert-circle" : undefined} />
                 }
               />
+              </SwipeRow>
             );
           })}
         </Group>

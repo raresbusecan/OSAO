@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { roUnit } from "@/lib/format";
 import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field } from "@/components/ui/primitives";
@@ -45,6 +46,7 @@ export function HomeSupplyRestockSheet({ entry, onCancel, onConfirm }: HomeSuppl
     <Sheet
       visible
       onClose={onCancel}
+      info="home.supplies"
       title={entry.name}
       subtitle="Cât ai cumpărat?"
       icon="basket-outline"
@@ -60,7 +62,7 @@ export function HomeSupplyRestockSheet({ entry, onCancel, onConfirm }: HomeSuppl
         keyboardType="decimal-pad"
         autoFocus
         big
-        suffix={entry.unit}
+        suffix={roUnit(entry.unit)}
         tone={SPACE_IDENTITY_COLORS.home}
         error={error || null}
         hint="Cantitatea contează pentru estimare: perioada până la următoarea cumpărătură depinde de cât iei de fiecare dată."

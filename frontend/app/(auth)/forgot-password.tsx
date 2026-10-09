@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { View } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/lib/theme";
-import { api } from "@/lib/api";
+import { api, apiErrorMessage } from "@/lib/api";
 import { Button, Field } from "@/components/ui/primitives";
 import { AuthShell, AuthSwitch, AuthNotice } from "@/components/auth/AuthShell";
 
@@ -28,7 +28,7 @@ export default function ForgotPassword() {
       await api.forgotPassword(email.trim());
       setSent(true);
     } catch (e: any) {
-      setErr(e?.message || "Nu am putut trimite linkul. Încearcă din nou.");
+      setErr(apiErrorMessage(e, "Nu am putut trimite linkul. Încearcă din nou.", "email"));
     } finally {
       setBusy(false);
     }

@@ -34,4 +34,6 @@ export type CarRecentItem = {
    * km/date decided it for maintenance). Swaps the status dot for a
    * small "!". */
   overdue?: boolean;
+  /** items.guilt_free -- the row shows a "Fără vină" chip. */
+  guiltFree?: boolean;
 };

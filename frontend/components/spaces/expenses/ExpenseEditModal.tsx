@@ -4,8 +4,9 @@ import { confirmAction } from "@/lib/confirm";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
 import { Sheet } from "@/components/ui/Sheet";
-import { Button, Field, FieldButton } from "@/components/ui/primitives";
+import { Button, Disclosure, Field, FieldButton } from "@/components/ui/primitives";
 import { ExpenseDatePickerSheet } from "./ExpenseDatePickerSheet";
+import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 
 export type ExpenseEditModalProps = {
   entry: ExpenseEntry | null;
@@ -47,7 +48,9 @@ function ExpenseEditSheet({
   const [price, setPrice] = useState(String(entry.price));
   const [date, setDate] = useState(entry.date);
   const [notes, setNotes] = useState(entry.notes ?? "");
+  const [guiltFree, setGuiltFree] = useState(!!entry.guiltFree);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(!!entry.notes);
   const [error, setError] = useState("");
 
   const parsedPrice = Number(price.replace(",", "."));
@@ -58,7 +61,7 @@ function ExpenseEditSheet({
       setError("Introdu un nume și un preț valid.");
       return;
     }
-    onSave({ ...entry, name: name.trim(), price: parsedPrice, date, notes: notes.trim() || undefined });
+    onSave({ ...entry, name: name.trim(), price: parsedPrice, date, notes: notes.trim() || undefined, guiltFree });
   };
 
   const handleDelete = async () => {
@@ -70,6 +73,7 @@ function ExpenseEditSheet({
     <Sheet
       visible
       onClose={onClose}
+      info="expenses.edit"
       title="Editează cheltuiala"
       icon="receipt-outline"
       tone={TEAL}
@@ -83,7 +87,11 @@ function ExpenseEditSheet({
       <Field testID="expense-edit-name" label="Ce ai cumpărat" value={name} onChangeText={setName} placeholder="ex. Geacă de iarnă" tone={TEAL} />
       <Field testID="expense-edit-price" label="Preț" value={price} onChangeText={setPrice} keyboardType="decimal-pad" big suffix="lei" tone={TEAL} error={error || null} />
       <FieldButton testID="expense-edit-date" label="Data" value={date ? formatShortDate(date) : null} onPress={() => setDatePickerVisible(true)} />
-      <Field testID="expense-edit-notes" label="Notă (opțional)" value={notes} onChangeText={setNotes} placeholder="Orice detaliu util" multiline tone={TEAL} />
+      <GuiltFreeToggle testID="expense-edit-guilt-free" value={guiltFree} onChange={setGuiltFree} tone={TEAL} />
+      <Disclosure label="Adaugă o notă" open={moreOpen} onToggle={() => setMoreOpen((v) => !v)} />
+      {moreOpen ? (
+        <Field testID="expense-edit-notes" label="Notă" value={notes} onChangeText={setNotes} placeholder="Orice detaliu util" multiline tone={TEAL} />
+      ) : null}
 
       {datePickerVisible ? (
         <ExpenseDatePickerSheet

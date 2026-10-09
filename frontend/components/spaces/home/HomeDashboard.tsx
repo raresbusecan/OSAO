@@ -1,18 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
+import { askRenewal, renewalPeriod, toIsoDate } from "@/lib/dashboard/documentRenewal";
 import { roDate } from "@/lib/format";
-import { ScrollView, View, Text, Pressable } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/lib/theme";
+import type { HelpKey } from "@/lib/help";
 import { confirmAction, notifyAction } from "@/lib/confirm";
-import { severityColor, type SeverityTier } from "@/lib/statusColors";
-import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
-import { PressableScale } from "@/components/ui/PressableScale";
-import { IconWell, readableOn } from "@/components/ui/primitives";
+import { nextDateAfterResolve } from "@/lib/dashboard/itemActions";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 
 import type { HomeData } from "./home.data.types";
-import type { HomeNextItem } from "./home.ui.types";
 import type {
   HomeDocumentEntry,
   HomeExpenseEntry,
@@ -22,9 +19,7 @@ import type {
   HomeTaskEntry,
 } from "@/lib/spaces/home/home.types";
 import { HomeHeader } from "./HomeHeader";
-import { HomeStats } from "./HomeStats";
 import { HomeSpendPage } from "./HomeSpendPage";
-import { HomeNextSection } from "./HomeNextSection";
 import { HomeCategoryPage } from "./HomeCategoryPage";
 import { HomeArchivePage } from "./HomeArchivePage";
 import { HomeTasksPage } from "./HomeTasksPage";
@@ -35,44 +30,23 @@ import { HomeSuppliesPage } from "./HomeSuppliesPage";
 import { HomeSupplyRestockSheet } from "./HomeSupplyRestockSheet";
 import HomeTaskForm from "./forms/HomeTaskForm";
 import HomeSupplyForm from "./forms/HomeSupplyForm";
-import { HOME_CATEGORIES, type HomeCategoryKey } from "./homeCategoryConfig";
-import { HomeRestanteCard } from "./HomeRestanteCard";
+import { HOME_CATEGORIES, addRecurrenceInterval, type HomeCategoryKey } from "./homeCategoryConfig";
+import { HomeOverviewCard, HomeDueSection, type DueTabKind } from "./HomeOverview";
+import { HomeRecordSheet, type HomeRecordResolve } from "./HomeRecordSheet";
+import { buildHomeRecordPreview, type HomeRecordKind } from "./homeRecordPreview";
+import { longPressFeedback } from "@/lib/haptics";
+import { SpaceQuickActions } from "@/components/spaces/SpaceQuickActions";
 import {
   getThisMonthHomeExpenses,
-  getUpcomingHomeItems,
-  getTaskTierCounts,
-  getMaintenanceTierCounts,
-  getRecurringTierCounts,
-  getRecurringTaskWarnings,
-  recurringWarningTierColor,
   getSupplyRestockEstimate,
   nextTaskOccurrence,
-  type RecurringWarningTier,
+  getHomeDueList,
+  getHomeKindRows,
+  monthlyBillsTotal,
+  daysUntil,
+  type HomeDueRow,
 } from "@/lib/spaces/home/calculations/dashboard.calculations";
 import type { HomeProfile } from "@/lib/spaces/spaceProfile";
-
-/** `severity` null = a neutral count (grey) -- red stays reserved for overdue. */
-type CategoryBadge = { count: number; severity: SeverityTier | null } | null;
-/** One dot per urgency tier instead of a single combined number -- per
- * explicit user request, every category tile that has a due-date-based
- * urgency concept (Task-uri/Mentenanță/Recurente -- Cheltuieli has no
- * due date, Provizii uses a different rate-based restock model, see
- * getSupplyRestockEstimate) gets its OWN dots from its OWN entries only,
- * never a combined cross-category total -- a dot always traces back to
- * exactly one tile. Each tier has its own distinct color (see
- * recurringWarningTierColor), so no two dots on the same tile ever look
- * identical either. */
-type TierDots = { tier: RecurringWarningTier; count: number }[];
-
-/** A small filled count on a category tile -- urgency tier or badge
- * color, with black/white ink picked for contrast (readableOn). */
-function CountDot({ count, color }: { count: number; color: string }) {
-  return (
-    <View style={{ minWidth: 20, height: 20, paddingHorizontal: 5, borderRadius: 10, backgroundColor: color, alignItems: "center", justifyContent: "center" }}>
-      <Text style={{ fontSize: 11, fontWeight: "600", color: readableOn(color) }}>{count}</Text>
-    </View>
-  );
-}
 
 export type HomeDashboardProps = {
   space: any;
@@ -102,7 +76,9 @@ export type HomeDashboardProps = {
   /** Deep-link from TodoCarouselSheet's "Deschide" -- jumps straight
    * into the sub-view where that specific to-do actually gets resolved
    * instead of just landing on this dashboard's own category grid. */
-  initialOpenItem?: { type: "home_task" | "home_recurring" | "home_maintenance"; id: string } | null;
+  /** `resolve`: open the item's resolve step (a swipe-right from another
+   * screen) instead of its edit form. */
+  initialOpenItem?: { type: "home_task" | "home_recurring" | "home_maintenance" | "home_document"; id: string; resolve?: boolean } | null;
 };
 
 export default function HomeDashboard({
@@ -125,11 +101,24 @@ export default function HomeDashboard({
   onTaskReorder,
   initialOpenItem,
 }: HomeDashboardProps) {
-  const { colors, spacing, radius, isDark } = useTheme();
-  const homeTint = spaceTextColor("home", isDark) ?? SPACE_IDENTITY_COLORS.home!;
+  const { spacing } = useTheme();
   const router = useRouter();
 
   const [activeCategory, setActiveCategory] = useState<HomeCategoryKey | null>(null);
+  // "De rezolvat"'s type tab -- Sarcini every time the dashboard opens
+  // (user's choice); each pill carries its own urgency count.
+  const [dueTab, setDueTab] = useState<DueTabKind>("task");
+  // The one record sheet for every Casă screen: a tap previews, a long
+  // press shows only the actions (HomeRecordSheet).
+  const [recordSheet, setRecordSheet] = useState<{ kind: HomeRecordKind; id: string; mode: "preview" | "actions" } | null>(null);
+  // "Editează" from that sheet while a category page is open: reopen
+  // that page's own form for the row (a fresh nonce each time).
+  const [categoryEditRequest, setCategoryEditRequest] = useState<{ id: string; n: number } | null>(null);
+  const editNonce = useRef(0);
+  // A category's add/edit form opened over the main Casă screen (quick-add
+  // buttons, "Editează" from a preview there) -- the screen behind stays.
+  const [formOverlay, setFormOverlay] = useState<{ category: HomeCategoryKey; editId?: string } | null>(null);
+  const [categoryStartsWithForm, setCategoryStartsWithForm] = useState(false);
   // Set alongside activeCategory only by the initialOpenItem deep-link
   // below -- HomeCategoryPage pre-opens this row for edit on mount, same
   // as tapping it (see its own initialEditId prop).
@@ -170,45 +159,48 @@ export default function HomeDashboard({
   const [restockSheetEntry, setRestockSheetEntry] = useState<HomeSupplyEntry | null>(null);
 
   const thisMonthExpenses = getThisMonthHomeExpenses(homeData);
-  // Unsliced -- the category grid's badges below need the REAL count per
-  // category, not just whichever 3 items happen to be the soonest
-  // overall (a category with nothing in the top 3 would wrongly show no
-  // badge at all). HomeNextSection still only ever sees the first 3.
-  const upcomingItems = getUpcomingHomeItems(homeData);
+  // The dashboard's state, in words (2026-10 redesign, variant A --
+  // components/spaces/home/HomeOverview.tsx). Same day rule everywhere
+  // (daysUntil); counts per category come only from that category.
+  const dueRows = getHomeDueList(homeData, 7);
+  const monthlyBills = monthlyBillsTotal(homeData);
+  const lowSupplyCount = homeData.supplyEntries.filter((entry) => getSupplyRestockEstimate(entry)?.isLow).length;
 
-  // One dot per urgency tier per tile -- each tile's dots come only from
-  // its OWN entries (getXTierCounts), never a cross-category total, so a
-  // dot always traces back to exactly one category.
-  const toTierDots = (counts: Record<RecurringWarningTier, number>): TierDots =>
-    (["red", "orangeToday", "orangeDays", "yellow"] as const)
-      .filter((tier) => counts[tier] > 0)
-      .map((tier) => ({ tier, count: counts[tier] }));
+  // No Categorii section any more (user, 2026-10-05): each "De rezolvat"
+  // tab ends in "Toate ... (N)", unfolding every open record in place; Documente
+  // and Provizii are pills under Istoric, carrying their red counts;
+  // Cheltuieli opens from the "Cheltuit luna asta" half of the top card.
+  const now = new Date();
+  const expiredDocs = homeData.documentEntries.filter((d) => d.expiryDate && daysUntil(d.expiryDate, now) < 0).length;
+  const allRows = {
+    task: getHomeKindRows(homeData, "task"),
+    recurring: getHomeKindRows(homeData, "recurring"),
+    maintenance: getHomeKindRows(homeData, "maintenance"),
+  };
 
-  const taskTierDots = toTierDots(getTaskTierCounts(homeData));
-  const maintenanceTierDots = toTierDots(getMaintenanceTierCounts(homeData));
-  const recurringTierDots = toTierDots(getRecurringTierCounts(homeData));
-
-  // Restanțe (the itemized, cross-category breakdown/drill-down) lives
-  // on this main page now, not buried inside Tasks -- per explicit user
-  // request, since it combines all 3 sources and reading it from inside
-  // "Task-uri" made its counts look like they disagreed with the Task
-  // tile's own (tasks-only) dots.
-  const { counts: restanteCounts } = getRecurringTaskWarnings(homeData);
-
-  const lowSupplyCount = homeData.supplyEntries.filter(
-    (entry) => getSupplyRestockEstimate(entry)?.isLow,
-  ).length;
-  const supplyBadge: CategoryBadge = lowSupplyCount > 0 ? { count: lowSupplyCount, severity: null } : null;
-
-  // Documents deliberately excluded here too -- no tile for it until it
-  // has real utility (file upload).
-  const categoryTiles = [
-    { key: "expenses" as const, label: "Cheltuieli", icon: HOME_CATEGORIES.find((c) => c.key === "expenses")!.icon, badge: null as CategoryBadge, dots: [] as TierDots },
-    { key: "maintenance" as const, label: "Mentenanță", icon: HOME_CATEGORIES.find((c) => c.key === "maintenance")!.icon, badge: null as CategoryBadge, dots: maintenanceTierDots },
-    { key: "recurring" as const, label: "Recurente", icon: HOME_CATEGORIES.find((c) => c.key === "recurring")!.icon, badge: null as CategoryBadge, dots: recurringTierDots },
-    { key: "supplies" as const, label: "Provizii", icon: "basket-outline" as const, badge: supplyBadge, dots: [] as TierDots },
-    { key: "task" as const, label: "Task-uri", icon: "checkmark-circle-outline" as const, badge: null as CategoryBadge, dots: taskTierDots },
+  const quickActions = [
+    { key: "task", label: "Sarcină", icon: "checkmark-circle-outline" },
+    { key: "recurring", label: "Factură", icon: HOME_CATEGORIES.find((c) => c.key === "recurring")!.icon as string },
+    { key: "maintenance", label: "Mentenanță", icon: HOME_CATEGORIES.find((c) => c.key === "maintenance")!.icon as string },
+    { key: "expenses", label: "Cheltuială", icon: HOME_CATEGORIES.find((c) => c.key === "expenses")!.icon as string },
+    { key: "supplies", label: "Provizie", icon: "basket-outline" },
   ];
+
+  // Quick-add: the form opens as a sheet OVER the Casă main screen -- the
+  // screen behind doesn't change (user, 2026-10-05).
+  const addNew = (key: string) => {
+    if (key === "task") {
+      setEditingTaskEntry(null);
+      setTaskFormVisible(true);
+      return;
+    }
+    if (key === "supplies") {
+      setEditingSupplyEntry(null);
+      setSupplyFormVisible(true);
+      return;
+    }
+    setFormOverlay({ category: key as HomeCategoryKey });
+  };
 
   // Every Task/Supplies sub-view (page, form, archive, warnings, resolve
   // sheet) is its own boolean instead of one shared enum, so switching
@@ -271,59 +263,96 @@ export default function HomeDashboard({
     // sub-view so none of them keep winning the render-order check
     // above activeCategory (see closeAllSubViews).
     closeAllSubViews();
+    setCategoryStartsWithForm(false);
     setActiveCategory(key as HomeCategoryKey);
   };
 
-  // "NEXT" row tap (HomeNextSection) -- item.id is always
-  // "<prefix>-<entry id>" (see getUpcomingHomeItems), opens that entry
-  // for editing in its own category page, same deep-link mechanism the
-  // TodoCarousel/initialOpenItem effect below already uses.
-  // Shared by press/resolve/delete below -- item.id is always
-  // "<prefix>-<entry id>" (doc-/maint-/rec-, see getUpcomingHomeItems),
-  // the one place that knows how to turn that back into a real
-  // category + entry id.
-  const decodeNextItem = (item: HomeNextItem): { categoryKey: HomeCategoryKey; entryId: string } | null => {
-    const id = String(item.id);
-    if (id.startsWith("doc-")) return { categoryKey: "documents", entryId: id.slice(4) };
-    if (id.startsWith("maint-")) return { categoryKey: "maintenance", entryId: id.slice(6) };
-    if (id.startsWith("rec-")) return { categoryKey: "recurring", entryId: id.slice(4) };
+  // One set of actions per Casă record, shared by "De rezolvat", every
+  // category page and the record sheet (tap = preview, long press =
+  // actions, swipe right = resolve, swipe left = delete).
+  const RECORD_CATEGORY = { recurring: "recurring", maintenance: "maintenance", document: "documents", expense: "expenses" } as const;
+  const openRecord = (kind: HomeRecordKind, id: string, mode: "preview" | "actions") => {
+    if (mode === "actions") longPressFeedback();
+    setRecordSheet({ kind, id, mode });
+  };
+  const recordResolve = (kind: HomeRecordKind, id: string): HomeRecordResolve | null => {
+    if (kind === "task") {
+      const entry = homeData.taskEntries.find((t) => t.id === id);
+      if (!entry || entry.completed) return null;
+      return { label: "Rezolvă", icon: "checkmark-circle-outline", run: () => setResolveSheetEntry(entry) };
+    }
+    if (kind === "supply") {
+      const entry = homeData.supplyEntries.find((e) => e.id === id);
+      return entry ? { label: "Am cumpărat", icon: "refresh-outline", run: () => setRestockSheetEntry(entry) } : null;
+    }
+    if (kind === "document") return { label: "Reînnoiește", icon: "refresh", run: () => handleDocumentRenew(id) };
+    if (kind === "recurring" || kind === "maintenance") {
+      const entry = (kind === "recurring" ? homeData.recurringEntries : homeData.maintenanceEntries).find((e) => e.id === id) as any;
+      if (!entry || entry.completed) return null;
+      return { label: "Rezolvă", icon: "checkmark-circle-outline", run: () => resolveCategoryEntry(kind, id) };
+    }
     return null;
   };
-
-  const handleNextItemPress = (item: HomeNextItem) => {
-    const decoded = decodeNextItem(item);
-    if (!decoded) return;
-
-    closeAllSubViews();
-    setActiveCategory(decoded.categoryKey);
-    setInitialCategoryEditId(decoded.entryId);
+  const recordEdit = (kind: HomeRecordKind, id: string) => {
+    // Every edit opens over the screen it was asked from.
+    if (kind === "task") {
+      const entry = homeData.taskEntries.find((t) => t.id === id);
+      if (!entry) return;
+      setEditingTaskEntry(entry);
+      setTaskFormVisible(true);
+      return;
+    }
+    if (kind === "supply") {
+      const entry = homeData.supplyEntries.find((e) => e.id === id);
+      if (!entry) return;
+      setEditingSupplyEntry(entry);
+      setSupplyFormVisible(true);
+      return;
+    }
+    const category = RECORD_CATEGORY[kind];
+    if (activeCategory === category) {
+      editNonce.current += 1;
+      setCategoryEditRequest({ id, n: editNonce.current });
+      return;
+    }
+    setFormOverlay({ category, editId: id });
+  };
+  const recordDelete = async (kind: HomeRecordKind, id: string) => {
+    if (kind === "task") {
+      const entry = homeData.taskEntries.find((t) => t.id === id);
+      if (entry) handleTaskRowDelete(entry);
+      return;
+    }
+    if (kind === "supply") {
+      const entry = homeData.supplyEntries.find((e) => e.id === id);
+      if (entry) handleSupplyRowDelete(entry);
+      return;
+    }
+    const title = buildHomeRecordPreview(homeData, kind, id)?.title ?? "Înregistrarea";
+    const ok = await confirmAction("Ștergi?", `„${title}” se șterge definitiv.`, { confirmLabel: "Șterge", destructive: true });
+    if (!ok) return;
+    deleteHandlers[RECORD_CATEGORY[kind]](id);
   };
 
-  // Swipe-right on a NEXT row -- reuses resolveCategoryEntry as-is (its
-  // own confirm dialog, the recurring-Maintenance price-sheet special
-  // case, all of it), same action the category page's own row swipe
-  // already fires, just reachable one level up without opening that
-  // page first.
-  const handleNextItemResolve = (item: HomeNextItem) => {
-    const decoded = decodeNextItem(item);
-    if (!decoded) return;
-    resolveCategoryEntry(decoded.categoryKey, decoded.entryId);
-  };
-
-  // Swipe-left on a NEXT row -- same confirm copy as HomeCategoryPage's
-  // own row-delete (this reaches the exact same permanent delete,
-  // deleteHandlers itself has no confirm built in).
-  const handleNextItemDelete = async (item: HomeNextItem) => {
-    const decoded = decodeNextItem(item);
-    if (!decoded) return;
-
-    const confirmed = await confirmAction(
-      "Ștergi intrarea?",
-      "Se șterge definitiv.",
-      { confirmLabel: "Șterge", destructive: true },
-    );
-    if (!confirmed) return;
-    deleteHandlers[decoded.categoryKey](decoded.entryId);
+  // A document's swipe-right (category page, "De rezolvat"): the
+  // renewal pop-up. "Cu datele vechi" moves the VALIDITY dates forward
+  // by the same period (lib/dashboard/documentRenewal.ts) -- a Casă
+  // document has no history, so it's updated in place. "Modifică"
+  // opens it for editing.
+  const handleDocumentRenew = async (id: string) => {
+    const doc = homeData.documentEntries.find((e) => e.id === id);
+    if (!doc) return;
+    const period = renewalPeriod(doc.issueDate, doc.expiryDate);
+    const pick = await askRenewal(doc.title, period);
+    if (pick === "edit") {
+      closeAllSubViews();
+      setActiveCategory("documents");
+      setInitialCategoryEditId(id);
+      return;
+    }
+    if (pick !== "saved" || !period) return;
+    onDocumentSave({ ...doc, issueDate: toIsoDate(period.issue), expiryDate: toIsoDate(period.expiry) });
+    notifyAction("Reînnoit", `${doc.title} e valabil până pe ${roDate(period.expiry, { withYear: true })}.`);
   };
 
   const handleTaskSave = (entry: HomeTaskEntry) => {
@@ -366,7 +395,7 @@ export default function HomeDashboard({
   // default, but the resolve sheet lets the user override that computed
   // date -- explicitNextDue, when passed, wins. A plain task's dueDate
   // stays put; it completes and archives normally.
-  const resolveTask = (entry: HomeTaskEntry, price: number | undefined, explicitNextDue?: string) => {
+  const resolveTask = (entry: HomeTaskEntry, price: number | undefined, explicitNextDue?: string, guiltFree?: boolean) => {
     const now = new Date().toISOString();
     const nextDue = entry.isRecurring
       ? (explicitNextDue ?? nextTaskOccurrence(entry.dueDate, entry.recurrenceFrequency))
@@ -378,6 +407,8 @@ export default function HomeDashboard({
       completedAt: now,
       dueDate: nextDue,
       price: price ?? entry.price,
+      // "Bani fără vină" from HomeTaskResolveSheet's purchase step; kept as-is otherwise.
+      guiltFree: guiltFree ?? entry.guiltFree,
       // A real price logs a NEW spend event every time, instead of just
       // overwriting the single `price` field above -- a recurring
       // purchase task resolved 3 times this month should count 3 times,
@@ -410,9 +441,9 @@ export default function HomeDashboard({
     resolveTask(entry, undefined);
   };
 
-  const handleResolveConfirm = (price: number | undefined, nextDueDate: string | undefined) => {
+  const handleResolveConfirm = (price: number | undefined, nextDueDate: string | undefined, guiltFree?: boolean) => {
     if (!resolveSheetEntry) return;
-    resolveTask(resolveSheetEntry, price, nextDueDate);
+    resolveTask(resolveSheetEntry, price, nextDueDate, guiltFree);
     setResolveSheetEntry(null);
   };
 
@@ -463,6 +494,13 @@ export default function HomeDashboard({
     );
     if (!confirmed) return;
 
+    // Paid early: ask whether the next date counts from today or keeps
+    // the usual rhythm (same question as a swipe from any other screen).
+    if (categoryKey === "recurring") {
+      const entry = existing as HomeRecurringEntry;
+      resolved.nextDueDate = await nextDateAfterResolve(entry.nextDueDate, (base) => addRecurrenceInterval(base, entry.frequency, 1));
+    }
+
     // Recurring bills' own fixed `amount` counts as this cycle's
     // payment -- logs a new spend event every resolve instead of the
     // total silently staying flat, same reasoning as Tasks' own
@@ -492,17 +530,23 @@ export default function HomeDashboard({
   // (same pure resolveEntry Maintenance always used) AND logs the
   // confirmed price as a new spend event, mirroring resolveTask's own
   // accumulation for Tasks.
-  const handleMaintenanceResolveConfirm = (price: number) => {
+  const handleMaintenanceResolveConfirm = (price: number | null) => {
     if (!maintenanceResolveEntry) return;
     const category = HOME_CATEGORIES.find((c) => c.key === "maintenance")!;
     const resolved = category.resolveEntry!(maintenanceResolveEntry) as HomeMaintenanceEntry;
     const now = new Date().toISOString();
 
-    saveHandlers.maintenance({
-      ...resolved,
-      price,
-      spendHistory: [...(maintenanceResolveEntry.spendHistory ?? []), { date: now, amount: price }],
-    });
+    // "Fără cost" (null): advance the schedule only -- no spend logged,
+    // the usual price stays for next time.
+    saveHandlers.maintenance(
+      price === null
+        ? resolved
+        : {
+            ...resolved,
+            price,
+            spendHistory: [...(maintenanceResolveEntry.spendHistory ?? []), { date: now, amount: price }],
+          },
+    );
 
     const label = resolved.nextDueDate
       ? roDate(resolved.nextDueDate)
@@ -534,11 +578,18 @@ export default function HomeDashboard({
       return;
     }
 
-    const categoryKey = initialOpenItem.type === "home_recurring" ? "recurring" : "maintenance";
+    const categoryKey =
+      initialOpenItem.type === "home_recurring" ? "recurring" : initialOpenItem.type === "home_document" ? "documents" : "maintenance";
     const category = HOME_CATEGORIES.find((c) => c.key === categoryKey);
     const exists = category?.entries(homeData).some((e) => e.id === initialOpenItem.id);
     if (!exists) return;
     openedInitialItemRef.current = key;
+    if (initialOpenItem.resolve && categoryKey !== "documents") {
+      // Same resolve as the category page's own swipe/checkbox: a
+      // recurring maintenance visit asks for this cycle's cost.
+      resolveCategoryEntry(categoryKey, initialOpenItem.id);
+      return;
+    }
     setActiveCategory(categoryKey);
     setInitialCategoryEditId(initialOpenItem.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -613,6 +664,17 @@ export default function HomeDashboard({
     supplies: onSupplyDelete,
   };
 
+  const recordSheetEl = (
+    <HomeRecordSheet
+      record={recordSheet ? buildHomeRecordPreview(homeData, recordSheet.kind, recordSheet.id) : null}
+      mode={recordSheet?.mode ?? "preview"}
+      onClose={() => setRecordSheet(null)}
+      resolve={recordSheet ? recordResolve(recordSheet.kind, recordSheet.id) : null}
+      onEdit={() => recordSheet && recordEdit(recordSheet.kind, recordSheet.id)}
+      onDelete={() => recordSheet && recordDelete(recordSheet.kind, recordSheet.id)}
+    />
+  );
+
   if (suppliesPageVisible) {
     return (
       <>
@@ -623,13 +685,12 @@ export default function HomeDashboard({
             setEditingSupplyEntry(null);
             setSupplyFormVisible(true);
           }}
-          onEdit={(entry) => {
-            setEditingSupplyEntry(entry);
-            setSupplyFormVisible(true);
-          }}
+          onPreview={(entry) => openRecord("supply", entry.id, "preview")}
+          onActions={(entry) => openRecord("supply", entry.id, "actions")}
           onRestock={handleSupplyRestock}
           onDelete={handleSupplyRowDelete}
         />
+        {recordSheetEl}
         {supplyFormVisible ? (
           <HomeSupplyForm
             entry={editingSupplyEntry ?? undefined}
@@ -698,7 +759,20 @@ export default function HomeDashboard({
               if (entry) setResolveSheetEntry(entry);
               return;
             }
+            if (row.kind === "document") {
+              // A document is renewed, not "resolved" -- same pop-up as
+              // everywhere else ("cu datele vechi" / "modifică").
+              handleDocumentRenew(row.id);
+              return;
+            }
             resolveCategoryEntry(row.kind, row.id);
+          }}
+          onDeletePress={async (row) => {
+            const ok = await confirmAction("Ștergi?", `„${row.title}” se șterge definitiv.`, { confirmLabel: "Șterge", destructive: true });
+            if (!ok) return;
+            if (row.kind === "task") onTaskDelete(row.id);
+            else if (row.kind === "document") onDocumentDelete(row.id);
+            else deleteHandlers[row.kind](row.id);
           }}
         />
         {resolveSheetEntry ? (
@@ -729,14 +803,13 @@ export default function HomeDashboard({
             setEditingTaskEntry(null);
             setTaskFormVisible(true);
           }}
-          onEdit={(entry) => {
-            setEditingTaskEntry(entry);
-            setTaskFormVisible(true);
-          }}
+          onPreview={(entry) => openRecord("task", entry.id, "preview")}
+          onActions={(entry) => openRecord("task", entry.id, "actions")}
           onCheckboxPress={handleCheckboxPress}
           onDelete={handleTaskRowDelete}
           onReorder={onTaskReorder}
         />
+        {recordSheetEl}
         {resolveSheetEntry ? (
           <HomeTaskResolveSheet
             entry={resolveSheetEntry}
@@ -761,17 +834,25 @@ export default function HomeDashboard({
 
   if (activeCategory) {
     const category = HOME_CATEGORIES.find((c) => c.key === activeCategory)!;
+    const CATEGORY_RECORD: Record<HomeCategoryKey, HomeRecordKind> = { recurring: "recurring", maintenance: "maintenance", documents: "document", expenses: "expense", supplies: "supply" };
 
     return (
       <>
         <HomeCategoryPage
+          key={activeCategory}
+          info={(activeCategory === "supplies" ? "home.supplies" : `home.category.${activeCategory}`) as HelpKey}
+          startWithForm={categoryStartsWithForm}
+          onRenew={activeCategory === "documents" ? handleDocumentRenew : undefined}
           title={category.label}
           icon={category.icon}
           fields={category.fields}
           submitLabel={category.submitLabel}
           emptyLabel={category.emptyLabel}
           rows={category.rows(homeData)}
-          onBack={() => setActiveCategory(null)}
+          onBack={() => {
+            setCategoryStartsWithForm(false);
+            setActiveCategory(null);
+          }}
           onSubmit={(values, editingId) => {
             const existing = editingId
               ? category.entries(homeData).find((e) => e.id === editingId)
@@ -789,7 +870,11 @@ export default function HomeDashboard({
             return existing ? category.valuesFromEntry(existing) : {};
           }}
           initialEditId={initialCategoryEditId}
+          editRequest={categoryEditRequest}
+          onRowPreview={(id) => openRecord(CATEGORY_RECORD[activeCategory], id, "preview")}
+          onRowActions={(id) => openRecord(CATEGORY_RECORD[activeCategory], id, "actions")}
         />
+        {recordSheetEl}
         {maintenanceResolveEntry ? (
           <HomeMaintenanceResolveSheet
             entry={maintenanceResolveEntry}
@@ -818,83 +903,101 @@ export default function HomeDashboard({
         onBack={() => router.push("/spaces")}
         onEdit={onEdit}
         onHistoryPress={() => setHomeArchivePageVisible(true)}
+        onDocumentsPress={() => selectCategory("documents")}
+        onSuppliesPress={() => selectCategory("supplies")}
+        expiredDocuments={expiredDocs}
+        lowSupplies={lowSupplyCount}
       />
 
-      <HomeStats
-        thisMonthExpenses={thisMonthExpenses}
-        upcomingCount={upcomingItems.length}
+      <HomeOverviewCard
+        spent={thisMonthExpenses}
+        monthlyBills={monthlyBills}
         onSpendPress={() => setSpendPageVisible(true)}
+        onBillsPress={() => selectCategory("recurring")}
+        spaceId={space?.id != null ? String(space.id) : undefined}
       />
 
-      <HomeRestanteCard
-        counts={restanteCounts}
-        onPress={() => {
-          closeAllSubViews();
-          setWarningsPageVisible(true);
-        }}
-        colors={colors}
-        spacing={spacing}
-        radius={radius}
-      />
+      <SpaceQuickActions kind="home" actions={quickActions} onAction={addNew} />
 
-      {/* Categories -- a 2-column grid of tiles; each tile's own
-          urgency dots (one per tier, its own entries only) or badge
-          sits top-right, opposite the icon. */}
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.md - 2 }}>
-        {categoryTiles.map((tile, index) => {
-          const isAlone = index === categoryTiles.length - 1 && categoryTiles.length % 2 !== 0;
-          return (
-            <PressableScale
-              key={tile.key}
-              testID={`home-category-tile-${tile.key}`}
-              onPress={() => selectCategory(tile.key)}
-              accessibilityRole="button"
-              accessibilityLabel={
-                tile.badge
-                  ? `${tile.label}, ${tile.badge.count}`
-                  : tile.dots.length > 0
-                    ? `${tile.label}, ${tile.dots.reduce((sum, d) => sum + d.count, 0)}`
-                    : tile.label
-              }
-              style={{
-                flexGrow: 1,
-                flexBasis: isAlone ? "100%" : "46%",
-                minHeight: 96,
-                padding: spacing.md + 2,
-                backgroundColor: colors.surfaceSecondary,
-                borderRadius: radius.card,
-                gap: spacing.md,
-              }}
-            >
-              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-                <IconWell icon={tile.icon} color={SPACE_IDENTITY_COLORS.home!} tint={homeTint} size={34} />
-                <View style={{ flexDirection: "row", gap: 4 }}>
-                  {tile.badge ? (
-                    <CountDot count={tile.badge.count} color={tile.badge.severity ? severityColor(tile.badge.severity, colors) : colors.surfaceTertiary} />
-                  ) : null}
-                  {tile.dots.map(({ tier, count }) => (
-                    <CountDot key={tier} count={count} color={recurringWarningTierColor(tier, colors)} />
-                  ))}
-                </View>
-              </View>
-              <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>
-                {tile.label}
-              </Text>
-            </PressableScale>
-          );
-        })}
-      </View>
-
-      <HomeNextSection
-        items={upcomingItems.slice(0, 3)}
-        onItemPress={handleNextItemPress}
-        onItemResolve={handleNextItemResolve}
-        onItemDelete={handleNextItemDelete}
+      <HomeDueSection
+        rows={dueRows}
+        tab={dueTab}
+        onTabChange={setDueTab}
+        allRows={allRows}
+        onRowPress={(row: HomeDueRow) => openRecord(row.kind, row.id, "preview")}
+        onRowLongPress={(row: HomeDueRow) => openRecord(row.kind, row.id, "actions")}
+        onResolve={(row: HomeDueRow) => recordResolve(row.kind, row.id)?.run()}
+        onDelete={(row: HomeDueRow) => recordDelete(row.kind, row.id)}
       />
     </ScrollView>
-    {/* NEXT's swipe-resolve on a recurring maintenance row lands here
-        (handleNextItemResolve -> resolveCategoryEntry -> price prompt),
-        so the main dashboard needs its own copy of this sheet too. */}
+    {recordSheetEl}
+    {taskFormVisible ? (
+      <HomeTaskForm
+        entry={editingTaskEntry ?? undefined}
+        onCancel={() => {
+          setTaskFormVisible(false);
+          setEditingTaskEntry(null);
+        }}
+        onSave={handleTaskSave}
+        onDelete={editingTaskEntry ? handleTaskDelete : undefined}
+      />
+    ) : null}
+    {supplyFormVisible ? (
+      <HomeSupplyForm
+        entry={editingSupplyEntry ?? undefined}
+        onCancel={() => {
+          setSupplyFormVisible(false);
+          setEditingSupplyEntry(null);
+        }}
+        onSave={handleSupplyFormSave}
+        onDelete={editingSupplyEntry ? handleSupplyFormDelete : undefined}
+      />
+    ) : null}
+    {formOverlay ? (() => {
+      const overlayCategory = HOME_CATEGORIES.find((c) => c.key === formOverlay.category)!;
+      return (
+        <HomeCategoryPage
+          key={`${formOverlay.category}-${formOverlay.editId ?? "new"}`}
+          formOnly
+          info={(formOverlay.category === "supplies" ? "home.supplies" : `home.category.${formOverlay.category}`) as HelpKey}
+          title={overlayCategory.label}
+          icon={overlayCategory.icon}
+          fields={overlayCategory.fields}
+          submitLabel={overlayCategory.submitLabel}
+          emptyLabel={overlayCategory.emptyLabel}
+          rows={[]}
+          onBack={() => setFormOverlay(null)}
+          onSubmit={(values, editingId) => {
+            const existing = editingId ? overlayCategory.entries(homeData).find((e) => e.id === editingId) : undefined;
+            saveHandlers[formOverlay.category](overlayCategory.buildEntry(values, existing));
+          }}
+          onDelete={(id) => deleteHandlers[formOverlay.category](id)}
+          onResolve={overlayCategory.resolveEntry ? (id) => resolveCategoryEntry(formOverlay.category, id) : undefined}
+          getEditValues={(id) => {
+            const existing = overlayCategory.entries(homeData).find((e) => e.id === id);
+            return existing ? overlayCategory.valuesFromEntry(existing) : {};
+          }}
+          initialEditId={formOverlay.editId ?? null}
+        />
+      );
+    })() : null}
+    {restockSheetEntry ? (
+      <HomeSupplyRestockSheet
+        entry={restockSheetEntry}
+        onCancel={() => setRestockSheetEntry(null)}
+        onConfirm={handleRestockConfirm}
+      />
+    ) : null}
+    {/* "De rezolvat"'s swipe-right lands here: a task asks for its
+        price / next date, a recurring maintenance visit for this
+        cycle's cost. */}
+    {resolveSheetEntry ? (
+      <HomeTaskResolveSheet
+        entry={resolveSheetEntry}
+        onCancel={() => setResolveSheetEntry(null)}
+        onResolve={handleResolveConfirm}
+      />
+    ) : null}
     {maintenanceResolveEntry ? (
       <HomeMaintenanceResolveSheet
         entry={maintenanceResolveEntry}

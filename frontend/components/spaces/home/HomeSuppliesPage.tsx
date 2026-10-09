@@ -9,17 +9,20 @@ import { SwipeRow } from "@/components/spaces/SwipeRow";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { TopBar, CircleButton, Identity, EmptyState } from "@/components/ui/primitives";
 import { motion } from "@/lib/motion";
-import { roCount } from "@/lib/format";
+import { roUnit } from "@/lib/format";
 
 import type { HomeData } from "./home.data.types";
 import type { HomeSupplyEntry } from "@/lib/spaces/home/home.types";
-import { getSupplyRestockEstimate } from "@/lib/spaces/home/calculations/dashboard.calculations";
+import { supplyStatus } from "@/lib/spaces/home/calculations/dashboard.calculations";
 
 export type HomeSuppliesPageProps = {
   homeData: HomeData;
   onBack: () => void;
   onAdd: () => void;
-  onEdit: (entry: HomeSupplyEntry) => void;
+  /** Tap on a row: the record preview (HomeRecordSheet). */
+  onPreview: (entry: HomeSupplyEntry) => void;
+  /** Long press on a row: the record's action sheet. */
+  onActions: (entry: HomeSupplyEntry) => void;
   /** "Restocked" tap -- logs a new restock event (appends today to
    * restockHistory) without opening the edit form. */
   onRestock: (entry: HomeSupplyEntry) => void;
@@ -28,34 +31,21 @@ export type HomeSuppliesPageProps = {
   onDelete: (entry: HomeSupplyEntry) => void;
 };
 
+/** The shared estimate words (supplyStatus -- the same ones "De rezolvat"
+ * shows) in this page's colors. */
 function statusFor(entry: HomeSupplyEntry, colors: ThemeColors) {
-  const estimate = getSupplyRestockEstimate(entry);
-
-  if (!estimate) {
-    const historyCount = (entry.restockHistory ?? []).length;
-    return {
-      label: historyCount === 0 ? "Fără istoric încă" : "Mai e nevoie de o achiziție ca să pornească estimarea",
-      color: colors.onSurfaceTertiary,
-      bg: "transparent",
-    };
-  }
-
-  const daysLeft = Math.round(estimate.predictedDaysUntilEmpty - estimate.daysSinceLastRestock);
-
-  if (estimate.isLow) {
-    return { label: "Probabil pe terminate", color: severityColor("critical", colors), bg: severityTint("critical", colors) };
-  }
-  if (daysLeft <= 3) {
-    return { label: `~${roCount(Math.max(daysLeft, 0), "zi", "zile")} rămase`, color: severityColor("warning", colors), bg: severityTint("warning", colors) };
-  }
-  return { label: `~${roCount(daysLeft, "zi", "zile")} rămase`, color: severityColor("safe", colors), bg: "transparent" };
+  const st = supplyStatus(entry);
+  if (st.daysLeft === null) return { label: st.label, color: colors.onSurfaceTertiary, bg: "transparent" };
+  if (st.tone === "error") return { label: st.label, color: severityColor("critical", colors), bg: severityTint("critical", colors) };
+  if (st.tone === "warning") return { label: st.label, color: severityColor("warning", colors), bg: severityTint("warning", colors) };
+  return { label: st.label, color: severityColor("safe", colors), bg: "transparent" };
 }
 
 /** The tracked-supplies list (upgraded from the old generic name+quantity
  * form) -- each restock logged here feeds getSupplyRestockEstimate,
  * which Grocery's shopping list reads cross-space to suggest supplies
  * that are probably running low while the user is actively shopping. */
-export function HomeSuppliesPage({ homeData, onBack, onAdd, onEdit, onRestock, onDelete }: HomeSuppliesPageProps) {
+export function HomeSuppliesPage({ homeData, onBack, onAdd, onPreview, onActions, onRestock, onDelete }: HomeSuppliesPageProps) {
   const { colors, spacing, radius } = useTheme();
   const entries = homeData.supplyEntries;
   const HOME = SPACE_IDENTITY_COLORS.home!;
@@ -70,7 +60,7 @@ export function HomeSuppliesPage({ homeData, onBack, onAdd, onEdit, onRestock, o
           <CircleButton testID="home-supply-add" icon="add" label="Adaugă o provizie" tone={HOME} onPress={onAdd} />
         </TopBar>
 
-        <Identity color={HOME} kicker="Casă" title="Provizii" subtitle="Estimăm când se termină, din ritmul în care le cumperi." />
+        <Identity color={HOME} kicker="Casă" title="Provizii" subtitle="Estimăm când se termină, din ritmul în care le cumperi." info="home.supplies" />
 
         {entries.length > 0 ? (
           <View style={{ gap: spacing.sm }}>
@@ -82,10 +72,10 @@ export function HomeSuppliesPage({ homeData, onBack, onAdd, onEdit, onRestock, o
                     {index > 0 ? <View style={{ height: 1, marginLeft: spacing.lg, backgroundColor: colors.border }} /> : null}
                     <SwipeRow onResolve={() => onRestock(entry)} onDelete={() => onDelete(entry)} cornerRadius={0} colors={colors}>
                       <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingLeft: spacing.lg, paddingRight: spacing.md, minHeight: 64, backgroundColor: colors.surfaceSecondary }}>
-                        <PressableScale onPress={() => onEdit(entry)} scaleTo={1} accessibilityRole="button" accessibilityLabel={entry.name} style={{ flex: 1, paddingVertical: spacing.sm + 2 }}>
+                        <PressableScale onPress={() => onPreview(entry)} onLongPress={() => onActions(entry)} delayLongPress={350} scaleTo={1} accessibilityRole="button" accessibilityLabel={entry.name} style={{ flex: 1, paddingVertical: spacing.sm + 2 }}>
                           <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>{entry.name}</Text>
                           <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, marginTop: 2 }} numberOfLines={1}>
-                            {entry.quantity} {entry.unit}, <Text style={{ fontWeight: "500", color: status.color }}>{status.label}</Text>
+                            {entry.quantity} {roUnit(entry.unit)}, <Text style={{ fontWeight: "500", color: status.color }}>{status.label}</Text>
                           </Text>
                         </PressableScale>
                         <PressableScale
@@ -113,9 +103,6 @@ export function HomeSuppliesPage({ homeData, onBack, onAdd, onEdit, onRestock, o
                 );
               })}
             </View>
-            <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, textAlign: "center" }}>
-              Glisează dreapta când cumperi din nou, stânga ca să ștergi.
-            </Text>
           </View>
         ) : (
           <EmptyState icon="basket-outline" title="Nimic urmărit încă" message="Adaugă ce cumperi des (hârtie, detergent...) și îți spunem când e momentul să iei din nou." />

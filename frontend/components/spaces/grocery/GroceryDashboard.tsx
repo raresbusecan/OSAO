@@ -4,8 +4,8 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL } from "@/lib/spaces/spaceProfile";
-import { CircleButton, TopBar, Identity, Button } from "@/components/ui/primitives";
-import { roCount } from "@/lib/format";
+import { CircleButton, TopBar, Identity, Button, InfoButton } from "@/components/ui/primitives";
+import { lei, roCount } from "@/lib/format";
 import { confirmAction, notifyAction } from "@/lib/confirm";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/auth";
@@ -498,7 +498,7 @@ export default function GroceryDashboard({
   // an optional total price becomes a grocery_trip expense for the
   // monthly budget, and the cart clears the same way handleClearCart
   // already does.
-  const handleFinishShopping = async (listId: string, price: number | undefined) => {
+  const handleFinishShopping = async (listId: string, price: number | undefined, guiltFree = false) => {
     const boughtItems = getItemsForList(items, listId).filter((item) => item.inCart);
 
     // Awaited (not fire-and-forget) so the restock writes are actually
@@ -519,7 +519,7 @@ export default function GroceryDashboard({
       const list = lists.find((l) => l.id === listId);
       try {
         await api.createItem(
-          groceryTripToItemBody(space.id, { listId, listName: list?.name ?? "Cumpărături", price }),
+          groceryTripToItemBody(space.id, { listId, listName: list?.name ?? "Cumpărături", price, guiltFree }),
         );
       } catch (error: any) {
         notifyAction("Nu am putut salva cheltuiala", error?.message || "A apărut o eroare.");
@@ -807,7 +807,7 @@ export default function GroceryDashboard({
         {/* IDENTITY + SHARING -- who can see the active list. The avatar
             stack (or "Invită pe cineva") opens SpaceMembersModal. */}
         <View style={{ gap: spacing.md }}>
-          <Identity color={groceryFill} kicker="Cumpărături" title={space?.name || "Cumpărături"} />
+          <Identity color={groceryFill} kicker="Cumpărături" title={space?.name || "Cumpărături"} info="grocery.space" />
 
           <PressableScale
             testID="grocery-members-stack"
@@ -843,17 +843,6 @@ export default function GroceryDashboard({
             of lists never scrolls it out of sight; the active list's own
             "x" deletes it (owner/creator only). */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-          {lists.map((list) => (
-            <ListPill
-              key={list.id}
-              list={list}
-              active={list.id === effectiveActiveListId}
-              onPress={() => setActiveListId(list.id)}
-              onDelete={() => confirmDeleteList(list)}
-              canManage={canManageList(list)}
-              isShared={list.spaceId !== String(space?.id)}
-            />
-          ))}
           {canCreateList ? (
             <PressableScale
               testID="grocery-list-card-new"
@@ -877,6 +866,17 @@ export default function GroceryDashboard({
               <Text style={{ fontSize: 14, color: muted }}>Listă nouă</Text>
             </PressableScale>
           ) : null}
+          {lists.map((list) => (
+            <ListPill
+              key={list.id}
+              list={list}
+              active={list.id === effectiveActiveListId}
+              onPress={() => setActiveListId(list.id)}
+              onDelete={() => confirmDeleteList(list)}
+              canManage={canManageList(list)}
+              isShared={list.spaceId !== String(space?.id)}
+            />
+          ))}
         </ScrollView>
 
         {lists.length === 0 ? (
@@ -893,6 +893,9 @@ export default function GroceryDashboard({
           </View>
         ) : (
           <>
+            {/* Add a product first, at the top -- the list can be long. */}
+            <GroceryQuickAddBar onAdd={handleHomeQuickAdd} />
+
             {/* THE LIST -- progress header, bar, then the items on the
                 same card. Checking an item keeps it in place (crossed
                 off, like paper) rather than moving it to another section. */}
@@ -904,9 +907,13 @@ export default function GroceryDashboard({
                       {activeTotal === 0 ? "Lista e goală" : `${inCartTotal} din ${activeTotal} în coș`}
                     </Text>
                     {activePriceTotal != null ? (
-                      <Text style={{ fontSize: 13, color: muted }}>Estimat {new Intl.NumberFormat("ro-RO").format(activePriceTotal)} lei</Text>
+                      <Text style={{ fontSize: 13, color: muted }}>
+                        Estimat {lei(activePriceTotal)}
+                        {activePriced.length < activeListItems.length ? ` · ${activePriced.length} din ${activeTotal} cu preț` : ""}
+                      </Text>
                     ) : null}
                   </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
                   {inCartTotal > 0 && effectiveActiveListId ? (
                     <PressableScale
                       testID="grocery-clear-cart"
@@ -919,6 +926,10 @@ export default function GroceryDashboard({
                       <Text style={{ fontSize: 13, color: muted }}>Debifează tot</Text>
                     </PressableScale>
                   ) : null}
+                  {/* How the list works (tap / swipe / long-press) -- used to
+                      be a grey line under the list. */}
+                  <InfoButton topic="grocery.list" />
+                  </View>
                 </View>
                 {activeTotal > 0 ? <CartProgress ratio={inCartTotal / activeTotal} color={groceryFill} track={colors.surfaceTertiary} /> : null}
               </View>
@@ -926,7 +937,7 @@ export default function GroceryDashboard({
               {activeListItems.length === 0 ? (
                 <View style={{ alignItems: "center", paddingBottom: spacing.xl, paddingHorizontal: spacing.lg, gap: 4 }}>
                   <Ionicons name="cart-outline" size={26} color={groceryFill} />
-                  <Text style={{ fontSize: 14, color: muted, textAlign: "center" }}>Adaugă primul produs mai jos.</Text>
+                  <Text style={{ fontSize: 14, color: muted, textAlign: "center" }}>Adaugă primul produs mai sus.</Text>
                 </View>
               ) : (
                 activeListItems.map((item) => (
@@ -936,20 +947,13 @@ export default function GroceryDashboard({
                       onToggle={handleToggle}
                       onOpenMenu={setHomeEditingItem}
                       onDelete={handleDelete}
-                      trailing={item.addedBy ? <Avatar id={item.addedBy.id} name={item.addedBy.name} size={20} /> : null}
+                      // Who added it only matters on a shared list -- and never for your own items.
+                      trailing={otherPeopleCount > 0 && item.addedBy && String(item.addedBy.id) !== String(user?.id) ? <Avatar id={item.addedBy.id} name={item.addedBy.name} size={20} /> : null}
                     />
                   </View>
                 ))
               )}
             </View>
-
-            <GroceryQuickAddBar onAdd={handleHomeQuickAdd} />
-
-            {activeListItems.length > 0 ? (
-              <Text style={{ fontSize: 13, color: muted, textAlign: "center" }}>
-                Ține apăsat un produs ca să-l editezi, glisează spre stânga ca să-l ștergi.
-              </Text>
-            ) : null}
 
             {/* Only once something's actually in the cart -- finishing an
                 empty cart has nothing to log. */}
@@ -1011,7 +1015,7 @@ export default function GroceryDashboard({
             getItemsForList(items, finishShoppingListId).filter((item) => item.inCart && item.linkedSupplyId).length
           }
           onCancel={() => setFinishShoppingListId(null)}
-          onConfirm={(price) => handleFinishShopping(finishShoppingListId, price)}
+          onConfirm={(price, guiltFree) => handleFinishShopping(finishShoppingListId, price, guiltFree)}
         />
       ) : null}
     </SwipeBackView>

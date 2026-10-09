@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
+import { DateField } from "@/components/ui/DateField";
 import { View, Text, Pressable } from "react-native";
 import Slider from "@react-native-community/slider";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
 import { Sheet } from "@/components/ui/Sheet";
-import { Button, Field } from "@/components/ui/primitives";
+import { Button, Field, Disclosure } from "@/components/ui/primitives";
+import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 
 const CAR = SPACE_IDENTITY_COLORS.car!;
 import { confirmAction } from "@/lib/confirm";
@@ -56,6 +58,7 @@ export default function CarFuelForm({
     entry?.odometer !== undefined ? String(entry.odometer) : "",
   );
   const [station, setStation] = useState(entry?.station ?? "");
+  const [guiltFree, setGuiltFree] = useState(!!entry?.guiltFree);
 
   // Defaults to today -- fill-ups get logged on the day they happen most
   // of the time, but a receipt from yesterday shouldn't have to become
@@ -168,7 +171,7 @@ export default function CarFuelForm({
     }
 
     if (!isValidDateInput(date)) {
-      setError("Data trebuie scrisă ca ZZ.LL.AAAA.");
+      setError("Alege data.");
       return;
     }
 
@@ -176,6 +179,7 @@ export default function CarFuelForm({
       id: entry?.id ?? `fuel-${Date.now()}`,
       date: parseDateInput(date) ?? entry?.date ?? new Date().toISOString(),
       ...draftEntry,
+      guiltFree,
     };
 
     onSave(entryToSave);
@@ -189,13 +193,14 @@ export default function CarFuelForm({
   // Sliders, station: secondary details, folded away until asked for
   // (open straight away when editing an entry that already uses them).
   const [moreOpen, setMoreOpen] = useState(
-    !!(entry?.station || entry?.level_before != null || entry?.level_after != null),
+    !!(entry?.station || entry?.level_before != null || entry?.level_after != null || entry?.guiltFree),
   );
 
   return (
     <Sheet
       visible
       onClose={onCancel}
+      info="car.fuelForm"
       title={isEditing ? "Editează alimentarea" : "Alimentare nouă"}
       subtitle="Doar prețul e obligatoriu"
       icon="water-outline"
@@ -225,7 +230,7 @@ export default function CarFuelForm({
           <Field label="Litri" value={liters} onChangeText={handleLitersChange} placeholder="ex. 42" keyboardType="decimal-pad" suffix="l" tone={CAR} />
         </View>
         <View style={{ flex: 1 }}>
-          <Field label="Data" value={date} onChangeText={setDate} placeholder="ZZ.LL.AAAA" tone={CAR} />
+          <DateField testID="car-fuel-date" label="Data" value={date} onChange={setDate} range="past" />
         </View>
       </View>
       {suggestedLiters !== null ? (
@@ -271,17 +276,7 @@ export default function CarFuelForm({
         </View>
       </View>
 
-      <Pressable
-        onPress={() => setMoreOpen((v) => !v)}
-        accessibilityRole="button"
-        accessibilityState={{ expanded: moreOpen }}
-        style={{ flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44 }}
-      >
-        <Ionicons name={moreOpen ? "remove" : "add"} size={16} color={colors.onSurfaceTertiary} />
-        <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>
-          {moreOpen ? "Mai puține detalii" : "Mai multe detalii (benzinărie, nivel rezervor)"}
-        </Text>
-      </Pressable>
+      <Disclosure label="Mai multe detalii (benzinărie, nivel rezervor)" open={moreOpen} onToggle={() => setMoreOpen((v) => !v)} />
 
       {moreOpen ? (
         <View style={{ gap: spacing.lg }}>
@@ -293,6 +288,7 @@ export default function CarFuelForm({
               Setează capacitatea rezervorului (Editează mașina) ca să primești litrii sugerați și consumul estimat.
             </Text>
           ) : null}
+          <GuiltFreeToggle value={guiltFree} onChange={setGuiltFree} tone={CAR} testID="car-fuel-guilt-free" />
         </View>
       ) : null}
 

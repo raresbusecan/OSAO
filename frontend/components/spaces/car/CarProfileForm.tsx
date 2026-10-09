@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
-import { View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { View, Text } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { notifyAction } from "@/lib/confirm";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field } from "@/components/ui/primitives";
+import { SpaceCreditToggle, afterSpaceCreditSaved, useSpaceCredit } from "@/components/spaces/SpaceCreditToggle";
 import {
   carProfileName,
   carProfileToApiBody,
@@ -39,7 +40,7 @@ export function CarProfileForm({
   onClose,
   onSaved,
 }: CarProfileFormProps) {
-  const { spacing } = useTheme();
+  const { colors, spacing } = useTheme();
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
   const [color, setColor] = useState("");
@@ -47,15 +48,20 @@ export function CarProfileForm({
   const [purchasePrice, setPurchasePrice] = useState("");
   const [tankCapacity, setTankCapacity] = useState("");
   const [busy, setBusy] = useState(false);
+  const savingRef = useRef(false);
   // Only true after a real Save attempt -- the Tank capacity warning must
   // never appear just because the field happens to be empty while the
   // user hasn't tried to submit yet.
   const [submitAttempted, setSubmitAttempted] = useState(false);
+  // "În rate" -- create only; the name follows the make ("Leasing BMW").
+  const credit = useSpaceCredit(make.trim() ? `Leasing ${make.trim()}` : "Leasing");
+  const resetCredit = credit.reset;
 
   useEffect(() => {
     if (!visible) return;
 
     setSubmitAttempted(false);
+    resetCredit();
 
     // Editing shows exactly what was last saved -- persisted until the
     // next edit, never reset. Creating starts every field genuinely
@@ -77,14 +83,18 @@ export function CarProfileForm({
       setPurchasePrice("");
       setTankCapacity("");
     }
-  }, [visible, initialProfile]);
+  }, [visible, initialProfile, resetCredit]);
 
   const tankCapacityMissing = tankCapacity.trim().length === 0;
 
+  const creditOn = mode === "create" && credit.on;
   const canSubmit =
     make.trim().length > 0 && model.trim().length > 0 && !tankCapacityMissing;
+  // Save stays disabled while "În rate" is on and the credit isn't valid.
+  const creditBlocked = creditOn && !!credit.error;
 
   const submit = async () => {
+    if (creditBlocked) return;
     if (!canSubmit) {
       setSubmitAttempted(true);
       return;
@@ -102,25 +112,32 @@ export function CarProfileForm({
 
     const derivedName = carProfileName(profile);
 
+    // A second tap before `busy` re-renders the button must not send a
+    // second create.
+    if (savingRef.current) return;
+    savingRef.current = true;
     setBusy(true);
     try {
-      let targetSpace: any;
-
       if (mode === "create") {
+        // ONE request: space + profile (+ Cheltuieli "Default" + credit)
+        // in one server transaction -- nothing is left behind on a 422.
         const created = await api.createSpace({
           name: derivedName,
           icon: "car-outline",
           color: "#111111",
           type: "car",
+          profile: carProfileToApiBody(profile),
+          ...(creditOn ? { credit: credit.apiBody } : {}),
         });
-        targetSpace = created?.space ?? created;
-      } else if (space) {
-        const result = await api.updateSpace(space.id, { name: derivedName });
-        targetSpace = result?.space ?? { ...space, name: derivedName };
-      } else {
+        onSaved(created.space, carProfileFromApi(created.profile) ?? profile);
+        onClose();
+        afterSpaceCreditSaved(created);
         return;
       }
+      if (!space) return;
 
+      const result = await api.updateSpace(space.id, { name: derivedName });
+      const targetSpace = result?.space ?? { ...space, name: derivedName };
       const profileResult = await api.saveCarProfile(
         targetSpace.id,
         carProfileToApiBody(profile),
@@ -132,6 +149,7 @@ export function CarProfileForm({
     } catch (error: any) {
       notifyAction("Nu am putut salva", error?.message || "A apărut o eroare.");
     } finally {
+      savingRef.current = false;
       setBusy(false);
     }
   };
@@ -143,6 +161,7 @@ export function CarProfileForm({
     <Sheet
       visible={visible}
       onClose={onClose}
+      info="car.profile"
       title={mode === "create" ? "Mașină nouă" : "Editează mașina"}
       subtitle="Marca devine numele spațiului"
       icon="car-outline"
@@ -154,6 +173,7 @@ export function CarProfileForm({
           tone={SPACE_BUTTON_FILL.car}
           onPress={submit}
           loading={busy}
+          disabled={creditBlocked}
         />
       }
     >
@@ -193,6 +213,10 @@ export function CarProfileForm({
         suffix="lei"
         tone={SPACE_IDENTITY_COLORS.car}
       />
+      {mode === "create" ? <SpaceCreditToggle kind="car" credit={credit} /> : null}
+      {creditBlocked ? (
+        <Text testID="car-credit-missing" style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{credit.error}</Text>
+      ) : null}
     </Sheet>
   );
 }

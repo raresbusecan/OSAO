@@ -4,7 +4,7 @@ import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
 import { confirmAction } from "@/lib/confirm";
 import { Sheet } from "@/components/ui/Sheet";
-import { Button, Field, FieldButton, Segmented, ToggleRow } from "@/components/ui/primitives";
+import { Button, Disclosure, Field, FieldButton, Segmented, ToggleRow } from "@/components/ui/primitives";
 import { roDate } from "@/lib/format";
 
 import type { HomeTaskEntry } from "@/lib/spaces/home/home.types";
@@ -39,16 +39,17 @@ export default function HomeTaskForm({ onCancel, onSave, entry, onDelete }: Home
   const [isRecurring, setIsRecurring] = useState(entry?.isRecurring ?? false);
   const [recurrenceFrequency, setRecurrenceFrequency] = useState<HomeTaskEntry["recurrenceFrequency"]>(entry?.recurrenceFrequency);
   const [notes, setNotes] = useState(entry?.notes ?? "");
+  const [notesOpen, setNotesOpen] = useState(!!entry?.notes);
   const [error, setError] = useState("");
 
   const handleSave = () => {
     setError("");
     if (!title.trim()) {
-      setError("Dă un nume task-ului.");
+      setError("Dă un nume sarcinii.");
       return;
     }
     if (isRecurring && !recurrenceFrequency) {
-      setError("Alege cât de des se repetă task-ul.");
+      setError("Alege cât de des se repetă sarcina.");
       return;
     }
 
@@ -67,11 +68,13 @@ export default function HomeTaskForm({ onCancel, onSave, entry, onDelete }: Home
       // Preserved, never derived from this form -- only resolveTask
       // appends to this (see HomeDashboard.tsx).
       spendHistory: entry?.spendHistory,
+      // Set by the resolve sheet's purchase step, never here.
+      guiltFree: entry?.guiltFree,
     });
   };
 
   const handleDelete = async () => {
-    const confirmed = await confirmAction("Ștergi task-ul?", "Se șterge definitiv.", { confirmLabel: "Șterge", destructive: true });
+    const confirmed = await confirmAction("Ștergi sarcina?", "Se șterge definitiv.", { confirmLabel: "Șterge", destructive: true });
     if (confirmed) onDelete?.();
   };
 
@@ -79,14 +82,15 @@ export default function HomeTaskForm({ onCancel, onSave, entry, onDelete }: Home
     <Sheet
       visible
       onClose={onCancel}
-      title={isEditing ? "Editează task-ul" : "Task nou"}
+      info="home.taskForm"
+      title={isEditing ? "Editează sarcina" : "Sarcină nouă"}
       subtitle={isEditing ? undefined : "Un lucru de făcut prin casă"}
       icon="checkmark-circle-outline"
       tone={HOME}
       footer={
         <>
-          <Button testID="home-task-save" label={isEditing ? "Salvează" : "Adaugă task-ul"} tone={SPACE_BUTTON_FILL.home} onPress={handleSave} />
-          {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge task-ul" onPress={handleDelete} /> : null}
+          <Button testID="home-task-save" label={isEditing ? "Salvează" : "Adaugă sarcina"} tone={SPACE_BUTTON_FILL.home} onPress={handleSave} />
+          {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge sarcina" onPress={handleDelete} /> : null}
         </>
       }
     >
@@ -142,14 +146,17 @@ export default function HomeTaskForm({ onCancel, onSave, entry, onDelete }: Home
         {error && title.trim() ? <Text style={{ marginTop: 6, fontSize: 13, color: colors.error }}>{error}</Text> : null}
       </ToggleRow>
 
-      <Field
-        label="Notițe (opțional)"
-        value={notes}
-        onChangeText={setNotes}
-        placeholder="Orice detaliu util"
-        multiline
-        tone={HOME}
-      />
+      <Disclosure label="Adaugă notițe" open={notesOpen} onToggle={() => setNotesOpen((v) => !v)} />
+      {notesOpen ? (
+        <Field
+          label="Notițe"
+          value={notes}
+          onChangeText={setNotes}
+          placeholder="Orice detaliu util"
+          multiline
+          tone={HOME}
+        />
+      ) : null}
 
       {datePickerVisible ? (
         <HomeDatePickerSheet

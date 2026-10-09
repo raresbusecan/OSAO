@@ -88,6 +88,7 @@ export const buildCarRecentItems = ({
         subtitle,
         amount,
         date: entry.date,
+        guiltFree: !!entry.guiltFree,
       };
     }),
 
@@ -102,6 +103,7 @@ export const buildCarRecentItems = ({
           : formatCarDate(entry.date),
       amount: `${formatCarNumber(entry.price)} lei`,
       date: entry.date,
+      guiltFree: !!entry.guiltFree,
       archived: entry.archived,
       statusDot: getMaintenanceStatusDot(entry, currentOdometer),
       overdue: isMaintenanceOverdue(entry, currentOdometer),
@@ -122,6 +124,7 @@ export const buildCarRecentItems = ({
           ? `${formatCarNumber(entry.price)} lei`
           : undefined,
       date: entry.date,
+      guiltFree: !!entry.guiltFree,
       archived: entry.archived,
       statusDot: getDocumentStatusDot(entry),
       overdue: isDocumentOverdue(entry),
@@ -143,6 +146,7 @@ export const buildCarRecentItems = ({
         .join(", "),
       amount: `${formatCarNumber(entry.amount)} lei`,
       date: entry.date,
+      guiltFree: !!entry.guiltFree,
     })),
   ];
 };

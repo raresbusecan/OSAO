@@ -1,15 +1,20 @@
 import React, { useEffect, useRef, useState } from "react";
+import { askRenewal, parseDocDate, renewalPeriod, renewedTitle, toCarDate } from "@/lib/dashboard/documentRenewal";
+import { SwipeRow } from "@/components/spaces/SwipeRow";
 import { useRouter } from "expo-router";
 import { buildCarRecentItems } from "./utils/carEntries";
 import type { CarRecentItem } from "./utils/carEntries.types";
 import { isRecentToday } from "@/lib/spaces/car/utils/recency";
 import { isDocumentLocked } from "@/lib/spaces/car/utils/documentLock";
-import { notifyAction } from "@/lib/confirm";
+import { confirmAction, notifyAction } from "@/lib/confirm";
 import { severityColor } from "@/lib/statusColors";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { CircleButton, Pill, Segmented, SectionHeader, Group, Chip, IconWell, TopBar, Identity } from "@/components/ui/primitives";
+import { GuiltFreeChip } from "@/components/dashboard/GuiltFree";
+import { LinkedCreditsLine } from "@/components/spaces/LinkedCreditsLine";
+import type { HelpKey } from "@/lib/help";
 import { formatCarDate } from "./utils/carFormatters";
 import { maintenanceLabel } from "@/lib/spaces/car/maintenanceLabels";
 
@@ -79,7 +84,9 @@ export type CarDashboardProps = {
      * of landing on the dashboard and making the user find it themselves.
      * Only "document" ever reaches here (fuel/maintenance/expense aren't
      * actionable to-dos, see Item::ACTIONABLE_TYPES on the backend). */
-    initialOpenEntry?: { type: "document"; id: string } | null;
+    /** `renew`: open the "log the renewal" form (a swipe from another
+     * screen picked "Modifică informațiile") instead of editing it. */
+    initialOpenEntry?: { type: "document" | "maintenance"; id: string; renew?: boolean } | null;
 };
 
 export default function CarDashboard({
@@ -141,7 +148,7 @@ export default function CarDashboard({
     // record (a renewal), see handleNextItemPress below.
     const [documentRenewFrom, setDocumentRenewFrom] =
         useState<
-            (Pick<CarDocumentEntry, "documentType" | "title" | "issuer"> & { sourceId: string })
+            (Pick<CarDocumentEntry, "documentType" | "title" | "issuer"> & { sourceId: string; issueDate?: string; expiryDate?: string; price?: number })
             | null
         >(null);
 
@@ -300,14 +307,14 @@ export default function CarDashboard({
             label: "Service",
         },
         {
-            key: "document",
-            icon: "document-text-outline",
-            label: "Document",
-        },
-        {
             key: "expense",
             icon: "card-outline",
             label: "Cheltuială",
+        },
+        {
+            key: "document",
+            icon: "document-text-outline",
+            label: "Document",
         },
     ];
 
@@ -508,11 +515,20 @@ export default function CarDashboard({
         if (!initialOpenEntry) return;
         const key = `${initialOpenEntry.type}:${initialOpenEntry.id}`;
         if (openedInitialEntryRef.current === key) return;
-        if (carData.documentEntries.length === 0) return;
+        const list = initialOpenEntry.type === "document" ? carData.documentEntries : carData.maintenanceEntries;
+        if (list.length === 0) return;
         openedInitialEntryRef.current = key;
-        openEntryForEdit(initialOpenEntry.type, initialOpenEntry.id);
+        if (initialOpenEntry.type === "document" && initialOpenEntry.renew) {
+            handleNextItemPress({ sourceType: "document", sourceId: initialOpenEntry.id } as CarNextItem);
+        } else if (initialOpenEntry.type === "maintenance") {
+            // A service flagged in "De făcut" (due by km or date) opens the
+            // same "log the next one" form its NEXT alert here opens.
+            handleNextItemPress({ sourceType: "maintenance", sourceId: initialOpenEntry.id } as CarNextItem);
+        } else {
+            openEntryForEdit(initialOpenEntry.type, initialOpenEntry.id);
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [initialOpenEntry, carData.documentEntries]);
+    }, [initialOpenEntry, carData.documentEntries, carData.maintenanceEntries]);
 
     /*
      * =========================================================
@@ -529,11 +545,18 @@ export default function CarDashboard({
             const source = carData.documentEntries.find((e) => e.id === item.sourceId);
             if (source) {
                 closeAllForms();
+                // Pre-filled with the proposed next validity (same length as
+                // the old one, starting the day after it ends) -- the user
+                // only changes what's actually different this time.
+                const period = renewalPeriod(source.issueDate, source.expiryDate);
                 setDocumentRenewFrom({
                     documentType: source.documentType,
-                    title: source.title,
+                    title: period ? renewedTitle(source.title, parseDocDate(source.expiryDate), period.expiry) : source.title,
                     issuer: source.issuer,
                     sourceId: source.id,
+                    issueDate: period ? toCarDate(period.issue) : undefined,
+                    expiryDate: period ? toCarDate(period.expiry) : undefined,
+                    price: source.price,
                 });
                 setDocumentFormVisible(true);
             }
@@ -557,6 +580,54 @@ export default function CarDashboard({
 
     const handleRecentItemPress = (item: CarRecentItem) =>
         openEntryForEdit(item.type, item.id);
+
+    // Swipe-right on a document (Documente page, "Urmează"): the renewal
+    // pop-up. "Cu datele vechi" saves a new record whose validity follows
+    // the old one's (lib/dashboard/documentRenewal.ts) through the same
+    // onDocumentSave the renew form uses -- so the old record is archived
+    // by the same rule. "Modifică" opens that renew form.
+    const handleDocumentRenewSwipe = async (doc: CarDocumentEntry) => {
+        const period = renewalPeriod(doc.issueDate, doc.expiryDate);
+        const pick = await askRenewal(doc.title, period);
+        if (pick === "edit") {
+            handleNextItemPress({ sourceType: "document", sourceId: doc.id } as CarNextItem);
+            return;
+        }
+        if (pick !== "saved" || !period) return;
+        const entry: CarDocumentEntry = {
+            id: `document-${Date.now()}`,
+            date: new Date().toISOString(),
+            documentType: doc.documentType,
+            title: renewedTitle(doc.title, parseDocDate(doc.expiryDate), period.expiry),
+            issuer: doc.issuer,
+            issueDate: toCarDate(period.issue),
+            expiryDate: toCarDate(period.expiry),
+            price: doc.price,
+            notes: doc.notes,
+            renewedFromId: doc.id,
+        };
+        onDocumentSave?.(entry);
+        notifyAction("Reînnoit", `${entry.title} e valabil ${entry.issueDate} – ${entry.expiryDate}. Cel vechi rămâne în istoric.`);
+    };
+
+    const handleDocumentDeleteSwipe = async (doc: CarDocumentEntry) => {
+        const ok = await confirmAction("Ștergi documentul?", `„${doc.title}” se șterge definitiv, inclusiv din istoric.`, { confirmLabel: "Șterge", destructive: true });
+        if (ok) onDocumentDelete?.(doc.id);
+    };
+
+    const docForNextItem = (item: CarNextItem) =>
+        item.sourceType === "document" ? carData.documentEntries.find((e) => e.id === item.sourceId) : undefined;
+
+    // Swipe-left on a logged entry -- asks first, then the same delete
+    // the entry's own form uses.
+    const handleRecentItemDelete = async (item: CarRecentItem) => {
+        const ok = await confirmAction("Ștergi înregistrarea?", `„${item.title}” se șterge definitiv.`, { confirmLabel: "Șterge", destructive: true });
+        if (!ok) return;
+        const id = String(item.id);
+        if (item.type === "fuel") onFuelDelete?.(id);
+        else if (item.type === "maintenance") onMaintenanceDelete?.(id);
+        else if (item.type === "expense") onExpenseDelete?.(id);
+    };
 
     /*
      * =========================================================
@@ -659,6 +730,8 @@ export default function CarDashboard({
                         carData={carData}
                         onBack={() => setDocsPageVisible(false)}
                         onRecordPress={(id) => openEntryForEdit("document", id)}
+                        onRenew={handleDocumentRenewSwipe}
+                        onDelete={handleDocumentDeleteSwipe}
                     />
                 </View>
             );
@@ -694,6 +767,7 @@ export default function CarDashboard({
                         initialTab={historyInitialTab}
                         onBack={() => setHistoryPageVisible(false)}
                         onRecordPress={(type, id) => openEntryForEdit(type, id)}
+                        onRecordDelete={handleRecentItemDelete}
                     />
                 </View>
             );
@@ -732,7 +806,7 @@ export default function CarDashboard({
                         example car). Docs/Archive/History sit right under it:
                         one destination each, always visible. */}
                     <View style={{ gap: spacing.md }}>
-                        <Identity color={carFill} kicker="Mașină" title={space?.name || "Mașina mea"} subtitle={vehicleSubtitle || null} />
+                        <Identity color={carFill} kicker="Mașină" title={space?.name || "Mașina mea"} subtitle={vehicleSubtitle || null} info="car.space" />
                         <View style={{ flexDirection: "row", gap: spacing.sm }}>
                             <Pill testID="car-docs-open" icon="document-text-outline" label="Documente" onPress={() => setDocsPageVisible(true)} />
                             <Pill testID="car-archive-open" icon="archive-outline" label="Arhivă" onPress={() => setArchivePageVisible(true)} />
@@ -748,42 +822,47 @@ export default function CarDashboard({
                         </View>
                     </View>
 
-                    {/* HERO -- odometer as the headline number; this month's
-                        spend (tap -> Expenses page, the one place for "what
-                        this car has cost") and average consumption under it. */}
-                    <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.lg }}>
-                        <View style={{ gap: 2 }}>
-                            <Text style={{ fontSize: 13, color: muted }}>Kilometraj</Text>
-                            <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-                                <AnimatedNumber value={currentOdometer} style={{ ...typography.display, color: colors.onSurface }} />
-                                <Text style={{ fontSize: 16, color: muted }}>km</Text>
-                            </View>
-                        </View>
-                        <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.md + 2 }}>
-                            <PressableScale
-                                testID="car-expenses-stat"
-                                onPress={() => setExpensesPageVisible(true)}
-                                accessibilityRole="button"
-                                accessibilityLabel={`Luna asta: ${thisMonthExpenses} lei. Vezi cheltuielile`}
-                                style={{ flex: 1, gap: 2 }}
-                            >
-                                <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-                                    <Text style={{ fontSize: 13, color: muted }}>Luna asta</Text>
-                                    <Ionicons name="chevron-forward" size={13} color={muted} />
+                    {/* HERO + the linked-credits line right under it (closer
+                        than the page's section gap). */}
+                    <View style={{ gap: spacing.sm }}>
+                        {/* HERO -- odometer as the headline number; this month's
+                            spend (tap -> Expenses page, the one place for "what
+                            this car has cost") and average consumption under it. */}
+                        <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.lg }}>
+                            <View style={{ gap: 2 }}>
+                                <Text style={{ fontSize: 13, color: muted }}>Kilometraj</Text>
+                                <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
+                                    <AnimatedNumber value={currentOdometer} style={{ ...typography.display, color: colors.onSurface }} />
+                                    <Text style={{ fontSize: 16, color: muted }}>km</Text>
                                 </View>
-                                <Text style={{ fontSize: 18, fontWeight: "600", color: colors.onSurface }}>
-                                    {thisMonthExpenses.toLocaleString("ro-RO")} lei
-                                </Text>
-                            </PressableScale>
-                            <View style={{ flex: 1, gap: 2 }}>
-                                <Text style={{ fontSize: 13, color: muted }}>Consum mediu</Text>
-                                <Text style={{ fontSize: 18, fontWeight: "600", color: colors.onSurface }}>
-                                    {averageConsumption != null
-                                        ? `${averageConsumption.toLocaleString("ro-RO", { maximumFractionDigits: 1 })} l/100`
-                                        : "—"}
-                                </Text>
+                            </View>
+                            <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.md + 2 }}>
+                                <PressableScale
+                                    testID="car-expenses-stat"
+                                    onPress={() => setExpensesPageVisible(true)}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={`Luna asta: ${thisMonthExpenses} lei. Vezi cheltuielile`}
+                                    style={{ flex: 1, gap: 2 }}
+                                >
+                                    <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+                                        <Text style={{ fontSize: 13, color: muted }}>Luna asta</Text>
+                                        <Ionicons name="chevron-forward" size={13} color={muted} />
+                                    </View>
+                                    <Text style={{ fontSize: 18, fontWeight: "600", color: colors.onSurface }}>
+                                        {thisMonthExpenses.toLocaleString("ro-RO")} lei
+                                    </Text>
+                                </PressableScale>
+                                <View style={{ flex: 1, gap: 2 }}>
+                                    <Text style={{ fontSize: 13, color: muted }}>Consum mediu</Text>
+                                    <Text style={{ fontSize: 18, fontWeight: "600", color: colors.onSurface }}>
+                                        {averageConsumption != null
+                                            ? `${averageConsumption.toLocaleString("ro-RO", { maximumFractionDigits: 1 })} l/100`
+                                            : "—"}
+                                    </Text>
+                                </View>
                             </View>
                         </View>
+                        <LinkedCreditsLine spaceId={String(space?.id ?? "")} />
                     </View>
 
                     {/* QUICK ACTIONS -- the one way into each form. */}
@@ -793,10 +872,28 @@ export default function CarDashboard({
                         its urgency chip (see InfoRow / getDocumentUrgencyTier). */}
                     {nextItems.length > 0 && (
                         <View style={{ gap: spacing.sm }}>
-                            <SectionHeader title="Urmează" />
+                            <SectionHeader title="Urmează" info="car.next" />
                             <Group inset={68}>
                                 {nextItems.map((item) => (
-                                    <InfoRow key={item.id} {...item} tint={carTint} onPress={() => handleNextItemPress(item)} />
+                                    <SwipeRow
+                                        key={item.id}
+                                        cornerRadius={0}
+                                        colors={colors}
+                                        // A due service is "resolved" by logging it; a document
+                                        // by renewing it (pop-up), or deleted with a swipe left.
+                                        onResolve={
+                                            item.sourceType === "maintenance"
+                                                ? () => handleNextItemPress(item)
+                                                : docForNextItem(item)
+                                                    ? () => handleDocumentRenewSwipe(docForNextItem(item)!)
+                                                    : undefined
+                                        }
+                                        onDelete={docForNextItem(item) ? () => handleDocumentDeleteSwipe(docForNextItem(item)!) : undefined}
+                                        resolveIcon={item.sourceType === "maintenance" ? "construct" : "refresh"}
+                                        resolveLabel={item.sourceType === "maintenance" ? "Înregistrează service-ul" : "Reînnoiește"}
+                                    >
+                                        <InfoRow {...item} tint={carTint} onPress={() => handleNextItemPress(item)} />
+                                    </SwipeRow>
                                 ))}
                             </Group>
                         </View>
@@ -814,6 +911,7 @@ export default function CarDashboard({
                                 expanded={recentExpanded}
                                 onToggle={() => setRecentExpanded((v) => !v)}
                                 onItemPress={handleRecentItemPress}
+                                onItemDelete={handleRecentItemDelete}
                                 testID="car-recent-show-more"
                             />
                         )}
@@ -821,10 +919,12 @@ export default function CarDashboard({
                         {olderItems.length > 0 ? (
                             <EntryGroup
                                 title="Ultimele 7 zile"
+                                info="car.recent"
                                 items={olderItems}
                                 expanded={allExpanded}
                                 onToggle={() => setAllExpanded((v) => !v)}
                                 onItemPress={handleRecentItemPress}
+                                onItemDelete={handleRecentItemDelete}
                                 testID="car-all-show-more"
                             />
                         ) : recentItems.length === 0 ? (
@@ -875,13 +975,18 @@ function EntryGroup({
     expanded,
     onToggle,
     onItemPress,
+    onItemDelete,
     testID,
+    info,
 }: {
     title: string;
+    info?: HelpKey;
     items: CarRecentItem[];
     expanded: boolean;
     onToggle: () => void;
     onItemPress: (item: CarRecentItem) => void;
+    /** Swipe-left delete for logs (fuel, service, expense) -- never a document. */
+    onItemDelete?: (item: CarRecentItem) => void;
     testID?: string;
 }) {
     const { colors, spacing } = useTheme();
@@ -890,12 +995,20 @@ function EntryGroup({
         <View style={{ gap: spacing.xs }}>
             <SectionHeader
                 title={title}
+                info={info}
                 muted
                 action={items.length > 5 ? { label: expanded ? "Arată mai puțin" : `Arată tot (${items.length})`, onPress: onToggle, testID } : undefined}
             />
             <Group inset={68}>
                 {visible.map((item) => (
-                    <RecentRow key={item.id} {...item} colors={colors} spacing={spacing} onPress={() => onItemPress(item)} />
+                    <SwipeRow
+                        key={`${item.type}-${item.id}`}
+                        cornerRadius={0}
+                        colors={colors}
+                        onDelete={onItemDelete && item.type !== "document" ? () => onItemDelete(item) : undefined}
+                    >
+                        <RecentRow {...item} colors={colors} spacing={spacing} onPress={() => onItemPress(item)} />
+                    </SwipeRow>
                 ))}
             </Group>
         </View>
@@ -981,6 +1094,7 @@ export function RecentRow({
     amount,
     statusDot,
     overdue,
+    guiltFree,
     colors,
     spacing,
     last,
@@ -1041,7 +1155,10 @@ export function RecentRow({
             </View>
 
             <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>{title}</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={{ flexShrink: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>{title}</Text>
+                    {guiltFree ? <View><GuiltFreeChip /></View> : null}
+                </View>
                 <Text style={{ marginTop: 2, fontSize: 13, color: colors.onSurfaceTertiary }} numberOfLines={1}>{subtitle}</Text>
             </View>
 

@@ -38,7 +38,14 @@ export type SwipeRowProps = {
    * Expenses) -- no left-swipe reveal is rendered at all then, same
    * as those categories' own checkbox being conditionally omitted. */
   onResolve?: () => void;
-  onDelete: () => void;
+  /** Omit for a row that can't be deleted from where it's shown. */
+  onDelete?: () => void;
+  /** Swipe-right icon/label -- a checkmark "Rezolvă" by default; e.g. a
+   * cart for "Pune în coș", a wrench for "Înregistrează service-ul". */
+  resolveIcon?: keyof typeof Ionicons.glyphMap;
+  resolveLabel?: string;
+  /** Turn the whole gesture off (a row mid-edit, a read-only view). */
+  disabled?: boolean;
   /** Matches whatever the wrapped row's own corner radius is (0 for a
    * flat divided-list row) so the action panel's outer edge lines up. */
   cornerRadius: number;
@@ -46,8 +53,10 @@ export type SwipeRowProps = {
   children: React.ReactNode;
 };
 
-export function SwipeRow({ onResolve, onDelete, cornerRadius, colors, children }: SwipeRowProps) {
+export function SwipeRow({ onResolve, onDelete, resolveIcon = "checkmark", resolveLabel = "Rezolvă", disabled, cornerRadius, colors, children }: SwipeRowProps) {
   const ref = useRef<Swipeable>(null);
+
+  if (disabled || (!onResolve && !onDelete)) return <>{children}</>;
 
   return (
     <Swipeable
@@ -86,7 +95,7 @@ export function SwipeRow({ onResolve, onDelete, cornerRadius, colors, children }
       onSwipeableOpen={(direction) => {
         ref.current?.close();
         if (direction === "left") onResolve?.();
-        else onDelete();
+        else onDelete?.();
       }}
       renderLeftActions={
         onResolve
@@ -97,7 +106,7 @@ export function SwipeRow({ onResolve, onDelete, cornerRadius, colors, children }
                   onResolve();
                 }}
                 accessibilityRole="button"
-                accessibilityLabel="Swipe to resolve"
+                accessibilityLabel={resolveLabel}
                 style={{
                   width: TRIGGER_DISTANCE,
                   alignItems: "center",
@@ -114,20 +123,20 @@ export function SwipeRow({ onResolve, onDelete, cornerRadius, colors, children }
                     ],
                   }}
                 >
-                  <Ionicons name="checkmark" size={20} color="#fff" />
+                  <Ionicons name={resolveIcon} size={20} color="#fff" />
                 </Animated.View>
               </Pressable>
             )
           : undefined
       }
-      renderRightActions={(_progress: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>) => (
+      renderRightActions={onDelete ? (_progress: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>) => (
         <Pressable
           onPress={() => {
             ref.current?.close();
             onDelete();
           }}
           accessibilityRole="button"
-          accessibilityLabel="Swipe to delete"
+          accessibilityLabel="Șterge"
           style={{
             width: TRIGGER_DISTANCE,
             alignItems: "center",
@@ -147,7 +156,7 @@ export function SwipeRow({ onResolve, onDelete, cornerRadius, colors, children }
             <Ionicons name="trash" size={20} color="#fff" />
           </Animated.View>
         </Pressable>
-      )}
+      ) : undefined}
     >
       {children}
     </Swipeable>

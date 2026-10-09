@@ -1,7 +1,24 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
-import { api, clearToken, getToken } from "../lib/api";
+import { api, clearToken, getToken, setToken } from "../lib/api";
 
-type User = { id: string; email: string; name: string; created_at: string } | null;
+/** email_verified_at: ISO string, or null while the registration email
+ * hasn't been confirmed yet (see components/auth/VerifyEmailBanner.tsx).
+ * Unverified users are NOT blocked -- the banner is only a reminder. */
+type User = {
+  id: string;
+  email: string;
+  name: string;
+  created_at: string;
+  email_verified_at?: string | null;
+  /** Linked social providers ("apple" | "google" | "facebook"), read-only
+   * list in Settings. Absent on older backends. */
+  providers?: string[];
+  /** false = social-only account (no usable password yet): Settings offers
+   * "Setează o parolă" instead of the change-password sheet. */
+  has_password?: boolean;
+  /** First-use tours finished/skipped, by key (lib/tours.ts); null/absent = none. */
+  tours?: Record<string, { status: "done" | "skipped"; v: number; at?: string }> | null;
+} | null;
 
 // The backend's User model serializes `id` as a JSON number (Laravel
 // doesn't know this app's User type promises a string) -- normalize it
@@ -20,10 +37,15 @@ type Ctx = {
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, name: string) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Social login (lib/socialAuth.ts): the server already issued the
+   * token -- store it and become that user. */
+  signInWithToken: (user: any, token: string) => Promise<void>;
   /** Merges a patch into the current user without a round-trip to
    * /user -- for a Settings edit (name, later email) that already got
    * the updated fields back in its own response. */
   updateUser: (patch: Partial<NonNullable<User>>) => void;
+  /** Re-reads GET /user (e.g. the email was verified on another device). */
+  refreshUser: () => Promise<void>;
 };
 
 const AuthCtx = createContext<Ctx>({} as Ctx);
@@ -69,9 +91,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const r = await api.register(email, password, name);
     setUser(normalizeUser(r.user));
   }, []);
+  const signInWithToken = useCallback(async (rawUser: any, token: string) => {
+    await setToken(token);
+    setUser(normalizeUser(rawUser));
+  }, []);
+  // The local session ends even when POST /logout fails (offline, or the
+  // token was already revoked server-side -- a password reset revokes
+  // every token, see app/(auth)/reset-password.tsx). api.logout() clears
+  // the stored token in its own finally; before this, a failed request
+  // threw past setUser(null) and left a "logged in" user with no token.
   const signOut = useCallback(async () => {
-    await api.logout();
+    try {
+      await api.logout();
+    } catch {}
     setUser(null);
+  }, []);
+
+  const refreshUser = useCallback(async () => {
+    const me = await api.me();
+    setUser(normalizeUser(me));
   }, []);
 
   const updateUser = useCallback((patch: Partial<NonNullable<User>>) => {
@@ -79,7 +117,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthCtx.Provider value={{ user, loading, signIn, signUp, signOut, updateUser }}>
+    <AuthCtx.Provider value={{ user, loading, signIn, signUp, signOut, signInWithToken, updateUser, refreshUser }}>
       {children}
     </AuthCtx.Provider>
   );

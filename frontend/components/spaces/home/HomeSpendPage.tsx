@@ -41,7 +41,7 @@ export type HomeSpendPageProps = {
 const CATEGORY_ORDER: HomeSpendCategory[] = ["expense", "maintenance", "task", "recurring"];
 
 const PERIOD_PRESETS: { label: string; period: HomeSpendPeriod }[] = [
-  { label: "Luna aceasta", period: { kind: "thisMonth" } },
+  { label: "Luna asta", period: { kind: "thisMonth" } },
   { label: "3 luni", period: { kind: "months", count: 3 } },
   { label: "6 luni", period: { kind: "months", count: 6 } },
   { label: "1 an", period: { kind: "years", count: 1 } },
@@ -149,7 +149,7 @@ export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: Home
       contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >
       <TopBar onBack={onBack} backTestID="home-spend-back" />
-      <Identity color={HOME} kicker="Casă" title="Cheltuieli" />
+      <Identity color={HOME} kicker="Casă" title="Cheltuieli" info="home.spend" />
 
       {/* Period -- the 5 presets as pills (was a modal picker). */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>

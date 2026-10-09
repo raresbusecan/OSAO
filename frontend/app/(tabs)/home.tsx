@@ -1,27 +1,43 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, ScrollView, RefreshControl, ActivityIndicator, DeviceEventEmitter, Animated } from "react-native";
+import { View, Text, ScrollView, RefreshControl, ActivityIndicator, DeviceEventEmitter, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import DraggableFlatList, { ScaleDecorator, type RenderItemParams } from "react-native-draggable-flatlist";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/providers/auth";
 import { api } from "@/lib/api";
 import { REFRESH_EVENT } from "./_layout";
 import { useFocusEffect, useRouter } from "expo-router";
 import { TodoCarouselSheet } from "@/components/dashboard/TodoCarouselSheet";
+import { isRecurringPayment } from "@/components/dashboard/RecurringBillRow";
+import { needsSpend } from "@/lib/budget/plan";
+import { HomeWidget, type HomeCtx } from "@/components/home/HomeWidgets";
+import { CatalogSheet, TemplatesSheet, WidgetSettingsSheet } from "@/components/home/LayoutSheets";
+import { overdueKmLabel } from "@/lib/dashboard/spaceDue";
 import { PressableScale } from "@/components/ui/PressableScale";
-import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
-import { Card, Chip, Group, Row, SectionHeader, IconWell } from "@/components/ui/primitives";
-import { motion, useReducedMotion } from "@/lib/motion";
-import { capitalize, lei, roCount, roDate } from "@/lib/format";
+import { CircleButton, InfoButton, Pill } from "@/components/ui/primitives";
+import { VerifyEmailBanner } from "@/components/auth/VerifyEmailBanner";
+import { VerifiedBadge, emailVerifiedState } from "@/components/auth/VerifiedBadge";
+import { motion } from "@/lib/motion";
+import { confirmAction, notifyAction } from "@/lib/confirm";
+import { capitalize, daysFromToday, roCount, roDate, roRelativeDays } from "@/lib/format";
+import { LAYOUT_TEMPLATES, WIDGET_META, defaultLayout, sanitizeLayout, toRows, type Widget } from "@/lib/dashboard/layout";
+import { onlyEmptyDataHidesOthers, visibleWidgets } from "@/lib/dashboard/widgetVisibility";
+import { useTourScroll, useTourTarget } from "@/components/ui/tourTargets";
+import { useAutoTour } from "@/lib/useAutoTour";
+import { startTour, type TourCtx } from "@/lib/tours";
 import {
   detectSpaceType,
   profileFromSpace,
   SPACE_IDENTITY_COLORS,
   SPACE_KIND_LABEL,
-  CUSTOM_EVENT_COLOR,
-  spaceTextColor,
   type SpaceKind,
 } from "@/lib/spaces/spaceProfile";
+
+/** TEMP (testing, 2026-10-08): a "Pornește ghidul" pill under the header
+ * that starts the Acasă tour on demand. Set to false (and delete the pill
+ * below) once the tour has been tried on the phone. */
+const SHOW_TOUR_TEST_BUTTON = true;
 
 function greeting(name?: string) {
   const h = new Date().getHours();
@@ -29,55 +45,60 @@ function greeting(name?: string) {
   return name ? `${t}, ${name.split(" ")[0]}` : t;
 }
 
-const KIND_ICON: Partial<Record<SpaceKind, keyof typeof Ionicons.glyphMap>> = {
-  car: "car-outline",
-  home: "home-outline",
-  grocery: "cart-outline",
-  expenses: "receipt-outline",
-};
-
 /** Backend's monthlyExpenses.sources[].spaceName is the space KIND's
  * English label (Item::SPENDING_TYPE_SPACE), not a user-given name. */
 const SOURCE_KIND: Record<string, SpaceKind> = { Car: "car", Home: "home", Grocery: "grocery", Expenses: "expenses" };
 
-type ActionableItem = { id: number | string; type: string; title: string; due_at: string; space: { id: number | string; name: string; icon: string } | null };
+type ActionableItem = { id: number | string; type: string; title: string; due_at: string; overdue_km?: number | null; space: { id: number | string; name: string; icon: string } | null };
 type SpaceCard = { id: string; name: string; kind: SpaceKind };
 type Urgency = "overdue" | "today" | "upcoming";
 type TodoRow = ActionableItem & { urgency: Urgency; days: number };
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-
 /**
- * Home tab, 2026-10 redesign: one hero card answering "where did this
- * month's money go" (the cross-space total, split by space color), then
- * what needs doing, then the spaces themselves. Every number comes from
- * real data (api.dashboard / api.getBudget / api.listSpaces) -- nothing
- * mocked. The hero's count-up and bar fill are the app's one unprompted
- * motion; everything else only moves when touched.
+ * Acasă -- a list of cards the user arranges (lib/dashboard/layout.ts):
+ * which cards, order, wide/compact, color, per-card settings. Saved per
+ * user on the server, default = the original fixed Acasă. Edit mode
+ * comes from the pencil next to the avatar OR a long press on any empty
+ * spot between/below the cards (the press lands on the screen, not on a
+ * card -- a card keeps its own tap). Mockup: "orgOS Acasă personalizabil".
  */
 export default function Home() {
-  const { colors, spacing, radius, isDark, typography } = useTheme();
+  const { colors, spacing, typography } = useTheme();
   const { user } = useAuth();
   const router = useRouter();
 
-  const [dashboard, setDashboard] = useState<{
-    today: ActionableItem[]; upcoming: ActionableItem[]; overdue: ActionableItem[];
-    monthlyExpenses: { total: number; sources: { spaceName: string; icon: string; amount: number }[] };
-  } | null>(null);
-  const [budget, setBudget] = useState<{
-    limits: { category: string; monthly_limit: number; spent: number }[];
-    recurringBills: any[];
-    savingsGoal: { target_amount: number; current_amount: number; target_date: string | null } | null;
-  } | null>(null);
+  const [dashboard, setDashboard] = useState<any>(null);
+  const [budget, setBudget] = useState<any>(null);
   const [spaces, setSpaces] = useState<SpaceCard[]>([]);
+  const [layout, setLayout] = useState<Widget[]>(defaultLayout());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [todoSheetVisible, setTodoSheetVisible] = useState(false);
 
+  // Edit mode works on a draft; "Gata" saves it.
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<Widget[]>([]);
+  const [catalogOpen, setCatalogOpen] = useState(false);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [settingsFor, setSettingsFor] = useState<Widget | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  // First-use tour (lib/tours.ts "home"): what it points at, and the page's
+  // scroll view so a step can bring its card into view.
+  const scrollRef = useRef<ScrollView>(null);
+  const tourScroll = useTourScroll("home", scrollRef);
+  const headerTarget = useTourTarget("home.header");
+  const editTarget = useTourTarget("home.edit");
+  const spendTarget = useTourTarget("home.card.spend");
+
   const load = useCallback(async () => {
     try {
-      const [d, b, spacesRes] = await Promise.all([api.dashboard(), api.getBudget(), api.listSpaces()]);
+      const [d, b, spacesRes, layoutRes] = await Promise.all([
+        api.dashboard(),
+        api.getBudget(),
+        api.listSpaces(),
+        api.getDashboardLayout().catch(() => ({ layout: null })),
+      ]);
       setDashboard(d);
       setBudget(b);
       setSpaces(
@@ -87,6 +108,8 @@ export default function Home() {
           kind: detectSpaceType(s, profileFromSpace(s)),
         })),
       );
+      const saved = sanitizeLayout(layoutRes.layout);
+      setLayout(saved ?? defaultLayout());
     } catch {}
   }, []);
 
@@ -101,8 +124,29 @@ export default function Home() {
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   const now = new Date();
-  const totalBudget = budget ? budget.limits.reduce((sum, l) => sum + l.monthly_limit, 0) : 0;
+  // With an income plan the budget is the necessities envelope (Buget's hero).
+  const totalBudget = !budget ? 0
+    : budget.plan ? Number(budget.necessities?.envelope ?? 0)
+    : budget.limits.reduce((sum: number, l: any) => sum + Number(l.monthly_limit), 0);
+  const hasPlan = !!budget?.plan;
+  // With a plan, the spend card is on the Buget hero's basis: necessities
+  // only (no fără vină), every label -- the shared needsSpend() -- so
+  // "cheltuit" + "de plătit/planificat" + "Mai ai" add up to the envelope.
+  const needs = useMemo(() => needsSpend(budget?.spending, budget?.recurring, budget?.planned), [budget]);
   const monthly = dashboard?.monthlyExpenses ?? { total: 0, sources: [] };
+  // What the "Cheltuit" card shows: the raw month (dashboard total) without
+  // a plan; with one, each label's RECORDED necessities spend. Only the
+  // spend card uses it -- other cards keep the raw month.
+  const spendMonthly = useMemo(() => {
+    if (!hasPlan) return monthly;
+    const sources = Object.entries((budget?.spending ?? {}) as Record<string, any>)
+      .map(([label, v]) => ({
+        spaceName: label,
+        amount: Math.max(0, Number(v?.this_month || 0) - Number(budget?.recurring?.[label] || 0) - Number(budget?.planned?.[label] || 0)),
+      }))
+      .filter((x) => x.amount > 0);
+    return { total: needs.recorded, sources };
+  }, [hasPlan, monthly, budget, needs]);
   const daysLeft = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - now.getDate() + 1;
   const monthName = now.toLocaleDateString("ro-RO", { month: "long" });
   const muted = colors.onSurfaceTertiary;
@@ -110,9 +154,9 @@ export default function Home() {
   // Bar segments: each space kind's share of the month, against the
   // budget when there is one (so the empty track IS what's left), else
   // against the total itself (a pure split, no remaining track).
-  const segments = useMemo(() => {
-    const scale = Math.max(totalBudget, monthly.total, 1);
-    return monthly.sources
+  const toSegments = (m: { total: number; sources: any[] }) => {
+    const scale = Math.max(totalBudget, m.total, 1);
+    return (m.sources as any[])
       .map((s) => {
         const kind = SOURCE_KIND[s.spaceName] ?? "other";
         return {
@@ -125,243 +169,418 @@ export default function Home() {
         };
       })
       .sort((a, b) => b.amount - a.amount);
-  }, [monthly, totalBudget, muted]);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const segments = useMemo(() => toSegments(monthly), [monthly, totalBudget, muted]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const spendSegments = useMemo(() => toSegments(spendMonthly), [spendMonthly, totalBudget, muted]);
 
   const todoRows = useMemo<TodoRow[]>(() => {
     if (!dashboard) return [];
-    const today = startOfDay(new Date());
-    const tag = (items: ActionableItem[], urgency: Urgency) =>
-      items.map((it) => ({ ...it, urgency, days: Math.round((startOfDay(new Date(it.due_at)) - today) / DAY_MS) }));
-    return [...tag(dashboard.overdue, "overdue"), ...tag(dashboard.today, "today"), ...tag(dashboard.upcoming, "upcoming")];
+    // Urgency comes from the LOCAL calendar day (daysFromToday), the
+    // same rule the "De făcut" sheet groups by.
+    // Credit reminders (`reminder: true`) are not to-dos: kept apart below.
+    return [...dashboard.overdue, ...dashboard.today, ...dashboard.upcoming]
+      .filter((it: any) => !it.reminder)
+      .map((it: ActionableItem) => {
+        const days = daysFromToday(it.due_at);
+        const urgency: Urgency = days < 0 ? "overdue" : days === 0 ? "today" : "upcoming";
+        return { ...it, urgency, days };
+      })
+      .sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime());
   }, [dashboard]);
 
-  const todoCountBySpace = useMemo(() => {
-    const m = new Map<string, number>();
-    todoRows.forEach((r) => r.space && m.set(String(r.space.id), (m.get(String(r.space.id)) ?? 0) + 1));
-    return m;
-  }, [todoRows]);
+  // Credit instalments due today: a reminder only (no resolve, never
+  // restant, gone tomorrow) -- shown in "De făcut", never counted.
+  const reminderRows = useMemo(
+    () => (dashboard?.today ?? []).filter((it: any) => !!it.reminder).map((it: any) => ({ ...it, days: daysFromToday(it.due_at) })),
+    [dashboard],
+  );
 
+  const overdueCount = todoRows.filter((r) => r.urgency === "overdue").length;
   const spaceById = useMemo(() => new Map(spaces.map((s) => [s.id, s])), [spaces]);
-  const kindCount = useMemo(() => {
-    const m = new Map<SpaceKind, number>();
-    spaces.forEach((s) => m.set(s.kind, (m.get(s.kind) ?? 0) + 1));
-    return m;
-  }, [spaces]);
+
+  // One row per space: its most urgent dated item, plus how much else
+  // is waiting there. A space with no deadline but something to act on
+  // (supplies low, a shopping list) still gets a row with that count.
+  const dueRows = useMemo(() => {
+    const groups = new Map<string, TodoRow[]>();
+    todoRows.forEach((r) => {
+      const key = r.space ? String(r.space.id) : "personal";
+      groups.set(key, [...(groups.get(key) ?? []), r]);
+    });
+    const rows: HomeCtx["dueRows"] = [];
+    groups.forEach((list, key) => {
+      const sorted = [...list].sort((a, b) => a.days - b.days || new Date(a.due_at).getTime() - new Date(b.due_at).getTime());
+      const space = key === "personal" ? undefined : spaceById.get(key);
+      const low = key === "personal" ? 0 : dashboard?.lowSupplies?.[key] ?? 0;
+      // Everything else in that space, by kind -- one lump "încă 19"
+      // mixed overdue, upcoming and supplies and read as a contradiction
+      // of the "11 restante" right above it.
+      const rest = sorted.slice(1);
+      const late = rest.filter((r) => r.days < 0).length;
+      const today = rest.filter((r) => r.days === 0).length;
+      const soon = rest.filter((r) => r.days > 0).length;
+      const more = [
+        late > 0 ? `încă ${roCount(late, "restantă", "restante")}` : null,
+        today > 0 ? `${today} azi` : null,
+        soon > 0 ? `${soon} în 7 zile` : null,
+        low > 0 ? roCount(low, "provizie", "provizii") : null,
+      ].filter(Boolean).join(" · ") || null;
+      rows.push({ key, spaceId: key === "personal" ? undefined : key, name: space?.name ?? sorted[0].space?.name ?? "Personal", kind: space?.kind, top: sorted[0], more, rank: sorted[0].days });
+    });
+    spaces.forEach((s) => {
+      if (groups.has(s.id)) return;
+      const low = dashboard?.lowSupplies?.[s.id] ?? 0;
+      if (low > 0) rows.push({ key: s.id, spaceId: s.id, name: s.name, kind: s.kind, summary: `${roCount(low, "provizie", "provizii")} pe terminate`, more: null, rank: 1000 });
+      (dashboard?.toBuyLists ?? [])
+        .filter((l: any) => String(l.space_id) === s.id)
+        .forEach((l: any) => rows.push({ key: `list-${l.list_id}`, spaceId: s.id, name: s.name, kind: s.kind, summary: l.title, detail: `${roCount(l.count, "produs", "produse")} de cumpărat`, more: null, rank: 1001 }));
+    });
+    return rows.sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
+  }, [todoRows, spaces, spaceById, dashboard]);
+
+  const statusOf = (r: TodoRow): { label: string; tone: "error" | "warning" | "muted" } => {
+    const km = overdueKmLabel(r);
+    if (km) return { label: km, tone: "error" };
+    // A document reads by its VALIDITY date, never when it was entered.
+    if (r.type.endsWith("_document")) {
+      const date = roDate(r.due_at, { short: true });
+      return r.days < 0 ? { label: `Expirat pe ${date}`, tone: "error" } : { label: `Expiră pe ${date}`, tone: r.days === 0 ? "warning" : "muted" };
+    }
+    if (r.days < 0) return { label: `Restant ${roCount(-r.days, "zi", "zile")}`, tone: "error" };
+    if (r.days === 0) return { label: "Azi", tone: "warning" };
+    return { label: roRelativeDays(r.days), tone: "muted" };
+  };
 
   const goal = budget?.savingsGoal ?? null;
-  const goalRatio = goal && goal.target_amount > 0 ? Math.max(0, Math.min(1, goal.current_amount / goal.target_amount)) : 0;
-  const nextBills = (budget?.recurringBills || []).slice(0, 3);
-  const remaining = totalBudget - monthly.total;
+  const goalRatio = goal && Number(goal.target_amount) > 0 ? Math.max(0, Math.min(1, Number(goal.current_amount) / Number(goal.target_amount))) : 0;
+  // Recurring bills aren't in "Cheltuit" (nothing was recorded yet) but
+  // they're still coming out of the budget -- same split as the Buget tab.
+  const recurringMonthly = Object.values(budget?.recurring ?? {}).reduce((sum: number, v: any) => sum + Number(v || 0), 0);
+  const recurringInBudget = hasPlan ? needs.recurring : (budget?.limits ?? []).reduce((sum: number, l: any) => sum + Number(budget?.recurring?.[l.category] || 0), 0);
+  // Calendar purchases still ahead: not spent, but the budget counts them.
+  const plannedMonthly = Object.values(budget?.planned ?? {}).reduce((sum: number, v: any) => sum + Number(v || 0), 0);
+  const plannedInBudget = hasPlan ? needs.planned : (budget?.limits ?? []).reduce((sum: number, l: any) => sum + Number(budget?.planned?.[l.category] || 0), 0);
+  // With an income plan, "Mai ai" is the Buget hero's own number: the
+  // necessities envelope minus every label's committed spend (needsSpend,
+  // fără vină excluded by the API -- the raw dashboard total includes it).
+  const remaining = hasPlan
+    ? totalBudget - needs.committed
+    : totalBudget - monthly.total - recurringInBudget - plannedInBudget;
   const initial = (user?.name ?? "?").trim().charAt(0).toUpperCase();
 
-  return (
-    <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="home-screen">
-      <ScrollView
-        contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.lg, paddingBottom: 120, gap: spacing.section }}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={muted} />}
-      >
-        {/* Header -- date + greeting; the avatar opens Settings (where
-            sign-out now lives, behind a confirmation). */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+  const ctx: HomeCtx = {
+    dashboard,
+    budget,
+    spaces,
+    todoRows,
+    reminderRows,
+    dueRows,
+    overdueCount,
+    statusOf,
+    monthName,
+    daysLeft,
+    monthly,
+    segments,
+    spendMonthly,
+    spendSegments,
+    totalBudget,
+    remaining,
+    hasPlan,
+    recurringMonthly,
+    recurringInBudget,
+    plannedMonthly,
+    plannedInBudget,
+    bills: (budget?.recurringBills || []).filter(isRecurringPayment),
+    goal,
+    goalRatio,
+    navigate: (href) => router.push(href as any),
+    openTodoSheet: () => setTodoSheetVisible(true),
+    refresh: load,
+  };
+
+  /* ---------------- edit mode ---------------- */
+
+  const startEditing = () => {
+    setDraft(layout.map((w) => ({ ...w })));
+    setEditing(true);
+  };
+
+  const finishEditing = async () => {
+    setSaving(true);
+    try {
+      await api.saveDashboardLayout(draft);
+      setLayout(draft);
+      setEditing(false);
+    } catch (error: any) {
+      notifyAction("Nu am putut salva aranjamentul", error?.message || "A apărut o eroare.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Back to the original Acasă (the default layout): asks first, then
+  // saves right away -- the server forgets the arrangement (null).
+  const resetLayout = async () => {
+    const ok = await confirmAction(
+      "Resetezi Acasă?",
+      "Cardurile revin la organizarea inițială. Cardurile adăugate, culorile și setările tale se pierd.",
+      { confirmLabel: "Resetează", destructive: true },
+    );
+    if (!ok) return;
+    setSaving(true);
+    try {
+      await api.saveDashboardLayout(null);
+      setLayout(defaultLayout());
+      setEditing(false);
+    } catch (error: any) {
+      notifyAction("Nu am putut reseta", error?.message || "A apărut o eroare.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const updateDraft = (id: string, patch: Partial<Widget>) => setDraft((d) => d.map((w) => (w.id === id ? { ...w, ...patch } : w)));
+
+  const firstListId = dashboard?.toBuyLists?.[0]?.list_id ? String(dashboard.toBuyLists[0].list_id) : undefined;
+  const firstCarId = dashboard?.cars?.[0]?.space_id != null ? String(dashboard.cars[0].space_id) : undefined;
+
+  const cardLabel = (w: Widget): string => {
+    if (w.settings?.title) return w.settings.title;
+    if (w.type === "grocery") return `Listă · ${(dashboard?.toBuyLists ?? []).find((l: any) => String(l.list_id) === w.settings?.listId)?.title ?? "—"}`;
+    if (w.type === "car") return `Mașină · ${(dashboard?.cars ?? []).find((c: any) => String(c.space_id) === w.settings?.spaceId)?.name ?? "—"}`;
+    if (w.type === "todo" && w.settings?.spaceId) return `De făcut · ${spaceById.get(w.settings.spaceId)?.name ?? "—"}`;
+    return WIDGET_META[w.type].label;
+  };
+
+  const renderEditItem = ({ item: w, drag, isActive }: RenderItemParams<Widget>) => (
+    <ScaleDecorator>
+      <View style={{ gap: 6, marginBottom: spacing.section, opacity: w.hidden ? 0.45 : 1 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+          <Pressable
+            testID={`home-edit-drag-${w.id}`}
+            // The handle drags right away -- no hold needed on the grip.
+            onPressIn={drag}
+            disabled={isActive}
+            accessibilityRole="button"
+            accessibilityLabel={`Mută ${cardLabel(w)}`}
+            hitSlop={6}
+            style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center" }}
+          >
+            <Ionicons name="reorder-three" size={24} color={muted} />
+          </Pressable>
+          <Text style={{ flex: 1, fontSize: 13, color: muted }} numberOfLines={1}>
+            {cardLabel(w)}{w.size === "compact" ? " · compact" : ""}{w.hidden ? " · ascuns" : ""}
+          </Text>
+          <CircleButton
+            testID={`home-edit-hide-${w.id}`}
+            icon={w.hidden ? "eye-outline" : "eye-off-outline"}
+            label={w.hidden ? "Arată cardul" : "Ascunde cardul"}
+            onPress={() => updateDraft(w.id, { hidden: !w.hidden })}
+          />
+          <CircleButton testID={`home-edit-settings-${w.id}`} icon="options-outline" label="Setările cardului" onPress={() => setSettingsFor(w)} />
+        </View>
+        {/* A preview: the card exactly as it will look, but inert. */}
+        <View pointerEvents="none" style={{ borderRadius: 22, borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.borderStrong, padding: 3 }}>
+          <HomeWidget widget={w} ctx={{ ...ctx, preview: true }} />
+        </View>
+      </View>
+    </ScaleDecorator>
+  );
+
+  const header = (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+      {editing ? (
+        <>
           <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ fontSize: 13, color: muted }}>
-              {capitalize(now.toLocaleDateString("ro-RO", { weekday: "long", day: "numeric", month: "long" }))}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={{ fontSize: 13, color: muted }}>Personalizezi Acasă</Text>
+              <InfoButton topic="home.edit" />
+            </View>
+            <Text style={{ ...typography.title, color: colors.onSurface }} numberOfLines={1}>Aranjează</Text>
+          </View>
+          <Pressable
+            testID="home-edit-cancel"
+            onPress={() => setEditing(false)}
+            disabled={saving}
+            accessibilityRole="button"
+            accessibilityLabel="Renunță la modificări"
+            style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 4 }}
+          >
+            <Text style={{ fontSize: 15, color: muted }}>Renunță</Text>
+          </Pressable>
+          <PressableScale
+            testID="home-edit-done"
+            onPress={finishEditing}
+            disabled={saving}
+            scaleTo={motion.scale.control}
+            accessibilityRole="button"
+            accessibilityLabel="Gata, salvează aranjamentul"
+            style={{ height: 44, paddingHorizontal: 20, borderRadius: 22, backgroundColor: colors.onSurface, alignItems: "center", justifyContent: "center", opacity: saving ? 0.6 : 1 }}
+          >
+            {saving ? <ActivityIndicator color={colors.surface} /> : <Text style={{ fontSize: 15, fontWeight: "600", color: colors.surface }}>Gata</Text>}
+          </PressableScale>
+        </>
+      ) : (
+        <>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ fontSize: 13, color: muted }}>{capitalize(now.toLocaleDateString("ro-RO", { weekday: "long", day: "numeric", month: "long" }))}</Text>
             <Text style={{ ...typography.title, color: colors.onSurface }}>{greeting(user?.name)}</Text>
+          </View>
+          <InfoButton topic="home.page" circle />
+          <View {...editTarget}>
+            <CircleButton testID="home-edit-open" icon="create-outline" label="Personalizează Acasă" onPress={startEditing} />
           </View>
           <PressableScale
             onPress={() => router.push("/settings")}
             testID="home-greeting-settings-link"
             accessibilityRole="button"
-            accessibilityLabel="Profil și setări"
+            accessibilityLabel={`Profil și setări${emailVerifiedState(user) === "unverified" ? ", email neconfirmat" : ""}`}
             scaleTo={motion.scale.control}
-            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" }}
+            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}
           >
             <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{initial}</Text>
+            <VerifiedBadge user={user} avatarSize={44} />
           </PressableScale>
-        </View>
+        </>
+      )}
+    </View>
+  );
 
-        {loading ? (
-          <ActivityIndicator color={muted} style={{ marginTop: spacing.xl }} />
-        ) : (
-          <>
-            {/* Hero -- this month's spend, split by space. */}
-            <PressableScale
-              testID="home-widget-budget"
-              onPress={() => router.push("/budget")}
-              accessibilityRole="button"
-              accessibilityLabel={`Cheltuit în ${monthName}: ${lei(Math.round(monthly.total))}`}
-              scaleTo={motion.scale.card}
-              style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md + 2 }}
-            >
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
-                <Text style={{ fontSize: 13, color: muted }}>Cheltuit în {monthName}</Text>
-                {totalBudget > 0 ? <Text style={{ fontSize: 13, color: muted }}>buget {lei(totalBudget)}</Text> : null}
-              </View>
-              <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-                <AnimatedNumber countUpOnMount value={monthly.total} style={{ ...typography.hero, color: colors.onSurface }} />
-                <Text style={{ fontSize: 17, fontWeight: "500", color: muted }}>lei</Text>
-              </View>
+  // Cards the user hid, then cards with nothing to show (lib/dashboard/
+  // widgetVisibility.ts) -- filtered BEFORE toRows so nothing leaves a
+  // gap. Edit mode renders `draft` instead, every card included. No
+  // flash: until the first load lands the spinner shows, and later
+  // reloads swap all the data in one batched render.
+  const userVisible = layout.filter((w) => !w.hidden);
+  const visible = visibleWidgets(layout, ctx);
+  const showEmptyHint = onlyEmptyDataHidesOthers(layout, ctx);
+  // The tour's step 2 points at the first spend card on the page.
+  const firstSpend = visible.find((w) => w.type === "spend");
+  const spendWrap = (w: Widget, node: React.ReactNode) =>
+    w.id === firstSpend?.id ? <View {...spendTarget}>{node}</View> : node;
 
-              <SpendBar segments={segments} track={colors.surfaceTertiary} />
+  const tourCtx: TourCtx = {
+    hasSpaces: spaces.length > 0,
+    emailState: emailVerifiedState(user),
+    hasPlan,
+    spendChart: (firstSpend?.settings?.chart ?? "ring") === "bar" ? "bar" : "ring",
+    initial,
+  };
+  useAutoTour("home", {
+    ready: !loading && !editing && !todoSheetVisible && !catalogOpen && !templatesOpen && !settingsFor,
+    ctx: tourCtx,
+  });
 
-              {segments.length > 0 ? (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: spacing.sm, columnGap: spacing.lg }}>
-                  {segments.map((s) => (
-                    <View key={s.key} style={{ width: "46%", flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                      <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: s.color }} />
-                      <Text style={{ flex: 1, fontSize: 14, color: colors.onSurfaceSecondary }} numberOfLines={1}>{s.label}</Text>
-                      <Text style={{ fontSize: 14, fontWeight: "500", color: colors.onSurface, fontVariant: ["tabular-nums"] }}>
-                        {Math.round(s.amount).toLocaleString("ro-RO")}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <Text style={{ fontSize: 14, color: muted }}>Nicio cheltuială înregistrată luna asta.</Text>
-              )}
-
-              {totalBudget > 0 ? (
-                <Text style={{ fontSize: 13, fontWeight: "500", color: remaining >= 0 ? colors.success : colors.error }}>
-                  {remaining >= 0
-                    ? `Mai ai ${lei(Math.round(remaining))} pentru ${roCount(daysLeft, "zi", "zile")}`
-                    : `Ai depășit bugetul cu ${lei(Math.round(-remaining))}`}
-                </Text>
-              ) : (
-                <Text style={{ fontSize: 13, fontWeight: "500", color: colors.onSurface }}>Setează un buget lunar</Text>
-              )}
-            </PressableScale>
-
-            {/* De făcut -- the most urgent few; "Vezi tot" opens the
-                carousel, which knows where each item resolves. */}
-            <View style={{ gap: spacing.sm }}>
-              <SectionHeader
-                title={`De făcut${todoRows.length > 0 ? ` (${todoRows.length})` : ""}`}
-                action={todoRows.length > 0 ? { label: "Vezi tot", onPress: () => setTodoSheetVisible(true), testID: "home-widget-todo" } : undefined}
-              />
-              {todoRows.length === 0 ? (
-                <Card style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.lg }}>
-                  <Ionicons name="checkmark-circle-outline" size={22} color={colors.success} />
-                  <Text style={{ fontSize: 15, color: colors.onSurface }}>Ești la zi. Nimic de făcut.</Text>
-                </Card>
-              ) : (
-                <Group inset={36}>
-                  {todoRows.slice(0, 4).map((row) => {
-                    const space = row.space ? spaceById.get(String(row.space.id)) : undefined;
-                    const kind = space?.kind;
-                    const dotColor = kind ? SPACE_IDENTITY_COLORS[kind] ?? muted : CUSTOM_EVENT_COLOR;
-                    const subColor = kind ? spaceTextColor(kind, isDark) ?? muted : row.space ? muted : spaceTextColor("custom", isDark);
-                    const chip =
-                      row.urgency === "overdue"
-                        ? <Chip label={`Restant ${roCount(Math.max(1, -row.days), "zi", "zile")}`} color={colors.error} />
-                        : row.urgency === "today"
-                          ? <Chip label="Azi" color={colors.warning} />
-                          : <Chip label={row.days === 1 ? "Mâine" : `în ${roCount(row.days, "zi", "zile")}`} color={muted} filled={false} />;
-                    return (
-                      <Row
-                        key={`${row.type}-${row.id}`}
-                        onPress={() => setTodoSheetVisible(true)}
-                        leading={<View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dotColor }} />}
-                        title={row.title}
-                        subtitle={space?.name ?? row.space?.name ?? "Personal"}
-                        subtitleColor={subColor}
-                        trailing={chip}
-                      />
-                    );
-                  })}
-                </Group>
-              )}
-            </View>
-
-            {/* Spațiile tale */}
-            <View style={{ gap: spacing.sm }}>
-              <SectionHeader title="Spațiile tale" />
-              {spaces.length === 0 ? (
-                <Group>
-                  <Row
-                    onPress={() => router.push("/spaces")}
-                    leading={<Ionicons name="add-circle-outline" size={22} color={colors.onSurface} />}
-                    title="Creează primul tău spațiu"
-                    chevron
-                  />
-                </Group>
-              ) : (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.md - 2 }}>
-                  {spaces.map((s) => {
-                    const todos = todoCountBySpace.get(s.id) ?? 0;
-                    // Spend is only known per KIND; attribute it to a space
-                    // only when it's the sole space of that kind.
-                    const spend = kindCount.get(s.kind) === 1 ? segments.find((seg) => seg.kind === s.kind)?.amount ?? 0 : 0;
-                    const value = todos > 0 ? `${todos} de făcut` : spend > 0 ? lei(Math.round(spend)) : "La zi";
-                    const fill = SPACE_IDENTITY_COLORS[s.kind] ?? muted;
-                    return (
-                      <PressableScale
-                        key={s.id}
-                        onPress={() => router.push(`/${s.id}`)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${s.name}, ${value}`}
-                        style={{ width: "48.4%", backgroundColor: colors.surfaceSecondary, borderRadius: radius.card, padding: spacing.md + 2, gap: spacing.md }}
-                      >
-                        <IconWell icon={KIND_ICON[s.kind] ?? "apps-outline"} color={fill} tint={spaceTextColor(s.kind, isDark)} size={34} />
-                        <View>
-                          <Text style={{ fontSize: 13, color: muted }} numberOfLines={1}>{s.name}</Text>
-                          <Text style={{ fontSize: 17, fontWeight: "600", color: colors.onSurface }} numberOfLines={1}>{value}</Text>
-                        </View>
-                      </PressableScale>
-                    );
-                  })}
-                </View>
-              )}
-            </View>
-
-            {/* Plăți recurente -- the next few bills, then savings. */}
-            {nextBills.length > 0 ? (
-              <View style={{ gap: spacing.sm }}>
-                <SectionHeader title="Plăți recurente" />
-                <Group>
-                  {nextBills.map((bill: any) => (
-                    <Row
-                      key={bill.id}
-                      testID={`home-recurring-${bill.id}`}
-                      onPress={() => router.push("/calendar")}
-                      title={bill.title}
-                      subtitle={roDate(bill.due_at)}
-                      trailing={
-                        bill.amount != null ? (
-                          <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{lei(Number(bill.amount))}</Text>
-                        ) : null
-                      }
-                    />
-                  ))}
-                </Group>
-              </View>
-            ) : null}
-
-            {goal ? (
+  return (
+    <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="home-screen">
+      {editing ? (
+        <DraggableFlatList
+          testID="home-edit-list"
+          data={draft}
+          keyExtractor={(w) => w.id}
+          onDragEnd={({ data }) => setDraft(data)}
+          renderItem={renderEditItem}
+          contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.lg, paddingBottom: 140 }}
+          ListHeaderComponent={<View style={{ marginBottom: spacing.section, gap: spacing.sm }}>{header}<Text style={{ fontSize: 13, color: muted }}>Ține apăsat mânerul ☰ și trage ca să muți un card.</Text></View>}
+          ListFooterComponent={
+            <View style={{ gap: spacing.md }}>
               <PressableScale
-                testID="home-widget-savings"
-                onPress={() => router.push("/budget")}
-                accessibilityRole="button"
-                accessibilityLabel="Obiectiv de economii"
+                testID="home-edit-add"
+                onPress={() => setCatalogOpen(true)}
                 scaleTo={motion.scale.card}
-                style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.sm }}
+                accessibilityRole="button"
+                accessibilityLabel="Adaugă card"
+                style={{ height: 56, borderRadius: 16, borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.borderStrong, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}
               >
-                <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <Text style={{ fontSize: 13, color: muted }}>Economii</Text>
-                  <Text style={{ fontSize: 13, color: muted }}>{Math.round(goalRatio * 100)}%</Text>
-                </View>
-                <Text style={{ fontSize: 22, fontWeight: "600", color: colors.onSurface }}>
-                  {lei(goal.current_amount)}
-                  <Text style={{ fontSize: 14, fontWeight: "400", color: muted }}> din {lei(goal.target_amount)}</Text>
-                </Text>
-                <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.surfaceTertiary, overflow: "hidden" }}>
-                  <View style={{ width: `${goalRatio * 100}%`, height: "100%", backgroundColor: colors.success, borderRadius: 3 }} />
-                </View>
+                <Ionicons name="add" size={20} color={colors.onSurface} />
+                <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }}>Adaugă card</Text>
               </PressableScale>
+              <PressableScale
+                testID="home-edit-templates"
+                onPress={() => setTemplatesOpen(true)}
+                scaleTo={motion.scale.card}
+                accessibilityRole="button"
+                accessibilityLabel="Șabloane"
+                style={{ height: 48, borderRadius: 14, backgroundColor: colors.surfaceSecondary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}
+              >
+                <Ionicons name="albums-outline" size={18} color={muted} />
+                <Text style={{ fontSize: 14, color: colors.onSurface }}>Pornește de la un șablon</Text>
+              </PressableScale>
+              <Pressable
+                testID="home-edit-reset"
+                onPress={resetLayout}
+                disabled={saving}
+                accessibilityRole="button"
+                accessibilityLabel="Resetează Acasă la organizarea inițială"
+                style={{ minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}
+              >
+                <Ionicons name="refresh" size={16} color={colors.error} />
+                <Text style={{ fontSize: 14, color: colors.error }}>Resetează Acasă la organizarea inițială</Text>
+              </Pressable>
+            </View>
+          }
+        />
+      ) : (
+        <ScrollView
+          ref={scrollRef}
+          {...tourScroll}
+          contentContainerStyle={{ flexGrow: 1 }}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={muted} />}
+        >
+          {/* The whole page is long-pressable: a press that lands on a
+              card goes to that card (it's the inner responder); one on
+              an empty spot between or below the cards opens edit mode. */}
+          <Pressable
+            testID="home-empty-longpress"
+            onLongPress={startEditing}
+            delayLongPress={450}
+            accessible={false}
+            style={{ flexGrow: 1, paddingHorizontal: spacing.gutter, paddingTop: spacing.lg, paddingBottom: 120, gap: spacing.section }}
+          >
+            <View {...headerTarget}>{header}</View>
+            {SHOW_TOUR_TEST_BUTTON ? (
+              // TEMP for testing -- see SHOW_TOUR_TEST_BUTTON.
+              <View style={{ flexDirection: "row", marginTop: -spacing.sm }}>
+                <Pill testID="home-tour-test" icon="play-circle-outline" label="Pornește ghidul" onPress={() => startTour("home", tourCtx)} />
+              </View>
             ) : null}
-          </>
-        )}
-      </ScrollView>
+            <VerifyEmailBanner testID="home-verify-email-banner" />
+            {loading ? (
+              <ActivityIndicator color={muted} style={{ marginTop: spacing.xl }} />
+            ) : visible.length === 0 ? (
+              <Text style={{ fontSize: 14, color: muted, textAlign: "center", marginTop: spacing.xl }}>
+                {userVisible.length === 0
+                  ? "Ai ascuns toate cardurile. Apasă creionul ca să adaugi unul."
+                  : "Nimic de arătat încă. Cardurile apar aici pe măsură ce adaugi înregistrări."}
+              </Text>
+            ) : (
+              toRows(visible).map((row) =>
+                row.length === 2 ? (
+                  <View key={row[0].id} style={{ flexDirection: "row", gap: spacing.md }}>
+                    {row.map((w) => (
+                      <View key={w.id} style={{ flex: 1, minWidth: 0 }}>{spendWrap(w, <HomeWidget widget={w} ctx={ctx} />)}</View>
+                    ))}
+                  </View>
+                ) : row[0].size === "compact" ? (
+                  <View key={row[0].id} style={{ flexDirection: "row", gap: spacing.md }}>
+                    <View style={{ flex: 1, minWidth: 0 }}>{spendWrap(row[0], <HomeWidget widget={row[0]} ctx={ctx} />)}</View>
+                    <View style={{ flex: 1 }} />
+                  </View>
+                ) : (
+                  <React.Fragment key={row[0].id}>{spendWrap(row[0], <HomeWidget widget={row[0]} ctx={ctx} />)}</React.Fragment>
+                ),
+              )
+            )}
+            {!loading && visible.length > 0 && showEmptyHint ? (
+              <Text testID="home-empty-data-hint" style={{ fontSize: 13, lineHeight: 18, color: muted, textAlign: "center", paddingHorizontal: spacing.md }}>
+                De făcut, Plăți recurente și Economii apar aici pe măsură ce adaugi date.
+              </Text>
+            ) : null}
+          </Pressable>
+        </ScrollView>
+      )}
 
       <TodoCarouselSheet
         visible={todoSheetVisible}
@@ -371,38 +590,49 @@ export default function Home() {
         upcoming={dashboard?.upcoming || []}
         onChanged={load}
       />
+
+      <CatalogSheet
+        visible={catalogOpen}
+        onClose={() => setCatalogOpen(false)}
+        ctx={ctx}
+        layout={draft}
+        onAdd={(w) => {
+          setDraft((d) => [...d, w]);
+          setCatalogOpen(false);
+        }}
+        onShow={(id) => {
+          updateDraft(id, { hidden: false });
+          setCatalogOpen(false);
+        }}
+      />
+
+      <WidgetSettingsSheet
+        widget={settingsFor}
+        ctx={ctx}
+        onClose={() => setSettingsFor(null)}
+        onSave={(w) => {
+          updateDraft(w.id, w);
+          setSettingsFor(null);
+        }}
+        onRemove={(id) => {
+          setDraft((d) => d.filter((w) => w.id !== id));
+          setSettingsFor(null);
+        }}
+      />
+
+      <TemplatesSheet
+        visible={templatesOpen}
+        onClose={() => setTemplatesOpen(false)}
+        onPick={(key) => {
+          const t = LAYOUT_TEMPLATES.find((x) => x.key === key);
+          if (t) setDraft(t.build({ firstListId, firstCarId }));
+          setTemplatesOpen(false);
+        }}
+        onReset={() => {
+          setDraft(defaultLayout());
+          setTemplatesOpen(false);
+        }}
+      />
     </SafeAreaView>
-  );
-}
-
-/** The hero's split bar -- grows from empty once per mount (skipped
- * under reduced motion), segment widths are each space's share. */
-function SpendBar({ segments, track }: { segments: { key: string; share: number; color: string }[]; track: string }) {
-  const reduced = useReducedMotion();
-  const grow = useRef(new Animated.Value(reduced ? 1 : 0)).current;
-
-  useEffect(() => {
-    if (reduced) {
-      grow.setValue(1);
-      return;
-    }
-    const a = Animated.timing(grow, { toValue: 1, delay: 120, useNativeDriver: false, ...motion.reveal });
-    a.start();
-    return () => a.stop();
-  }, [grow, reduced]);
-
-  return (
-    <View style={{ flexDirection: "row", gap: 3, height: 10, borderRadius: 5, overflow: "hidden", backgroundColor: track }}>
-      {segments.map((s) => (
-        <Animated.View
-          key={s.key}
-          style={{
-            flexShrink: 1,
-            backgroundColor: s.color,
-            width: grow.interpolate({ inputRange: [0, 1], outputRange: ["0%", `${Math.min(100, s.share * 100)}%`] }),
-          }}
-        />
-      ))}
-    </View>
   );
 }

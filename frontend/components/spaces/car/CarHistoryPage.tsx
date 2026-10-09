@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
+import { SwipeRow } from "@/components/spaces/SwipeRow";
 import { TopBar, Identity, Segmented, Pill, SectionHeader, Group, EmptyState } from "@/components/ui/primitives";
 import { capitalize, roCount } from "@/lib/format";
 import { RecentRow } from "./CarDashboard";
@@ -28,6 +29,8 @@ export type CarHistoryPageProps = {
    * History already filtered to Fuel, not back on "All". */
   initialTab?: CarRecentItem["type"] | "all";
   onRecordPress?: (type: CarRecentItem["type"], id: string | number) => void;
+  /** Swipe-left delete for a logged entry (never a document). */
+  onRecordDelete?: (item: CarRecentItem) => void;
 };
 
 // No "Documents" tab -- see allEntries below, documents never reach
@@ -68,7 +71,7 @@ const CATEGORY_TABS: { key: CarRecentItem["type"] | "all"; label: string }[] = [
  * PERIOD picker below narrows that on request, same period system
  * Expenses uses.
  */
-export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPress }: CarHistoryPageProps) {
+export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPress, onRecordDelete }: CarHistoryPageProps) {
   const { colors, spacing } = useTheme();
   const [activeTab, setActiveTab] = useState<CarRecentItem["type"] | "all">(initialTab);
 
@@ -169,7 +172,7 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
       contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >
       <TopBar onBack={onBack} backTestID="history-back" />
-      <Identity color={SPACE_IDENTITY_COLORS.car} kicker="Mașină" title="Istoric" subtitle="Ce a ieșit de pe pagina mașinii după 7 zile" />
+      <Identity color={SPACE_IDENTITY_COLORS.car} kicker="Mașină" title="Istoric" subtitle="Ce a ieșit de pe pagina mașinii după 7 zile" info="car.history" />
 
       <Segmented options={CATEGORY_TABS} value={activeTab} onChange={setActiveTab} testIDPrefix="history-tab" />
 
@@ -202,7 +205,13 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
             <SectionHeader title={group.label} muted />
             <Group inset={68}>
               {group.items.map((item) => (
-                <View key={`${item.type}-${item.id}`} testID={`history-record-${item.type}-${item.id}`}>
+                <SwipeRow
+                  key={`${item.type}-${item.id}`}
+                  cornerRadius={0}
+                  colors={colors}
+                  onDelete={onRecordDelete && item.type !== "document" ? () => onRecordDelete(item) : undefined}
+                >
+                <View testID={`history-record-${item.type}-${item.id}`}>
                   <RecentRow
                     {...item}
                     subtitle={item.archived ? `${item.subtitle}, arhivat` : item.subtitle}
@@ -211,6 +220,7 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
                     onPress={onRecordPress ? () => onRecordPress(item.type, item.id) : undefined}
                   />
                 </View>
+                </SwipeRow>
               ))}
             </Group>
           </View>

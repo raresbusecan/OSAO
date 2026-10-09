@@ -44,21 +44,29 @@ export function severityTint(tier: SeverityTier, colors: ThemeColors, alpha: str
 }
 
 /**
- * Calendar's month-grid heat scale -- explicitly requested as its own
- * fixed palette (yellow/orange/purple/red), separate from the urgency
- * scale above: this colors a day by how MANY things are due, not by how
- * soon any one of them is. Kept here (not calendar.tsx) so it has the
- * same single-source-of-truth home as everything else in this file, even
- * though today it's only consumed by the calendar screen.
+ * Calendar heat (2026-10 redesign, design-lead spec): how FULL a day is,
+ * as a red tint ramp -- one shade per thing on the day, 8 shades, 8+ keeps
+ * the darkest (user, 2026-10-05). `error` at 9 / 17 / 26 / 35 / 44 / 54 /
+ * 65 / 75% over the card (surfaceSecondary), baked to exact hex per theme;
+ * the day number (onSurface) stays >= 4.5:1 on every shade. Load = a plain count
+ * of what falls on the day (every item and projected occurrence, custom
+ * events included), and only today / future days are heated: overdue is
+ * a STATUS, shown as full-strength red text or a red dot on past days,
+ * so "busy" and "late" never share a tile.
  */
-const DENSITY_TIERS = [
-  { bg: "#FBBF24", text: "#111111" }, // 1 -- yellow
-  { bg: "#F97316", text: "#111111" }, // 2 -- orange
-  { bg: "#8B5CF6", text: "#FFFFFF" }, // 3 -- purple
-  { bg: "#EF4444", text: "#FFFFFF" }, // 4+ -- red
-];
+export type HeatLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+export const HEAT_MAX: HeatLevel = 8;
+export const HEAT_LEVELS: readonly HeatLevel[] = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 
-export function densityColor(count: number, colors: ThemeColors): { bg: string; text: string } {
-  if (count <= 0) return { bg: "transparent", text: colors.onSurface };
-  return DENSITY_TIERS[Math.min(count, DENSITY_TIERS.length) - 1];
+/** The count itself, capped at 8 (8 or more = the darkest shade). */
+export function heatLevel(count: number): HeatLevel {
+  if (!(count > 0)) return 0;
+  return Math.min(Math.floor(count), HEAT_MAX) as HeatLevel;
+}
+
+const HEAT_DARK = ["transparent", "#2B1F28", "#3D222D", "#512632", "#652A37", "#792E3D", "#8F3242", "#A83749", "#BE3B4E"];
+const HEAT_LIGHT = ["transparent", "#FAEBED", "#F6D9DE", "#F1C4CC", "#ECB0BA", "#E79CA8", "#E18695", "#DB6D7F", "#D6566B"];
+
+export function heatColor(level: HeatLevel, isDark: boolean): string {
+  return (isDark ? HEAT_DARK : HEAT_LIGHT)[level];
 }

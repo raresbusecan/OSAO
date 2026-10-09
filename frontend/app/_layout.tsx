@@ -18,6 +18,8 @@ import {
 
 import { ThemeProvider } from "@/lib/theme";
 import { ConfirmHost } from "@/lib/confirmHost";
+import { HelpHost } from "@/components/ui/HelpHost";
+import { TourHost } from "@/components/ui/TourHost";
 import { AuthProvider, useAuth } from "@/providers/auth";
 
 LogBox.ignoreAllLogs(true);
@@ -71,18 +73,29 @@ function AuthGuard() {
   }
 
   const inAuthGroup = segments[0] === "(auth)";
-  // Reached from an email link (see ConfirmEmailChangeNotification), which
-  // could open in a browser that's logged out entirely, or logged in as a
-  // DIFFERENT session than the one that requested the change -- either way
-  // the screen itself only needs the token in the URL, not a session, so it
-  // has to render regardless of auth state instead of bouncing to /login.
-  const isPublicRoute = segments[0] === "confirm-email";
+  // Opened from an email link (the backend's /open/<screen> page redirects
+  // to exp://<host>/--/<screen>?token&email in Expo Go, orgos://<screen>
+  // in an own build; the (auth) group is invisible in the URL, so
+  // "/reset-password" is app/(auth)/reset-password.tsx). The link can
+  // open on a device that's logged out, or logged in -- possibly as a
+  // DIFFERENT account -- and the screen only needs the token in the URL,
+  // so these render regardless of auth state instead of bouncing to
+  // /login or /home. forgot-password is included so reset-password's
+  // "cere un link nou" works while logged in too.
+  const screen = inAuthGroup ? segments[1] : segments[0];
+  // auth-callback = Google/Facebook sign-in landing (?code / ?error, see
+  // lib/socialAuth.ts); it signs in itself, so it must render logged out.
+  const isPublicRoute =
+    screen === "auth-callback" ||
+    screen === "confirm-email" ||
+    screen === "verify-email" ||
+    (inAuthGroup && (screen === "reset-password" || screen === "forgot-password"));
 
   if (!user && !inAuthGroup && !isPublicRoute) {
     return <Redirect href="/(auth)/login" />;
   }
 
-  if (user && inAuthGroup) {
+  if (user && inAuthGroup && !isPublicRoute) {
     return <Redirect href="/(tabs)/home" />;
   }
 
@@ -109,6 +122,9 @@ function RootLayout() {
             <BottomSheetModalProvider>
               <StatusBar style="auto" />
               <AuthGuard />
+              <HelpHost />
+              {/* First-use tours (lib/tours.ts); renders nothing unless one runs. */}
+              <TourHost />
               <ConfirmHost />
             </BottomSheetModalProvider>
           </AuthProvider>

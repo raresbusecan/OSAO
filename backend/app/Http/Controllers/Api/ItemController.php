@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Item;
 use App\Models\Space;
 use App\Models\User;
+use App\Support\ItemBudgetRules;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -213,10 +214,35 @@ class ItemController extends Controller
             'category'      => 'nullable|string|max:100',
             'recurrence'    => 'nullable|string|max:100',
             'metadata'      => 'nullable|array',
+            // "Bani fără vină" -- only on Item::guiltFreeTypes(), checked
+            // in budgetFieldErrors() below.
+            'guilt_free'    => 'sometimes|boolean',
         ]);
 
+        // A document is created with BOTH validity dates -- urgency,
+        // "Expiră pe" and a renewal's next period are all computed from
+        // them (same rule both forms enforce). Car stores "dd.mm.yyyy",
+        // Casă an ISO date; either is accepted.
+        $validator->after(function ($v) use ($request) {
+            if (!in_array($request->input('type'), ['car_document', 'home_document'], true)) {
+                return;
+            }
+            $issue = $this->documentDate($request->input('metadata.issueDate'));
+            $expiry = $this->documentDate($request->input('metadata.expiryDate'));
+            if (!$issue) {
+                $v->errors()->add('metadata.issueDate', 'Data emiterii este obligatorie.');
+            }
+            if (!$expiry) {
+                $v->errors()->add('metadata.expiryDate', 'Data expirării este obligatorie.');
+            }
+            if ($issue && $expiry && $expiry->lt($issue)) {
+                $v->errors()->add('metadata.expiryDate', 'Data expirării nu poate fi înaintea celei de emitere.');
+            }
+        });
+
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 422);
+            // `message` = the first error, shown as-is by lib/api.ts.
+            return response()->json(['message' => $validator->errors()->first(), 'errors' => $validator->errors()], 422);
         }
 
         $data = $validator->validated();
@@ -262,6 +288,10 @@ class ItemController extends Controller
                     'message' => 'Space-ul specificat nu exista sau nu iti apartine.'
                 ], 404);
             }
+        }
+
+        if ($error = $this->budgetFieldErrors($request, $data, null)) {
+            return $error;
         }
 
         $data['user_id'] = $request->user()->id;
@@ -315,10 +345,14 @@ class ItemController extends Controller
             'category'      => 'nullable|string|max:100',
             'recurrence'    => 'nullable|string|max:100',
             'metadata'      => 'nullable|array',
+            // "Bani fără vină" -- only on Item::guiltFreeTypes(), checked
+            // in budgetFieldErrors() below.
+            'guilt_free'    => 'sometimes|boolean',
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 422);
+            // `message` = the first error, shown as-is by lib/api.ts.
+            return response()->json(['message' => $validator->errors()->first(), 'errors' => $validator->errors()], 422);
         }
 
         $data = $validator->validated();
@@ -376,6 +410,10 @@ class ItemController extends Controller
         // new object), so this can't regress the current behavior.
         if (array_key_exists('metadata', $data) && is_array($data['metadata'])) {
             $data['metadata'] = array_merge($item->metadata ?? [], $data['metadata']);
+        }
+
+        if ($error = $this->budgetFieldErrors($request, $data, $item)) {
+            return $error;
         }
 
         $item->update($data);
@@ -546,5 +584,36 @@ class ItemController extends Controller
             'affected_item_ids' => $theirItemsOnThisList->pluck('id')->values(),
             'items_deleted' => $request->boolean('remove_items'),
         ]);
+    }
+
+    /** Budget-from-income rules (guilt_free, expense_credit) shared by
+     * store() and update() ($item = null on create). The rules themselves
+     * live in App\Support\ItemBudgetRules (also used by
+     * SpaceController::store for a car/home created "în rate"). Mutates
+     * $data; returns a 422 response on a violation, null when fine. */
+    private function budgetFieldErrors(Request $request, array &$data, ?Item $item)
+    {
+        $errors = ItemBudgetRules::errors($request->user(), $data, $item);
+
+        // `message` = the first error, so the client shows it as-is
+        // (lib/api.ts reads body.message before body.errors).
+        return $errors
+            ? response()->json(['message' => array_values($errors)[0][0], 'errors' => $errors], 422)
+            : null;
+    }
+
+    // "10.10.2026" (Car) or an ISO date (Casă) -> Carbon, null if missing/invalid.
+    private function documentDate($value): ?\Carbon\Carbon
+    {
+        if (!is_string($value) || trim($value) === '') {
+            return null;
+        }
+        try {
+            return preg_match('/^\d{2}\.\d{2}\.\d{4}$/', $value)
+                ? \Carbon\Carbon::createFromFormat('d.m.Y', $value)->startOfDay()
+                : \Carbon\Carbon::parse($value);
+        } catch (\Exception $e) {
+            return null;
+        }
     }
 }

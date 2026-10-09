@@ -5,6 +5,7 @@ import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field } from "@/components/ui/primitives";
+import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 
 export type GroceryFinishShoppingSheetProps = {
   listName: string;
@@ -13,7 +14,8 @@ export type GroceryFinishShoppingSheetProps = {
    * those, not just clears the cart. */
   linkedSupplyCount: number;
   onCancel: () => void;
-  onConfirm: (price: number | undefined) => void;
+  /** guiltFree = "Bani fără vină" on the trip record (only matters with a price). */
+  onConfirm: (price: number | undefined, guiltFree: boolean) => void;
 };
 
 /** Opened from "Finalizează cumpărăturile" on the active list (only
@@ -33,8 +35,9 @@ export function GroceryFinishShoppingSheet({
   const { colors, spacing, radius } = useTheme();
   const [price, setPrice] = useState("");
   const [error, setError] = useState("");
+  const [guiltFree, setGuiltFree] = useState(false);
 
-  const confirmWith = (value: number | undefined) => onConfirm(value);
+  const confirmWith = (value: number | undefined) => onConfirm(value, value !== undefined && guiltFree);
 
   const handleConfirm = () => {
     if (!price.trim()) {
@@ -55,6 +58,7 @@ export function GroceryFinishShoppingSheet({
     <Sheet
       visible
       onClose={onCancel}
+      info="grocery.finish"
       centered
       icon="checkmark-done"
       tone={colors.success}
@@ -78,6 +82,7 @@ export function GroceryFinishShoppingSheet({
         hint="Intră în bugetul lunii, la Cumpărături."
         accessibilityLabel="Total plătit"
       />
+      <GuiltFreeToggle value={guiltFree} onChange={setGuiltFree} tone={GROC} testID="grocery-finish-guilt-free" />
       {linkedSupplyCount > 0 ? (
         <View style={{ flexDirection: "row", gap: spacing.sm, padding: spacing.md, borderRadius: radius.control, backgroundColor: colors.surfaceTertiary }}>
           <Ionicons name="basket-outline" size={18} color={colors.onSurfaceTertiary} />

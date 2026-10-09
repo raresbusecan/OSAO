@@ -2,6 +2,8 @@ import { Tabs, useSegments } from "expo-router";
 import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { TabSwipeEdges } from "@/components/navigation/TabSwipeEdges";
+import { MainTabBar } from "@/components/navigation/MainTabBar";
 
 export const REFRESH_EVENT = "lifeos.refresh";
 
@@ -33,6 +35,11 @@ export default function TabsLayout() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <Tabs
+        // Revolut-style tab bar, per explicit user request -- a pill
+        // slides behind the active icon and it bounces on arrival,
+        // instead of the default bar's instant color swap. See
+        // MainTabBar.tsx.
+        tabBar={(props) => <MainTabBar {...(props as any)} />}
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: colors.onSurface,
@@ -43,6 +50,24 @@ export default function TabsLayout() {
             backgroundColor: colors.surfaceSecondary,
             borderTopColor: colors.border,
           },
+          // "shift" (a built-in screen-content transition, separate from
+          // MainTabBar's own pill animation) was tried here for a
+          // smoother tab switch, but caused a real, repeatable blank/
+          // black-screen bug on-device even after two targeted fixes
+          // (deferring the swipe's navigate() call, then lazy:false to
+          // remove the cold-mount race) -- the "shift" interpolator can
+          // apparently land both the outgoing and incoming screen at
+          // opacity:0 at once, showing the native surface behind them
+          // through both. Reverted to the default (no animation) rather
+          // than keep chasing it; the tab bar's own pill slide/bounce
+          // (MainTabBar.tsx) is unrelated and unaffected -- that's a
+          // separate Animated-driven overlay, not this transition.
+          // A tab is lazy by default -- its screen doesn't mount at all
+          // until the FIRST time you navigate to it. Kept false (mount
+          // all 4 up front) even without "shift": still removes a
+          // first-visit cold-mount delay, and costs little for 4 light
+          // screens.
+          lazy: false,
         }}
       >
         <Tabs.Screen
@@ -83,6 +108,7 @@ export default function TabsLayout() {
         <Tabs.Screen name="search" options={{ href: null }} />
         <Tabs.Screen name="[id]" options={{ href: null }} />
       </Tabs>
+      <TabSwipeEdges />
     </View>
   );
 }

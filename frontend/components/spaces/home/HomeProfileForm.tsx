@@ -1,10 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { View, Text } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { notifyAction } from "@/lib/confirm";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field, Segmented } from "@/components/ui/primitives";
+import { SpaceCreditToggle, afterSpaceCreditSaved, useSpaceCredit } from "@/components/spaces/SpaceCreditToggle";
 import {
   homeProfileName,
   homeProfileToApiBody,
@@ -43,9 +44,15 @@ export function HomeProfileForm({
   const [bought, setBought] = useState(true);
   const [purchasePrice, setPurchasePrice] = useState("0");
   const [busy, setBusy] = useState(false);
+  const savingRef = useRef(false);
+  // "În rate" -- create only, and only for a bought home; the name
+  // follows the locality ("Credit Băiuț").
+  const credit = useSpaceCredit(city.trim() ? `Credit ${city.trim()}` : "Credit casă");
+  const resetCredit = credit.reset;
 
   useEffect(() => {
     if (!visible) return;
+    resetCredit();
 
     if (initialProfile) {
       setCounty(initialProfile.county);
@@ -58,9 +65,12 @@ export function HomeProfileForm({
       setBought(true);
       setPurchasePrice("0");
     }
-  }, [visible, initialProfile]);
+  }, [visible, initialProfile, resetCredit]);
 
-  const canSubmit = county.trim().length > 0 && city.trim().length > 0;
+  const creditOn = mode === "create" && bought && credit.on;
+  // Save stays disabled while "În rate" is on and the credit isn't valid.
+  const creditBlocked = creditOn && !!credit.error;
+  const canSubmit = county.trim().length > 0 && city.trim().length > 0 && !creditBlocked;
 
   const submit = async () => {
     if (!canSubmit) return;
@@ -75,25 +85,32 @@ export function HomeProfileForm({
 
     const derivedName = homeProfileName(profile);
 
+    // A second tap before `busy` re-renders the button must not send a
+    // second create.
+    if (savingRef.current) return;
+    savingRef.current = true;
     setBusy(true);
     try {
-      let targetSpace: any;
-
       if (mode === "create") {
+        // ONE request: space + profile (+ Cheltuieli "Default" + credit)
+        // in one server transaction -- nothing is left behind on a 422.
         const created = await api.createSpace({
           name: derivedName,
           icon: "home-outline",
           color: "#374151",
           type: "home",
+          profile: homeProfileToApiBody(profile),
+          ...(creditOn ? { credit: credit.apiBody } : {}),
         });
-        targetSpace = created?.space ?? created;
-      } else if (space) {
-        const result = await api.updateSpace(space.id, { name: derivedName });
-        targetSpace = result?.space ?? { ...space, name: derivedName };
-      } else {
+        onSaved(created.space, homeProfileFromApi(created.profile) ?? profile);
+        onClose();
+        afterSpaceCreditSaved(created);
         return;
       }
+      if (!space) return;
 
+      const result = await api.updateSpace(space.id, { name: derivedName });
+      const targetSpace = result?.space ?? { ...space, name: derivedName };
       const profileResult = await api.saveHomeProfile(
         targetSpace.id,
         homeProfileToApiBody(profile),
@@ -105,6 +122,7 @@ export function HomeProfileForm({
     } catch (error: any) {
       notifyAction("Nu am putut salva", error?.message || "A apărut o eroare.");
     } finally {
+      savingRef.current = false;
       setBusy(false);
     }
   };
@@ -115,6 +133,7 @@ export function HomeProfileForm({
     <Sheet
       visible={visible}
       onClose={onClose}
+      info="home.profile"
       title={mode === "create" ? "Casă nouă" : "Editează casa"}
       subtitle="Localitatea devine numele spațiului"
       icon="home-outline"
@@ -154,6 +173,10 @@ export function HomeProfileForm({
           suffix="lei"
           tone={tone}
         />
+      ) : null}
+      {mode === "create" && bought ? <SpaceCreditToggle kind="home" credit={credit} /> : null}
+      {creditBlocked ? (
+        <Text testID="home-credit-missing" style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{credit.error}</Text>
       ) : null}
     </Sheet>
   );

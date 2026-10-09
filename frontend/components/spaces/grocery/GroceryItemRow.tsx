@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { roUnit } from "@/lib/format";
 import { View, Text, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
@@ -8,6 +9,14 @@ import type { GroceryItem } from "@/lib/spaces/grocery/grocery.types";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { SwipeRow } from "@/components/spaces/SwipeRow";
 import { motion, useReducedMotion } from "@/lib/motion";
+
+/** "5 pcs" (stored English unit) and a bare "5" both read "5 buc." --
+ * any other unit ("1 kg", "500 g") is shown as typed. */
+function displayQuantity(q: string | number): string {
+  const text = String(q).trim();
+  if (/^\d+([.,]\d+)?$/.test(text)) return `${text} buc.`;
+  return text.replace(/\bpcs?\b\.?/i, roUnit("pcs"));
+}
 
 export type GroceryItemRowProps = {
   item: GroceryItem;
@@ -69,7 +78,15 @@ export function GroceryItemRow({ item, onToggle, onOpenMenu, onDelete, trailing 
   const detail = item.price != null ? `${new Intl.NumberFormat("ro-RO").format(item.price)} lei` : null;
 
   return (
-    <SwipeRow onDelete={handleDelete} cornerRadius={0} colors={colors}>
+    <SwipeRow
+      onDelete={handleDelete}
+      // Swipe right puts it in the cart (or takes it back out) -- same as a tap.
+      onResolve={() => onToggle(item.id)}
+      resolveIcon={item.inCart ? "arrow-undo" : "cart"}
+      resolveLabel={item.inCart ? "Scoate din coș" : "Pune în coș"}
+      cornerRadius={0}
+      colors={colors}
+    >
       <PressableScale
         testID={`grocery-item-${item.id}`}
         onPress={() => onToggle(item.id)}
@@ -125,7 +142,7 @@ export function GroceryItemRow({ item, onToggle, onOpenMenu, onDelete, trailing 
 
         {item.quantity ? (
           <Animated.View style={{ opacity: fade }}>
-            <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>{item.quantity}</Text>
+            <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>{displayQuantity(item.quantity)}</Text>
           </Animated.View>
         ) : null}
         {trailing ? <View>{trailing}</View> : null}

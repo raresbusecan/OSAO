@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Item;
+use App\Services\EventSpend;
 use App\Services\RecurrenceProjector;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -70,15 +71,17 @@ class CalendarController extends Controller
         // group rather than an error case.
         // Same allowlist as Home's "De făcut" (Item::ACTIONABLE_TYPES):
         // tasks, recurring bills, scheduled deadlines (car_document) and
-        // custom events. Everything else with a due_at -- car_fuel,
-        // car_maintenance, car_expense, grocery_trip, home_expense,
-        // expense_item -- is a log of something that already happened,
-        // not a thing to plan around, and stays visible only inside its
-        // own space, never on the calendar.
+        // custom events -- plus, below, the deadlines that live in
+        // metadata instead of due_at: one-off maintenance's next date,
+        // Casă documents' expiry, car services' next date. Everything else
+        // with a due_at -- car_fuel, car_expense, grocery_trip,
+        // home_expense, expense_item, a car service's own visit -- is a
+        // log of something that already happened, not a thing to plan
+        // around, and stays visible only inside its own space.
         $plainItemsBase = Item::visibleTo($user)
             ->whereIn('type', Item::ACTIONABLE_TYPES)
             ->whereNull('recurrence')
-            ->whereNotIn('status', ['completed', 'archived']);
+            ->whereNotIn('status', Item::CLOSED_STATUSES);
 
         // car_document can't be range-filtered by due_at in SQL -- its
         // due_at is just whenever it was logged, not its real deadline
@@ -89,28 +92,77 @@ class CalendarController extends Controller
         $plainItems = (clone $plainItemsBase)
             ->where('type', '!=', 'car_document')
             ->whereBetween('due_at', [$startUtc, $endUtc])
-            ->with('space:id,name,icon')
+            ->with('space:id,name,icon,type')
             ->get()
             ->merge(
                 (clone $plainItemsBase)
                     ->where('type', 'car_document')
                     ->whereNotNull('due_at')
-                    ->with('space:id,name,icon')
+                    ->with('space:id,name,icon,type')
                     ->get()
-                    ->map(function (Item $item) {
-                        $item->due_at = $item->effectiveDueAt();
+                    ->map(function (Item $item) use ($userTz) {
+                        $item->due_at = $item->effectiveDueAt($userTz);
 
                         return $item;
                     })
                     ->filter(fn (Item $item) => $item->due_at !== null && $item->due_at->between($start, $end))
-            );
+                    ->reject(fn (Item $item) => in_array($item->id, Item::supersededCarDocumentIds($user->id), true))
+            )
+            // One-off maintenance with a "next due" date set in Casă --
+            // a real deadline (Item::maintenanceNextDue), shown on it.
+            ->concat(
+                Item::visibleTo($user)
+                    ->where('type', 'home_maintenance')
+                    ->whereNull('recurrence')
+                    ->whereNotIn('status', Item::CLOSED_STATUSES)
+                    ->with('space:id,name,icon,type')
+                    ->get()
+                    ->map(function (Item $item) {
+                        $next = $item->maintenanceNextDue();
+                        if (!$next) {
+                            return null;
+                        }
+                        $item->due_at = $next;
+
+                        return $item;
+                    })
+                    ->filter(fn (?Item $item) => $item !== null && $item->due_at->between($start, $end))
+            )
+            // Casă documents, on the day they expire (metadata.expiryDate,
+            // end of that day in the user's zone) -- the same date Casă
+            // and Acasă's "De făcut" read (DashboardController::
+            // homeDocumentsDue). Their due_at is only the day they were
+            // entered, so it can't be range-filtered in SQL either.
+            ->concat(
+                Item::visibleTo($user)
+                    ->where('type', 'home_document')
+                    ->whereNotIn('status', Item::CLOSED_STATUSES)
+                    ->with('space:id,name,icon,type')
+                    ->get()
+                    ->map(function (Item $item) use ($userTz) {
+                        $expiry = $item->metadata['expiryDate'] ?? null;
+                        if (!is_string($expiry) || $expiry === '') {
+                            return null;
+                        }
+                        try {
+                            $due = Carbon::parse($expiry)->setTimezone($userTz)->endOfDay();
+                        } catch (\Exception $e) {
+                            return null;
+                        }
+                        $item->due_at = $due->setTimezone(config('app.timezone'));
+
+                        return $item;
+                    })
+                    ->filter(fn (?Item $item) => $item !== null && $item->due_at->between($start, $end))
+            )
+            ->concat($this->carServicesBetween($user, $userTz, $start, $end));
 
         $recurringItems = Item::visibleTo($user)
             ->whereIn('type', Item::RECURRING_ACTIONABLE_TYPES)
             ->whereNotNull('recurrence')
             ->whereNotNull('due_at')
-            ->whereNotIn('status', ['completed', 'archived'])
-            ->with('space:id,name,icon')
+            ->whereNotIn('status', Item::CLOSED_STATUSES)
+            ->with('space:id,name,icon,type')
             ->get();
 
         $days = [];
@@ -127,7 +179,7 @@ class CalendarController extends Controller
         }
 
         foreach ($recurringItems as $item) {
-            foreach (RecurrenceProjector::occurrencesBetween($item, $start, $end) as $occurrence) {
+            foreach (RecurrenceProjector::occurrencesBetween(self::projectionAnchor($item), $start, $end) as $occurrence) {
                 $key = $occurrence['due']->copy()->setTimezone($userTz)->toDateString();
                 $days[$key] ??= [];
                 // The real row's due_at is untouched -- this is only
@@ -139,6 +191,35 @@ class CalendarController extends Controller
                     'due_at' => $occurrence['due']->toJSON(),
                     'created_at' => $occurrence['cycle_start']->toJSON(),
                     'is_projected' => true,
+                ]);
+            }
+        }
+
+        // Credits (Item::CREDIT_TYPE): a reminder on each due day --
+        // metadata.day_of_month clamped to the month's length
+        // (RecurrenceProjector re-clamps every step, so a 31st stays the
+        // 31st after February), never after the last instalment
+        // (metadata.end_date). Not a held type, so never "restant"; the
+        // frontend shows `reminder: true` rows without swipe-to-resolve.
+        $credits = Item::visibleTo($user)
+            ->where('type', Item::CREDIT_TYPE)
+            ->whereNotIn('status', Item::CLOSED_STATUSES)
+            ->whereNotNull('due_at')
+            ->with('space:id,name,icon,type')
+            ->get();
+        foreach ($credits as $credit) {
+            $last = $credit->creditEndDate($userTz);
+            foreach (RecurrenceProjector::occurrencesBetween($credit, $start, $end) as $occurrence) {
+                if (!$last || $occurrence['due']->gt($last)) {
+                    continue;
+                }
+                $key = $occurrence['due']->copy()->setTimezone($userTz)->toDateString();
+                $days[$key] ??= [];
+                $days[$key][] = array_merge($credit->toArray(), [
+                    'due_at' => $occurrence['due']->toJSON(),
+                    'created_at' => $occurrence['cycle_start']->toJSON(),
+                    'is_projected' => true,
+                    'reminder' => true,
                 ]);
             }
         }
@@ -159,7 +240,7 @@ class CalendarController extends Controller
         $now = Carbon::now($userTz);
         $recurring = $recurringItems
             ->map(function (Item $item) use ($now) {
-                $next = RecurrenceProjector::nextOccurrence($item, $now);
+                $next = RecurrenceProjector::currentDue($item, $now);
 
                 return array_merge($item->toArray(), [
                     'due_at' => $next['due']->toJSON(),
@@ -171,5 +252,104 @@ class CalendarController extends Controller
             ->values();
 
         return response()->json(['days' => $days, 'recurring' => $recurring]);
+    }
+
+    /**
+     * GET /calendar/purchases -- every occurrence of a Calendar event with
+     * "Implică o cumpărare", from the first one to the end of this month:
+     * the Cheltuieli space lists them ("din Calendar") so its totals match
+     * Budget's. `planned` = this month, day not reached yet (EventSpend).
+     */
+    public function purchases(Request $request)
+    {
+        $user = $request->user();
+        $now = Carbon::now($user->timezone ?? 'UTC');
+
+        return response()->json(['purchases' => EventSpend::untilEndOfMonth($user->id, $now)]);
+    }
+
+    /**
+     * What a recurring item is projected FROM. A recurring maintenance
+     * visit runs off Casă's own next date (metadata.nextDueDate, moved on
+     * every time it's done), not the day it was first entered -- the same
+     * anchor RecurrenceProjector::currentDue uses, so a visit that's
+     * restant in Casă is restant on the same day here, and the next ones
+     * fall where Casă expects them. Everything else: its own due_at.
+     */
+    private static function projectionAnchor(Item $item): Item
+    {
+        $next = $item->metadata['nextDueDate'] ?? null;
+        if ($item->type !== 'home_maintenance' || !is_string($next) || $next === '') {
+            return $item;
+        }
+        try {
+            $anchor = clone $item;
+            // App zone before assigning: the datetime cast drops the zone.
+            $anchor->due_at = Carbon::parse($next)->setTimezone(config('app.timezone'));
+
+            return $anchor;
+        } catch (\Exception $e) {
+            return $item;
+        }
+    }
+
+    /**
+     * Car services due by DATE inside [$start, $end] -- metadata.
+     * nextServiceDate ("ZZ.LL.AAAA"), the date Mașină's "Urmează" shows.
+     * Same rules as DashboardController::carServiceDue: a "Repair"
+     * predicts nothing, a newer record of the same service on the same
+     * car supersedes the older one's prediction. A km-only target has no
+     * day, so it can't sit on a calendar (Mașină and Acasă still flag it).
+     * `current_odometer` rides along for the swipe's "same as last time"
+     * (lib/dashboard/itemActions.ts).
+     */
+    private function carServicesBetween($user, string $userTz, Carbon $start, Carbon $end)
+    {
+        $entries = Item::visibleTo($user)
+            ->where('type', 'car_maintenance')
+            ->whereNotIn('status', Item::CLOSED_STATUSES)
+            ->with('space:id,name,icon,type')
+            ->get();
+        if ($entries->isEmpty()) {
+            return collect();
+        }
+
+        $live = $entries->filter(function (Item $e) use ($entries) {
+            if ($e->title === 'Repair') {
+                return false;
+            }
+
+            return !$entries->contains(fn (Item $o) => $o->id !== $e->id
+                && $o->space_id === $e->space_id
+                && $o->title === $e->title
+                && $o->due_at && $e->due_at && $o->due_at->gt($e->due_at));
+        });
+
+        $odometer = Item::visibleTo($user)
+            ->whereIn('type', ['car_fuel', 'car_maintenance', 'car_expense'])
+            ->whereIn('space_id', $live->pluck('space_id')->unique())
+            ->get(['space_id', 'metadata'])
+            ->groupBy('space_id')
+            ->map(fn ($rows) => $rows->max(fn ($r) => (float) ($r->metadata['odometer'] ?? 0)));
+
+        return $live
+            ->map(function (Item $e) use ($userTz, $odometer) {
+                $next = $e->metadata['nextServiceDate'] ?? null;
+                if (!is_string($next) || !preg_match('/^\d{2}\.\d{2}\.\d{4}$/', $next)) {
+                    return null;
+                }
+                try {
+                    $due = Carbon::createFromFormat('d.m.Y', $next, $userTz)->startOfDay();
+                } catch (\Exception $ex) {
+                    return null;
+                }
+                $odo = (float) ($odometer[$e->space_id] ?? 0);
+                $e->setAttribute('current_odometer', $odo > 0 ? (int) round($odo) : null);
+                $e->due_at = $due->setTimezone(config('app.timezone'));
+
+                return $e;
+            })
+            ->filter(fn (?Item $e) => $e !== null && $e->due_at->between($start, $end))
+            ->values();
     }
 }

@@ -74,6 +74,7 @@ export function EditSpaceModal({ visible, mode = "edit", space, onClose, onSaved
     <Sheet
       visible={visible}
       onClose={onClose}
+      info="space.edit"
       title={mode === "create" ? `${space?.name ?? "Spațiu"} nou` : "Redenumește spațiul"}
       subtitle={mode === "create" ? "Dă-i un nume, ca să-l recunoști ușor" : undefined}
       icon={(space?.icon as any) ?? "grid-outline"}

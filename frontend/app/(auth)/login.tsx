@@ -5,6 +5,7 @@ import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/providers/auth";
 import { Button, Field } from "@/components/ui/primitives";
 import { AuthShell, AuthSwitch, PasswordField } from "@/components/auth/AuthShell";
+import { SocialLogin } from "@/components/auth/SocialLogin";
 
 // The backend's validation messages are still English (Laravel's
 // default locale); the one every user hits gets a Romanian line here.
@@ -71,8 +72,10 @@ export default function Login() {
         </Pressable>
       </View>
 
-      <View style={{ gap: spacing.sm }}>
+      <View style={{ gap: spacing.lg }}>
         <Button testID="login-submit-button" label="Intră în cont" onPress={submit} loading={busy} disabled={!email || !password} />
+        {/* "sau" + Apple / Google / Facebook -- renders nothing when none is available. */}
+        <SocialLogin testID="login-social" />
         <AuthSwitch testID="login-goto-register" prompt="Nu ai cont?" action="Creează unul" onPress={() => router.push("/(auth)/register")} />
       </View>
     </AuthShell>

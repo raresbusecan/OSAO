@@ -7,6 +7,7 @@ import { recurringWarningTierColor, type RecurringWarningTier } from "@/lib/spac
 import { SwipeRow } from "@/components/spaces/SwipeRow";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { SectionHeader } from "@/components/ui/primitives";
+import { GuiltFreeChip } from "@/components/dashboard/GuiltFree";
 
 const RECURRING_TIERS = new Set<string>(["red", "orangeToday", "orangeDays", "yellow"]);
 
@@ -41,14 +42,18 @@ export type HomeCategoryRow = {
    * resolveUrgencyColor above for how the two tier vocabularies map to
    * an actual color. */
   urgencyTier?: SeverityTier | RecurringWarningTier;
+  /** items.guilt_free -- a small "Fără vină" chip after the title. */
+  guiltFree?: boolean;
 };
 
 export type HomeCategorySectionProps = {
   title: string;
   rows: HomeCategoryRow[];
   emptyLabel: string;
-  /** Tapping the row itself -- used to open it for editing. */
+  /** Tapping the row itself -- the record preview (HomeRecordSheet). */
   onRowPress?: (id: string | number) => void;
+  /** Long press -- the record's action sheet (Rezolvă / Editează / Șterge). */
+  onRowLongPress?: (id: string | number) => void;
   /** Swipe-left delete (the caller confirms first). */
   onRowDelete?: (id: string | number) => void;
   /** A checkbox at the row's LEFT edge (same treatment as Tasks' own
@@ -57,6 +62,8 @@ export type HomeCategorySectionProps = {
    * see homeCategoryConfig.ts's resolveEntry). Omitted entirely for
    * every other category rather than shown disabled. */
   onRowResolve?: (id: string | number) => void;
+  /** Swipe-right only, no checkbox -- a document's "Reînnoiește". */
+  onRowRenew?: (id: string | number) => void;
 };
 
 /**
@@ -72,8 +79,10 @@ export function HomeCategorySection({
   rows,
   emptyLabel,
   onRowPress,
+  onRowLongPress,
   onRowDelete,
   onRowResolve,
+  onRowRenew,
 }: HomeCategorySectionProps) {
   const { colors, spacing, radius } = useTheme();
   const inset = onRowResolve ? 54 : 16;
@@ -105,7 +114,9 @@ export function HomeCategorySection({
 
                 <PressableScale
                   onPress={onRowPress ? () => onRowPress(row.id) : undefined}
-                  disabled={!onRowPress}
+                  onLongPress={onRowLongPress ? () => onRowLongPress(row.id) : undefined}
+                  delayLongPress={350}
+                  disabled={!onRowPress && !onRowLongPress}
                   scaleTo={1}
                   accessibilityRole="button"
                   accessibilityLabel={row.title}
@@ -116,9 +127,10 @@ export function HomeCategorySection({
                       {/* Says what "Resolved" will do (advance vs. retire)
                           before it's tapped. */}
                       {row.isRecurring ? <Ionicons name="repeat-outline" size={14} color={colors.onSurfaceTertiary} /> : null}
-                      <Text style={{ flex: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={2}>
+                      <Text style={{ flexShrink: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={2}>
                         {row.title}
                       </Text>
+                      {row.guiltFree ? <View><GuiltFreeChip testID={`home-row-guilt-free-${row.id}`} /></View> : null}
                     </View>
                     <Text style={{ fontSize: 13, marginTop: 2, color: tone ?? colors.onSurfaceTertiary, fontWeight: tone ? "500" : "400" }} numberOfLines={2}>
                       {row.subtitle}
@@ -136,7 +148,9 @@ export function HomeCategorySection({
                 {index > 0 ? <View style={{ height: 1, marginLeft: inset, backgroundColor: colors.border }} /> : null}
                 {onRowDelete ? (
                   <SwipeRow
-                    onResolve={onRowResolve ? () => onRowResolve(row.id) : undefined}
+                    onResolve={onRowResolve ? () => onRowResolve(row.id) : onRowRenew ? () => onRowRenew(row.id) : undefined}
+                    resolveIcon={onRowRenew && !onRowResolve ? "refresh" : "checkmark"}
+                    resolveLabel={onRowRenew && !onRowResolve ? "Reînnoiește" : "Rezolvă"}
                     onDelete={() => onRowDelete(row.id)}
                     cornerRadius={0}
                     colors={colors}

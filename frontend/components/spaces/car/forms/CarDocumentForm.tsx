@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { DateField } from "@/components/ui/DateField";
 import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
@@ -7,6 +8,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field, Pill } from "@/components/ui/primitives";
 
 const CAR = SPACE_IDENTITY_COLORS.car!;
+import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 import { confirmAction } from "@/lib/confirm";
 
 import type { CarDocumentEntry } from "@/lib/spaces/car/car.types";
@@ -32,6 +34,11 @@ type CarDocumentFormProps = {
    * Ignored when `entry` is set (editing always wins). */
   renewFrom?: Pick<CarDocumentEntry, "documentType" | "title" | "issuer"> & {
     sourceId: string;
+    /** The proposed next validity + price, pre-filled (still editable):
+     * computed from the old document's validity dates. */
+    issueDate?: string;
+    expiryDate?: string;
+    price?: number;
   };
 };
 
@@ -59,10 +66,11 @@ export default function CarDocumentForm({
   const [documentType, setDocumentType] = useState(entry?.documentType ?? renewFrom?.documentType ?? "");
   const [title, setTitle] = useState(entry?.title ?? renewFrom?.title ?? "");
   const [issuer, setIssuer] = useState(entry?.issuer ?? renewFrom?.issuer ?? "");
-  const [issueDate, setIssueDate] = useState(entry?.issueDate ?? "");
-  const [expiryDate, setExpiryDate] = useState(entry?.expiryDate ?? "");
-  const [price, setPrice] = useState(entry?.price !== undefined ? String(entry.price) : "");
+  const [issueDate, setIssueDate] = useState(entry?.issueDate ?? renewFrom?.issueDate ?? "");
+  const [expiryDate, setExpiryDate] = useState(entry?.expiryDate ?? renewFrom?.expiryDate ?? "");
+  const [price, setPrice] = useState(entry?.price !== undefined ? String(entry.price) : renewFrom?.price !== undefined ? String(renewFrom.price) : "");
   const [notes, setNotes] = useState(entry?.notes ?? "");
+  const [guiltFree, setGuiltFree] = useState(!!entry?.guiltFree);
 
 
   const [error, setError] = useState("");
@@ -96,9 +104,16 @@ export default function CarDocumentForm({
       return;
     }
 
-    if (issueDate && !isValidDate(issueDate)) {
+    // Both validity dates are required: they're what the whole urgency
+    // system runs on, and what a renewal's next period is computed from.
+    if (!issueDate.trim()) {
+      setError("Alege data emiterii.");
+      return;
+    }
+
+    if (!isValidDate(issueDate)) {
       setError(
-        "Data emiterii trebuie scrisă ca ZZ.LL.AAAA.",
+        "Alege data emiterii.",
       );
       return;
     }
@@ -115,7 +130,7 @@ export default function CarDocumentForm({
 
     if (!isValidDate(expiryDate)) {
       setError(
-        "Data expirării trebuie scrisă ca ZZ.LL.AAAA.",
+        "Alege data expirării.",
       );
       return;
     }
@@ -142,6 +157,7 @@ export default function CarDocumentForm({
       price: priceValue,
       notes: notes.trim() || undefined,
       renewedFromId: isRenewing ? renewFrom?.sourceId : entry?.renewedFromId,
+      guiltFree,
     };
 
     onSave(entryToSave);
@@ -161,6 +177,7 @@ export default function CarDocumentForm({
     <Sheet
       visible
       onClose={onCancel}
+      info="car.documentForm"
       title={readOnly ? title || "Document" : isEditing ? "Editează documentul" : isRenewing ? "Reînnoiește documentul" : "Document nou"}
       subtitle={readOnly ? "Doar citire" : undefined}
       icon="document-text-outline"
@@ -200,14 +217,15 @@ export default function CarDocumentForm({
       <Field label="Emitent (opțional)" value={issuer} onChangeText={setIssuer} placeholder="ex. Allianz" tone={CAR} editable={!readOnly} />
       <View style={{ flexDirection: "row", gap: spacing.md }}>
         <View style={{ flex: 1 }}>
-          <Field label="Emis pe (opțional)" value={issueDate} onChangeText={setIssueDate} placeholder="ZZ.LL.AAAA" tone={CAR} editable={!readOnly} />
+          <DateField testID="car-doc-issue-date" label="Emis pe" value={issueDate} onChange={setIssueDate} disabled={readOnly} placeholder="Alege" />
         </View>
         <View style={{ flex: 1 }}>
-          <Field label="Expiră pe" value={expiryDate} onChangeText={setExpiryDate} placeholder="ZZ.LL.AAAA" tone={CAR} editable={!readOnly} />
+          <DateField testID="car-doc-expiry-date" label="Expiră pe" value={expiryDate} onChange={setExpiryDate} disabled={readOnly} placeholder="Alege" />
         </View>
       </View>
       <Field label="Preț (opțional)" value={price} onChangeText={setPrice} placeholder="ex. 650" keyboardType="decimal-pad" suffix="lei" tone={CAR} editable={!readOnly} />
       <Field label="Notițe (opțional)" value={notes} onChangeText={setNotes} placeholder="Orice detaliu util" multiline tone={CAR} editable={!readOnly} />
+      {!readOnly ? <GuiltFreeToggle value={guiltFree} onChange={setGuiltFree} tone={CAR} testID="car-document-guilt-free" /> : null}
 
       {error ? (
         <View style={{ padding: spacing.md, borderRadius: radius.control, backgroundColor: `${colors.error}14` }}>

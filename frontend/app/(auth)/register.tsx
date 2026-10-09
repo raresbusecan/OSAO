@@ -5,6 +5,7 @@ import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/providers/auth";
 import { Button, Field } from "@/components/ui/primitives";
 import { AuthShell, AuthSwitch, PasswordField } from "@/components/auth/AuthShell";
+import { SocialLogin } from "@/components/auth/SocialLogin";
 
 export default function Register() {
   const { spacing } = useTheme();
@@ -26,6 +27,11 @@ export default function Register() {
     setBusy(true);
     try {
       await signUp(email.trim(), password, name.trim());
+      // Logged in already (AuthGuard moves on to Acasă); the account is
+      // just unverified -- nothing is blocked, Acasă/Settings show the
+      // "Confirmă-ți adresa de email" banner until the link is opened.
+      // No dialog here (product decision 2026-10-08): the banner is the
+      // one reminder, and Acasă's first-use tour starts right away.
     } catch (e: any) {
       setErr(e?.message || "Nu am putut crea contul. Încearcă din nou.");
     } finally {
@@ -73,8 +79,10 @@ export default function Register() {
         />
       </View>
 
-      <View style={{ gap: spacing.sm }}>
+      <View style={{ gap: spacing.lg }}>
         <Button testID="register-submit-button" label="Creează contul" onPress={submit} loading={busy} disabled={disabled} />
+        {/* "sau" + Apple / Google / Facebook -- renders nothing when none is available. */}
+        <SocialLogin testID="register-social" />
         <AuthSwitch testID="register-goto-login" prompt="Ai deja cont?" action="Intră în cont" onPress={() => router.replace("/(auth)/login")} />
       </View>
     </AuthShell>

@@ -5,11 +5,21 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/providers/auth";
-import { api } from "@/lib/api";
+import { api, apiErrorMessage } from "@/lib/api";
 import { confirmAction, notifyAction } from "@/lib/confirm";
 import { TopBar, SectionHeader, Group, Row, IconWell, Button, Field } from "@/components/ui/primitives";
 import { Sheet } from "@/components/ui/Sheet";
 import { PasswordField } from "@/components/auth/AuthShell";
+import { VerifyEmailBanner } from "@/components/auth/VerifyEmailBanner";
+import { VerifiedBadge } from "@/components/auth/VerifiedBadge";
+import { PROVIDER_LABEL, type SocialProvider } from "@/lib/socialAuth";
+import { TOUR_LIST, clearSeenLocally, requestTour, tourExists, type TourKey } from "@/lib/tours";
+
+const PROVIDER_ICON: Record<SocialProvider, keyof typeof Ionicons.glyphMap> = {
+  apple: "logo-apple",
+  google: "logo-google",
+  facebook: "logo-facebook",
+};
 
 type SettingsRow = {
   key: string;
@@ -35,16 +45,34 @@ export default function Settings() {
   const [editingName, setEditingName] = useState(false);
   const [editingPassword, setEditingPassword] = useState(false);
   const [editingEmail, setEditingEmail] = useState(false);
+  const [settingPassword, setSettingPassword] = useState(false);
+  const [toursOpen, setToursOpen] = useState(false);
+
+  // Social-only account (signed up with Apple/Google/Facebook, no password
+  // yet): both password-protected sheets would be dead ends, so "Parolă"
+  // becomes "Setează o parolă" and Email asks for a password first.
+  const noPassword = user?.has_password === false;
+  const askPasswordFirst = async () => {
+    const ok = await confirmAction(
+      "Setează mai întâi o parolă",
+      "Ca să schimbi emailul îți trebuie o parolă. Acum intri doar prin Apple, Google sau Facebook; după ce setezi o parolă, poți schimba și emailul.",
+      { confirmLabel: "Setează o parolă" },
+    );
+    if (ok) setSettingPassword(true);
+  };
 
   const account: SettingsRow[] = [
     { key: "name", icon: "person-outline", label: "Nume", value: user?.name, onPress: () => setEditingName(true) },
-    { key: "email", icon: "mail-outline", label: "Email", value: user?.email, onPress: () => setEditingEmail(true) },
-    { key: "password", icon: "lock-closed-outline", label: "Parolă", onPress: () => setEditingPassword(true) },
+    { key: "email", icon: "mail-outline", label: "Email", value: user?.email, onPress: noPassword ? askPasswordFirst : () => setEditingEmail(true) },
+    noPassword
+      ? { key: "password", icon: "lock-closed-outline", label: "Setează o parolă", onPress: () => setSettingPassword(true) }
+      : { key: "password", icon: "lock-closed-outline", label: "Parolă", onPress: () => setEditingPassword(true) },
   ];
   const app: SettingsRow[] = [
     { key: "language", icon: "language-outline", label: "Limbă", value: "Română" },
     { key: "colors", icon: "color-palette-outline", label: "Culori" },
     { key: "theme", icon: "contrast-outline", label: "Temă", value: "Automat" },
+    { key: "tours", icon: "map-outline", label: "Revezi ghidurile", onPress: () => setToursOpen(true) },
   ];
 
   // Sign-out lives here, behind a confirmation -- it used to be a
@@ -56,6 +84,8 @@ export default function Settings() {
     });
     if (ok) signOut();
   };
+
+  const linkedProviders = (user?.providers ?? []).filter((p): p is SocialProvider => p in PROVIDER_LABEL);
 
   const initial = (user?.name ?? "?").trim().charAt(0).toUpperCase();
 
@@ -85,6 +115,7 @@ export default function Settings() {
           <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md + 2 }}>
             <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}>
               <Text style={{ fontSize: 20, fontWeight: "600", color: colors.onSurface }}>{initial}</Text>
+              <VerifiedBadge user={user} avatarSize={56} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 20, fontWeight: "600", color: colors.onSurface }} numberOfLines={1}>{user?.name ?? "Setări"}</Text>
@@ -92,9 +123,22 @@ export default function Settings() {
             </View>
           </View>
 
+          <VerifyEmailBanner testID="settings-verify-email-banner" />
+
           <View style={{ gap: spacing.sm }}>
             <SectionHeader title="Cont" muted />
-            <Group inset={62}>{account.map(renderRow)}</Group>
+            <Group inset={62}>
+              {account.map(renderRow)}
+              {/* Read-only: social accounts linked to this user (lib/socialAuth.ts). */}
+              {linkedProviders.map((p) => (
+                <Row
+                  key={`provider-${p}`}
+                  testID={`settings-provider-${p}`}
+                  leading={<IconWell icon={PROVIDER_ICON[p]} color={colors.onSurfaceTertiary} tint={colors.onSurfaceSecondary} size={34} />}
+                  title={`Conectat cu ${PROVIDER_LABEL[p]}`}
+                />
+              ))}
+            </Group>
           </View>
 
           <View style={{ gap: spacing.sm }}>
@@ -118,7 +162,29 @@ export default function Settings() {
 
       <EditPasswordModal visible={editingPassword} onClose={() => setEditingPassword(false)} />
 
+      <SetPasswordModal
+        visible={settingPassword}
+        email={user?.email}
+        onClose={() => setSettingPassword(false)}
+        onSaved={() => {
+          updateUser({ has_password: true });
+          setSettingPassword(false);
+        }}
+      />
+
       <EditEmailModal visible={editingEmail} onClose={() => setEditingEmail(false)} />
+
+      <ToursSheet
+        visible={toursOpen}
+        onClose={() => setToursOpen(false)}
+        onStart={(key) => {
+          setToursOpen(false);
+          // Acasă's useAutoTour picks the request up once it's focused and
+          // this screen (and the sheet's Modal) are gone.
+          requestTour(key);
+          router.dismissTo("/(tabs)/home");
+        }}
+      />
     </View>
   );
 }
@@ -273,6 +339,83 @@ function EditPasswordModal({ visible, onClose }: { visible: boolean; onClose: ()
   );
 }
 
+/** First password for a social-only account (user.has_password === false):
+ * no current password, POST /profile/password/set. */
+function SetPasswordModal({ visible, email, onClose, onSaved }: { visible: boolean; email?: string | null; onClose: () => void; onSaved: () => void }) {
+  const [next, setNext] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const wasVisible = React.useRef(visible);
+  if (visible && !wasVisible.current) {
+    setNext("");
+    setConfirm("");
+    setError(null);
+  }
+  wasVisible.current = visible;
+
+  const mismatch = next.length > 0 && confirm.length > 0 && next !== confirm;
+  const canSave = next.length >= 8 && next === confirm;
+
+  const handleSave = async () => {
+    if (!canSave || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await api.setPassword(next, confirm);
+      onSaved();
+      notifyAction(
+        "Parola a fost setată",
+        email ? `De acum poți intra și cu emailul (${email}) și parola, nu doar cu contul extern.` : "De acum poți intra și cu emailul și parola.",
+      );
+    } catch (err: any) {
+      setError(apiErrorMessage(err, "Nu am putut seta parola.", "password"));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const clearError = () => {
+    if (error) setError(null);
+  };
+
+  return (
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title="Setează o parolă"
+      subtitle={email ? `Ca să intri și cu ${email}, pe lângă Apple, Google sau Facebook.` : "Ca să intri și cu emailul, pe lângă Apple, Google sau Facebook."}
+      icon="lock-closed-outline"
+      testID="settings-set-password-sheet"
+      footer={<Button testID="settings-set-password-save" label="Setează parola" onPress={handleSave} loading={saving} disabled={!canSave} />}
+    >
+      <PasswordField
+        testID="settings-set-password-next"
+        label="Parola nouă"
+        value={next}
+        onChangeText={(t) => { setNext(t); clearError(); }}
+        autoComplete="new-password"
+        textContentType="newPassword"
+        autoFocus
+        hint="Cel puțin 8 caractere."
+        error={error}
+      />
+      <PasswordField
+        testID="settings-set-password-confirm"
+        label="Repetă parola"
+        value={confirm}
+        onChangeText={(t) => { setConfirm(t); clearError(); }}
+        onSubmitEditing={handleSave}
+        returnKeyType="done"
+        autoComplete="new-password"
+        textContentType="newPassword"
+        error={mismatch ? "Parolele nu se potrivesc." : null}
+      />
+    </Sheet>
+  );
+}
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function EditEmailModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
@@ -369,6 +512,72 @@ function EditEmailModal({ visible, onClose }: { visible: boolean; onClose: () =>
           />
         </>
       )}
+    </Sheet>
+  );
+}
+
+/** "Revezi ghidurile": every first-use tour (lib/tours.ts) with whether it
+ * was seen, skipped or is still new; tap one to run it now. Tours that
+ * don't exist yet are listed dimmed as "În curând". */
+function ToursSheet({ visible, onClose, onStart }: { visible: boolean; onClose: () => void; onStart: (key: TourKey) => void }) {
+  const { colors } = useTheme();
+  const { user, updateUser } = useAuth();
+  const [resetting, setResetting] = useState(false);
+
+  const status = (key: TourKey) => {
+    const s = user?.tours?.[key]?.status;
+    return s === "done" ? "Văzut" : s === "skipped" ? "Sărit" : "Nou";
+  };
+
+  const resetAll = async () => {
+    const ok = await confirmAction("Arăți din nou toate ghidurile?", "Fiecare ecran îți va arăta ghidul la următoarea vizită.", {
+      confirmLabel: "Arată-le",
+    });
+    if (!ok) return;
+    setResetting(true);
+    try {
+      await api.resetTours();
+      clearSeenLocally();
+      updateUser({ tours: null });
+      onClose();
+    } catch (err: any) {
+      notifyAction("Nu am putut reseta ghidurile", err?.message || "A apărut o eroare.");
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  return (
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title="Revezi ghidurile"
+      subtitle="Atinge un ghid ca să-l pornești acum."
+      icon="map-outline"
+      testID="settings-tours-sheet"
+      footer={<Button testID="settings-tours-reset" variant="secondary" label="Arată-le din nou pe toate" onPress={resetAll} loading={resetting} />}
+    >
+      <Group inset={62}>
+        {TOUR_LIST.map((t) => {
+          const exists = tourExists(t.key);
+          return (
+            <Row
+              key={t.key}
+              testID={`settings-tour-${t.key}`}
+              leading={<IconWell icon={t.icon as keyof typeof Ionicons.glyphMap} color={colors.onSurfaceTertiary} tint={colors.onSurfaceSecondary} size={34} />}
+              title={t.label}
+              onPress={exists ? () => onStart(t.key) : undefined}
+              dim={!exists}
+              trailing={
+                <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }} numberOfLines={1}>
+                  {exists ? status(t.key) : "În curând"}
+                </Text>
+              }
+              chevron={exists}
+            />
+          );
+        })}
+      </Group>
     </Sheet>
   );
 }

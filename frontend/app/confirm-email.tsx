@@ -4,7 +4,7 @@ import { useLocalSearchParams } from "expo-router";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/auth";
-import { AuthShell, AuthNotice } from "@/components/auth/AuthShell";
+import { AuthShell, AuthNotice, linkEmail } from "@/components/auth/AuthShell";
 
 /** Opened from the link in ConfirmEmailChangeNotification --
  * ?token=...&email=... (see backend/app/Notifications/ConfirmEmailChangeNotification.php).
@@ -12,12 +12,13 @@ import { AuthShell, AuthNotice } from "@/components/auth/AuthShell";
  * the token itself is the proof, not a session. Confirms automatically on
  * open rather than waiting for a tap: there's no second field to fill in
  * here, so a confirm button would only add a step. If this browser is
- * also logged in as the account being changed, updateUser() keeps that
+ * also logged in as the account being changed, refreshUser() keeps that
  * session's local state in sync immediately. */
 export default function ConfirmEmail() {
   const { colors, spacing } = useTheme();
-  const { user, updateUser } = useAuth();
-  const { token, email } = useLocalSearchParams<{ token?: string; email?: string }>();
+  const { user, refreshUser } = useAuth();
+  const { token, email: rawEmail } = useLocalSearchParams<{ token?: string; email?: string }>();
+  const email = linkEmail(rawEmail);
   const [status, setStatus] = useState<"pending" | "done" | "error">("pending");
   const [error, setError] = useState<string | null>(null);
 
@@ -32,7 +33,9 @@ export default function ConfirmEmail() {
     (async () => {
       try {
         const res = await api.confirmEmailChange(email!, token!);
-        if (user) updateUser({ email: res.email });
+        // Re-read the session from the server: the link may belong to a
+        // different account than the one logged in here.
+        if (user) refreshUser().catch(() => {});
         setStatus("done");
       } catch (err: any) {
         setError(err?.message || null);

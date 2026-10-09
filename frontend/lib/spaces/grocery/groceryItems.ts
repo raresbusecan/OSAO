@@ -97,7 +97,7 @@ function itemToGroceryItem(item: any): GroceryItem {
 
 export function groceryTripToItemBody(
   spaceId: string | number,
-  trip: { listId: string; listName: string; price: number },
+  trip: { listId: string; listName: string; price: number; guiltFree?: boolean },
 ) {
   return {
     space_id: spaceId,
@@ -107,6 +107,8 @@ export function groceryTripToItemBody(
     amount: trip.price,
     currency: "RON",
     due_at: new Date().toISOString(),
+    // "Bani fără vină" (GroceryFinishShoppingSheet) -- grocery_trip is a spending type.
+    guilt_free: !!trip.guiltFree,
     metadata: {
       listId: trip.listId,
     },

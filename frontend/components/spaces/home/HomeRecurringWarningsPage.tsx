@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { SwipeRow } from "@/components/spaces/SwipeRow";
 import { View, ScrollView } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
@@ -35,9 +36,10 @@ const TIER_SECTION_TITLE: Record<RecurringWarningTier, string> = {
 // still shown too) only hinted at "recurring or not", never named the
 // actual source category.
 const KIND_LABEL: Record<RecurringWarningRow["kind"], string> = {
-  task: "Task",
+  task: "Sarcină",
   maintenance: "Mentenanță",
   recurring: "Recurent",
+  document: "Document",
 };
 
 export type HomeRecurringWarningsPageProps = {
@@ -49,11 +51,14 @@ export type HomeRecurringWarningsPageProps = {
    * category checkbox already uses. See row.kind and HomeDashboard's
    * wiring of this prop. */
   onResolvePress: (row: RecurringWarningRow) => void;
+  /** Swipe-left on a row (the caller confirms). */
+  onDeletePress?: (row: RecurringWarningRow) => void;
 };
 
 // Built from `colors` (not a module-level constant) so it actually flips
 // with dark mode -- the old hardcoded hex here never did.
 function rowChip(row: RecurringWarningRow): string {
+  if (row.kind === "document" && row.daysRemaining < 0) return `Expirat de ${roCount(-row.daysRemaining, "zi", "zile")}`;
   if (row.tier === "red") return row.daysRemaining < 0 ? `Restant ${roCount(-row.daysRemaining, "zi", "zile")}` : "Restant";
   if (row.tier === "orangeToday") return "Azi";
   return row.daysRemaining === 1 ? "Mâine" : `în ${roCount(row.daysRemaining, "zi", "zile")}`;
@@ -65,7 +70,7 @@ function rowChip(row: RecurringWarningRow): string {
  * independently collapsible via its own "Show more"/"Show less" next
  * to its title -- per explicit user request, replacing the old single
  * flat list. */
-export function HomeRecurringWarningsPage({ homeData, onBack, onResolvePress }: HomeRecurringWarningsPageProps) {
+export function HomeRecurringWarningsPage({ homeData, onBack, onResolvePress, onDeletePress }: HomeRecurringWarningsPageProps) {
   const { colors, spacing } = useTheme();
 
   const { rows } = getRecurringTaskWarnings(homeData);
@@ -79,11 +84,11 @@ export function HomeRecurringWarningsPage({ homeData, onBack, onResolvePress }: 
         contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 100, gap: spacing.section }}
       >
         <TopBar onBack={onBack} />
-        <Identity color={SPACE_IDENTITY_COLORS.home} kicker="Casă" title="Restanțe" subtitle="Atinge un rând ca să-l rezolvi." />
+        <Identity color={SPACE_IDENTITY_COLORS.home} kicker="Casă" title="Scadențe" subtitle="Atinge un rând ca să-l rezolvi." info="home.scadente" />
 
         {rows.length > 0 ? (
           TIER_ORDER.filter((tier) => rowsByTier[tier].length > 0).map((tier) => (
-            <TierSection key={tier} tier={tier} rows={rowsByTier[tier]} onResolvePress={onResolvePress} />
+            <TierSection key={tier} onDeletePress={onDeletePress} tier={tier} rows={rowsByTier[tier]} onResolvePress={onResolvePress} />
           ))
         ) : (
           <EmptyState icon="checkmark-done-outline" title="Ești la zi" message="Nimic nu se apropie de scadență." />
@@ -97,10 +102,12 @@ function TierSection({
   tier,
   rows,
   onResolvePress,
+  onDeletePress,
 }: {
   tier: RecurringWarningTier;
   rows: RecurringWarningRow[];
   onResolvePress: (row: RecurringWarningRow) => void;
+  onDeletePress?: (row: RecurringWarningRow) => void;
 }) {
   const { colors, spacing } = useTheme();
   const [expanded, setExpanded] = useState(false);
@@ -116,14 +123,24 @@ function TierSection({
       />
       <Group inset={68}>
         {visibleRows.map((row) => (
-          <Row
+          <SwipeRow
             key={row.id}
+            cornerRadius={0}
+            colors={colors}
+            // A document's swipe-right renews it (the caller's pop-up).
+            onResolve={() => onResolvePress(row)}
+            resolveIcon={row.kind === "document" ? "refresh" : "checkmark"}
+            resolveLabel={row.kind === "document" ? "Reînnoiește" : "Rezolvă"}
+            onDelete={onDeletePress ? () => onDeletePress(row) : undefined}
+          >
+          <Row
             onPress={() => onResolvePress(row)}
-            leading={<IconWell icon={row.isRecurring ? "repeat-outline" : "alert-circle-outline"} color={color} />}
+            leading={<IconWell icon={row.kind === "document" ? "document-text-outline" : row.isRecurring ? "repeat-outline" : "alert-circle-outline"} color={color} />}
             title={row.title}
             subtitle={KIND_LABEL[row.kind]}
             trailing={tier === "yellow" ? <Chip label={rowChip(row)} color={colors.onSurfaceTertiary} filled={false} /> : <Chip label={rowChip(row)} color={color} icon={tier === "red" ? "alert-circle" : undefined} />}
           />
+          </SwipeRow>
         ))}
       </Group>
     </View>

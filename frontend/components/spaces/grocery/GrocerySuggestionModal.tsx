@@ -7,7 +7,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { Button } from "@/components/ui/primitives";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { motion } from "@/lib/motion";
-import { roCount } from "@/lib/format";
+import { roCount, roUnit } from "@/lib/format";
 
 export type SupplySuggestion = {
   /** The Home supply's own item id -- carried through so the added
@@ -53,6 +53,7 @@ export function GrocerySuggestionModal({ visible, suggestions, onAdd, onClose }:
     <Sheet
       visible={visible}
       onClose={onClose}
+      info="grocery.suggestions"
       title="Probabil pe terminate"
       subtitle="Din ritmul în care cumperi proviziile din Casă"
       icon="basket-outline"
@@ -101,7 +102,7 @@ function SuggestionRow({
           accessibilityLabel={`Cantitate ${suggestion.name}`}
           style={[{ width: 36, fontSize: 15, fontWeight: "600", color: colors.onSurface, paddingVertical: 0 }, { outlineStyle: "none" } as any]}
         />
-        <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }} numberOfLines={1}>{suggestion.unit}</Text>
+        <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }} numberOfLines={1}>{roUnit(suggestion.unit)}</Text>
       </View>
       <PressableScale
         onPress={handleAdd}

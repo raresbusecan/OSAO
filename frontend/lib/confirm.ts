@@ -1,4 +1,4 @@
-import { showConfirmDialog, showNotifyDialog } from "./confirmHost";
+import { showChoiceDialog, showConfirmDialog, showNotifyDialog, type DialogChoice } from "./confirmHost";
 
 /**
  * react-native-web's Alert.alert is a total no-op --
@@ -40,6 +40,12 @@ export function confirmAction(
     cancelLabel: options?.cancelLabel,
     destructive: options?.destructive,
   });
+}
+
+/** One question, several answers -- resolves the chosen key, or null
+ * when dismissed ("Renunță" / tap outside). */
+export function chooseAction(title: string, message: string, choices: DialogChoice[]): Promise<string | null> {
+  return showChoiceDialog({ title, message, choices });
 }
 
 export function notifyAction(title: string, message: string): void {

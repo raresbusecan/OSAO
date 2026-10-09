@@ -142,6 +142,7 @@ export function GroceryProductModal({
     <Sheet
       visible={visible}
       onClose={onClose}
+      info="grocery.product"
       title={isEditing ? "Editează produsul" : "Produs nou"}
       icon="cart-outline"
       tone={GROC}

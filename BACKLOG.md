@@ -4,106 +4,110 @@ Small, non-urgent tasks to pick up later. Not ordered by priority unless
 noted — just a running list so ideas don't get lost mid-session. Add new
 ones under "Open", move finished ones to "Done" with the date.
 
+## Future features (user-requested, parked)
+
+### DONE, awaiting qa-lead (built 2026-10-08, uncommitted on feat/redesign): credit toggle when creating a Car / Home space
+
+Built: `SpaceCreditToggle.tsx` ("În rate" ToggleRow + shared `expenses/CreditFields.tsx`, which CreditSheet now uses too) on the CREATE forms of `CarProfileForm` / `HomeProfileForm` (Casă: only when "Cumpărată"). `POST /spaces` takes an optional `credit` {title, amount, day_of_month, end_date}; one DB transaction creates the space, reuses the first typed Cheltuieli space or creates "Default", and the linked `expense_credit` through `App\Support\ItemBudgetRules` (extracted from ItemController, same rules). Tests: `tests/Feature/SpaceCreditTest.php`. Not built (out of scope): adding a credit from the Edit form of an existing car/home -- a "Adaugă un credit" shortcut there that opens CreditSheet pre-linked would be the natural follow-up.
+
+
+User request: when creating a Mașină or Casă space, a toggle "În rate" (on credit). If on, the creation form expands with the credit fields (same as CreditSheet: name, monthly rate, payment day, last instalment date) and on save a normal `expense_credit` is created in the Cheltuieli space, linked (`metadata.linked_space_id`) to the new car/home. If the user has NO Cheltuieli (expenses) space, one is created automatically named **"Default"** (type expenses) holding the credit. Same for Casă. Consistent with the earlier decision: credits live in Cheltuieli, the space only shows the read-only LinkedCreditsLine. `[from: user request 2026-10-08]`
+
+### Telling apart several spaces of the same kind (2 homes / 2 cars) (parked 2026-10-08)
+
+**Status: parked, undecided** -- user wants a distinguishing "label" that appears ONLY when 2+ spaces of the same kind exist (a single home keeps today's look), but hasn't decided what it is, how it looks, or what it's derived from (name? a short tag/variant the user picks? auto "Casa 1/2"?). User asked for design-lead to propose.
+
+**Today:** all spaces of a kind share one identity colour + icon; rows from Calendar / Acasă / recurring bills carry `space {id,name}` from the API, but it's not verified the name is shown everywhere. **Buget groups by KIND label** (`Item::SPENDING_TYPE_SPACE` → "Car"/"Home"; `budget_categories.category`), so two homes share ONE budget and one share of Necesități -- the budget-from-income suggestion/limits are per kind, not per space.
+
+**For design-lead:** audit every place a record from a space surfaces (Acasă widgets + De făcut, Calendar, Buget rows/detail/overview, recurring bills, credits chip, LinkedCreditsLine, Cheltuieli, archive) and propose the label (what it is, where it's defined -- likely space create/edit -- and how it renders). Also propose budget granularity with 2+ same-kind spaces: separate limit per space vs one per kind with per-space breakdown (per-space would need `budget_categories` keyed by space_id + BudgetController grouping change).
+
+**Done already (2026-10-08):** CreditSheet lets you pick the exact car/home by name (pills), and credit chips show the space's own name. `[from: user question 2026-10-08, budget-from-income testing]`
+
+### Import card payments from bank notifications + "De confirmat" inbox (parked 2026-10-08)
+
+**Status: parked by the user** -- first finish and verify Budget-from-income (lots of data to check for correctness). Notification route chosen; open-banking/PSD2 API route explicitly rejected for now (too complex to start).
+
+**Goal:** stop typing card payments by hand -- catch the bank app's payment notification ("Ai plătit 45,90 lei la Lidl"), extract amount/merchant/date, and bring it into orgOS for one-tap confirmation.
+
+**Capture, per platform:**
+- **Android (main route):** a `NotificationListenerService` reads other apps' notifications after the user grants "Acces la notificări" once. Needs native code → does NOT run in Expo Go; requires a custom dev build / APK (EAS or local `expo prebuild`). That's the "deliberate future upgrade" CLAUDE.md mentions -- decide it consciously. Candidate lib: a RN notification-listener module (verify maintenance + Expo config-plugin support before picking). Filter by bank package names; one small parser per bank (BT, ING, Revolut, ... -- whichever the user uses), since every bank words its notification differently. Keep raw text for debugging parsers.
+- **iPhone:** reading other apps' notifications is impossible on iOS. Fallback: Shortcuts "Transaction" (Wallet/Apple Pay) automation → "Get contents of URL" POST to the backend with the user's token. Works with Expo Go as-is, but only catches Apple Pay payments (not physical card/online).
+
+**Never auto-create spending -- always a confirmation step ("De confirmat"):**
+- Captured payments land in a pending inbox (new item type or table, e.g. `pending_transaction`: amount, currency, merchant, occurred_at, source bank, raw text, status pending/confirmed/dismissed). Pending ones count NOWHERE (not Buget, not Dashboard) until confirmed.
+- Per row: pick the space (Mașină/Casă/Cumpărături/Cheltuieli), optional "Bani fără vină", confirm → becomes the normal spending item of that space; or dismiss.
+- **Merchant memory:** after "Lidl → Cumpărături" once, pre-select it next time (later: one-tap / batch confirm).
+- **Correctness guards (why confirmation is mandatory):** duplicates (a grocery trip already entered by hand + the same payment from the notification -- suggest "pare deja introdusă" by amount ± date match), refunds/reversals, transfers between own accounts, pre-authorizations (fuel pumps, hotels) that settle at a different amount, foreign currency, credit rates (expense_credit already counts in the 10% jar -- don't double count).
+- Entry point: a badge on Acasă / Buget ("3 plăți de confirmat").
+
+**Before starting:** ask which phone (Android/iPhone) and which bank(s); design-lead mockup for the inbox; decide the dev-build switch if Android. `[from: user request 2026-10-08, budget-from-income session]`
+
 ## Prioritized queue -- redesign + seeded-account verification (2026-10-04)
 
-One task per entry, ordered by severity: P1 = shows the user wrong data,
-P2 = needs the user's decision on a definition before coding, P3 =
-visual/UX polish. Work top-down. All found on branch `feat/redesign`
-with the seeded account (user 4), checked against the DB. Each is
-`[from: seeded-account design + data verification, feat/redesign]`
-unless noted.
+**Status: all 23 tasks worked through on `feat/redesign` (P1 -> P2 -> P3),
+NOT committed yet, NOT verified by qa-lead.** P2 decisions were applied
+as design-lead proposed (user delegated them). Next: qa-lead, then
+release-lead.
 
-### P1-1 · Two status vocabularies for "resolved" (`done` vs `completed`)
+Done: P1-1 `done`/`completed` (backend `Item::CLOSED_STATUSES`, Casă now
+writes `completed`, reads both) · P1-2 Dashboard day buckets in the user's
+timezone · P1-3 "De făcut" ✓ only for plain one-off tasks/reminders, the
+rest open their Space's own resolve step, "Anulează" after ticking ·
+P1-4 car document expiry at 23:59 local · P1-5 `lei()`/`roNumber()`
+coerce string decimals · P1-6 one `daysFromToday()` for headers, chips,
+tiles · P2-1 "Cheltuit" = recorded; recurring shown as "+ X lei plăți
+recurente de plătit" (Acasă, Buget, overview, space detail; budget
+comparison still on the total) · P2-2 unpaid recurring bill stays
+restant everywhere (`RecurrenceProjector::currentDue`) · P2-3 tiles show
+"8 restante"/"1 azi", Casă card "Scadențe", hero "Restante" (tappable),
+server counts one-off maintenance with a next date like Casă does ·
+P2-4 shared `RecurringBillRow`, only items with an amount, Calendar
+lists the visible month + unpaid ones with a total · P2-5 car services
+due by km/date in "De făcut" and the BMW tile, deep-link opens the
+renewal form · P2-6 Grocery tile "21 de cumpărat" (`toBuy`) · P2-7
+"Sarcini" · P2-8 Casă tiles Sarcini-first + "Adaugă" chooser, "Fără cost"
+on maintenance resolve, Rețete grid shown immediately · P3-1..P3-8 as
+listed · P3-9 `Disclosure` primitive (5 forms), unified period pills,
+resolve-sheet copy, interval field with unit suffix.
 
-Home space writes and reads `status: "done"` (`frontend/lib/spaces/home/homeItems.ts:118,144,266,286`); Dashboard/Calendar/Budget only exclude `completed`/`archived` (`DashboardController.php:58,73`, `CalendarController.php:81,112`, `BudgetController.php:81,354`). Effects: a finished Casă task (item 640 "Test") shows on Acasă as "Restant 12 zile"; a task ticked ✓ in "De făcut" (`TodoCarouselSheet.tsx:93`, writes `completed`) stays open inside Casă. Fix: pick one value (likely `completed`), migrate existing `done` rows, update both mappers, and have the backend treat the other value as resolved during the transition.
+Found and fixed during the pass: (N1) Casă category rows started with
+", în 1 zi" when the description was empty (`joinParts`); (N4) both date
+pickers started weeks on Sunday -- one shared Monday-first
+`DatePickerSheet` now; (N5) Casă's picker only paged forward, so a past
+expense couldn't be dated; (N6) recurrence projection stepped in UTC and
+drifted a day across the 25 Oct DST change; plus the known
+`occurrencesBetween` shared-iteration-cap truncation.
 
-### P1-2 · Acasă / "De făcut" classify days in UTC
+### Still open from this pass
 
-`DashboardController` builds `$now` in the user's timezone but tests `$item->due_at->isToday()` / `lt($now)` on a UTC-tagged date. A task due today (local) lands in "Restante", tomorrow's in "Azi" -- Calendar and Casă classify the same items correctly. Fix: convert `due_at` to `$now`'s timezone before `isToday()`/comparisons (same pattern CalendarController uses).
-
-### P1-3 · "De făcut" ✓ bypasses Home's own resolve flow
-
-`TodoCarouselSheet.tsx:139-150` resolves with a bare `status: completed` (one tap, no confirm, no undo). For `home_task`/`home_recurring` that skips Home's price sheet and the next-date advance, so a recurring task/bill is closed for good instead of rolling forward. Pre-existing (the old carousel did the same). Fix: route each type through its own resolve logic, or open the Space's resolve sheet; add undo.
-
-### P1-4 · Car document expiry computed at 23:59 UTC
-
-`Item::effectiveDueAt()` returns `Carbon::createFromFormat('d.m.Y', $expiry)->endOfDay()` in UTC = 02:59 the next day in Bucharest. RCA reads "în 6 zile" on Mașină but "în 7 zile" in "De făcut". Fix: build the date in the user's timezone (or compare date-only).
-
-### P1-5 · Decimal amounts arrive as strings and render unformatted
-
-API decimals come back as `"450.00"`; `lei()` (`frontend/lib/format.ts:24`) calls `toLocaleString` on the string and returns it unchanged -> "450.00 lei din 1500.00 lei" (Economii on Acasă `home.tsx:354-355` and Buget). Fix: `Number(n)` inside `lei()`/`roNumber()`; audit other raw-API amounts.
-
-### P1-6 · "De făcut" group headers and row chips disagree
-
-Groups come from the server (UTC, see P1-2), row chips from the client (`TodoCarouselSheet.tsx` `daysFromToday`), and `daysUntil` in `dashboard.calculations.ts:27` uses `Math.ceil` on milliseconds. Under "Restante" a row says "Azi"; under "Azi" rows say "Mâine". Fix: one local-calendar-day helper feeding headers, chips and every "în N zile" label; rows under "Azi" drop the redundant chip.
-
-### P2-1 · Decide: what "Cheltuit" means (Acasă 0 lei vs Buget 725 lei)
-
-Buget counts Casă's scheduled `home_recurring` bills as their monthly-equivalent (725 lei = 45 weekly + 80 + 150 + 100 + 200 monthly) inside "Cheltuit"; Acasă and Casă count only paid records (0 lei in October). Proposal (design-lead): "Cheltuit" = paid only, everywhere; scheduled = "de plătit" -> Buget hero `0 lei · din 14.670 lei` + `+ 725 lei de plătit (plăți recurente)`; Casă row `0 / 140 lei` with a warning note `725 lei de plătit vor depăși bugetul cu 585 lei`.
-
-### P2-2 · Decide: how an unpaid recurring bill is shown
-
-A monthly bill unpaid since 28 Sep is "Restant 5 zile" in Casă, "următoarea pe 28 octombrie" in Calendar/Buget, and absent from Acasă (Dashboard/Calendar project to the next occurrence). Proposal: an occurrence doesn't advance until paid; every screen shows the oldest unpaid date (Casă `Restant 5 zile`; Calendar/Acasă red `Restantă · 28 sept.`; Buget `Lunar · restantă din 28 septembrie`; listed in Acasă "De făcut").
-
-### P2-3 · Decide: one count per Space for "what's due" (Casă shows 10 / 11 / 13)
-
-Tiles on Acasă/Spații say "10 de făcut" (Dashboard rules), Casă hero "Urmează 11", Casă card "Restanțe (13)" -- the card also counts items due in 2 and 4 days. Proposal: "Restant" = due before today (local) and unresolved, nothing else; tiles show the most severe tier (`9 restante` / `2 azi` / `La zi`); Casă card renamed `Scadențe (13)` with columns `9 Restante · 1 Azi · 2 1-2 zile · 1 3-4 zile`; page title `Scadențe`; hero stat becomes tappable `Restante 9`. Also align which types count server- and client-side (Dashboard excludes one-off `home_maintenance` and `home_document`, Casă includes them).
-
-### P2-4 · Decide: what belongs in "Plăți recurente"
-
-Acasă, Calendar and Buget list recurring TASKS without an amount ("[SEED] Due in 2 days, recurring") under "Plăți recurente". Proposal: only recurring items with amount > 0; recurring tasks stay in "De făcut"/agenda. Same row everywhere: IconWell repeat in the Space color, subtitle `{Spațiu} · {Frecvență}`, trailing amount over short date. Calendar: limit to the visible month (`Plăți recurente în octombrie` + month total).
-
-### P2-5 · Decide: count km-overdue car maintenance as "de făcut"
-
-Mașină shows "Schimb ulei · Depășit cu 500 km" but BMW's tile says "1 de făcut" (only RCA) and it's absent from "De făcut". Proposal: count it, sort first under Restante, same chip `Depășit cu 500 km` everywhere. Needs backend support (km-based items aren't date-based).
-
-### P2-6 · Decide: Grocery tile says "La zi" with 19 items to buy
-
-Proposal: `19 de cumpărat`. Needs a per-space summary field from the backend.
-
-### P2-7 · Decide: "Task" / "Task-uri" wording
-
-English loanword against the Romanian-only rule (`HomeRecurringWarningsPage.tsx:38`, `HomeDashboard.tsx:210`, `HomeTasksPage.tsx:90`, `HomeArchivePage.tsx:33`, `spaces.tsx:43`). design-lead suggests "Sarcini".
-
-### P2-8 · Decide: three mockup deviations from the first design pass
-
-(a) Casă tile order: board has Task-uri first plus a dashed "Adaugă" tile (new entry point); (b) "Fără cost" button on the maintenance resolve sheet; (c) Rețete grid hidden behind "Arată N rețete" + two-level filter, board shows the grid immediately. `[from: design verify of feat/redesign 8cf9a2e..HEAD]`
-
-### P3-1 · "De făcut" sheet rows are cramped
-
-Chip + 40px check button take ~half the row (`TodoCarouselSheet.tsx:134-151`); titles wrap, 11 items ≈ 2.5 screens. Move status into the subtitle (`Mogosesti · Restant 12 zile`, status part colored); `Row` (`primitives.tsx:205`) needs `subtitle?: string | ReactNode`.
-
-### P3-2 · Casă "Urmează" wording and overlap
-
-`HomeNextSection.tsx:38` / `dashboard.calculations.ts:36,40`: `restant de N zile` -> `Restant N zile`, `a expirat acum N zile` -> `Expirat de N zile` (also fixes the two-line wrap). After P2-3, "Urmează" should only hold documents and items outside the 4-day window -- never what the Scadențe card already counts.
-
-### P3-3 · Restanțe card vs page tier labels
-
-Card says "2 zile"/"4 zile" (`HomeRestanteCard.tsx:23-24`), page says "În 1-2 zile"/"În 3-4 zile". Card -> `1-2 zile` / `3-4 zile`.
-
-### P3-4 · Buget space rows stack up to 4 notes
-
-`budget.tsx:243-248`: show at most 2 notes, one line each (`Cea mai mare în sept.: {titlu}, {sumă}`, title cut ~18 chars).
-
-### P3-5 · Cumpărături row details
-
-(a) Adder's avatar on every row of a solo list (`GroceryDashboard.tsx:939`) -- only when `otherPeopleCount > 0` and the adder isn't you; (b) "5 pcs" / "5" / "1" (`GroceryItemRow.tsx:128`) -> display `buc.`; (c) "Estimat 10 lei" from 2 of 19 priced items (`:907`) -> `Estimat 10 lei · 2 din 19 cu preț`.
-
-### P3-6 · RingProgress web warning "Invalid DOM property transform-origin"
-
-`RingProgress.tsx:52-53,113-114`: replace `rotation="-90" origin=…` with `transform={\`rotate(-90 ${center} ${center})\`}`. Shows as a red dev toast on Buget (web only).
-
-### P3-7 · Car forms take typed dates
-
-`CarFuelForm:228`, `CarExpenseForm:144`, `CarDocumentForm:203/206`, `CarMaintenanceForm:427` use free text "ZZ.LL.AAAA"; every other form uses a picker. Swap to FieldButton + one shared date sheet (merge `HomeDatePickerSheet` and `ExpenseDatePickerSheet`). `[from: design verify of feat/redesign 8cf9a2e..HEAD]`
-
-### P3-8 · Acasă "De făcut" reads as a wall of red; date format rule
-
-Header total `De făcut (11) · 9 restante`; dates short (`5 oct.`) in trailing columns, long (`5 octombrie`) in subtitles -- Acasă bill rows break this.
-
-### P3-9 · Design-system suggestions (no defect)
-
-`Disclosure` primitive for the three hand-rolled "Mai multe detalii" toggles (and use it in HomeTaskForm/ExpenseEditModal/CarMaintenanceForm); one period selector across the three Cheltuieli pages; resolve-sheet copy (entry name as title, "Marchezi ca rezolvat" as subtitle); maintenance interval as a Field with the unit as suffix; undo toast instead of confirm for resolve/delete. `[from: design verify of feat/redesign 8cf9a2e..HEAD]`
+- Undo toasts instead of confirm dialogs app-wide (P3-9e): only "De făcut"
+  has inline undo. Needs a global toast host and real restore-after-delete
+  -- worth a device test first.
+- Car: `CarHistoryPage` still uses the period-sheet trigger (only the Car
+  Cheltuieli page got the inline pills); Car presets have no "Luna asta"
+  (`CarExpensePeriod` has no calendar-month kind).
+- `CarMaintenanceForm`'s optional fields aren't behind `Disclosure` yet
+  (multi-service form, needs its own pass).
+- Device checks: `DatePickerSheet` opened from inside a form Sheet is a
+  nested Modal (fine on web/Android, verify on iOS); Casă "Adaugă" chooser
+  -> form transition.
+- Swipe left/right was added everywhere it makes sense (Acasă, "De făcut",
+  Calendar, Buget, Casă Scadențe, Cheltuieli, Cumpărături -- right = în coș,
+  Mașină logs + "Urmează" services) but **can't be exercised on web**: a
+  mouse drag in the browser pane registers as a tap. Needs a phone pass:
+  each list's swipe-right/left, the early-payment question, and that a
+  swipe doesn't also fire the row's tap. Deliberately not swipeable:
+  documents (both spaces), Car "Cheltuieli" and Buget per-space records
+  (reports over other spaces' logs), Casă spend/archive pages. Documents
+  were added later (swipe right = renewal pop-up, left = delete).
+- Customizable Acasă (2026-10-04): built per the "orgOS Acasă personalizabil"
+  canvas. Phone checks: long press on an empty spot opens edit mode (and a
+  long press on a card does NOT), dragging cards by the ☰ handle
+  (react-native-draggable-flatlist, same as Spații's reorder -- if that
+  doesn't drag in Expo Go, neither will this). Ideas left for later: a
+  "Nu expiră" option for documents, per-card refresh of Buget numbers.
+- Seed data titles are misleading ("[SEED] Completed today" is pending,
+  "[SEED] Due today" is 4+ days old) -- data, not app.
 
 ## Found along the way (not yet fixed)
 
@@ -113,6 +117,127 @@ entry the moment something like this turns up (even mid-task); pick
 one up like any other "Open" item once nothing more pressing is ahead
 of it. Mark it `[from: <task>]` so there's a trail back to how it was
 found.
+
+### `composer audit` reports 2 advisories in already-installed packages (2026-10-08)
+
+`laravel/framework` 13.x below 13.30 is affected by CVE-2026-102279, an XSS in the debug page information. `league/flysystem` up to 3.35.2 is affected by CVE-2026-102601, control characters in `WhitespacePathNormalizer`. Neither package was touched by the social login work; `composer require` flagged both. The debug-page XSS only matters with `APP_DEBUG=true` exposed publicly, but the dev backend IS exposed publicly through the tunnel with `APP_DEBUG=true`. The fix is a deliberate `composer update laravel/framework league/flysystem` plus a full test run. `[from: social login backend, 2026-10-08]`
+
+### FIXED 2026-10-08 (uncommitted, awaiting qa-lead): Social-only accounts can't change password or email from Settings (2026-10-08)
+
+**Fix (QA #6):** `/user.has_password`; when false Settings shows "Setează o parolă" (new + confirm, `POST /profile/password/set`, then `updateUser({has_password:true})`), and the Email row first asks for a password (confirmAction -> same sheet). Open: what email change means for an Apple relay address.
+
+Original report:
+
+
+A user created through Apple/Google/Facebook has no usable password, but Settings > Parolă (`PUT /profile/password`) and Settings > Email (`PUT /profile/email`) both require `current_password`, so those two sheets are dead ends for them. Workaround today: "Ai uitat parola?" on Login sets a first password (spec-approved path). Proper fix needs a backend flag (e.g. `user.has_password`) so Settings can show "Setează o parolă" without the current-password field, and decide what email change means for an Apple relay address. Also: Settings > Parolă/Email copy doesn't mention any of this. `[from: social login frontend, 2026-10-08]`
+
+### FIXED 2026-10-08 (uncommitted, awaiting qa-lead): Car/Home create is two requests -- a failed profile save leaves a space (and now its credit) behind (2026-10-08)
+
+**Fix:** `POST /spaces` takes `profile` (same body/rules as the profile endpoints, now shared via `App\Support\SpaceProfileRules` with Romanian messages) and creates space + profile + "Default" + credit in one transaction; a bad profile or credit returns 422 (`errors["profile.*"|"credit.*"]`) and nothing is created. Both forms' create mode send ONE request, edit mode unchanged (PUT profile endpoints still used), and a ref guards double-tap on save. Tests in `tests/Feature/SpaceCreditTest.php`.
+
+Original report:
+
+`CarProfileForm` / `HomeProfileForm` create mode call `api.createSpace` and THEN `saveCarProfile` / `saveHomeProfile`. If the second call fails (validation, network), the space already exists without a profile and the form shows "Nu am putut salva" but stays open; tapping save again creates a SECOND space. Pre-existing, but with "În rate" the retry also duplicates the `expense_credit` (and its Calendar/Acasă reminders). Fix idea: send the profile in the same `POST /spaces` transaction (SpaceController already takes `credit` there), or remember the created space id in the form and only retry the profile. `[from: credit toggle on car/home create]`
+
+### Numbers past a DECIMAL column's range return a raw 500 (SQLSTATE) instead of a Romanian 422 (2026-10-08)
+
+`App\Support\SpaceProfileRules` (same rules the profile endpoints had before) has no upper bound on `tank_capacity` (`decimal(6,2)`, max 9999.99) or `purchase_price` (`decimal(12,2)`), and `ItemBudgetRules` / ItemController none on `amount` (`decimal(12,2)`). Seen live: `POST /spaces` with `profile.tank_capacity: 100000` or `credit.amount: 1000000000000` -> HTTP 500, body `"SQLSTATE[22003]: Numeric value out of range ..."` (+ stack trace, APP_DEBUG), which the Car form shows verbatim in "Nu am putut salva". The transaction rolls back correctly (0 rows left), so it's a message/validation gap, not data loss; PUT car-profile and POST /items have the same gap. Fix: `max:9999.99` / `max:9999999999.99` with Romanian messages. Related: `$request->validate()` 422s with 2+ errors (PUT car-profile/home-profile) get Laravel's English suffix, e.g. "Scrie marca mașinii. (and 5 more errors)" -- see the English-validation-messages entries. `[from: qa-lead verification of În rate / one-request space create, 2026-10-08]`
+
+### Tab bar: tapping "Spații" while inside a Space does nothing (2026-10-08)
+
+`components/navigation/MainTabBar.tsx`: inside a Space (`segments[1] === "[id]"`) `activeIndex` is forced onto "spaces" so the pill stays lit, which also makes that cell `focused` -- and `onPress` only navigates when `!focused`. No `tabPress` listener exists anywhere else, so from e.g. a Mașină space, tapping "Spații" in the bar emits the event and stays put; the grid is reachable only via the screen's own back. Expected (and the stock tab bar's behavior): go to the Spații grid. Fix idea: `if ((!focused || (inSpace && route.name === "spaces")) && !event.defaultPrevented) navigation.navigate(route.name)`. Static trace only, not tried on a phone; the file was never committed, so whether this predates the TabCell extraction can't be told from git. `[from: qa-lead verification of first-use tour, 2026-10-08]`
+
+### First-use tour: two TEMP testing switches to undo after phone testing (2026-10-08)
+
+`app/(tabs)/home.tsx` `SHOW_TOUR_TEST_BUTTON = true` renders a "Pornește ghidul" pill (testID `home-tour-test`) under the Acasă header that starts the tour on demand -- set false and delete the pill once the user has tried the tour. `lib/tours.ts` `ONE_AUTO_TOUR_PER_SESSION = false` -- flip to true when more screens get tours, so a new user isn't hit by several auto tours in one session (design-lead's spec wants the limit). `[from: first-use tour build]`
+
+### `hooks/` holds two more dead Expo-template files (2026-10-08)
+
+`hooks/use-theme-color.ts` and `hooks/use-color-scheme.ts` (+ `.web.ts`) are imported only by already-dead template leftovers (`parallax-scroll-view.tsx`, `themed-text.tsx`, `themed-view.tsx`, `components/ui/collapsible.tsx`). Not on `frontend/CLAUDE.md`'s dead list yet; `use-theme-color.ts` is also 2 of the 8 pre-existing `npx tsc --noEmit` errors (the other 6 are in `haptic-tab.tsx`, `parallax-scroll-view.tsx`, `icon-symbol.tsx` -- all dead). Deleting the dead set would make `tsc` clean. `[from: first-use tour build]`
+
+### Acasă "Provizii" card can't tell "no supplies" from "none low" (2026-10-08)
+
+`lib/dashboard/widgetVisibility.ts` hides empty Acasă cards, but `/dashboard` only returns `lowSupplies` (count of LOW `home_supply` rows per space) -- there's no "this Casă tracks N supplies" number. So the Provizii card stays visible for any Casă space, showing "Ok · nimic pe terminate" even when that Casă has zero supplies. Fix: add a per-space `supplies` count to `DashboardController` (next to `lowSuppliesBySpace`) and make the `supplies` rule `count > 0`. `[from: acasa-hide-empty]`
+
+### Email-change confirmation links never expire (2026-10-08)
+
+`AuthController::confirmEmailChange` checks expiry with `now()->diffInMinutes($pending->created_at) > 60`, but Carbon 3 (installed: 3.13.2) returns a SIGNED diff -- "now vs a past time" is negative (tinker: `now()->diffInMinutes(now()->subMinutes(90))` = `-90.01`), so the check is never true. Confirmed live: a pending change backdated 5h still confirmed with 200 "Emailul a fost actualizat." -- while the email itself says "Acest link expiră în 60 de minute". Pre-existing since the initial commit (not part of the auth-email diff). Fix: `$pending->created_at` older than `now()->subMinutes(60)` (same shape as `verifyEmail`'s check), plus a test. Worth grepping other `diffIn*(` uses for the same sign assumption. `[from: qa-lead verification of auth-emails 2026-10-08]`
+
+### More leftover QA/test accounts than the one listed below (2026-10-08)
+
+Besides id 88, the `lifeos` dev DB still has ~20 other obvious test accounts from earlier sessions (ids 5-8, 16, 24-34, 38-41, 89: `qa-*`, `qalead*`, `diagtest*`, `bugtest_*`, factory-style `antonina40@example.com`/`hreynolds@example.net`). All predate the auth-email work and are now marked verified by its backfill migration. Real accounts appear to be ids 1-4 -- confirm with the user before deleting anything. `[from: qa-lead verification of auth-emails 2026-10-08]`
+
+### confirm-email.tsx updates the local email of ANY logged-in account (2026-10-08)
+
+**[FIXED 2026-10-08 -- now `refreshUser()`]** `app/confirm-email.tsx` calls `updateUser({ email: res.email })` whenever a user is logged in on the device that opens the link -- even when the link belongs to a DIFFERENT account (now more reachable: email links open the app itself via `/open/confirm-email`). The logged-in user's Settings then shows the other account's new email until the next `/user` reload. Can't compare by email (the session holds the OLD address); fix = have `POST /confirm-email` return the user id and only patch when it matches `user.id`, or just `refreshUser()` (providers/auth.tsx) instead of patching. `[from: auth-email frontend 2026-10-08]`
+
+### Other English 4xx messages still reach Romanian screens (2026-10-08)
+
+`lib/api.ts` now maps Laravel's default "Too Many Attempts." to Romanian, but Laravel validation messages are still English wherever the backend doesn't set its own (e.g. register's "The email has already been taken.", forgot-password's "The email field must be a valid email address.", login's "The provided credentials are incorrect." -- the last one is papered over in login.tsx's `loginError`). Proper fix is a `lang/ro/validation.php` + `APP_LOCALE=ro` on the backend, not per-screen string matching. `[from: auth-email frontend 2026-10-08]`
+
+### Budget: a 0 limit can be saved from "Reîmparte" but not from the space's own page (2026-10-08)
+
+`ResplitSheet` saves an explicit 0 per space (and 0 now counts as a set limit everywhere: "Depășit", red amount, "Șterge bugetul"), but `BudgetSpaceDetailPage`'s single amount field still requires > 0 (`saveManualAmount`'s `!(amount > 0)` guard + `typedOk`), so you can't type 0 there to set or keep a 0 limit. Decide whether 0 is a valid limit on that page too. Related: Acasă's "Buget pe spații" card (`HomeWidgets.tsx` BudgetCard) still compares the sum of limits, not the necessities envelope, when a plan exists -- check it against the Buget tab's "Necesități pe spații" footer. `[from: budget-from-income QA fixes 2026-10-08]`
+
+### Leftover QA test account in the dev DB (2026-10-08)
+
+User id 88 (`qa-reorder-a-1790748327@example.com`, 9 items) is still in the `lifeos` dev DB -- looks like a test account from an earlier QA pass that was never cleaned up. Harmless, but it shows up in any "users by item count" inspection next to the real accounts. Delete it (items/spaces/limits/tokens first) once someone confirms it is not in use. `[from: qa-lead verification of budget-from-income 2026-10-08]`
+
+### Budget-from-income redesign: deferred pieces (2026-10-07)
+
+Spec + mockup "orgOS Buget din venit" (https://claude.ai/artifact/1w4h13z2dXQVSFcPDgkJdy) awaiting implementation. User decisions 2026-10-07: income = fixed monthly net; fără vină = per-expense flag; savings jars = targets; credits live in a "Credite" section of the Cheltuieli space (name, monthly rate, due day, end date, optional space label) -- not in Car/Home; they count against the 10% jar (tracked when a credit is active, "Investiții" otherwise), never in Necesități; stored as new item type `expense_credit` (design rev 2); rates over 10% = warning only, never reduce Economii; credits in Calendar AND Acasă "De făcut" on their day as reminders only (no paid/restant state); Economii goal auto-created (target 0) on first plan save; fără vină leftover/overspend rolls into Economii; the 15% short-term jar is ADDED to Economii automatically each month (overrides design-lead's "manual" recommendation); first income save with existing budgets asks keep vs re-split. Still deferred: (2) fără vină marking from Cheltuieli's quick-add bar (`ExpensesAddBar`) — edit-only for now; (4) archive has no income/split snapshot per month — past months' % can't be reconstructed if income changes; (5) once shipped, close "per-space limit entry has two competing UIs" and "Savings Goal auto-update depends invisibly on per-space limits" (both resolved by the redesign). `[from: design-lead budget-from-income redesign 2026-10-07]`
+
+### Budget-from-income frontend side findings (2026-10-08) [from: budget-from-income frontend]
+
+(1) Renewing a flagged car document by swipe ("cu datele vechi", `handleDocumentRenewSwipe`) creates the new record UNflagged -- it copies price/notes but not `guiltFree`; the renew form also starts unflagged. (2) Car's own "Luna asta" total and `lib/spaces/car/calculations/expenses.calculations.ts` totals are computed on the phone and still INCLUDE fără vină records, while Buget's per-space spend (server) excludes them -- decide whether in-space totals should match. (Cheltuieli deliberately keeps them in its own month total -- mockup.) (3) Car/Home mappers now always send `guilt_free`; any future path that builds an entry from scratch for an existing record would silently clear the flag (none found today). (4) `homeCategoryConfig.ts` rows pass the English word "Due" to `dueSubtitle(remaining, "Due")` -- check whether it ever renders. (5) `lib/api.ts`'s 429 message is still English ("Too many attempts...") against the Romanian-only rule. (6) `components/ui/DatePickerSheet.tsx`'s future range stops at 24 months, so CreditSheet uses its own month/year picker for "Ultima rată"; widen the shared picker if it should be reused. (7) Saving a fără vină expense from Cheltuieli (`[id].tsx` `handleExpenseEntrySave`) doesn't call `refreshBudgetPlan()`; harmless today (Buget reloads on focus) but the cached plan in `lib/budget/plan.ts` can be up to 60s stale. (8) The fără vină chip isn't shown yet on CarDocsPage/CarArchivePage, Home tasks (`HomeTasksPage`), `HomeSpendPage`; no Grocery list reads trips back. (9) First-income dialog labels are short ("Păstrez bugetele actuale" / "Reîmpart cei 55% pe spații") with the amounts moved into the message: ConfirmHost's choice buttons are single-line and truncate the spec's longer label.
+
+### Budget-from-income backend side findings (2026-10-08)
+
+(1) **[FIXED inline]** `BudgetController::archiveCompletedMonths` parsed the last archived month in UTC while comparing it against the user's-zone start of last month, so for any UTC+ user (Bucharest) the just-completed month was skipped and only archived a month later (seen live: Sep 2026 missing from the archive on 8 Oct). Now parsed in the user's zone. (2) **[FIXED 2026-10-08 -- cursor now re-parsed in the user's zone; verified 1 Oct 00:30 Bucharest fill-up counts in October]** `applyMonthlySavings` has the same UTC-cursor shape (`last_applied_month` is a `date` cast, so the cursor is 1st 00:00 UTC) -- it happens to apply the right months because it increments before summing, but each past month's spend window is then computed in UTC, not the user's zone (an item at 00:30 Bucharest on the 1st counts in the previous month there). (3) `RecurrenceProjector`'s monthly stepping still drifts for every type WITHOUT `metadata.day_of_month`: a `home_recurring`/`custom_event` due on the 31st goes 31 Jan -> 28 Feb -> 28 Mar forever (`addMonthsNoOverflow` keeps the clamped day). The new clamp only applies when `day_of_month` is set (credits); extending it to "anchor = the original due_at's day" is a behavior change for existing bills that should be checked against Casă's own frontend projection first. Yearly stepping uses `addYears` (overflow) -- a 29 Feb item lands on 1 Mar. (4) Credits have no start date, so `Item::scopeActiveCredits` counts a credit in every month up to its `end_date`, including months before it was entered -- harmless in normal use (the archive only writes the just-completed month) but a backfilled/test archive shows rates in months the credit didn't exist yet. `[from: budget-from-income backend]`
+
+### Auth emails: synchronous mail sends can 500 two endpoints (2026-10-08)
+
+**[FIXED 2026-10-08: forgot-password + email change now try/catch → log + Romanian 503; email change deletes its pending row on failure. Note: forgot-password's 503 only happens when the account exists, a minor enumeration leak while SMTP is down. 429 English copy still open.]** Mail is sent inside the request (no queue worker in dev). `register` and `POST /email/verification-notification` catch transport failures (account still created / Romanian 503), but `POST /forgot-password` (`Password::sendResetLink`) and `PUT /profile/email` (`requestEmailChange`, after it has already stored the pending row) don't -- once `MAIL_MAILER=smtp`, a Brevo outage/bad key/daily-quota hit turns them into a raw 500. Options: try/catch + log + Romanian 503 (forgot-password must keep its don't-reveal-the-account wording), or queue the notifications (`ShouldQueue` + a worker in `dev.ps1`). Also: the shared `password-reset` throttle group (now also `/email/verify`) answers 429 with Laravel's English "Too Many Attempts." (related to `lib/api.ts`'s own English 429 copy, item (5) under budget-from-income frontend findings). `[from: auth-emails backend 2026-10-08]`
+
+### Apple sign-in does NOT work in Expo Go (confirmed on the user's iPhone 2026-10-09)
+
+Expo Go (SDK 57) doesn't ship the native expo-apple-authentication module: `isAvailableAsync()` → false and `AppleAuthenticationButton` renders "Unimplemented component: <ViewManagerAdapter_ExpoAppleAuthentication>". The button stays hidden (frontend gate is correct). Backend + app code are done and QA'd; Apple needs an own development build (EAS/`expo prebuild`) signed with an Apple Developer account (99 USD/yr), then add the bundle id to APPLE_CLIENT_IDS and REMOVE `host.exp.Exponent`. Same build decision unblocks the bank-notification feature (Android) and `orgos://` links. `[from: Apple sign-in device test 2026-10-09]`
+
+### Social login: fix BEFORE enabling Google/Facebook credentials (2026-10-08)
+
+QA re-verify passed all security fixes; Apple is ready. Open: (NEW-1, MEDIUM) a Facebook / unverified-Google user who verifies their email or resets the password LOSES that sign-in forever: `dropUnverifiedLinks()` in verifyEmail/resetPassword/confirmEmailChange deletes the link, next sign-in 409 "Intră cu emailul și parola" though has_password=false. Fix idea: when the link was created with the account and its email equals the address just proven, mark it verified instead of deleting; at least point the 409 copy to "Ai uitat parola?" when the account has no password. (NEW-2, LOW) verify-email doesn't revoke the registrant's tokens/password, so a victim who clicks "confirm" on an attacker-created account and later links Apple inherits an account the attacker still controls (standard email-verification limitation). (NEW-3, LOW) first-sign-in race on MySQL can deadlock (1213) instead of unique violation → use `DB::transaction($cb, 3)`. Notes: `pendingWebFlowAt` not cleared on cancel/error (10-min trust window); set-password needs no re-auth (stolen token can lock in); stale has_password after a 409 on set-password; apple-nonce limiter effectively global behind the tunnel (same as TrustProxies item). `[from: qa-lead social login re-verify 2026-10-08]`
+
+### Spații create-templates design review side findings (2026-10-08)
+
+Mockup "Spații create-space templates": https://claude.ai/artifact/VadARnBuD5N2GM7QR9aH8b . (a) Dashed "add" affordances use `borderStrong` (~1.4:1 on the light page): home.tsx "Adaugă card", Pill `dashed` (primitives.tsx), TourHost ghost rows -- the new Spații create tiles use `colors.control` (~2.8–3.5:1); consider moving them all for consistency. (b) The "Spațiu nou" sheet could show which spaces of each kind already exist ("Ai deja: BMW") to prevent accidental duplicates -- new on-screen info, needs sign-off; relates to "Telling apart several spaces of the same kind". (c) Spații first-use tour not built yet -- empty variant: "Alege ce creezi" (grid), ⓘ; with spaces: status line on the first card, "+", pencil/long-press. Flip `ONE_AUTO_TOUR_PER_SESSION` before shipping a 2nd auto tour. (d) Empty Spații: header "+" duplicates the on-page create grid -- hide it at 0 spaces? (behaviour change, open). `[from: Spații create-templates design review]`
+
+### First-use tour design side findings (2026-10-08)
+
+(a) **[FIXED 2026-10-08 -- the income card now shows with no spaces]** **No path to set income on an account with no spaces.** `budget.tsx` renders "Adaugă venitul" only when `spaceKinds.length > 0`, so Buget can't be the first step for a new account (the Acasă empty state sends people to Spații instead). Decide whether income should be settable before the first space exists. (b) **Two email reminders on first login:** register's `notifyAction` "Verifică emailul" + `VerifyEmailBanner` say the same thing on the same first screen -- consider dropping the dialog (functional change, needs sign-off). (c) **Spend card repeats the amount when there's no budget:** in `HomeWidgets.tsx` SpendRingCard the ring centre shows `lei(total)` and the column beside it shows the same total -- show the centre empty or an icon. (d) **`dashboard_layout` reaches the app as a raw JSON string** (not in `User::casts()`, `/user` returns text; `GET /dashboard/layout` decodes separately) -- cast it (and the planned `tours` column) as arrays. `[from: design-lead first-use tour 2026-10-08]`
+
+### Auth-email leftovers from QA (2026-10-08)
+
+(a) A failed resend/forgot/email-change send replaces the previous token BEFORE the mail fails, so the link from the earlier, delivered email stops working ("nu este valid"). Fix: keep the old token until the new mail actually went out (or restore it in the catch). (b) `register.tsx` always says "Ți-am trimis un link de confirmare" even when the backend swallowed a mail failure -- register response doesn't say whether mail went out. (c) Hitting the 6/h resend limit gives `retry_after` up to 3600 → button reads "Retrimite în 3412 s"; format as minutes. (d) No TrustProxies: behind the tunnel every client is 127.0.0.1, so IP-keyed limiters (`auth` 5/min, `password-reset` 10/min incl. `/email/verify`, `open-link` 30/min) are effectively global. Fixed already: forgot-password no longer reveals accounts while SMTP is down and drops its token row on failure; email-change links now expire after 60 min (Carbon 3 signed diff); `/open/*` stateless. `[from: qa-lead auth-email 2026-10-08]`
+
+### Generic Laravel validation messages are English (2026-10-08)
+
+`APP_LOCALE=en` and no Romanian lang file, so since item 422s now carry `message` (2026-10-08), generic rule failures reach the Romanian UI as e.g. "The amount field must be at least 0." / "The selected type is invalid." (previously "Request failed (422)", also English). Custom credit/fără vină messages are Romanian. Fix: Romanian `lang/ro/validation.php` + `APP_LOCALE=ro`, own pass. Related to "Backend validation/auth messages are still English (2026-10-04)". `[from: qa-lead budget re-verify 2026-10-08]`
+
+### Budget-from-income QA low findings (2026-10-08)
+
+(a) Credits have no start date: `activeCredits` only checks end_date, so a backfilled archive counts a credit in months before it existed, and a credit created after its pay day counts in this month's `credit.rates` though `next_due` is next month. (b) `suggestSplit` can return a negative amount when recurring floors sit within ~10 lei of the envelope (rounding) -- ResplitSheet saves it as 0, cosmetic. (c) `PUT /items/{credit} {type:"expense_item"}` retypes a credit into an expense (no UI path). (d) With no past-month history the suggestion puts the whole envelope on the space with recurring bills (spec-correct, may surprise). `[from: qa-lead budget-from-income 2026-10-08]`
+
+### Tap = preview everywhere, long press = actions + haptic everywhere (2026-10-05) -- user decision, Casă done first
+
+The user decided: in EVERY space, a single tap on any record opens a read-only preview (not its create/edit form), and every long press gives a light haptic. Built for Casă only so far (`components/spaces/home/HomeRecordSheet.tsx` + `homeRecordPreview.ts`, `lib/haptics.ts` `longPressFeedback()`). Still to do: (1) Mașină -- fuel/service/document/expense rows still open the edit form on tap (`CarDashboard.tsx` `openEntryForEdit`, CarDocsPage, CarHistoryPage, CarExpensesPage); (2) Cumpărături -- product rows (long press = edit today), lists; (3) Cheltuieli -- expense rows; (4) Calendar / Buget / Acasă rows that open a record; (5) haptic on every existing long press: Spații edit mode (empty-spot long press), Acasă edit mode, Grocery product long press, any drag handle start. Likely a shared `RecordSheet` generalized from the Casă one. `[from: Casă dashboard redesign v2, user 2026-10-05]`
+
+### Calendar redesign side findings (2026-10-05)
+
+From the design-lead's Calendar review (mockup "orgOS Calendar redesign"): (1) [DONE 2026-10-05 for dated ones -- `CalendarController` now adds Casă documents by expiry and car services by `nextServiceDate`; km-only services have no day and stay out by design] `/calendar` omits car services due by km/date and Casă documents -- `DashboardController::carServiceDue`/`homeDocumentsDue` live only in `/dashboard`, so a calendar heatmap undercounts and a non-today day panel misses them; backend: add both to `CalendarController` `days`. (2) Scope mismatch now visible on one screen: `/dashboard` filters by `user_id`, `/calendar` uses `visibleTo` -- a shared-space item can be heated on the grid but absent from a "today" list built from `/dashboard`. (3) `densityColor`/`DENSITY_TIERS` in `lib/statusColors.ts` are dead (no importers); `frontend/CLAUDE.md` still describes Calendar as "density-colored… agenda accordion… recurring-bills list". (4) Calendar rows deep-link on tap instead of a preview -- part of "Tap = preview everywhere" above. (5) Older Calendar entries in this file ("density coloring conflates count with urgency", per-space dots, "CHELTUIELI RECURENTE includes non-expense items", "no Today quick-jump") close once the redesign ships. `[from: design-lead Calendar redesign 2026-10-05]` (6) [DONE 2026-10-05 -- `CalendarController::projectionAnchor`] Recurring `home_maintenance` lands on different days in Calendar than in Casă: `CalendarController` projects it with `RecurrenceProjector::occurrencesBetween` anchored on `due_at`, while Casă / `currentDue` use `metadata.nextDueDate` -- seeded account: "Overdue, recurring" (monthly) is restant since 27 Sep (local) in Casă but heated 28 Oct, 28 Nov... in Calendar (now 27 Oct, 27 Nov...); the weekly one already matched. Anchor the projection on `nextDueDate` when set. (7) Confirmed on the seeded account for (1): 4 Casă documents expire inside the 3-month window and none heat the strip. (8) Swipe-right "Rezolvă cu datele salvate" on a car service from Acasă / Calendar loses its next DATE: `logCarServiceAgain` (lib/dashboard/itemActions.ts) computes the day interval as `nextServiceDate - item.due_at`, but both `/dashboard` and `/calendar` overwrite `due_at` with the next-service date (or yesterday for km-overdue), so the interval is ~0 and the new record gets `nextServiceDate: null`. Fix: send the visit's own date alongside (e.g. `service_date`) and use it there. `[from: heatmap data audit 2026-10-05]`
+
+### Casă redesign v2 leftovers from design-lead (2026-10-05)
+
+From the design-lead review of the Casă dashboard (mockup "Casă dashboard redesign"): (1) Mașină's "Urmează" rows should use the same row anatomy (timing in the subtitle, amount on the right) so the spaces match; (2) second designer's idea: put the to-do section above the quick-add buttons in both spaces and give it one name -- needs one shared time window first (Car docs 45 days vs Casă 7 days); (3) a "De plătit acum" figure in the top card -- needs a definition that doesn't clash with Buget's "de plătit"; (4) the quick-add buttons use singular nouns next to plural category names ("Sarcină" vs "Sarcini") with nothing saying "add" -- shared with Mașină (`SpaceQuickActions`), consider a "+" mark or "Adaugă"; (5) `roCount` adds "de" from 20 up, which reads oddly with adjectives ("20 de deschise"); (6) the Sarcini page chip still says "Restant 12 zile" while the dashboard says "Restantă de 12 zile" -- align; (7) with type tabs, the same five nouns appear three times (add buttons, pills, Categorii) -- a later simplification: a "Toate facturile ›" link at the bottom of each tab could replace Categorii; (8) `Sheet`'s close `CircleButton` uses `surfaceSecondary`, the same as the sheet, so only the X shows, not its round button. `[from: design-lead Casă dashboard review 2026-10-04/05]`
 
 ### Redesign follow-ups needing a decision or a device (2026-10-04)
 

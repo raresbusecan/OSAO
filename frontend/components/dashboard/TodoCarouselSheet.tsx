@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, ActivityIndicator } from "react-native";
+import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useTheme, type ThemeColors } from "@/lib/theme";
@@ -8,16 +8,22 @@ import { notifyAction } from "@/lib/confirm";
 import { severityColor } from "@/lib/statusColors";
 import { CUSTOM_EVENT_COLOR, SPACE_IDENTITY_COLORS, detectSpaceType } from "@/lib/spaces/spaceProfile";
 import { Sheet } from "@/components/ui/Sheet";
-import { Group, Row, Chip, SectionHeader, EmptyState, hexToRgba } from "@/components/ui/primitives";
+import { Group, Row, SectionHeader, EmptyState, hexToRgba } from "@/components/ui/primitives";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { motion } from "@/lib/motion";
-import { roCount, roRelativeDays } from "@/lib/format";
+import { daysFromToday, roCount, roDate, roRelativeDays } from "@/lib/format";
+import { overdueKmLabel, todoHref, todoTitle } from "@/lib/dashboard/spaceDue";
+import { SwipeItemRow } from "@/components/dashboard/SwipeItemRow";
+import { CreditReminderRow, isReminder } from "@/components/dashboard/CreditReminderRow";
 
 type TodoItem = {
   id: number | string;
   type: string;
   title: string;
   due_at: string;
+  recurrence?: string | null;
+  metadata?: Record<string, any> | null;
+  overdue_km?: number | null;
   space: { id: number | string; name: string; icon: string } | null;
 };
 
@@ -27,74 +33,86 @@ export type TodoCarouselSheetProps = {
   overdue: TodoItem[];
   today: TodoItem[];
   upcoming: TodoItem[];
-  /** Called after an item is marked resolved, so the caller (Home) can
-   * refetch and the widget's count stays in sync. */
+  /** Called after an item is marked resolved (or un-resolved), so the
+   * caller (Home) can refetch and the widget's count stays in sync. */
   onChanged: () => void;
 };
 
-function daysFromToday(iso: string): number {
-  const due = new Date(iso);
-  const now = new Date();
-  const a = new Date(due.getFullYear(), due.getMonth(), due.getDate()).getTime();
-  const b = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  return Math.round((a - b) / 86400000);
+/** Status for a row -- red past due, muted ahead, nothing for today
+ * (the "Azi" header already says it). Same daysFromToday the group
+ * headers use, so a header and its rows can't disagree. */
+function statusFor(days: number, colors: ThemeColors): { label: string; color: string } | null {
+  if (days < 0) return { label: `Restant ${roCount(-days, "zi", "zile")}`, color: severityColor("critical", colors) };
+  if (days === 0) return null;
+  return { label: roRelativeDays(days), color: colors.onSurfaceTertiary };
 }
 
-// Same overdue/today/upcoming -> critical/warning/safe tiers Home's "De
-// făcut" widget uses (lib/statusColors.ts), so a row reads with the
-// same urgency as the card it was opened from.
-function statusFor(item: TodoItem, colors: ThemeColors): { label: string; color: string } {
-  const days = daysFromToday(item.due_at);
-  if (days < 0) return { label: `Restant ${roCount(-days, "zi", "zile")}`, color: severityColor("critical", colors) };
-  if (days === 0) return { label: "Azi", color: severityColor("warning", colors) };
-  return { label: roRelativeDays(days), color: colors.onSurfaceTertiary };
+/** Only a plain one-off task or reminder can be ticked off right here.
+ * Everything else has its own resolve step in its Space -- a purchase
+ * asks for the price, a recurring task/bill/visit advances to its next
+ * date, a car document gets renewed -- so its row opens that instead of
+ * closing it for good with a bare status change. */
+function canQuickResolve(item: TodoItem): boolean {
+  const meta = item.metadata ?? {};
+  if (item.recurrence) return false;
+  if (item.type === "custom_event") return true;
+  if (item.type === "home_task") return !meta.isRecurring && !meta.isPurchase;
+  return false;
 }
 
 /**
  * Opened from Home's "De făcut" -- every real to-do, grouped Restante /
- * Azi / Următoarele. Tapping a row opens it where it actually gets
- * resolved (its Space's sub-view, or Calendar for a custom event, which
- * has no space); the check button marks it done right here.
+ * Azi / Următoarele by local calendar day. Tapping a row opens it where
+ * it actually gets resolved (its Space's sub-view, or Calendar for a
+ * custom event); a plain one-off task/reminder also has a check button,
+ * with "Anulează" right after in case of a mis-tap.
  * (Name kept from the earlier carousel version -- Home imports it.)
  */
 export function TodoCarouselSheet({ visible, onClose, overdue, today, upcoming, onChanged }: TodoCarouselSheetProps) {
   const { colors, spacing, radius } = useTheme();
   const router = useRouter();
   const [resolvingId, setResolvingId] = useState<string | number | null>(null);
-  // Optimistically hidden right after "Rezolvat", before the refetch lands.
+  // Ticked off during this open of the sheet -- the row stays, struck
+  // through, with "Anulează" until the sheet closes.
   const [resolved, setResolved] = useState<Set<string>>(new Set());
 
-  const visibleOf = (list: TodoItem[]) => list.filter((it) => !resolved.has(String(it.id)));
+  // The server's three lists are only the source; grouping is by LOCAL
+  // calendar day, the same helper every row's status uses.
+  // Credit reminders (`reminder: true`) aren't to-dos: no resolve, no
+  // swipe, not counted -- listed apart under "Mementouri".
+  const reminders = [...overdue, ...today, ...upcoming].filter(isReminder);
+  const all = [...overdue, ...today, ...upcoming]
+    .filter((item) => !isReminder(item))
+    .map((item) => ({ item, days: daysFromToday(item.due_at) }))
+    .sort((a, b) => new Date(a.item.due_at).getTime() - new Date(b.item.due_at).getTime());
   const groups = [
-    { key: "overdue", title: "Restante", items: visibleOf(overdue) },
-    { key: "today", title: "Azi", items: visibleOf(today) },
-    { key: "upcoming", title: "Următoarele", items: visibleOf(upcoming) },
-  ].filter((g) => g.items.length > 0);
-  const total = groups.reduce((n, g) => n + g.items.length, 0);
+    { key: "overdue", title: "Restante", rows: all.filter((r) => r.days < 0) },
+    { key: "today", title: "Azi", rows: all.filter((r) => r.days === 0) },
+    { key: "upcoming", title: "Următoarele", rows: all.filter((r) => r.days > 0) },
+  ].filter((g) => g.rows.length > 0);
+  const openCount = all.filter((r) => !resolved.has(String(r.item.id))).length;
 
   const openTarget = (item: TodoItem) => {
     onClose();
-    if (item.space) {
-      // Deep-links straight into the sub-view where this item is
-      // resolved -- see [id].tsx's itemId/itemType handling.
-      router.push(`/${item.space.id}?itemId=${item.id}&itemType=${item.type}` as any);
-    } else {
-      const due = new Date(item.due_at);
-      const dateParam = Number.isNaN(due.getTime())
-        ? ""
-        : `?date=${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, "0")}-${String(due.getDate()).padStart(2, "0")}`;
-      router.push(`/calendar${dateParam}` as any);
-    }
+    router.push(todoHref(item) as any);
   };
 
-  const markResolved = async (item: TodoItem) => {
+  const setDone = async (item: TodoItem, done: boolean) => {
     setResolvingId(item.id);
     try {
-      await api.updateItem(item.id, { status: "completed", completed_at: new Date().toISOString() });
-      setResolved((prev) => new Set(prev).add(String(item.id)));
+      await api.updateItem(
+        item.id,
+        done ? { status: "completed", completed_at: new Date().toISOString() } : { status: "pending", completed_at: null },
+      );
+      setResolved((prev) => {
+        const next = new Set(prev);
+        if (done) next.add(String(item.id));
+        else next.delete(String(item.id));
+        return next;
+      });
       onChanged();
     } catch (error: any) {
-      notifyAction("Nu am putut marca drept rezolvat", error?.message || "A apărut o eroare.");
+      notifyAction(done ? "Nu am putut marca drept rezolvat" : "Nu am putut anula", error?.message || "A apărut o eroare.");
     } finally {
       setResolvingId(null);
     }
@@ -103,60 +121,111 @@ export function TodoCarouselSheet({ visible, onClose, overdue, today, upcoming, 
   return (
     <Sheet
       visible={visible}
+      info="todo.sheet"
       onClose={() => {
         setResolved(new Set());
         onClose();
       }}
       title="De făcut"
-      subtitle={total > 0 ? roCount(total, "lucru", "lucruri") : undefined}
+      subtitle={openCount > 0 ? roCount(openCount, "lucru", "lucruri") : undefined}
       icon="checkbox-outline"
       testID="todo-sheet"
     >
-      {total === 0 ? (
+      {all.length === 0 && reminders.length === 0 ? (
         <View style={{ backgroundColor: colors.surfaceTertiary, borderRadius: radius.card }}>
           <EmptyState icon="checkmark-circle-outline" title="Totul e rezolvat" message="Nimic restant și nimic pentru azi." />
         </View>
       ) : (
         groups.map((g) => (
           <View key={g.key} style={{ gap: spacing.sm }}>
-            <SectionHeader title={g.title} muted />
+            <SectionHeader title={`${g.title} (${g.rows.length})`} muted />
             <Group inset={20}>
-              {g.items.map((item) => {
-                const status = statusFor(item, colors);
+              {g.rows.map(({ item, days }) => {
+                const isDone = resolved.has(String(item.id));
+                const kmLabel = overdueKmLabel(item);
+                const isDoc = item.type.endsWith("_document");
+                // Documents read by their validity date, not a day count.
+                const docDate = isDoc ? roDate(item.due_at, { short: true }) : "";
+                const status = kmLabel
+                  ? { label: kmLabel, color: severityColor("critical", colors) }
+                  : isDoc
+                    ? { label: days < 0 ? `Expirat pe ${docDate}` : `Expiră pe ${docDate}`, color: days < 0 ? severityColor("critical", colors) : days === 0 ? colors.warning : colors.onSurfaceTertiary }
+                    : statusFor(days, colors);
                 const color = item.space ? SPACE_IDENTITY_COLORS[detectSpaceType(item.space, null)] ?? colors.onSurfaceTertiary : CUSTOM_EVENT_COLOR;
-                const resolving = resolvingId === item.id;
+                const busy = resolvingId === item.id;
                 return (
+                  <SwipeItemRow key={item.id} item={item} onChanged={onChanged} canResolve={!isDone} canDelete={!isDone}>
                   <Row
-                    key={item.id}
                     testID={`todo-open-${item.id}`}
-                    onPress={() => openTarget(item)}
+                    onPress={isDone ? undefined : () => openTarget(item)}
+                    strike={isDone}
+                    dim={isDone}
                     leading={<View style={{ width: 4, alignSelf: "stretch", marginVertical: 10, borderRadius: 2, backgroundColor: color }} />}
-                    title={item.title}
-                    subtitle={item.space ? item.space.name : "Eveniment personal"}
+                    title={todoTitle(item)}
+                    subtitle={
+                      <>
+                        {item.space ? item.space.name : "Personal"}
+                        {isDone ? (
+                          <Text style={{ color: colors.success }}> · Rezolvat</Text>
+                        ) : status ? (
+                          <Text style={{ color: status.color }}>{` · ${status.label}`}</Text>
+                        ) : null}
+                      </>
+                    }
                     trailing={
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                        <Chip label={status.label} color={status.color} filled={status.color !== colors.onSurfaceTertiary} />
+                      isDone ? (
+                        <Pressable
+                          testID={`todo-undo-${item.id}`}
+                          onPress={() => setDone(item, false)}
+                          disabled={busy}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Anulează rezolvarea: ${item.title}`}
+                          style={{ minHeight: 44, paddingHorizontal: 4, justifyContent: "center" }}
+                        >
+                          {busy ? <ActivityIndicator size="small" color={colors.onSurfaceTertiary} /> : <Text style={{ fontSize: 14, color: colors.onSurface }}>Anulează</Text>}
+                        </Pressable>
+                      ) : canQuickResolve(item) ? (
                         <PressableScale
                           testID={`todo-resolve-${item.id}`}
-                          onPress={() => markResolved(item)}
-                          disabled={resolving}
+                          onPress={() => setDone(item, true)}
+                          disabled={busy}
                           scaleTo={motion.scale.control}
                           accessibilityRole="button"
                           accessibilityLabel={`Marchează rezolvat: ${item.title}`}
-                          hitSlop={4}
-                          style={{ width: 40, height: 40, borderRadius: 20, alignItems: "center", justifyContent: "center", backgroundColor: hexToRgba(colors.success, 0.14) }}
+                          style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: hexToRgba(colors.success, 0.14) }}
                         >
-                          {resolving ? <ActivityIndicator size="small" color={colors.success} /> : <Ionicons name="checkmark" size={20} color={colors.success} />}
+                          {busy ? <ActivityIndicator size="small" color={colors.success} /> : <Ionicons name="checkmark" size={20} color={colors.success} />}
                         </PressableScale>
-                      </View>
+                      ) : (
+                        <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceTertiary} />
+                      )
                     }
                   />
+                  </SwipeItemRow>
                 );
               })}
             </Group>
           </View>
         ))
       )}
+      {reminders.length > 0 ? (
+        <View style={{ gap: spacing.sm }}>
+          <SectionHeader title={`Mementouri (${reminders.length})`} muted />
+          <Group inset={68}>
+            {reminders.map((item) => (
+              <CreditReminderRow
+                key={`credit-${item.id}`}
+                item={item}
+                testID={`todo-reminder-${item.id}`}
+                onBeforeOpen={() => {
+                  setResolved(new Set());
+                  onClose();
+                }}
+              />
+            ))}
+          </Group>
+        </View>
+      ) : null}
     </Sheet>
   );
 }

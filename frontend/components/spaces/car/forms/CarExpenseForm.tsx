@@ -1,9 +1,11 @@
 import React, { useState } from "react";
+import { DateField } from "@/components/ui/DateField";
 import { View, Text } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field, Pill } from "@/components/ui/primitives";
+import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 
 const CAR = SPACE_IDENTITY_COLORS.car!;
 import { confirmAction } from "@/lib/confirm";
@@ -40,6 +42,7 @@ export default function CarExpenseForm({
   const [odometer, setOdometer] = useState(entry?.odometer !== undefined ? String(entry.odometer) : "");
   const [provider, setProvider] = useState(entry?.provider ?? "");
   const [notes, setNotes] = useState(entry?.notes ?? "");
+  const [guiltFree, setGuiltFree] = useState(!!entry?.guiltFree);
 
   // Defaults to today -- an expense gets logged the day it happens most
   // of the time, but a receipt from earlier in the week shouldn't have
@@ -88,7 +91,7 @@ export default function CarExpenseForm({
     }
 
     if (!isValidDateInput(date)) {
-      setError("Data trebuie scrisă ca ZZ.LL.AAAA.");
+      setError("Alege data.");
       return;
     }
 
@@ -101,6 +104,7 @@ export default function CarExpenseForm({
       odometer: odometerValue,
       provider: provider.trim() || undefined,
       notes: notes.trim() || undefined,
+      guiltFree,
     };
 
     onSave(entryToSave);
@@ -115,6 +119,7 @@ export default function CarExpenseForm({
     <Sheet
       visible
       onClose={onCancel}
+      info="car.expenseForm"
       title={isEditing ? "Editează cheltuiala" : "Cheltuială nouă"}
       subtitle="Doar suma e obligatorie"
       icon="receipt-outline"
@@ -141,7 +146,7 @@ export default function CarExpenseForm({
 
       <View style={{ flexDirection: "row", gap: spacing.md }}>
         <View style={{ flex: 1 }}>
-          <Field label="Data" value={date} onChangeText={setDate} placeholder="ZZ.LL.AAAA" tone={CAR} />
+          <DateField testID="car-expense-date" label="Data" value={date} onChange={setDate} range="past" />
         </View>
         <View style={{ flex: 1 }}>
           <Field label="Kilometraj (opțional)" value={odometer} onChangeText={setOdometer} placeholder="ex. 124580" keyboardType="number-pad" suffix="km" tone={CAR} />
@@ -150,6 +155,7 @@ export default function CarExpenseForm({
 
       <Field label="Furnizor (opțional)" value={provider} onChangeText={setProvider} placeholder="ex. Parcările Cluj" tone={CAR} />
       <Field label="Notițe (opțional)" value={notes} onChangeText={setNotes} placeholder="Orice detaliu util" multiline tone={CAR} />
+      <GuiltFreeToggle value={guiltFree} onChange={setGuiltFree} tone={CAR} testID="car-expense-guilt-free" />
 
       {error ? (
         <View style={{ padding: spacing.md, borderRadius: radius.control, backgroundColor: `${colors.error}14` }}>

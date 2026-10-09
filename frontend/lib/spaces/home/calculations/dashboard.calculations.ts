@@ -1,7 +1,7 @@
 import type { HomeData } from "@/components/spaces/home/home.data.types";
-import { roCount } from "@/lib/format";
+import { daysFromToday, roCount, roUnit } from "@/lib/format";
 import type { HomeNextItem } from "@/components/spaces/home/home.ui.types";
-import type { SupplyRestockEvent } from "@/lib/spaces/home/home.types";
+import type { HomeSupplyEntry, SupplyRestockEvent } from "@/lib/spaces/home/home.types";
 import type { SeverityTier } from "@/lib/statusColors";
 import type { ThemeColors } from "@/lib/theme";
 import { getThisMonthHomeSpend } from "./spend.calculations";
@@ -9,6 +9,8 @@ import { getThisMonthHomeSpend } from "./spend.calculations";
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const DOC_ALERT_DAYS = 45;
 const DUE_ALERT_DAYS = 14;
+/** The Scadențe card's own reach (restant, azi, 1-2 zile, 3-4 zile). */
+const SCADENTE_WINDOW_DAYS = 4;
 // DUE SOON's own outer window (see getHomeTasksView) -- classifyTaskUrgencyTier
 // already colors anything within 0-4 days/overdue, this just extends the
 // same section a bit further (5-10 days) uncolored, instead of a task
@@ -24,20 +26,21 @@ export function getThisMonthHomeExpenses(homeData: HomeData): number {
   return getThisMonthHomeSpend(homeData);
 }
 
+/** Local calendar days until `dateString` -- see lib/format.ts's
+ * daysFromToday (shared with Acasă, Calendar and "De făcut" so the same
+ * item never reads "Azi" on one screen and "în 1 zi" on another). */
 export function daysUntil(dateString: string, now: Date): number {
-  return Math.ceil(
-    (new Date(dateString).getTime() - now.getTime()) / MS_PER_DAY,
-  );
+  return daysFromToday(dateString, now);
 }
 
 export function dueSubtitle(daysRemaining: number, verb: "Expires" | "Due"): string {
   const days = Math.abs(daysRemaining);
   if (verb === "Expires") {
-    if (daysRemaining < 0) return `a expirat acum ${roCount(days, "zi", "zile")}`;
+    if (daysRemaining < 0) return `expirat de ${roCount(days, "zi", "zile")}`;
     if (daysRemaining === 0) return "expiră azi";
     return `expiră în ${roCount(days, "zi", "zile")}`;
   }
-  if (daysRemaining < 0) return `restant de ${roCount(days, "zi", "zile")}`;
+  if (daysRemaining < 0) return `restant ${roCount(days, "zi", "zile")}`;
   if (daysRemaining === 0) return "azi";
   return `în ${roCount(days, "zi", "zile")}`;
 }
@@ -105,6 +108,8 @@ export function getUpcomingHomeItems(
 
     const remaining = daysUntil(entry.expiryDate, now);
     if (remaining > DOC_ALERT_DAYS) return;
+    // Expired or within 4 days is already in the Scadențe card.
+    if (remaining <= SCADENTE_WINDOW_DAYS) return;
 
     items.push({
       id: `doc-${entry.id}`,
@@ -121,6 +126,9 @@ export function getUpcomingHomeItems(
 
     const remaining = daysUntil(entry.nextDueDate, now);
     if (remaining > DUE_ALERT_DAYS) return;
+    // 4 days or less (or past due) is already in the Scadențe card --
+    // "Urmează" only adds what's further out, never a second copy.
+    if (remaining <= SCADENTE_WINDOW_DAYS) return;
 
     items.push({
       id: `maint-${entry.id}`,
@@ -134,6 +142,7 @@ export function getUpcomingHomeItems(
   homeData.recurringEntries.forEach((entry) => {
     const remaining = daysUntil(entry.nextDueDate, now);
     if (remaining > DUE_ALERT_DAYS) return;
+    if (remaining <= SCADENTE_WINDOW_DAYS) return;
 
     items.push({
       id: `rec-${entry.id}`,
@@ -194,7 +203,7 @@ export type RecurringWarningRow = {
    * recurring entry goes through the same resolveEntry/confirmAction
    * flow HomeCategoryPage's own checkbox already uses. See
    * HomeDashboard's onResolvePress. */
-  kind: "task" | "maintenance" | "recurring";
+  kind: "task" | "maintenance" | "recurring" | "document";
   /** Always true for "maintenance"/"recurring" (both only ever appear
    * here when they genuinely recur -- see the guards below), only
    * sometimes true for "task" now that a plain, non-recurring task can
@@ -314,6 +323,16 @@ export function getRecurringTaskWarnings(homeData: HomeData): {
     const tier = classifyTaskUrgencyTier(remaining);
 
     if (tier) rows.push({ id: entry.id, title: entry.title, tier, daysRemaining: remaining, kind: "recurring", isRecurring: true });
+  });
+
+  // Documents expiring within the same 4-day window, or already expired
+  // -- Acasă counts an expired Casă document as restant (Dashboard), so
+  // the Scadențe card has to as well or the two numbers drift apart.
+  homeData.documentEntries.forEach((entry) => {
+    if (!entry.expiryDate) return;
+    const remaining = daysUntil(entry.expiryDate, now);
+    const tier = classifyTaskUrgencyTier(remaining);
+    if (tier) rows.push({ id: entry.id, title: entry.title, tier, daysRemaining: remaining, kind: "document", isRecurring: false });
   });
 
   // Ascending by daysRemaining -- most negative (furthest overdue, most
@@ -565,4 +584,132 @@ export function getSupplyRestockEstimate(entry: {
     predictedDaysUntilEmpty,
     isLow: daysSinceLastRestock >= predictedDaysUntilEmpty,
   };
+}
+
+export type HomeDueKind = "task" | "maintenance" | "recurring" | "document" | "supply";
+
+export type HomeDueRow = {
+  id: string;
+  title: string;
+  kind: HomeDueKind;
+  /** Local calendar days until it's due (negative = overdue). For a
+   * supply: the estimated days left (negative = probably out already). */
+  daysRemaining: number;
+  /** "late" = overdue / probably out (red), "today" = due today, or a
+   * supply with 3 days or less left (amber), "later" = the rest. */
+  urgency: "late" | "today" | "later";
+  /** What resolving it costs, when known (a bill's amount, a visit's price). */
+  amount?: number;
+  /** Supplies: "2 buc." -- shown where the amount would be. */
+  quantity?: string;
+};
+
+/** A supply's restock estimate in words -- shared by the Provizii page and
+ * the "De rezolvat" Provizii tab so the two never disagree. `tone`:
+ * error = probably out, warning = 3 days or less, muted otherwise. */
+export function supplyStatus(entry: HomeSupplyEntry): {
+  label: string;
+  tone: "error" | "warning" | "muted";
+  daysLeft: number | null;
+  isLow: boolean;
+} {
+  const estimate = getSupplyRestockEstimate(entry);
+  if (!estimate) {
+    const historyCount = (entry.restockHistory ?? []).length;
+    return {
+      label: historyCount === 0 ? "Fără istoric încă" : "Mai e nevoie de o achiziție ca să pornească estimarea",
+      tone: "muted",
+      daysLeft: null,
+      isLow: false,
+    };
+  }
+  const daysLeft = Math.round(estimate.predictedDaysUntilEmpty - estimate.daysSinceLastRestock);
+  if (estimate.isLow) return { label: "Probabil pe terminate", tone: "error", daysLeft, isLow: true };
+  if (daysLeft <= 3) return { label: `~${roCount(Math.max(daysLeft, 0), "zi", "zile")} rămase`, tone: "warning", daysLeft, isLow: false };
+  return { label: `~${roCount(daysLeft, "zi", "zile")} rămase`, tone: "muted", daysLeft, isLow: false };
+}
+
+/**
+ * The Casă dashboard's "De rezolvat" list (2026-10 redesign, design-lead
+ * spec v2): every open task, scheduled maintenance, bill and document
+ * that is overdue or due within `horizonDays`, plus every supply that is
+ * probably out or estimated to run out within `horizonDays` -- the same
+ * day rule (daysUntil) as everywhere else. Grouped into type tabs by the
+ * UI; most urgent first.
+ */
+export function getHomeDueList(homeData: HomeData, horizonDays = 7): HomeDueRow[] {
+  const now = new Date();
+  const rows: HomeDueRow[] = [];
+  const dated = (d: number): HomeDueRow["urgency"] => (d < 0 ? "late" : d === 0 ? "today" : "later");
+  const add = (row: Omit<HomeDueRow, "urgency">) => {
+    if (row.daysRemaining <= horizonDays) rows.push({ ...row, urgency: dated(row.daysRemaining) });
+  };
+
+  homeData.taskEntries.forEach((t) => {
+    if (t.completed || !t.dueDate) return;
+    add({ id: t.id, title: t.title, kind: "task", daysRemaining: daysUntil(t.dueDate, now) });
+  });
+  homeData.maintenanceEntries.forEach((m) => {
+    if (m.completed || !m.nextDueDate) return;
+    add({ id: m.id, title: m.service, kind: "maintenance", daysRemaining: daysUntil(m.nextDueDate, now), amount: m.price || undefined });
+  });
+  homeData.recurringEntries.forEach((r) => {
+    add({ id: r.id, title: r.title, kind: "recurring", daysRemaining: daysUntil(r.nextDueDate, now), amount: r.amount || undefined });
+  });
+  homeData.documentEntries.forEach((d) => {
+    if (!d.expiryDate) return;
+    add({ id: d.id, title: d.title, kind: "document", daysRemaining: daysUntil(d.expiryDate, now) });
+  });
+  homeData.supplyEntries.forEach((s) => {
+    const st = supplyStatus(s);
+    if (st.daysLeft === null || (!st.isLow && st.daysLeft > horizonDays)) return;
+    rows.push({
+      id: s.id,
+      title: s.name,
+      kind: "supply",
+      daysRemaining: st.isLow ? Math.min(-1, st.daysLeft) : st.daysLeft,
+      urgency: st.isLow ? "late" : st.tone === "warning" ? "today" : "later",
+      quantity: `${s.quantity} ${roUnit(s.unit)}`.trim(),
+    });
+  });
+
+  return rows.sort((a, b) => a.daysRemaining - b.daysRemaining);
+}
+
+/** A bill's cost per month (weekly x 52/12, yearly / 12) -- the same
+ * monthly equivalent the Budget's "de plătit" uses. */
+export function monthlyBillsTotal(homeData: HomeData): number {
+  return homeData.recurringEntries.reduce((sum, r) => {
+    const amount = Number(r.amount) || 0;
+    return sum + (r.frequency === "weekly" ? (amount * 52) / 12 : r.frequency === "yearly" ? amount / 12 : amount);
+  }, 0);
+}
+
+/**
+ * Every open record of one kind -- what "Toate sarcinile / facturile /
+ * mentenanța" unfolds to in "De rezolvat" (whatever their state: overdue,
+ * far off, or undated). Undated ones get `daysRemaining: Infinity` and
+ * `noDate: true` so they sort last. Completed tasks and finished one-off
+ * maintenance are left out (they live in Istoric).
+ */
+export function getHomeKindRows(homeData: HomeData, kind: "task" | "recurring" | "maintenance"): (HomeDueRow & { noDate?: boolean })[] {
+  const now = new Date();
+  const at = (date?: string) => (date ? { daysRemaining: daysUntil(date, now) } : { daysRemaining: Number.POSITIVE_INFINITY, noDate: true });
+  const urgency = (d: number): HomeDueRow["urgency"] => (d < 0 ? "late" : d === 0 ? "today" : "later");
+  let rows: (HomeDueRow & { noDate?: boolean })[] = [];
+  if (kind === "task") {
+    rows = homeData.taskEntries
+      .filter((t) => !t.completed)
+      .map((t) => { const a = at(t.dueDate); return { id: t.id, title: t.title, kind: "task" as const, ...a, urgency: urgency(a.daysRemaining) }; });
+  } else if (kind === "recurring") {
+    rows = homeData.recurringEntries.map((r) => {
+      const a = at(r.nextDueDate);
+      return { id: r.id, title: r.title, kind: "recurring" as const, ...a, urgency: urgency(a.daysRemaining), amount: r.amount || undefined };
+    });
+  } else {
+    rows = homeData.maintenanceEntries
+      .filter((m) => !m.completed)
+      .map((m) => { const a = at(m.nextDueDate); return { id: m.id, title: m.service, kind: "maintenance" as const, ...a, urgency: urgency(a.daysRemaining), amount: m.price || undefined }; });
+  }
+  return rows.sort((a, b) => a.daysRemaining - b.daysRemaining);
 }

@@ -4,20 +4,29 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
 import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
-import { Group, Row, IconWell, SectionHeader, EmptyState } from "@/components/ui/primitives";
+import { Group, IconWell, SectionHeader, EmptyState } from "@/components/ui/primitives";
+import { GuiltFreeChip } from "@/components/dashboard/GuiltFree";
+import { TitleChipRow } from "./TitleChipRow";
+import { SwipeRow } from "@/components/spaces/SwipeRow";
 import { capitalize, lei, roDate } from "@/lib/format";
 
 export type ExpensesListSectionProps = {
   entries: ExpenseEntry[];
   onEntryPress?: (entry: ExpenseEntry) => void;
+  /** Swipe-left delete (asks first). An expense is a log -- there's
+   * nothing to "resolve", so no swipe-right. */
+  onEntryDelete?: (entry: ExpenseEntry) => void;
   /** Empty-state line -- the dashboard points at its add bar; a filtered
    * page (no add bar) says the period is empty instead. */
   emptyMessage?: string;
+  emptyTitle?: string;
 };
 
 /** Every expense, newest first, grouped by month ("Octombrie"), each
- * month on its own card with its own total. */
-export function ExpensesListSection({ entries, onEntryPress, emptyMessage }: ExpensesListSectionProps) {
+ * month on its own card with its own total. Calendar purchases are listed
+ * read-only ("din Calendar", no swipe); a planned one shows muted and
+ * stays out of the month's total. */
+export function ExpensesListSection({ entries, onEntryPress, onEntryDelete, emptyMessage, emptyTitle }: ExpensesListSectionProps) {
   const { colors, spacing, isDark } = useTheme();
   const tint = spaceTextColor("expenses", isDark) ?? SPACE_IDENTITY_COLORS.expenses!;
 
@@ -33,14 +42,14 @@ export function ExpensesListSection({ entries, onEntryPress, emptyMessage }: Exp
         g = { key, label, total: 0, items: [] };
         out.push(g);
       }
-      g.total += e.price;
+      if (!e.planned) g.total += e.price;
       g.items.push(e);
     });
     return out;
   }, [entries]);
 
   if (entries.length === 0) {
-    return <EmptyState icon="receipt-outline" title="Nicio cheltuială încă" message={emptyMessage ?? "Scrie mai sus ce ai cumpărat și cât a costat."} />;
+    return <EmptyState icon="receipt-outline" title={emptyTitle ?? "Nicio cheltuială încă"} message={emptyMessage ?? "Scrie mai sus ce ai cumpărat și cât a costat."} />;
   }
 
   return (
@@ -53,20 +62,26 @@ export function ExpensesListSection({ entries, onEntryPress, emptyMessage }: Exp
           </View>
           <Group inset={68}>
             {group.items.map((entry) => (
-              <Row
-                key={entry.id}
+              <SwipeRow key={entry.id} cornerRadius={0} colors={colors} onDelete={onEntryDelete && entry.source !== "calendar" ? () => onEntryDelete(entry) : undefined}>
+              <TitleChipRow
                 testID={`expense-row-${entry.id}`}
                 onPress={onEntryPress ? () => onEntryPress(entry) : undefined}
-                leading={<IconWell icon="receipt-outline" color={SPACE_IDENTITY_COLORS.expenses!} tint={tint} />}
+                leading={<IconWell icon={entry.source === "calendar" ? "calendar-outline" : "receipt-outline"} color={SPACE_IDENTITY_COLORS.expenses!} tint={tint} />}
                 title={entry.name}
-                subtitle={roDate(entry.date)}
+                chip={entry.guiltFree ? <GuiltFreeChip testID={`expense-row-${entry.id}-guilt-free`} /> : undefined}
+                subtitle={
+                  entry.source === "calendar"
+                    ? `${entry.planned ? "Planificat pe " : ""}${roDate(entry.date)} · din Calendar`
+                    : roDate(entry.date)
+                }
                 trailing={
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     {entry.notes ? <Ionicons name="document-text-outline" size={14} color={colors.onSurfaceTertiary} /> : null}
-                    <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{lei(entry.price)}</Text>
+                    <Text style={{ fontSize: 15, fontWeight: entry.planned ? "400" : "600", color: entry.planned ? colors.onSurfaceTertiary : colors.onSurface }}>{lei(entry.price)}</Text>
                   </View>
                 }
               />
+              </SwipeRow>
             ))}
           </Group>
         </View>

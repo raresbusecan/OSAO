@@ -28,6 +28,7 @@ export function GroceryNewListModal({ visible, name, onChangeName, onClose, onCr
     <Sheet
       visible={visible}
       onClose={onClose}
+      info="grocery.newList"
       title="Listă nouă"
       subtitle="Pentru săptămâna asta, o ieșire sau orice cumperi des"
       icon="list-outline"

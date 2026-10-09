@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -20,13 +20,16 @@ import {
   recurringWarningTierColor,
   type HomeTaskRow,
 } from "@/lib/spaces/home/calculations/dashboard.calculations";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
 
 export type HomeTasksPageProps = {
   homeData: HomeData;
   onBack: () => void;
   onAdd: () => void;
-  onEdit: (entry: HomeTaskEntry) => void;
+  /** Tap on a row: the record preview (HomeRecordSheet). */
+  onPreview: (entry: HomeTaskEntry) => void;
+  /** Long press on a row: the record's action sheet. */
+  onActions: (entry: HomeTaskEntry) => void;
   /** Checkbox tap -- the caller decides what happens: a purchase task
    * opens HomeTaskResolveSheet for the price, everything else completes
    * instantly. Not named onToggleComplete because it isn't always one. */
@@ -34,8 +37,8 @@ export type HomeTasksPageProps = {
   /** Swipe-left delete. Caller is expected to confirm before actually
    * deleting (see HomeDashboard's handleTaskRowDelete). */
   onDelete: (entry: HomeTaskEntry) => void;
-  /** Drag-reorder in "Toate" -- fires with that section's full id list
-   * in its new order every time a drag ends. */
+  /** Drag-reorder in "Toate" ("Ordonează" mode, ☰ handle) -- fires with
+   * that section's full id list in its new order every time a drag ends. */
   onReorder: (orderedIds: string[]) => void;
 };
 
@@ -59,14 +62,15 @@ function TaskChip({ row }: { row: HomeTaskRow }) {
 }
 
 /**
- * Home -> Task-uri, 2026-10 redesign. "+" in the top bar adds (always
- * reachable, never buried under a long list); rows are one big target:
- * tap the round check to complete (a purchase task asks for the price),
- * tap the row to edit, swipe right to resolve / left to delete, and in
- * "Toate" long-press to drag into a new order.
+ * Home -> Sarcini, 2026-10 redesign. "+" in the top bar adds; the round
+ * check completes (a purchase task asks for the price); tap a row = its
+ * preview, long press = its actions, swipe right = resolve, left =
+ * delete. Reordering "Toate" is its own mode ("Ordonează" -> ☰ handles ->
+ * "Gata"), so a long press always means "actions" in Casă.
  */
-export function HomeTasksPage({ homeData, onBack, onAdd, onEdit, onCheckboxPress, onDelete, onReorder }: HomeTasksPageProps) {
-  const { colors, spacing, radius } = useTheme();
+export function HomeTasksPage({ homeData, onBack, onAdd, onPreview, onActions, onCheckboxPress, onDelete, onReorder }: HomeTasksPageProps) {
+  const { colors, spacing, radius, isDark } = useTheme();
+  const [reordering, setReordering] = useState(false);
 
   const { dueSoon, upcoming, recentDone } = getHomeTasksView(homeData);
   const findEntry = (id: string) => homeData.taskEntries.find((t) => t.id === id)!;
@@ -81,13 +85,14 @@ export function HomeTasksPage({ homeData, onBack, onAdd, onEdit, onCheckboxPress
         contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 100, gap: spacing.section }}
       >
         <TopBar onBack={onBack}>
-          <CircleButton testID="home-task-add" icon="add" label="Task nou" tone={HOME} onPress={onAdd} />
+          <CircleButton testID="home-task-add" icon="add" label="Sarcină nouă" tone={HOME} onPress={onAdd} />
         </TopBar>
 
         <Identity
           color={HOME}
           kicker="Casă"
-          title="Task-uri"
+          title="Sarcini"
+          info="home.tasks"
           subtitle={
             openCount === 0 && recentDone.length === 0
               ? null
@@ -107,7 +112,8 @@ export function HomeTasksPage({ homeData, onBack, onAdd, onEdit, onCheckboxPress
                   row={row}
                   first={i === 0}
                   onToggle={() => onCheckboxPress(findEntry(row.id))}
-                  onPress={() => onEdit(findEntry(row.id))}
+                  onPress={() => onPreview(findEntry(row.id))}
+                  onLongPress={() => onActions(findEntry(row.id))}
                   onDelete={() => onDelete(findEntry(row.id))}
                 />
               ))}
@@ -126,18 +132,28 @@ export function HomeTasksPage({ homeData, onBack, onAdd, onEdit, onCheckboxPress
                   first={i === 0}
                   done
                   onToggle={() => onCheckboxPress(findEntry(row.id))}
-                  onPress={() => onEdit(findEntry(row.id))}
+                  onPress={() => onPreview(findEntry(row.id))}
+                  onLongPress={() => onActions(findEntry(row.id))}
                 />
               ))}
             </View>
           </View>
         ) : null}
 
-        {/* "Toate" -- everything else not yet done. Long-press a row to
-            drag it: NestableDraggableFlatList because this list lives
-            inside the page's own outer scroll. */}
+        {/* "Toate" -- everything else not yet done. "Ordonează" shows a ☰
+            handle per row (NestableDraggableFlatList because this list
+            lives inside the page's own outer scroll). */}
         <View style={{ gap: spacing.sm }}>
-          <SectionHeader title="Toate" />
+          <SectionHeader
+            title="Toate"
+            action={
+              reordering
+                ? { label: "Gata", onPress: () => setReordering(false), testID: "home-tasks-reorder-done", tone: spaceTextColor("home", isDark) ?? HOME }
+                : upcoming.length > 1
+                  ? { label: "Ordonează", onPress: () => setReordering(true), testID: "home-tasks-reorder" }
+                  : undefined
+            }
+          />
           {upcoming.length > 0 ? (
             <View style={groupStyle}>
               <NestableDraggableFlatList
@@ -149,9 +165,10 @@ export function HomeTasksPage({ homeData, onBack, onAdd, onEdit, onCheckboxPress
                     row={row}
                     first={getIndex() === 0}
                     onToggle={() => onCheckboxPress(findEntry(row.id))}
-                    onPress={() => onEdit(findEntry(row.id))}
+                    onPress={() => onPreview(findEntry(row.id))}
+                    onLongPress={() => onActions(findEntry(row.id))}
                     onDelete={() => onDelete(findEntry(row.id))}
-                    onDrag={drag}
+                    onDrag={reordering ? drag : undefined}
                     isActive={isActive}
                     showDate
                   />
@@ -163,11 +180,6 @@ export function HomeTasksPage({ homeData, onBack, onAdd, onEdit, onCheckboxPress
           )}
         </View>
 
-        {openCount > 0 ? (
-          <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, textAlign: "center" }}>
-            Glisează dreapta ca să rezolvi, stânga ca să ștergi. Ține apăsat în „Toate” ca să muți.
-          </Text>
-        ) : null}
       </NestableScrollContainer>
     </SwipeBackView>
   );
@@ -182,6 +194,7 @@ function TaskRow({
   done,
   onToggle,
   onPress,
+  onLongPress,
   onDelete,
   onDrag,
   isActive,
@@ -192,7 +205,10 @@ function TaskRow({
   done?: boolean;
   onToggle: () => void;
   onPress: () => void;
+  onLongPress?: () => void;
   onDelete?: () => void;
+  /** Set only in "Ordonează" mode: the row shows a ☰ handle instead of
+   * its check, and takes no taps/swipes. */
   onDrag?: () => void;
   isActive?: boolean;
   showDate?: boolean;
@@ -206,7 +222,7 @@ function TaskRow({
 
   const body = (
     <View>
-      {!first ? <View style={{ height: 1, marginLeft: 54, backgroundColor: colors.border }} /> : null}
+      {!first ? <View style={{ height: 1, marginLeft: onDrag ? 16 : 54, backgroundColor: colors.border }} /> : null}
       <View
         style={{
           flexDirection: "row",
@@ -218,6 +234,7 @@ function TaskRow({
           backgroundColor: isActive ? colors.surfaceTertiary : colors.surfaceSecondary,
         }}
       >
+        {onDrag ? null : (
         <Pressable
           onPress={onToggle}
           hitSlop={10}
@@ -237,11 +254,12 @@ function TaskRow({
         >
           {done ? <Ionicons name="checkmark" size={15} color="#FFFFFF" /> : null}
         </Pressable>
+        )}
         <PressableScale
-          onPress={onPress}
-          onLongPress={onDrag}
+          onPress={onDrag ? undefined : onPress}
+          onLongPress={onDrag ? undefined : onLongPress}
           delayLongPress={350}
-          disabled={isActive}
+          disabled={isActive || !!onDrag}
           scaleTo={1}
           accessibilityRole="button"
           accessibilityLabel={row.title}
@@ -262,11 +280,24 @@ function TaskRow({
           </View>
           {!done ? <TaskChip row={row} /> : null}
         </PressableScale>
+        {onDrag ? (
+          <Pressable
+            testID={`home-task-drag-${row.id}`}
+            onPressIn={onDrag}
+            disabled={isActive}
+            accessibilityRole="button"
+            accessibilityLabel={`Mută ${row.title}`}
+            hitSlop={6}
+            style={{ width: 44, height: 44, alignItems: "center", justifyContent: "center", marginRight: -spacing.sm }}
+          >
+            <Ionicons name="reorder-three" size={24} color={isActive ? colors.onSurface : colors.onSurfaceTertiary} />
+          </Pressable>
+        ) : null}
       </View>
     </View>
   );
 
-  if (!onDelete) return body;
+  if (!onDelete || onDrag) return body;
   return (
     <SwipeRow onResolve={onToggle} onDelete={onDelete} cornerRadius={0} colors={colors}>
       {body}

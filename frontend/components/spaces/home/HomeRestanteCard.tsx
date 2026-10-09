@@ -1,4 +1,5 @@
 import React from "react";
+import { InfoButton } from "@/components/ui/primitives";
 import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { PressableScale } from "@/components/ui/PressableScale";
@@ -18,10 +19,10 @@ export type HomeRestanteCardProps = {
 
 // Most urgent first (the approved redesign mockup's order).
 const COLUMNS: { tier: RecurringWarningTier; label: string }[] = [
-  { tier: "red", label: "Restant" },
+  { tier: "red", label: "Restante" },
   { tier: "orangeToday", label: "Azi" },
-  { tier: "orangeDays", label: "2 zile" },
-  { tier: "yellow", label: "4 zile" },
+  { tier: "orangeDays", label: "1-2 zile" },
+  { tier: "yellow", label: "3-4 zile" },
 ];
 
 /** Rendered on HomeDashboard's main page (HomeTasksPage's old inline
@@ -43,7 +44,7 @@ export function HomeRestanteCard({ counts, onPress, colors, spacing, radius }: H
       onPress={onPress}
       scaleTo={motion.scale.card}
       accessibilityRole="button"
-      accessibilityLabel={`Restanțe: ${total}. Vezi lista`}
+      accessibilityLabel={`Scadențe: ${total}. Vezi lista`}
       style={{
         flexDirection: "row",
         alignItems: "center",
@@ -55,7 +56,10 @@ export function HomeRestanteCard({ counts, onPress, colors, spacing, radius }: H
       }}
     >
       <View style={{ flex: 1, gap: spacing.sm }}>
-        <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>Restanțe ({total})</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>Scadențe ({total})</Text>
+          <InfoButton topic="home.scadente" />
+        </View>
         <View style={{ flexDirection: "row", gap: spacing.lg + 2 }}>
           {visibleColumns.map((column) => (
             <View key={column.tier}>

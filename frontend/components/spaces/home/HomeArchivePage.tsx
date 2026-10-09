@@ -30,7 +30,7 @@ type ArchiveRowData = {
 
 const TABS: { key: ArchiveKind | "all"; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { key: "all", label: "Toate", icon: "time-outline" },
-  { key: "task", label: "Task-uri", icon: "checkmark-circle-outline" },
+  { key: "task", label: "Sarcini", icon: "checkmark-circle-outline" },
   { key: "maintenance", label: "Mentenanță", icon: "construct-outline" },
 ];
 
@@ -91,7 +91,7 @@ export function HomeArchivePage({ homeData, onBack }: HomeArchivePageProps) {
         contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 100, gap: spacing.section }}
       >
         <TopBar onBack={onBack} />
-        <Identity color={HOME} kicker="Casă" title="Istoric" subtitle="Tot ce ai rezolvat, cel mai recent primul." />
+        <Identity color={HOME} kicker="Casă" title="Istoric" subtitle="Tot ce ai rezolvat, cel mai recent primul." info="home.archive" />
 
         {spentThisMonth > 0 ? (
           <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: 2 }}>

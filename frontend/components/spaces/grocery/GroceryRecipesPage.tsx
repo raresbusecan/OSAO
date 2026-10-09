@@ -192,14 +192,6 @@ export function GroceryRecipesPage({
      * current list" message below reads this. */
     skippedOnCurrentList: number;
   } | null>(null);
-  // Recipes stay hidden until "Show Recipes" is pressed -- picking a
-  // cuisine/meal-type filter narrows what pressing it will reveal, it
-  // never repopulates the screen by itself. Any further filter change
-  // (including Clear filters) hides an already-shown list again, so
-  // "what's on screen" always matches the filters the button was last
-  // pressed for, never a stale set from before the last change.
-  const [shown, setShown] = useState(false);
-
   // Only offers a cuisine pill for one that actually has a recipe right
   // now -- CUISINE_TAGS can list more than the library currently has
   // (e.g. once a cuisine is planned but not seeded yet) without an
@@ -221,12 +213,10 @@ export function GroceryRecipesPage({
 
   const handleToggleCuisine = (cuisine: Cuisine) => {
     setSelectedCuisines((prev) => toggleInSet(prev, cuisine));
-    setShown(false);
   };
 
   const handleToggleMealType = (mealType: MealType) => {
     setSelectedMealTypes((prev) => toggleInSet(prev, mealType));
-    setShown(false);
   };
 
   const detailRecipe = useMemo(
@@ -380,7 +370,7 @@ export function GroceryRecipesPage({
       contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >
       <TopBar onBack={onBack} backTestID="grocery-recipes-back" />
-      <Identity color={GROC} kicker="Cumpărături" title="Rețete" subtitle="Alege ce ai poftă, apoi pune pe listă ce lipsește" />
+      <Identity color={GROC} kicker="Cumpărături" title="Rețete" subtitle="Alege ce ai poftă, apoi pune pe listă ce lipsește" info="grocery.recipes" />
 
       {/* Filters: cuisine and meal type as two tabs of pills. A dot marks
           the tab that has a selection while it's not the one open. Both
@@ -424,7 +414,6 @@ export function GroceryRecipesPage({
             onPress={() => {
               setSelectedCuisines(new Set());
               setSelectedMealTypes(new Set());
-              setShown(false);
             }}
             style={{ alignSelf: "flex-start", minHeight: 44, justifyContent: "center" }}
           >
@@ -471,21 +460,10 @@ export function GroceryRecipesPage({
         </ScrollView>
       </View>
 
-      {/* Show / add-selected -- the library stays hidden until "Arată"
-          is pressed, and again after any filter change (see `shown`). */}
+      {/* The grid is always on screen (approved board) and the filters
+          above narrow it live; selected recipes go on the list in one go. */}
       <View style={{ gap: spacing.sm }}>
-        <Button
-          testID="grocery-recipes-show"
-          icon="restaurant-outline"
-          tone={filteredRecipes.length === 0 ? undefined : GROC}
-          variant={filteredRecipes.length === 0 ? "secondary" : "primary"}
-          disabled={filteredRecipes.length === 0}
-          label={filteredRecipes.length === 0 ? "Nicio rețetă nu se potrivește" : `Arată ${roCount(filteredRecipes.length, "rețeta", "rețete")}`}
-          onPress={() => {
-            if (filteredRecipes.length === 0) return;
-            setShown(true);
-          }}
-        />
+        <SectionHeader title={hasActiveFilters ? `${roCount(filteredRecipes.length, "rețetă", "rețete")} potrivite` : roCount(filteredRecipes.length, "rețetă", "rețete")} muted />
         {selectedRecipeIds.size > 0 ? (
           <View style={{ flexDirection: "row", gap: spacing.sm }}>
             <View style={{ flex: 1 }}>
@@ -503,9 +481,9 @@ export function GroceryRecipesPage({
         ) : null}
       </View>
 
-      {shown ? (
+      {
         filteredRecipes.length === 0 ? (
-          <EmptyState icon="restaurant-outline" message="Nicio rețetă aici încă." />
+          <EmptyState icon="restaurant-outline" message={hasActiveFilters ? "Nicio rețetă nu se potrivește filtrelor." : "Nicio rețetă aici încă."} />
         ) : (
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.md }}>
             {filteredRecipes.map((recipe) => {
@@ -580,7 +558,7 @@ export function GroceryRecipesPage({
             })}
           </View>
         )
-      ) : null}
+      }
     </ScrollView>
     </SwipeBackView>
 

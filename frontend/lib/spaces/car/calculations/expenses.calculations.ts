@@ -49,6 +49,8 @@ export type CarExpenseRecord = {
    * the entry has actually passed its trigger. Swaps the status dot for
    * a small "!". */
   overdue?: boolean;
+  /** items.guilt_free -- the row shows a "Fără vină" chip. */
+  guiltFree?: boolean;
 };
 
 function getDocumentStatusDot(entry: CarDocumentEntry): CarExpenseRecord["statusDot"] {
@@ -92,6 +94,7 @@ export function getCarExpenseRecords(carData: CarData, currentOdometer: number):
       subtitle: entry.liters !== undefined ? `${entry.liters} l` : undefined,
       date: entry.date,
       amount: entry.total_paid,
+      guiltFree: entry.guiltFree,
     });
   });
 
@@ -108,6 +111,7 @@ export function getCarExpenseRecords(carData: CarData, currentOdometer: number):
       archived: entry.archived,
       statusDot: getMaintenanceStatusDot(entry, currentOdometer),
       overdue: isMaintenanceOverdue(entry, currentOdometer),
+      guiltFree: entry.guiltFree,
     });
   });
 
@@ -129,6 +133,7 @@ export function getCarExpenseRecords(carData: CarData, currentOdometer: number):
       archived: entry.archived,
       statusDot: getDocumentStatusDot(entry),
       overdue: isDocumentOverdue(entry),
+      guiltFree: entry.guiltFree,
     });
   });
 
@@ -145,6 +150,7 @@ export function getCarExpenseRecords(carData: CarData, currentOdometer: number):
       subtitle: entry.provider,
       date: entry.date,
       amount: entry.amount,
+      guiltFree: entry.guiltFree,
     });
   });
 
@@ -282,7 +288,12 @@ export function getArchivedCarRecords(carData: CarData): CarArchivedRecord[] {
         icon: "document-text-outline",
         categoryLabel: entry.documentType,
         title: entry.title,
-        subtitle: entry.expiryDate ? `expirat pe ${entry.expiryDate}` : undefined,
+        // Validity dates, never the day it was entered in the app.
+        subtitle: entry.issueDate && entry.expiryDate
+          ? `${entry.issueDate} – ${entry.expiryDate}`
+          : entry.expiryDate
+            ? `expirat pe ${entry.expiryDate}`
+            : undefined,
         date: entry.date,
         amount: entry.price,
         renewedByTitle: renewedBy?.title,

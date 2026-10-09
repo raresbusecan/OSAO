@@ -8,13 +8,19 @@ import type {
   HomeSupplyEntry,
 } from "@/lib/spaces/home/home.types";
 import type { HomeCategoryRow } from "./HomeCategorySection";
-import { roCount, roDate } from "@/lib/format";
+import { roCount, roDate, roUnit } from "@/lib/format";
 import {
   daysUntil,
   dueSubtitle,
   classifyDocumentUrgencyTier,
   classifyTaskUrgencyTier,
 } from "@/lib/spaces/home/calculations/dashboard.calculations";
+
+/** "a, b" without a dangling comma when either side is empty. */
+function joinParts(...parts: (string | null | undefined)[]): string {
+  const text = parts.filter((p) => p && p.trim()).join(", ");
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
 
 export type HomeCategoryField = {
   key: string;
@@ -30,8 +36,16 @@ export type HomeCategoryField = {
    * shape. Added specifically so Recurring can offer a real due-date
    * picker and a frequency choice instead of every new entry silently
    * defaulting to "today" / "monthly" with no way to change either (see
-   * homeCategoryConfig.ts's "recurring" entry). */
-  type?: "text" | "date" | "select" | "toggle";
+   * homeCategoryConfig.ts's "recurring" entry). "guiltFree" is the
+   * shared "Bani fără vină" GuiltFreeToggle (stores "true"/"false"; it
+   * hides itself until the person has an income plan). */
+  type?: "text" | "date" | "select" | "toggle" | "guiltFree";
+  /** A date field that may not fall before another date field's value
+   * (a document's expiry vs. its issue date). */
+  notBefore?: string;
+  /** A unit shown at the end of a text field, worked out from the rest
+   * of the form (e.g. the interval's "luni" follows the frequency). */
+  suffix?: (values: Record<string, string>) => string | undefined;
   options?: { value: string; label: string }[];
   /** Shown as selected/pre-filled on a brand-new (non-edit) entry when
    * the user hasn't touched this field yet, so a "select" field never
@@ -79,6 +93,17 @@ const LEADING_NUMBER = /^[+-]?\d+\.?\d*/;
  * every buildEntry below already parses amounts). Null when the
  * string doesn't start with a number at all (empty, or non-numeric
  * text). */
+/** "Bani fără vină" -- only on the categories whose item type the server
+ * accepts it for (home_expense, home_maintenance, home_recurring; see
+ * Item::SPENDING_TYPES / RECURRING_TYPE_SPACE). Never supplies/documents. */
+const GUILT_FREE_FIELD: HomeCategoryField = {
+  key: "guiltFree",
+  label: "Bani fără vină",
+  placeholder: "",
+  type: "guiltFree",
+  required: false,
+};
+
 export function parseLeadingNumber(raw: string): number | null {
   const match = raw.trim().replace(",", ".").match(LEADING_NUMBER);
   if (!match) return null;
@@ -184,11 +209,11 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
     fields: [
       { key: "title", label: "Titlu", placeholder: "ex. Certificat de impozit" },
       { key: "documentType", label: "Tip document", placeholder: "ex. RCA" },
-      // Optional -- a document with no expiry (e.g. a deed) just never
-      // enters classifyDocumentUrgencyTier's alert window (see rows()
-      // below), same as leaving it unset always did before urgency
-      // coloring existed.
-      { key: "expiryDate", label: "Expiră pe", placeholder: "", type: "date", required: false },
+      // Both validity dates are required (same rule as Car documents):
+      // urgency, "Expiră pe", and a renewal's next period all come from
+      // them -- never from the day the document was entered.
+      { key: "issueDate", label: "Emis pe", placeholder: "", type: "date" },
+      { key: "expiryDate", label: "Expiră pe", placeholder: "", type: "date", notBefore: "issueDate" },
     ],
     submitLabel: "Adaugă documentul",
     emptyLabel: "Niciun document încă.",
@@ -199,12 +224,13 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       documentType: values.documentType || "Other",
       title: values.title,
       issuer: existing?.issuer,
-      issueDate: existing?.issueDate,
+      issueDate: values.issueDate || existing?.issueDate,
       expiryDate: values.expiryDate || existing?.expiryDate,
     }),
     valuesFromEntry: (entry: HomeDocumentEntry) => ({
       title: entry.title,
       documentType: entry.documentType,
+      issueDate: entry.issueDate ?? "",
       expiryDate: entry.expiryDate ?? "",
     }),
     rows: (data) => {
@@ -218,8 +244,8 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
           title: entry.title,
           subtitle: entry.expiryDate
             ? tier
-              ? `${entry.documentType}, ${dueSubtitle(remaining!, "Expires")}`
-              : `${entry.documentType}, expiră pe ${formatDate(entry.expiryDate)}`
+              ? joinParts(entry.documentType, dueSubtitle(remaining!, "Expires"))
+              : joinParts(entry.documentType, `expiră pe ${formatDate(entry.expiryDate)}`)
             : entry.documentType,
           urgencyTier: tier,
         };
@@ -233,6 +259,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
     fields: [
       { key: "title", label: "Titlu", placeholder: "ex. Reparație acoperiș" },
       { key: "amount", label: "Sumă (lei)", placeholder: "0", nonNegativeNumber: true },
+      GUILT_FREE_FIELD,
     ],
     submitLabel: "Adaugă cheltuiala",
     emptyLabel: "Nicio cheltuială încă.",
@@ -243,10 +270,12 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       title: values.title,
       amount: parseLeadingNumber(values.amount) ?? 0,
       notes: existing?.notes,
+      guiltFree: values.guiltFree === "true",
     }),
     valuesFromEntry: (entry: HomeExpenseEntry) => ({
       title: entry.title,
       amount: String(entry.amount),
+      guiltFree: entry.guiltFree ? "true" : "false",
     }),
     rows: (data) =>
       data.expenseEntries.map((entry) => ({
@@ -254,6 +283,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
         title: entry.title,
         subtitle: formatDate(entry.date),
         amount: `${entry.amount.toLocaleString("ro-RO")} lei`,
+        guiltFree: entry.guiltFree,
       })),
   },
   {
@@ -281,12 +311,18 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       },
       {
         key: "recurrenceInterval",
-        label: "La fiecare (ex. 3 = la fiecare 3)",
+        label: "La fiecare",
         placeholder: "1",
+        suffix: (values) => {
+          const n = Number(values.recurrenceInterval || 1);
+          const unit = ({ weekly: ["săptămână", "săptămâni"], monthly: ["lună", "luni"], yearly: ["an", "ani"] } as Record<string, [string, string]>)[values.recurrenceFrequency || "monthly"];
+          return unit ? (n === 1 ? unit[0] : unit[1]) : undefined;
+        },
         required: false,
         showWhen: "isRecurring",
         keyboardType: "numeric",
       },
+      GUILT_FREE_FIELD,
     ],
     submitLabel: "Adaugă lucrarea",
     emptyLabel: "Nicio lucrare de mentenanță încă.",
@@ -332,6 +368,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
         // this. An unrelated edit (price, service name) must not wipe
         // out every resolve logged so far.
         spendHistory: existing?.spendHistory,
+        guiltFree: values.guiltFree === "true",
       };
     },
     /** The "Resolved" action -- recurring: advances nextDueDate one
@@ -357,6 +394,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       isRecurring: entry.isRecurring ? "true" : "false",
       recurrenceFrequency: entry.recurrenceFrequency ?? "monthly",
       recurrenceInterval: entry.recurrenceInterval != null ? String(entry.recurrenceInterval) : "1",
+      guiltFree: entry.guiltFree ? "true" : "false",
     }),
     rows: (data) => {
       const now = new Date();
@@ -375,23 +413,26 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
           return {
             id: entry.id,
             title: entry.service,
+            // joinParts: an empty description used to leave a leading
+            // ", în 1 zi" on every row without one.
             subtitle: entry.isRecurring
               ? entry.nextDueDate
                 ? taskTier
-                  ? `${entry.description}, ${dueSubtitle(remaining!, "Due")}`
-                  : `${entry.description}, următoarea pe ${formatDate(entry.nextDueDate)}`
-                : `${entry.description}, ${everyLabel(entry.recurrenceInterval ?? 1, entry.recurrenceFrequency ?? "monthly")}`
-              : `${entry.description}, ${formatDate(entry.date)}`,
+                  ? joinParts(entry.description, dueSubtitle(remaining!, "Due"))
+                  : joinParts(entry.description, `următoarea pe ${formatDate(entry.nextDueDate)}`)
+                : joinParts(entry.description, everyLabel(entry.recurrenceInterval ?? 1, entry.recurrenceFrequency ?? "monthly"))
+              : joinParts(entry.description, formatDate(entry.date)),
             amount: `${entry.price.toLocaleString("ro-RO")} lei`,
             isRecurring: entry.isRecurring,
             urgencyTier: taskTier,
+            guiltFree: entry.guiltFree,
           };
         });
     },
   },
   {
     key: "recurring",
-    label: "Recurente",
+    label: "Facturi",
     icon: "repeat-outline",
     fields: [
       { key: "title", label: "Titlu", placeholder: "ex. Abonament internet" },
@@ -410,9 +451,10 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
           { value: "yearly", label: "Anual" },
         ],
       },
+      GUILT_FREE_FIELD,
     ],
-    submitLabel: "Adaugă plata",
-    emptyLabel: "Nicio plată recurentă încă.",
+    submitLabel: "Adaugă factura",
+    emptyLabel: "Nicio factură încă.",
     entries: (data) => data.recurringEntries,
     buildEntry: (values, existing?: HomeRecurringEntry): HomeRecurringEntry => ({
       id: existing?.id ?? makeId("rec"),
@@ -426,6 +468,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       // appends to this. An unrelated edit (amount, title) must not wipe
       // out every payment logged so far.
       spendHistory: existing?.spendHistory,
+      guiltFree: values.guiltFree === "true",
     }),
     // Every entry here recurs by definition (there's no on/off toggle
     // like Maintenance's "Recurent") -- Resolved always just advances
@@ -439,6 +482,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       amount: String(entry.amount),
       nextDueDate: entry.nextDueDate,
       frequency: entry.frequency,
+      guiltFree: entry.guiltFree ? "true" : "false",
     }),
     rows: (data) => {
       const now = new Date();
@@ -459,6 +503,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
           amount: `${entry.amount.toLocaleString("ro-RO")} lei`,
           isRecurring: true,
           urgencyTier: taskTier,
+          guiltFree: entry.guiltFree,
         };
       });
     },
@@ -497,13 +542,13 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
     }),
     valuesFromEntry: (entry: HomeSupplyEntry) => ({
       name: entry.name,
-      quantity: `${entry.quantity} ${entry.unit}`,
+      quantity: `${entry.quantity} ${roUnit(entry.unit)}`,
     }),
     rows: (data) =>
       data.supplyEntries.map((entry) => ({
         id: entry.id,
         title: entry.name,
-        subtitle: `${entry.category}, ${entry.quantity} ${entry.unit}`,
+        subtitle: `${entry.category}, ${entry.quantity} ${roUnit(entry.unit)}`,
       })),
   },
 ];

@@ -46,6 +46,25 @@ class User extends Authenticatable
         return $this->hasMany(Item::class);
     }
 
+    /** Linked social-login identities (Apple/Google/Facebook). */
+    public function socialAccounts(): HasMany
+    {
+        return $this->hasMany(SocialAccount::class);
+    }
+
+    /** The user as /user, login, register and the social endpoints return
+     * it: roles loaded plus `providers` (linked social-login providers,
+     * e.g. ["apple"], for Settings' "Conectat cu ..." list). Set
+     * explicitly here, not $appends, so other places that serialize a
+     * User (space members, ...) don't pay a query for it. */
+    public function toAuthPayload(): self
+    {
+        $this->load('roles');
+        $this->setAttribute('providers', $this->socialAccounts()->orderBy('id')->pluck('provider')->unique()->values()->all());
+
+        return $this;
+    }
+
     /** Overrides the base Authenticatable's default (which sends
      * Illuminate\Auth\Notifications\ResetPassword -- built around
      * route('password.reset', ...), which doesn't exist here) with one
@@ -73,6 +92,19 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            // false = random password the user never knew (social login);
+            // see POST /profile/password/set.
+            'has_password' => 'boolean',
+            // Buget din venit -- see the 2026_10_08 migration and
+            // BudgetController::plan()/savePlan().
+            'monthly_income' => 'decimal:2',
+            'budget_split' => 'array',
+            'budget_plan_set_at' => 'datetime',
+            // Acasă card arrangement (DashboardController::layout/saveLayout).
+            'dashboard_layout' => 'array',
+            // First-use tours seen: {key: {status, v, at}} -- see
+            // AuthController::markTour/resetTours.
+            'tours' => 'array',
         ];
     }
 }

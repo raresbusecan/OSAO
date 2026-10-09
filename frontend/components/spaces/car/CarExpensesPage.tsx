@@ -7,7 +7,15 @@ import { PressableScale } from "@/components/ui/PressableScale";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { TopBar, Identity, Pill, SectionHeader, Group, Row, IconWell, EmptyState } from "@/components/ui/primitives";
 import { motion } from "@/lib/motion";
-import { CarPeriodSheet } from "./CarPeriodSheet";
+import { GuiltFreeChip } from "@/components/dashboard/GuiltFree";
+import { CarPeriodSheet, periodsEqual } from "./CarPeriodSheet";
+
+const CAR_INLINE_PERIODS: { label: string; period: CarExpensePeriod }[] = [
+  { label: "3 luni", period: { kind: "months", count: 3 } },
+  { label: "6 luni", period: { kind: "months", count: 6 } },
+  { label: "1 an", period: { kind: "months", count: 12 } },
+  { label: "Tot timpul", period: { kind: "all" } },
+];
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import type { CarData } from "./car.data.types";
 import {
@@ -118,6 +126,7 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
   const [customUnit, setCustomUnit] = useState<"weeks" | "months">("months");
   const [customMonths, setCustomMonths] = useState(2);
   const [periodPickerOpen, setPeriodPickerOpen] = useState(false);
+  const isInlinePeriod = !usingCustom && CAR_INLINE_PERIODS.some((p) => periodsEqual(period, p.period));
 
   // ALL starts capped at 5 -- category chips + period + archived toggle
   // already narrow things down, so one "Show more" tap is enough instead
@@ -250,7 +259,14 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
               title={record.title}
               subtitle={[record.categoryLabel, formatCarDate(record.date), record.subtitle, record.archived ? "arhivat" : null].filter(Boolean).join(", ")}
               dim={record.archived}
-              trailing={<Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{formatCarNumber(record.amount)} lei</Text>}
+              trailing={
+                <View style={{ alignItems: "flex-end", gap: 4 }}>
+                  <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{formatCarNumber(record.amount)} lei</Text>
+                  {/* Row's title is a plain string, so the chip sits under the amount
+                      (wrapped: the chip itself aligns flex-start). */}
+                  {record.guiltFree ? <View><GuiltFreeChip /></View> : null}
+                </View>
+              }
             />
           ))}
         </Group>
@@ -266,14 +282,26 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
       contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >
       <TopBar onBack={onBack} backTestID="expenses-back" />
-      <Identity color={CAR} kicker="Mașină" title="Cheltuieli" subtitle="Tot ce a costat mașina, din toate formularele" />
+      <Identity color={CAR} kicker="Mașină" title="Cheltuieli" subtitle="Tot ce a costat mașina, din toate formularele" info="car.expenses" />
 
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+      {/* Period as inline pills -- the same row Casă's and Cheltuieli's
+          own pages use -- plus "Altă perioadă" for a custom N weeks/months
+          (the sheet), and the archived toggle at the end. */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
+        {CAR_INLINE_PERIODS.map((preset) => (
+          <Pill
+            key={preset.label}
+            testID={`expenses-period-option-${preset.label}`}
+            label={preset.label}
+            active={!usingCustom && periodsEqual(period, preset.period)}
+            onPress={() => selectPreset(preset.period)}
+          />
+        ))}
         <Pill
           testID="expenses-period-trigger"
           icon="calendar-outline"
-          label={formatPeriodLabel(period)}
-          active={period.kind !== "all"}
+          label={isInlinePeriod ? "Altă perioadă" : formatPeriodLabel(period)}
+          active={!isInlinePeriod}
           onPress={() => setPeriodPickerOpen(true)}
         />
         <Pill
@@ -283,7 +311,7 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
           active={includeArchived}
           onPress={() => setIncludeArchived((v) => !v)}
         />
-      </View>
+      </ScrollView>
 
       <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>
         <View style={{ gap: 2 }}>
@@ -344,7 +372,7 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
       ) : (
         <>
           {recentRecords.length > 0 ? renderGroup("Azi", recentRecords, recentExpanded, () => setRecentExpanded((v) => !v), "expenses-recent-show-more") : null}
-          {olderRecords.length > 0 ? renderGroup(recentRecords.length > 0 ? "Mai devreme" : "Înregistrări", olderRecords, allExpanded, () => setAllExpanded((v) => !v), "expenses-all-show-more") : null}
+          {olderRecords.length > 0 ? renderGroup(recentRecords.length > 0 ? "Vechi" : "Înregistrări", olderRecords, allExpanded, () => setAllExpanded((v) => !v), "expenses-all-show-more") : null}
         </>
       )}
     </ScrollView>

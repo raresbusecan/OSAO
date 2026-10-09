@@ -27,6 +27,8 @@ export type HomeDocumentEntry = {
 export type HomeExpenseEntry = {
   id: string;
   date: string;
+  /** items.guilt_free -- counted against the "Bani fără vină" jar. */
+  guiltFree?: boolean;
   title: string;
   amount: number;
   notes?: string;
@@ -35,6 +37,8 @@ export type HomeExpenseEntry = {
 export type HomeMaintenanceEntry = {
   id: string;
   date: string;
+  /** items.guilt_free -- counted against the "Bani fără vină" jar. */
+  guiltFree?: boolean;
   service: string;
   description: string;
   price: number;
@@ -74,6 +78,8 @@ export type HomeMaintenanceEntry = {
 export type HomeRecurringEntry = {
   id: string;
   title: string;
+  /** items.guilt_free -- counted against the "Bani fără vină" jar. */
+  guiltFree?: boolean;
   category: string;
   amount: number;
   frequency: "weekly" | "monthly" | "yearly";
@@ -122,6 +128,8 @@ export type HomeSupplyEntry = {
 export type HomeTaskEntry = {
   id: string;
   title: string;
+  /** items.guilt_free -- counted against the "Bani fără vină" jar. */
+  guiltFree?: boolean;
   dueDate?: string;
   completed: boolean;
   completedAt?: string;

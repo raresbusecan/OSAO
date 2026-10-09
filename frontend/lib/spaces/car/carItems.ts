@@ -46,6 +46,8 @@ export function fuelEntryToItemBody(spaceId: string | number, entry: CarFuelEntr
     amount: entry.total_paid ?? null,
     currency: entry.total_paid != null ? "RON" : null,
     due_at: entry.date,
+    // "Bani fără vină" (GuiltFreeToggle) -- every car type is a spending type.
+    guilt_free: !!entry.guiltFree,
     metadata: {
       liters: entry.liters ?? null,
       odometer: entry.odometer ?? null,
@@ -61,6 +63,7 @@ function itemToFuelEntry(item: any): CarFuelEntry {
   return {
     id: String(item.id),
     date: item.due_at ?? item.created_at,
+    guiltFree: !!item.guilt_free,
     liters: meta.liters ?? undefined,
     total_paid: item.amount != null ? Number(item.amount) : undefined,
     odometer: meta.odometer ?? undefined,
@@ -82,6 +85,8 @@ export function maintenanceEntryToItemBody(spaceId: string | number, entry: CarM
     amount: entry.price ?? null,
     currency: entry.price != null ? "RON" : null,
     due_at: entry.date,
+    // "Bani fără vină" (GuiltFreeToggle) -- every car type is a spending type.
+    guilt_free: !!entry.guiltFree,
     // Only set explicitly when archiving (see archiveMaintenanceEntry) --
     // omitted here so a normal save/edit never accidentally resets an
     // already-archived entry back to "pending".
@@ -102,6 +107,7 @@ function itemToMaintenanceEntry(item: any): CarMaintenanceEntry {
   return {
     id: String(item.id),
     date: item.due_at ?? item.created_at,
+    guiltFree: !!item.guilt_free,
     service: item.title,
     description: meta.description ?? "",
     price: item.amount != null ? Number(item.amount) : 0,
@@ -134,6 +140,8 @@ export function documentEntryToItemBody(spaceId: string | number, entry: CarDocu
     amount: entry.price ?? null,
     currency: entry.price != null ? "RON" : null,
     due_at: entry.date,
+    // "Bani fără vină" (GuiltFreeToggle) -- every car type is a spending type.
+    guilt_free: !!entry.guiltFree,
     metadata: {
       documentType: entry.documentType,
       issuer: entry.issuer ?? null,
@@ -150,6 +158,7 @@ function itemToDocumentEntry(item: any): CarDocumentEntry {
   return {
     id: String(item.id),
     date: item.due_at ?? item.created_at,
+    guiltFree: !!item.guilt_free,
     documentType: meta.documentType ?? "Other",
     title: item.title,
     issuer: meta.issuer ?? undefined,
@@ -182,6 +191,8 @@ export function expenseEntryToItemBody(spaceId: string | number, entry: CarExpen
     currency: "RON",
     category: entry.category,
     due_at: entry.date,
+    // "Bani fără vină" (GuiltFreeToggle) -- every car type is a spending type.
+    guilt_free: !!entry.guiltFree,
     metadata: {
       odometer: entry.odometer ?? null,
       provider: entry.provider ?? null,
@@ -195,6 +206,7 @@ function itemToExpenseEntry(item: any): CarExpenseEntry {
   return {
     id: String(item.id),
     date: item.due_at ?? item.created_at,
+    guiltFree: !!item.guilt_free,
     category: item.category ?? "Other",
     title: item.title,
     amount: item.amount != null ? Number(item.amount) : 0,

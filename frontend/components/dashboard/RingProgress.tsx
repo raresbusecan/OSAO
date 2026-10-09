@@ -49,8 +49,10 @@ export function RingProgress({ value, size = 84, strokeWidth = 10, color, trackC
         strokeDasharray={`${circumference} ${circumference}`}
         strokeDashoffset={circumference * (1 - clamped)}
         strokeLinecap="round"
-        rotation="-90"
-        origin={`${center}, ${center}`}
+        // An SVG transform string instead of rotation/origin props --
+        // react-native-svg's web build forwards `origin` as an invalid
+        // DOM "transform-origin" attribute (dev warning on Buget).
+        transform={`rotate(-90 ${center} ${center})`}
       />
       {paceMarker != null ? (
         <Line
@@ -110,8 +112,7 @@ export function MultiRingProgress({ segments, size = 88, strokeWidth = 10, track
             fill="none"
             strokeDasharray={`${length} ${circumference - length}`}
             strokeDashoffset={-offset}
-            rotation="-90"
-            origin={`${center}, ${center}`}
+            transform={`rotate(-90 ${center} ${center})`}
           />
         );
       })}

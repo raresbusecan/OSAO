@@ -6,17 +6,28 @@ import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { REFRESH_EVENT } from "./_layout";
 import { useFocusEffect } from "expo-router";
-import { notifyAction } from "@/lib/confirm";
+import { notifyAction, chooseAction } from "@/lib/confirm";
 import { RingProgress } from "@/components/dashboard/RingProgress";
 import { BudgetSpaceDetailPage } from "@/components/dashboard/BudgetSpaceDetailPage";
 import { profileFromSpace, detectSpaceType, SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, spaceTextColor, type SpaceKind } from "@/lib/spaces/spaceProfile";
 import { BudgetOverviewPage } from "@/components/dashboard/BudgetOverviewPage";
+import { RecurringBillRow, RecurringGroups, isRecurringPayment } from "@/components/dashboard/RecurringBillRow";
+import { BudgetSplitBar, budgetUpcomingNote, budgetUpcomingSuffix, upcomingWords } from "@/components/dashboard/BudgetSplitBar";
+import { SwipeItemRow } from "@/components/dashboard/SwipeItemRow";
+import { IncomeSplitCard } from "@/components/dashboard/IncomeSplitCard";
+import { IncomeSheet } from "@/components/dashboard/IncomeSheet";
+import { SplitSheet } from "@/components/dashboard/SplitSheet";
+import { ResplitSheet } from "@/components/dashboard/ResplitSheet";
+import { GuiltFreePage } from "@/components/dashboard/GuiltFreePage";
+import { BudgetCreditPage } from "@/components/dashboard/BudgetCreditPage";
+import { DEFAULT_SPLIT, JAR_ORDER, jarFill, jarAmounts, primeBudgetPlan, unallocated, needsSpend, envelopeStatus, roundSuggested, type BudgetPlan, type BudgetPlanSummary, type BudgetSplit } from "@/lib/budget/plan";
+import { useRouter } from "expo-router";
 import { severityColor, budgetSeverity } from "@/lib/statusColors";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { Sheet } from "@/components/ui/Sheet";
-import { PageTitle, SectionHeader, Group, Row, IconWell, Button, Field, EmptyState } from "@/components/ui/primitives";
+import { PageTitle, SectionHeader, Group, IconWell, InfoButton, Button, Field, EmptyState, Row } from "@/components/ui/primitives";
 import { motion } from "@/lib/motion";
-import { capitalize, lei, roDate, roNumber } from "@/lib/format";
+import { lei, roNumber, roDate } from "@/lib/format";
 
 type BudgetLimit = { category: string; monthly_limit: number; spent: number };
 type SavingsGoal = { target_amount: number; current_amount: number; target_date: string | null } | null;
@@ -34,13 +45,30 @@ const SPACE_KIND_META: Partial<Record<SpaceKind, { label: string; icon: keyof ty
   expenses: { label: "Expenses", icon: "receipt-outline" },
 };
 
-const FREQUENCY_LABEL: Record<string, string> = { weekly: "săptămânal", monthly: "lunar", yearly: "anual" };
 
 // Every grocery_trip's title is literally "Cumpărături -- {listName}"
 // (see groceryTripToItemBody) -- the row already says which space it
 // is, so that fixed prefix is stripped for display only.
 function biggestExpenseTitle(title: string): string {
   return title.replace(/^Cumpărături -- /, "");
+}
+
+const ONBOARDING_LEGEND: [string, string][] = [
+  ["55%", "necesități"],
+  ["5%", "bani fără vină"],
+  ["10%", "investiții sau credit"],
+  ["15%", "termen scurt"],
+  ["15%", "termen lung"],
+];
+
+function shorten(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
+
+/** "sept." -- last month, short, for "Cea mai mare în sept.". */
+function lastMonthShort(): string {
+  const d = new Date();
+  return new Date(d.getFullYear(), d.getMonth() - 1, 1).toLocaleDateString("ro-RO", { month: "short" });
 }
 
 // Fraction of the current month already elapsed (0-1) -- what spending
@@ -73,17 +101,42 @@ export default function BudgetScreen() {
   // Home-only: monthly commitment from active Recurring items --
   // deliberately separate from `spent` (see BudgetController::index).
   const [recurring, setRecurring] = useState<Record<string, number>>({});
+  // Calendar purchases still ahead this month, per label -- also inside
+  // `spent`, shown apart as "planificat" (BudgetController::plannedForLabel).
+  const [planned, setPlanned] = useState<Record<string, number>>({});
   const [recurringBills, setRecurringBills] = useState<any[]>([]);
   const [savingsGoal, setSavingsGoal] = useState<SavingsGoal>(null);
   // Every space kind the user actually has at least one space for --
   // "other" spaces don't feed the spending aggregation, so no row.
   const [spaceKinds, setSpaceKinds] = useState<SpaceKindMeta[]>([]);
   const [loading, setLoading] = useState(true);
+  // Buget din venit (null plan = no income set yet: today's UI + onboarding).
+  const [planSummary, setPlanSummary] = useState<BudgetPlanSummary | null>(null);
+  // This month's fără vină spend per space label ("+ 120 lei fără vină,
+  // socotiți separat" under a space) -- from GET /budget/guilt-free.
+  const [guiltFreeByLabel, setGuiltFreeByLabel] = useState<Record<string, number>>({});
+  // String(space id) -> kind, for the credit page's linked-space chips;
+  // and the first Cheltuieli space, where credits are managed.
+  const [spaceKindById, setSpaceKindById] = useState<Record<string, SpaceKind>>({});
+  const [spaceNameById, setSpaceNameById] = useState<Record<string, string>>({});
+  const [expensesSpaceId, setExpensesSpaceId] = useState<string | null>(null);
 
   // Every space row opens this detail page -- setting, changing and
   // deleting a budget all live inside it.
   const [spaceDetailFor, setSpaceDetailFor] = useState<{ label: string; icon: keyof typeof Ionicons.glyphMap; monthlyLimit?: number } | null>(null);
   const [showOverview, setShowOverview] = useState(false);
+  const [showGuiltFree, setShowGuiltFree] = useState(false);
+  const [showCredit, setShowCredit] = useState(false);
+
+  const [incomeOpen, setIncomeOpen] = useState(false);
+  // An income typed but not saved yet (the keep/re-split dialog was
+  // dismissed) -- the sheet reopens with it instead of losing it.
+  const [pendingIncome, setPendingIncome] = useState<number | null>(null);
+  const [savingIncome, setSavingIncome] = useState(false);
+  const [splitOpen, setSplitOpen] = useState(false);
+  const [savingSplit, setSavingSplit] = useState(false);
+  const [resplitOpen, setResplitOpen] = useState(false);
+  const router = useRouter();
 
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalTarget, setGoalTarget] = useState("");
@@ -97,13 +150,43 @@ export default function BudgetScreen() {
       setSpending(b.spending || {});
       setBiggest(b.biggest || {});
       setRecurring(b.recurring || {});
-      setRecurringBills(b.recurringBills || []);
+      setPlanned(b.planned || {});
+      setRecurringBills((b.recurringBills || []).filter(isRecurringPayment));
       setSavingsGoal(b.savingsGoal || null);
+      primeBudgetPlan(b);
+      setPlanSummary({
+        plan: b.plan ?? null,
+        necessities: b.necessities ?? { envelope: null, avg_last_3_months: 0 },
+        guiltFree: b.guiltFree ?? { budget: null, spent: 0, planned: 0, count: 0 },
+        credit: b.credit ?? { budget: null, rates: 0, count: 0, items: [] },
+        suggested: b.suggested ?? null,
+      });
+      if (b.plan) {
+        api
+          .getGuiltFree()
+          .then((g) => {
+            const byLabel: Record<string, number> = {};
+            (g.items || []).forEach((it) => {
+              if (it.planned) return;
+              byLabel[it.label] = (byLabel[it.label] || 0) + (Number(it.amount) || 0);
+            });
+            setGuiltFreeByLabel(byLabel);
+          })
+          .catch(() => {});
+      } else {
+        setGuiltFreeByLabel({});
+      }
 
       const seen = new Set<SpaceKind>();
       const kinds: SpaceKindMeta[] = [];
+      const byId: Record<string, SpaceKind> = {};
+      const nameById: Record<string, string> = {};
+      let expensesId: string | null = null;
       (spacesRes.spaces || []).forEach((s: any) => {
         const kind = detectSpaceType(s, profileFromSpace(s));
+        byId[String(s.id)] = kind;
+        nameById[String(s.id)] = s.name ?? "";
+        if (kind === "expenses" && !expensesId) expensesId = String(s.id);
         const meta = SPACE_KIND_META[kind];
         if (meta && !seen.has(kind)) {
           seen.add(kind);
@@ -111,6 +194,9 @@ export default function BudgetScreen() {
         }
       });
       setSpaceKinds(kinds);
+      setSpaceKindById(byId);
+      setSpaceNameById(nameById);
+      setExpensesSpaceId(expensesId);
     } catch {}
   }, []);
 
@@ -147,12 +233,124 @@ export default function BudgetScreen() {
 
   const goalIsNegative = !!savingsGoal && savingsGoal.current_amount < 0;
 
+  const plan: BudgetPlan | null = planSummary?.plan ?? null;
+  const envelope = plan ? jarAmounts(plan.monthly_income, plan.split).needs : 0;
+  const hasCredit = (planSummary?.credit.count ?? 0) > 0;
+  // Active credits. A rate linked to a car/home is SHOWN with that space
+  // (a note on its row + the "Credite" group under Plăți recurente) but
+  // COUNTED only in the Credit jar -- never in the space's budget.
+  const creditItems = planSummary?.credit.items ?? [];
+  const creditByKind: Partial<Record<SpaceKind, number>> = {};
+  creditItems.forEach((c) => {
+    const k = c.linked_space_id != null ? spaceKindById[String(c.linked_space_id)] : undefined;
+    if (k) creditByKind[k] = (creditByKind[k] ?? 0) + Number(c.amount || 0);
+  });
+  const creditsMonthly = creditItems.reduce((s, c) => s + Number(c.amount || 0), 0);
+
+  // ---- Income plan actions ----
+  const savePlan = async (income: number, split: BudgetSplit) => {
+    await api.saveBudgetPlan({ monthly_income: income, split });
+    await load();
+  };
+
+  const saveIncome = async (income: number) => {
+    const firstTime = !plan;
+    const split = plan?.split ?? DEFAULT_SPLIT;
+    let resplit = false;
+    if (firstTime && limits.length > 0) {
+      // Decision 9: existing per-space limits -- keep them, or re-split
+      // the needs share over the spaces. Asked with the sheet closed (the
+      // in-app dialog can't sit on top of an open sheet on web).
+      setIncomeOpen(false);
+      const current = limits.reduce((sum, l) => sum + l.monthly_limit, 0);
+      const currentPct = Math.round((current / income) * 100);
+      const needs = jarAmounts(income, split).needs;
+      const choice = await chooseAction(
+        "Ai deja bugete pe spații",
+        `Bugetele de acum: ${lei(current)}, ${currentPct}% din venit. Necesitățile (${split.needs}%) înseamnă ${lei(Math.round(needs))}.`,
+        [
+          { key: "keep", label: "Păstrez bugetele actuale" },
+          { key: "resplit", label: `Reîmpart cei ${split.needs}% pe spații`, secondary: true },
+        ],
+      );
+      if (!choice) {
+        setPendingIncome(income);
+        setIncomeOpen(true);
+        return;
+      }
+      resplit = choice === "resplit";
+    } else if (firstTime && spaceKinds.length > 0) {
+      // No budgets yet: every space gets its share right away (the sheet
+      // opens prefilled with the suggested split; nothing saved unasked).
+      resplit = true;
+    }
+    setSavingIncome(true);
+    try {
+      await savePlan(income, split);
+      setIncomeOpen(false);
+      setPendingIncome(null);
+      if (resplit) setResplitOpen(true);
+    } catch (error: any) {
+      notifyAction("Nu am putut salva venitul", error?.message || "A apărut o eroare.");
+    } finally {
+      setSavingIncome(false);
+    }
+  };
+
+  const saveSplit = async (split: BudgetSplit) => {
+    if (!plan) return;
+    setSavingSplit(true);
+    try {
+      await savePlan(plan.monthly_income, split);
+      setSplitOpen(false);
+    } catch (error: any) {
+      notifyAction("Nu am putut salva procentele", error?.message || "A apărut o eroare.");
+    } finally {
+      setSavingSplit(false);
+    }
+  };
+
   // Just the set-budget spaces -- the hero and BudgetOverviewPage's own
   // header total agree on scope.
   const totalBudget = limits.reduce((sum, l) => sum + l.monthly_limit, 0);
-  const totalSpent = limits.reduce((sum, l) => sum + l.spent, 0);
-  const totalRatio = totalBudget > 0 ? totalSpent / totalBudget : 0;
-  const left = totalBudget - totalSpent;
+  // `spent` from the API already folds in each space's recurring bills
+  // as a flat monthly amount (BudgetController::monthlySumForLabel --
+  // the savings rollover depends on that). On screen they're split:
+  // "Cheltuit" is only what was actually recorded, the recurring part
+  // is "de plătit", Calendar purchases still ahead are "planificat", and
+  // the comparison with the budget uses all three.
+  const totalCommitted = limits.reduce((sum, l) => sum + l.spent, 0);
+  const totalRecurring = limits.reduce((sum, l) => sum + (recurring[l.category] || 0), 0);
+  const totalPlanned = limits.reduce((sum, l) => sum + (planned[l.category] || 0), 0);
+  const totalSpent = Math.max(0, totalCommitted - totalRecurring - totalPlanned);
+  const totalRatio = totalBudget > 0 ? totalCommitted / totalBudget : 0;
+  const left = totalBudget - totalCommitted;
+
+  // With a plan the hero is "Cheltuit din necesități": EVERY label's spend
+  // (fără vină already excluded by the API), against the envelope -- the
+  // shared needsSpend() so Acasă's "Mai ai" and the drill-down agree.
+  const needs = needsSpend(spending, recurring, planned);
+  const needsCommitted = needs.committed;
+  const needsRecurring = needs.recurring;
+  const needsPlanned = needs.planned;
+  const needsRecorded = needs.recorded;
+  const needsLeft = envelope - needsCommitted;
+  const allocated = limits.reduce((sum, l) => sum + l.monthly_limit, 0);
+  const notAllocated = plan ? unallocated(envelope, limits) : 0;
+  const allocStatus = envelopeStatus(notAllocated);
+  const needsSegments = plan && envelope > 0
+    ? spaceKinds
+        .map((k) => ({ color: SPACE_IDENTITY_COLORS[k.kind] ?? colors.onSurfaceTertiary, share: (limits.find((l) => l.category === k.label)?.monthly_limit ?? 0) / Math.max(envelope, allocated) }))
+        .filter((seg) => seg.share > 0)
+    : [];
+
+  const heroBudget = plan ? envelope : totalBudget;
+  const heroSpent = plan ? needsRecorded : totalSpent;
+  const heroRecurring = plan ? needsRecurring : totalRecurring;
+  const heroPlanned = plan ? needsPlanned : totalPlanned;
+  const heroLeft = plan ? needsLeft : left;
+  const heroRatio = plan ? (envelope > 0 ? needsCommitted / envelope : 0) : totalRatio;
+  const heroLabel = plan ? "Cheltuit din necesități" : "Cheltuit din buget";
 
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="budget-screen">
@@ -161,19 +359,38 @@ export default function BudgetScreen() {
           category={spaceDetailFor.label}
           icon={spaceDetailFor.icon}
           monthlyLimit={spaceDetailFor.monthlyLimit}
+          plan={plan}
+          suggested={roundSuggested(planSummary?.suggested, envelope)?.[spaceDetailFor.label] ?? null}
+          otherLimitsTotal={limits.filter((l) => l.category !== spaceDetailFor.label).reduce((sum, l) => sum + l.monthly_limit, 0)}
           onBack={() => setSpaceDetailFor(null)}
           onLimitSaved={load}
+        />
+      ) : showGuiltFree && plan ? (
+        <GuiltFreePage percent={plan.split.guilt_free} onBack={() => setShowGuiltFree(false)} />
+      ) : showCredit && plan && planSummary && hasCredit ? (
+        <BudgetCreditPage
+          percent={plan.split.third}
+          budget={planSummary.credit.budget ?? 0}
+          rates={planSummary.credit.rates}
+          items={planSummary.credit.items}
+          spaceKindById={spaceKindById}
+          spaceNameById={spaceNameById}
+          onOpenExpenses={expensesSpaceId ? () => router.push(`/${expensesSpaceId}` as any) : null}
+          onBack={() => setShowCredit(false)}
         />
       ) : showOverview ? (
         <BudgetOverviewPage
           limits={limits}
           spending={spending}
           spaceKinds={spaceKinds}
+          recurring={recurring}
+          planned={planned}
+          envelope={plan ? envelope : null}
           onBack={() => setShowOverview(false)}
         />
       ) : (
       <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 140, gap: spacing.section }}>
-        <PageTitle>Buget</PageTitle>
+        <PageTitle info="budget.page">Buget</PageTitle>
 
         {loading ? (
           <ActivityIndicator color={colors.onSurfaceTertiary} />
@@ -181,43 +398,90 @@ export default function BudgetScreen() {
           <>
             {/* The whole month at a glance -- opens the overview page
                 (composition ring + ranked spend list). */}
-            {limits.length > 0 ? (
+            {!plan ? (
+              <View testID="income-onboarding" style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: 14 }}>
+                <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="wallet-outline" size={20} color={colors.onSurface} />
+                </View>
+                <View style={{ gap: 4 }}>
+                  <Text style={{ fontSize: 17, fontWeight: "600", color: colors.onSurface }}>Pornește de la venitul tău</Text>
+                  <Text style={{ fontSize: 14, lineHeight: 20, color: colors.onSurfaceTertiary }}>
+                    Spune-ne cât câștigi net pe lună. Îl împărțim în cinci și fiecare spațiu își primește bugetul din necesități.
+                  </Text>
+                </View>
+                <View accessible accessibilityRole="image" accessibilityLabel="Împărțirea implicită: 55, 5, 10, 15, 15 la sută" style={{ flexDirection: "row", gap: 2, height: 10 }}>
+                  {JAR_ORDER.map((k) => (
+                    <View key={k} style={{ flex: DEFAULT_SPLIT[k], borderRadius: 5, backgroundColor: jarFill(k, colors, isDark), opacity: k === "needs" ? 0.85 : 1 }} />
+                  ))}
+                </View>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: 4 }}>
+                  {ONBOARDING_LEGEND.map(([p, t]) => (
+                    <Text key={t} style={{ width: "50%", fontSize: 13, color: colors.onSurfaceTertiary }}>
+                      <Text style={{ fontWeight: "600", color: colors.onSurface }}>{p}</Text> {t}
+                    </Text>
+                  ))}
+                </View>
+                <Button testID="income-onboarding-add" label="Adaugă venitul" onPress={() => setIncomeOpen(true)} />
+              </View>
+            ) : null}
+
+            {plan || limits.length > 0 ? (
               <PressableScale
                 testID="budget-overview-entry"
                 onPress={() => setShowOverview(true)}
                 scaleTo={motion.scale.card}
                 accessibilityRole="button"
-                accessibilityLabel={`Cheltuit din buget: ${lei(totalSpent)} din ${lei(totalBudget)}. Vezi detalii`}
+                accessibilityLabel={`${heroLabel}: ${lei(heroSpent)} din ${lei(heroBudget)}. Vezi detalii`}
                 style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, flexDirection: "row", alignItems: "center", gap: 18 }}
               >
                 <RingProgress
-                  value={totalRatio}
+                  value={heroRatio}
                   size={96}
-                  color={severityColor(budgetSeverity(totalRatio), colors)}
+                  color={severityColor(budgetSeverity(heroRatio), colors)}
                   trackColor={colors.surfaceTertiary}
                   paceMarker={monthProgress()}
                   markerColor={colors.onSurfaceTertiary}
                 />
                 <View style={{ flex: 1, gap: 2 }}>
-                  <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Cheltuit din buget</Text>
-                  <Text style={{ ...typography.display, color: colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>{lei(totalSpent)}</Text>
-                  <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>din {lei(totalBudget)}</Text>
-                  <Text style={{ fontSize: 13, color: left >= 0 ? colors.success : colors.error, marginTop: 4 }}>
-                    {left >= 0 ? `Mai ai ${lei(left)}` : `Ai depășit cu ${lei(-left)}`}
+                  <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{heroLabel}</Text>
+                  <Text style={{ ...typography.display, color: colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>{lei(Math.round(heroSpent))}</Text>
+                  <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>din {lei(Math.round(heroBudget))}</Text>
+                  {heroRecurring > 0 ? (
+                    <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>+ {lei(Math.round(heroRecurring))} plăți recurente de plătit</Text>
+                  ) : null}
+                  {heroPlanned > 0 ? (
+                    <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>+ {lei(Math.round(heroPlanned))} planificat în Calendar</Text>
+                  ) : null}
+                  <Text style={{ fontSize: 13, color: heroLeft >= 0 ? colors.success : colors.error, marginTop: 4 }}>
+                    {heroLeft >= 0 ? `Mai ai ${lei(Math.round(heroLeft))}` : `Ai depășit cu ${lei(Math.round(-heroLeft))}`}
                   </Text>
                 </View>
               </PressableScale>
-            ) : spaceKinds.length > 0 ? (
-              <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: 4 }}>
-                <Text style={{ fontSize: 17, fontWeight: "600", color: colors.onSurface }}>Încă nu ai un buget</Text>
-                <Text style={{ fontSize: 14, lineHeight: 20, color: colors.onSurfaceTertiary }}>
-                  Alege un spațiu mai jos și pune-i o limită lunară. Vezi apoi aici cât ai cheltuit din ea.
-                </Text>
-              </View>
+            ) : null}
+
+            {plan && planSummary ? (
+              <IncomeSplitCard
+                plan={plan}
+                needs={{ recorded: needsRecorded, recurring: needsRecurring, planned: needsPlanned }}
+                guiltFree={{ spent: planSummary.guiltFree.spent, planned: planSummary.guiltFree.planned }}
+                credit={{ rates: planSummary.credit.rates, count: planSummary.credit.count }}
+                savingsGoal={savingsGoal}
+                needsSegments={needsSegments}
+                onEditIncome={() => setIncomeOpen(true)}
+                onEditSplit={() => setSplitOpen(true)}
+                onOpenNeeds={() => setShowOverview(true)}
+                onOpenGuiltFree={() => setShowGuiltFree(true)}
+                onOpenCredit={() => setShowCredit(true)}
+                onOpenGoal={openEditGoal}
+              />
             ) : null}
 
             <View style={{ gap: spacing.sm }} testID="section-limits">
-              <SectionHeader title="Pe spații" />
+              <SectionHeader
+                title={plan ? "Necesități pe spații" : "Pe spații"}
+                info="budget.spaces"
+                action={plan && spaceKinds.length > 0 ? { label: "Reîmparte", onPress: () => setResplitOpen(true), testID: "resplit-open", tone: colors.onSurface } : undefined}
+              />
               {spaceKinds.length === 0 ? (
                 <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card }}>
                   <EmptyState icon="wallet-outline" message="Creează un spațiu Mașină, Casă, Cumpărături sau Cheltuieli ca să-i poți pune un buget." />
@@ -231,21 +495,40 @@ export default function BudgetScreen() {
                     const limit = limits.find((l) => l.category === meta.label);
                     const spend = spending[meta.label];
                     const topItem = biggest[meta.label];
-                    const recurringNote = meta.label === "Home" ? recurring["Home"] || 0 : 0;
+                    const rec = recurring[meta.label] || 0;
+                    const plannedAmt = planned[meta.label] || 0;
+                    // Not spent yet: bills to pay + Calendar purchases ahead.
+                    const up = rec + plannedAmt;
+                    // Recorded spend only; the rest shown apart (hatched).
+                    const recorded = Math.max(0, (limit ? limit.spent : spend?.this_month ?? 0) - up);
 
-                    const ratio = limit && limit.monthly_limit > 0 ? limit.spent / limit.monthly_limit : 0;
+                    // Tone and pace from what was actually SPENT -- the bills
+                    // still to pay sit in the bar's faded part (BudgetSplitBar)
+                    // and get their own note, instead of turning an untouched
+                    // budget red on the 1st of the month.
+                    // A 0 limit is a real limit: any spend is already over it.
+                    const ratio = !limit ? 0 : limit.monthly_limit > 0 ? recorded / limit.monthly_limit : recorded > 0 ? 2 : 0;
                     // A pace warning takes priority even under 80% --
                     // 20 points over pace a third into the month is a
                     // real early signal a plain ratio tone would miss.
                     const pace = limit ? paceDelta(ratio) : null;
                     const tone = pace !== null ? colors.warning : severityColor(budgetSeverity(ratio), colors);
 
-                    const notes = [
+                    const upcomingNote = limit ? budgetUpcomingNote(recorded, up, limit.monthly_limit, plannedAmt) : null;
+                    // At most two notes, most urgent first. Whenever the bar
+                    // holds bills not paid yet, one of them says so.
+                    const notes = ([
+                      limit && recorded > limit.monthly_limit
+                        ? { text: `Depășit cu ${lei(recorded - limit.monthly_limit)}`, color: colors.error }
+                        : null,
+                      upcomingNote ? { text: upcomingNote.text, color: upcomingNote.tone === "warning" ? colors.warning : colors.onSurfaceTertiary } : null,
                       pace !== null ? { text: `Cu ${pace}% peste ritmul lunii`, color: colors.warning } : null,
-                      ratio >= 1 ? { text: `Depășit cu ${lei(limit!.spent - limit!.monthly_limit)}`, color: colors.error } : null,
-                      topItem ? { text: `Cea mai mare${topItem.from_last_month ? " (luna trecută)" : ""}: ${biggestExpenseTitle(topItem.title)}, ${lei(topItem.amount)}`, color: colors.onSurfaceTertiary } : null,
-                      recurringNote > 0 ? { text: `Din care ${lei(recurringNote)} plăți recurente`, color: colors.onSurfaceTertiary } : null,
-                    ].filter(Boolean) as { text: string; color: string }[];
+                      plan && guiltFreeByLabel[meta.label] > 0 ? { text: `+ ${lei(Math.round(guiltFreeByLabel[meta.label]))} fără vină, socotiți separat`, color: colors.onSurfaceTertiary } : null,
+                      topItem ? { text: `Cea mai mare${topItem.from_last_month ? " în " + lastMonthShort() : ""}: ${shorten(biggestExpenseTitle(topItem.title), 18)}, ${lei(topItem.amount)}`, color: colors.onSurfaceTertiary } : null,
+                    ].filter(Boolean) as { text: string; color: string }[]).slice(0, 2);
+                    // A linked credit's rate: its own line, outside the
+                    // 2-note cap, shown with or without a limit.
+                    const creditNote = creditByKind[meta.kind] ? `+ rată ${lei(Math.round(creditByKind[meta.kind]!))} pe lună, socotită la Credit` : null;
 
                     return (
                       <PressableScale
@@ -255,16 +538,21 @@ export default function BudgetScreen() {
                         scaleTo={1}
                         pressedStyle={{ backgroundColor: colors.surfaceTertiary }}
                         accessibilityRole="button"
-                        accessibilityLabel={limit ? `${name}: ${lei(limit.spent)} din ${lei(limit.monthly_limit)}` : `Setează un buget pentru ${name}`}
+                        accessibilityLabel={limit ? `${name}: ${lei(recorded)} cheltuiți din ${lei(limit.monthly_limit)}${up > 0 ? `, ${upcomingWords(rec, plannedAmt, lei)}` : ""}` : `Setează un buget pentru ${name}`}
                         style={{ paddingHorizontal: spacing.lg, paddingVertical: 14, gap: 8, backgroundColor: colors.surfaceSecondary }}
                       >
                         <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
                           <IconWell icon={meta.icon} color={color} tint={tint} size={34} />
-                          <Text style={{ flex: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>{name}</Text>
+                          <Text style={{ flex: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>
+                            {name}
+                            {plan && limit && envelope > 0 ? (
+                              <Text style={{ fontWeight: "400", color: colors.onSurfaceTertiary }}>{` · ${Math.round((limit.monthly_limit / envelope) * 100)}%`}</Text>
+                            ) : null}
+                          </Text>
                           {limit ? (
                             <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>
-                              <Text style={{ fontWeight: "600", color: ratio >= 1 ? colors.error : colors.onSurface }}>{roNumber(limit.spent, 2)}</Text>
-                              {` / ${lei(limit.monthly_limit)}`}
+                              <Text style={{ fontWeight: "600", color: recorded > limit.monthly_limit ? colors.error : colors.onSurface }}>{roNumber(recorded, 2)}</Text>
+                              {`${budgetUpcomingSuffix(up)} / ${lei(limit.monthly_limit)}`}
                             </Text>
                           ) : (
                             <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
@@ -274,30 +562,48 @@ export default function BudgetScreen() {
                           )}
                         </View>
                         {limit ? (
-                          <View style={{ marginLeft: 46, height: 6, borderRadius: 3, backgroundColor: colors.surfaceTertiary, overflow: "hidden" }}>
-                            <View style={{ width: `${Math.min(1, ratio) * 100}%`, height: "100%", borderRadius: 3, backgroundColor: tone }} />
-                          </View>
+                          <BudgetSplitBar style={{ marginLeft: 46 }} recorded={recorded} upcoming={up} limit={limit.monthly_limit} color={tone} upcomingColor={color} />
                         ) : spend ? (
                           <Text style={{ marginLeft: 46, fontSize: 13, color: colors.onSurfaceTertiary }}>
-                            {lei(spend.this_month)} luna asta{spend.last_month > 0 ? `, ${lei(spend.last_month)} luna trecută` : ""}
+                            {lei(recorded)} luna asta{up > 0 ? ` ${upcomingWords(rec, plannedAmt, lei)}` : ""}
                           </Text>
                         ) : null}
                         {limit && notes.length > 0 ? (
                           <View style={{ marginLeft: 46, gap: 2 }}>
                             {notes.map((n) => (
-                              <Text key={n.text} style={{ fontSize: 13, color: n.color }} numberOfLines={2}>{n.text}</Text>
+                              <Text key={n.text} style={{ fontSize: 13, lineHeight: 18, color: n.color }}>{n.text}</Text>
                             ))}
                           </View>
+                        ) : null}
+                        {creditNote ? (
+                          <Text testID={`space-credit-note-${meta.kind}`} style={{ marginLeft: 46, fontSize: 13, lineHeight: 18, color: colors.onSurfaceTertiary }}>{creditNote}</Text>
                         ) : null}
                       </PressableScale>
                     );
                   })}
+                  {plan ? (
+                    <View testID="needs-footer" style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.lg, minHeight: 48, backgroundColor: colors.surfaceSecondary }}>
+                      <Ionicons
+                        name={allocStatus === "exact" ? "checkmark" : allocStatus === "under" ? "ellipse-outline" : "alert-circle-outline"}
+                        size={16}
+                        color={allocStatus === "exact" ? colors.success : allocStatus === "under" ? colors.onSurfaceTertiary : colors.warning}
+                      />
+                      <Text style={{ flex: 1, fontSize: 13, lineHeight: 18, color: allocStatus === "over" ? colors.warning : colors.onSurfaceTertiary }}>
+                        {allocStatus === "over"
+                          ? `Bugetele trec de necesități cu ${lei(Math.round(-notAllocated))}`
+                          : `Împărțit: ${roNumber(Math.round(allocated))} din ${lei(Math.round(envelope))}${allocStatus === "under" ? ` · Nealocat ${lei(Math.round(notAllocated))}` : ""}`}
+                      </Text>
+                    </View>
+                  ) : null}
                 </Group>
               )}
             </View>
 
             {/* Savings goal -- filled up automatically at month's end
-                with whatever was left in each space's budget. */}
+                with whatever was left in each space's budget. With an
+                income plan it lives in IncomeSplitCard's "Termen scurt"
+                row instead. */}
+            {!plan ? (
             <PressableScale
               testID="savings-goal-card"
               onPress={openEditGoal}
@@ -309,7 +615,10 @@ export default function BudgetScreen() {
               <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
                 <IconWell icon="wallet-outline" color={goalIsNegative ? colors.error : colors.success} size={34} />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }}>Economii</Text>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }}>Economii</Text>
+                    <InfoButton topic="budget.savings" />
+                  </View>
                   <Text style={{ fontSize: 13, color: goalIsNegative ? colors.error : colors.onSurfaceTertiary, marginTop: 2 }}>
                     {savingsGoal
                       ? `${roNumber(savingsGoal.current_amount, 2)} din ${lei(savingsGoal.target_amount)}`
@@ -329,26 +638,62 @@ export default function BudgetScreen() {
                 </Text>
               ) : null}
             </PressableScale>
+            ) : null}
 
             <View style={{ gap: spacing.sm }} testID="section-recurring">
-              <SectionHeader title="Plăți recurente" />
-              {recurringBills.length === 0 ? (
+              <SectionHeader title="Plăți recurente" info="budget.recurring" />
+              {recurringBills.length === 0 && creditItems.length === 0 ? (
                 <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card }}>
                   <EmptyState icon="repeat" message="Nicio plată recurentă. Le adaugi din spațiul Casă, la Plăți recurente." />
                 </View>
               ) : (
-                <Group inset={68}>
-                  {recurringBills.map((bill) => (
-                    <Row
-                      key={bill.id}
-                      testID={`recurring-bill-${bill.id}`}
-                      leading={<IconWell icon="repeat" color={SPACE_IDENTITY_COLORS.home!} tint={spaceTextColor("home", isDark)} />}
-                      title={bill.title}
-                      subtitle={capitalize([FREQUENCY_LABEL[bill.recurrence] || bill.recurrence, bill.due_at ? `următoarea pe ${roDate(bill.due_at)}` : null].filter(Boolean).join(", "))}
-                      trailing={bill.amount != null ? <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{lei(Number(bill.amount))}</Text> : null}
+                <View style={{ gap: spacing.lg }}>
+                  {recurringBills.length > 0 ? (
+                    <RecurringGroups
+                      items={recurringBills}
+                      renderRow={(bill) => (
+                        <SwipeItemRow key={bill.id} item={bill} onChanged={load}>
+                          <RecurringBillRow testID={`recurring-bill-${bill.id}`} item={bill} />
+                        </SwipeItemRow>
+                      )}
                     />
-                  ))}
-                </Group>
+                  ) : null}
+                  {/* Credit rates -- listed with the bills (they're due like
+                      one), but counted in the Credit jar, not here. No swipe:
+                      a rate is a reminder, not something to resolve. */}
+                  {creditItems.length > 0 ? (
+                    <View style={{ gap: spacing.sm }} testID="recurring-group-credit">
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 }}>
+                          <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurfaceSecondary }}>{`Credite · ${creditItems.length}`}</Text>
+                          <InfoButton topic="budget.credit" />
+                        </View>
+                        <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>{`${lei(Math.round(creditsMonthly))} / lună`}</Text>
+                      </View>
+                      <Group inset={68}>
+                        {creditItems.map((c) => {
+                          const spaceName = c.linked_space_id != null ? spaceNameById[String(c.linked_space_id)] : "";
+                          return (
+                            <Row
+                              key={String(c.id)}
+                              testID={`recurring-credit-${c.id}`}
+                              onPress={plan && hasCredit ? () => setShowCredit(true) : undefined}
+                              leading={<IconWell icon="card-outline" color={SPACE_IDENTITY_COLORS.expenses!} tint={spaceTextColor("expenses", isDark) ?? undefined} />}
+                              title={c.title}
+                              subtitle={`${spaceName ? `${spaceName} · ` : ""}socotită la Credit`}
+                              trailing={
+                                <View style={{ alignItems: "flex-end", gap: 2 }}>
+                                  <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{lei(Number(c.amount))}</Text>
+                                  {c.next_due ? <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{roDate(c.next_due, { short: true })}</Text> : null}
+                                </View>
+                              }
+                            />
+                          );
+                        })}
+                      </Group>
+                    </View>
+                  ) : null}
+                </View>
               )}
             </View>
           </>
@@ -356,10 +701,46 @@ export default function BudgetScreen() {
       </ScrollView>
       )}
 
+      <IncomeSheet
+        visible={incomeOpen}
+        onClose={() => {
+          setIncomeOpen(false);
+          setPendingIncome(null);
+        }}
+        initialIncome={pendingIncome ?? plan?.monthly_income ?? null}
+        split={plan?.split ?? DEFAULT_SPLIT}
+        saving={savingIncome}
+        onSave={saveIncome}
+      />
+      {plan && planSummary ? (
+        <SplitSheet
+          visible={splitOpen}
+          onClose={() => setSplitOpen(false)}
+          income={plan.monthly_income}
+          initialSplit={plan.split}
+          avgNeeds={planSummary.necessities.avg_last_3_months}
+          hasCredit={hasCredit}
+          creditRates={planSummary.credit.rates}
+          saving={savingSplit}
+          onSave={saveSplit}
+        />
+      ) : null}
+      {plan ? (
+        <ResplitSheet
+          visible={resplitOpen}
+          onClose={() => setResplitOpen(false)}
+          envelope={envelope}
+          suggested={planSummary?.suggested ?? null}
+          spaces={spaceKinds}
+          onSaved={load}
+        />
+      ) : null}
+
       <Sheet
         visible={editingGoal}
         onClose={() => setEditingGoal(false)}
         title="Obiectiv de economii"
+        info="budget.savings"
         icon="wallet-outline"
         tone={colors.success}
         footer={<Button testID="goal-save-button" label="Salvează obiectivul" onPress={saveGoal} loading={savingGoal} disabled={!goalTarget.trim()} />}

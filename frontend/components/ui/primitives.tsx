@@ -1,8 +1,9 @@
 import React from "react";
-import { View, Text, Pressable, TextInput, ActivityIndicator, type TextInputProps, type StyleProp, type ViewStyle } from "react-native";
+import { View, Text, Pressable, TextInput, ActivityIndicator, Platform, type TextInputProps, type StyleProp, type ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { PressableScale } from "./PressableScale";
+import { HELP, showHelp, type HelpKey } from "@/lib/help";
 
 /**
  * Shared building blocks for the 2026-10 redesign -- one place for the
@@ -76,6 +77,32 @@ export function CircleButton({
   );
 }
 
+/**
+ * The app-wide "ⓘ": opens that topic's explanation (lib/help.ts) in the
+ * root HelpHost sheet. Small and quiet by default, sitting next to a
+ * heading; `circle` is the 44px header-button variant. 44px hit area
+ * either way.
+ */
+export function InfoButton({ topic, circle, color, testID }: { topic: HelpKey; circle?: boolean; color?: string; testID?: string }) {
+  const { colors } = useTheme();
+  const label = `Despre ${HELP[topic].title}`;
+  if (circle) return <CircleButton testID={testID ?? `info-${topic}`} icon="information-circle-outline" label={label} onPress={() => showHelp(topic)} />;
+  return (
+    <Pressable
+      testID={testID ?? `info-${topic}`}
+      onPress={() => showHelp(topic)}
+      // On web a "button" role renders a <button>, and the "ⓘ" often sits
+      // inside a tappable card that already is one (invalid nesting).
+      accessibilityRole={Platform.OS === "web" ? "link" : "button"}
+      accessibilityLabel={label}
+      hitSlop={13}
+      style={({ pressed }) => ({ width: 18, height: 18, alignItems: "center", justifyContent: "center", opacity: pressed ? 0.5 : 1 })}
+    >
+      <Ionicons name="information-circle-outline" size={18} color={color ?? colors.onSurfaceTertiary} />
+    </Pressable>
+  );
+}
+
 /** Back on the left, any number of CircleButtons on the right. */
 export function TopBar({ onBack, backTestID = "space-back", children }: { onBack?: () => void; backTestID?: string; children?: React.ReactNode }) {
   const { spacing } = useTheme();
@@ -89,7 +116,7 @@ export function TopBar({ onBack, backTestID = "space-back", children }: { onBack
 
 /** Kind dot + small label, then the page title, then an optional line
  * under it -- the left-aligned header every Space page opens with. */
-export function Identity({ color, kicker, title, subtitle }: { color?: string; kicker?: string; title: string; subtitle?: string | null }) {
+export function Identity({ color, kicker, title, subtitle, info }: { color?: string; kicker?: string; title: string; subtitle?: string | null; info?: HelpKey }) {
   const { colors, spacing } = useTheme();
   return (
     <View style={{ gap: 2 }}>
@@ -99,20 +126,26 @@ export function Identity({ color, kicker, title, subtitle }: { color?: string; k
           <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }} numberOfLines={1}>{kicker}</Text>
         </View>
       ) : null}
-      <Text style={{ fontSize: 28, fontWeight: "600", letterSpacing: -0.6, color: colors.onSurface }} numberOfLines={2}>
-        {title}
-      </Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+        <Text style={{ fontSize: 28, fontWeight: "600", letterSpacing: -0.6, color: colors.onSurface, flexShrink: 1 }} numberOfLines={2}>
+          {title}
+        </Text>
+        {info ? <InfoButton topic={info} /> : null}
+      </View>
       {subtitle ? <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>{subtitle}</Text> : null}
     </View>
   );
 }
 
 /** Plain page title for the top-level tabs (Spații, Calendar, Buget). */
-export function PageTitle({ children, right }: { children: React.ReactNode; right?: React.ReactNode }) {
-  const { colors } = useTheme();
+export function PageTitle({ children, right, info }: { children: React.ReactNode; right?: React.ReactNode; info?: HelpKey }) {
+  const { colors, spacing } = useTheme();
   return (
     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44 }}>
-      <Text style={{ fontSize: 28, fontWeight: "600", letterSpacing: -0.6, color: colors.onSurface, flexShrink: 1 }}>{children}</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flexShrink: 1 }}>
+        <Text style={{ fontSize: 28, fontWeight: "600", letterSpacing: -0.6, color: colors.onSurface, flexShrink: 1 }}>{children}</Text>
+        {info ? <InfoButton topic={info} /> : null}
+      </View>
       {right}
     </View>
   );
@@ -123,18 +156,24 @@ export function SectionHeader({
   title,
   action,
   muted,
+  info,
 }: {
   title: string;
-  action?: { label: string; onPress: () => void; testID?: string };
+  /** "ⓘ" right after the title -- see InfoButton. */
+  info?: HelpKey;
+  action?: { label: string; onPress: () => void; testID?: string; /** Emphasized action ("Gata"). */ tone?: string };
   /** Smaller grey heading (month groups, settings groups). */
   muted?: boolean;
 }) {
   const { colors } = useTheme();
   return (
     <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: muted ? 4 : 0 }}>
-      <Text style={muted ? { fontSize: 13, color: colors.onSurfaceTertiary } : { fontSize: 17, fontWeight: "600", color: colors.onSurface }}>
-        {title}
-      </Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 }}>
+        <Text style={muted ? { fontSize: 13, color: colors.onSurfaceTertiary } : { fontSize: 17, fontWeight: "600", color: colors.onSurface }}>
+          {title}
+        </Text>
+        {info ? <InfoButton topic={info} /> : null}
+      </View>
       {action ? (
         <Pressable
           testID={action.testID}
@@ -142,7 +181,7 @@ export function SectionHeader({
           accessibilityRole="button"
           style={{ minHeight: 44, justifyContent: "center", paddingLeft: 12 }}
         >
-          <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>{action.label}</Text>
+          <Text style={{ fontSize: 14, color: action.tone ?? colors.onSurfaceTertiary, fontWeight: action.tone ? "600" : "400" }}>{action.label}</Text>
         </Pressable>
       ) : null}
     </View>
@@ -170,7 +209,8 @@ export function Group({ children, style, inset = 16 }: { children: React.ReactNo
     <View style={[{ backgroundColor: level === "card" ? colors.surfaceTertiary : colors.surfaceSecondary, borderRadius: radius.card, overflow: "hidden" }, style]}>
       {items.map((child, i) => (
         <View key={i}>
-          {i > 0 ? <View style={{ height: 1, marginLeft: inset, backgroundColor: colors.border }} /> : null}
+          {/* Inside a sheet the group is surfaceTertiary, where `border` vanishes. */}
+          {i > 0 ? <View style={{ height: 1, marginLeft: inset, backgroundColor: level === "card" ? colors.borderStrong : colors.border }} /> : null}
           {child}
         </View>
       ))}
@@ -200,10 +240,13 @@ export function Row({
   chevron,
   strike,
   dim,
+  destructive,
 }: {
   leading?: React.ReactNode;
   title: string;
-  subtitle?: string | null;
+  /** Plain text, or nested <Text> runs (e.g. "Mogosesti · " + a colored
+   * status) -- rendered inside the subtitle Text either way. */
+  subtitle?: React.ReactNode;
   subtitleColor?: string;
   trailing?: React.ReactNode;
   onPress?: () => void;
@@ -212,6 +255,8 @@ export function Row({
   chevron?: boolean;
   strike?: boolean;
   dim?: boolean;
+  /** Title in the error color (a "Șterge" action row). */
+  destructive?: boolean;
 }) {
   const { colors, spacing } = useTheme();
   const onCard = React.useContext(SurfaceLevelContext) === "card";
@@ -220,7 +265,7 @@ export function Row({
       {leading}
       <View style={{ flex: 1, paddingVertical: spacing.sm + 2, opacity: dim ? 0.5 : 1 }}>
         <Text
-          style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface, textDecorationLine: strike ? "line-through" : "none" }}
+          style={{ fontSize: 15, fontWeight: "500", color: destructive ? colors.error : colors.onSurface, textDecorationLine: strike ? "line-through" : "none" }}
           numberOfLines={2}
         >
           {title}
@@ -249,6 +294,7 @@ export function Row({
       testID={testID}
       onPress={onPress}
       onLongPress={onLongPress}
+      delayLongPress={350}
       scaleTo={1}
       pressedStyle={{ backgroundColor: onCard ? colors.segmentActive : colors.surfaceTertiary }}
       accessibilityRole="button"
@@ -289,6 +335,8 @@ export function Pill({
   tone,
   testID,
   dashed,
+  badge,
+  a11yLabel,
 }: {
   label: string;
   icon?: IconName;
@@ -298,6 +346,10 @@ export function Pill({
   tone?: string;
   testID?: string;
   dashed?: boolean;
+  /** A small red count after the label (e.g. expired documents). */
+  badge?: number;
+  /** Screen-reader label when the visible one isn't enough ("Documente, 1 expirat"). */
+  a11yLabel?: string;
 }) {
   const { colors, spacing, radius } = useTheme();
   const activeFill = tone ?? colors.surfaceTertiary;
@@ -308,7 +360,7 @@ export function Pill({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityState={{ selected: !!active }}
-      accessibilityLabel={label}
+      accessibilityLabel={a11yLabel ?? label}
       hitSlop={{ top: 2, bottom: 2 }}
       scaleTo={0.97}
       style={{
@@ -326,6 +378,11 @@ export function Pill({
     >
       {icon ? <Ionicons name={icon} size={15} color={active ? fg : colors.onSurfaceTertiary} /> : null}
       <Text style={{ fontSize: 13, fontWeight: active ? "600" : "500", color: fg }} numberOfLines={1}>{label}</Text>
+      {badge && badge > 0 ? (
+        <View style={{ height: 18, minWidth: 18, paddingHorizontal: 5, borderRadius: 9, backgroundColor: colors.error, alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ fontSize: 11, fontWeight: "600", color: readableOn(colors.error) }}>{badge}</Text>
+        </View>
+      ) : null}
     </PressableScale>
   );
 }
@@ -337,7 +394,9 @@ export function Segmented<K extends string>({
   onChange,
   testIDPrefix,
 }: {
-  options: { key: K; label: string }[];
+  /** `badge`: a small count after the label (red = overdue, amber =
+   * today) -- Casă's "De rezolvat"; Mașină passes none. */
+  options: { key: K; label: string; badge?: { count: number; tone: "error" | "warning" }; a11yLabel?: string }[];
   value: K;
   onChange: (key: K) => void;
   testIDPrefix?: string;
@@ -355,20 +414,31 @@ export function Segmented<K extends string>({
             onPress={() => onChange(o.key)}
             accessibilityRole="button"
             accessibilityState={{ selected: on }}
+            accessibilityLabel={o.a11yLabel}
             hitSlop={{ top: 2, bottom: 2 }}
             style={{
               flex: 1,
               height: 40,
               borderRadius: radius.inner,
               backgroundColor: on ? colors.segmentActive : "transparent",
+              flexDirection: "row",
               alignItems: "center",
               justifyContent: "center",
+              gap: 4,
               paddingHorizontal: 4,
             }}
           >
-            <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: on ? "600" : "400", color: on ? colors.onSurface : colors.onSurfaceTertiary }}>
+            <Text numberOfLines={1} style={{ flexShrink: 1, fontSize: 13, fontWeight: on ? "600" : "400", color: on ? colors.onSurface : colors.onSurfaceTertiary }}>
               {o.label}
             </Text>
+            {o.badge && o.badge.count > 0 ? (() => {
+              const bg = o.badge.tone === "error" ? colors.error : colors.warning;
+              return (
+                <View style={{ height: 16, minWidth: 16, paddingHorizontal: 4, borderRadius: 8, backgroundColor: bg, alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ fontSize: 11, fontWeight: "600", color: readableOn(bg) }}>{o.badge.count}</Text>
+                </View>
+              );
+            })() : null}
           </Pressable>
         );
       })}
@@ -388,6 +458,7 @@ export function Button({
   testID,
   compact,
   loading,
+  a11yLabel,
 }: {
   label: string;
   onPress?: () => void;
@@ -399,6 +470,8 @@ export function Button({
   compact?: boolean;
   /** Shows a spinner in place of the label and blocks presses. */
   loading?: boolean;
+  /** Screen-reader label when the visible one isn't enough ("Înainte, pasul 2 din 4"). */
+  a11yLabel?: string;
 }) {
   const { colors, radius } = useTheme();
   const fill =
@@ -417,7 +490,7 @@ export function Button({
       onPress={onPress}
       disabled={disabled || loading}
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={a11yLabel ?? label}
       accessibilityState={{ disabled: !!disabled, busy: !!loading }}
       style={{
         height: compact ? 44 : 52,
@@ -625,5 +698,34 @@ export function ToggleRow({
         </SurfaceLevelContext.Provider>
       ) : null}
     </View>
+  );
+}
+
+/** "Mai multe detalii" -- a quiet +/- row that reveals a form's optional
+ * fields. `label` is what it shows while closed (it may name what's
+ * inside: "Mai multe detalii (sumă, repetare, notă)"). */
+export function Disclosure({
+  label,
+  open,
+  onToggle,
+  testID,
+}: {
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+  testID?: string;
+}) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      testID={testID}
+      onPress={onToggle}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+      style={{ flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", minHeight: 44 }}
+    >
+      <Ionicons name={open ? "remove" : "add"} size={16} color={colors.onSurfaceTertiary} />
+      <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>{open ? "Mai puține detalii" : label}</Text>
+    </Pressable>
   );
 }

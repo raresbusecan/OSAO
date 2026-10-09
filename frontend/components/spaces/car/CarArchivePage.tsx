@@ -45,7 +45,7 @@ export function CarArchivePage({ carData, onBack, onRecordPress }: CarArchivePag
       contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >
       <TopBar onBack={onBack} backTestID="archive-back" />
-      <Identity color={CAR} kicker="Mașină" title="Arhivă" subtitle="Documente și lucrări înlocuite la reînnoire" />
+      <Identity color={CAR} kicker="Mașină" title="Arhivă" subtitle="Documente și lucrări înlocuite la reînnoire" info="car.archive" />
 
       {records.length === 0 ? (
         <EmptyState icon="archive-outline" message="Nimic arhivat încă. Când reînnoiești un document sau o lucrare, cea veche ajunge aici." />
@@ -54,7 +54,7 @@ export function CarArchivePage({ carData, onBack, onRecordPress }: CarArchivePag
           {records.map((record) => {
             const locked = record.category === "document";
             const renewed = record.renewedByTitle
-              ? `înlocuit de ${record.renewedByTitle}${record.renewedByDate ? `, ${record.renewedByDate}` : ""}`
+              ? `înlocuit de ${record.renewedByTitle}${record.renewedByDate ? ` (până pe ${record.renewedByDate})` : ""}`
               : null;
             return (
               <Row
@@ -63,7 +63,7 @@ export function CarArchivePage({ carData, onBack, onRecordPress }: CarArchivePag
                 onPress={onRecordPress ? () => onRecordPress(record.category, record.id) : undefined}
                 leading={<IconWell icon={record.icon} color={CAR} tint={tint} />}
                 title={record.title}
-                subtitle={[record.categoryLabel, formatCarDate(record.date), renewed].filter(Boolean).join(", ")}
+                subtitle={[record.categoryLabel, record.category === "document" ? record.subtitle ?? formatCarDate(record.date) : formatCarDate(record.date), renewed].filter(Boolean).join(", ")}
                 dim
                 trailing={
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>

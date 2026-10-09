@@ -10,6 +10,13 @@ import type {
 } from "@/lib/spaces/home/home.types";
 import { isSavedItemId } from "@/lib/spaces/itemSync";
 
+// "completed" is the one status the backend treats as resolved
+// everywhere (Item::CLOSED_STATUSES). Rows resolved before 2026-10 were
+// stored as "done" -- still read as resolved so they don't reopen.
+function isClosedStatus(status: unknown): boolean {
+  return status === "completed" || status === "done";
+}
+
 /**
  * Same reasoning as lib/spaces/car/carItems.ts (read that file's doc
  * comment first): Home's 5 categories were frontend-only local state
@@ -78,6 +85,7 @@ export function expenseEntryToItemBody(spaceId: string | number, entry: HomeExpe
     amount: entry.amount ?? null,
     currency: entry.amount != null ? "RON" : null,
     due_at: entry.date,
+    guilt_free: !!entry.guiltFree,
     metadata: {
       notes: entry.notes ?? null,
     },
@@ -92,6 +100,7 @@ function itemToExpenseEntry(item: any): HomeExpenseEntry {
     title: item.title,
     amount: item.amount != null ? Number(item.amount) : 0,
     notes: meta.notes ?? undefined,
+    guiltFree: !!item.guilt_free,
   };
 }
 
@@ -115,9 +124,10 @@ export function maintenanceEntryToItemBody(spaceId: string | number, entry: Home
     amount: entry.price ?? null,
     currency: entry.price != null ? "RON" : null,
     due_at: entry.date,
-    status: entry.completed ? "done" : "pending",
+    status: entry.completed ? "completed" : "pending",
     completed_at: entry.completedAt ?? null,
     recurrence: entry.isRecurring ? entry.recurrenceFrequency ?? "monthly" : null,
+    guilt_free: !!entry.guiltFree,
     metadata: {
       description: entry.description ?? null,
       provider: entry.provider ?? null,
@@ -141,9 +151,10 @@ function itemToMaintenanceEntry(item: any): HomeMaintenanceEntry {
     isRecurring: !!item.recurrence,
     recurrenceFrequency: (item.recurrence as HomeMaintenanceEntry["recurrenceFrequency"]) ?? undefined,
     recurrenceInterval: meta.recurrenceInterval != null ? Number(meta.recurrenceInterval) : undefined,
-    completed: item.status === "done",
+    completed: isClosedStatus(item.status),
     completedAt: item.completed_at ?? undefined,
     spendHistory: Array.isArray(meta.spendHistory) ? meta.spendHistory : undefined,
+    guiltFree: !!item.guilt_free,
   };
 }
 
@@ -161,6 +172,7 @@ export function recurringEntryToItemBody(spaceId: string | number, entry: HomeRe
     category: entry.category,
     recurrence: entry.frequency,
     due_at: entry.nextDueDate,
+    guilt_free: !!entry.guiltFree,
     metadata: {
       notes: entry.notes ?? null,
       spendHistory: entry.spendHistory ?? [],
@@ -179,6 +191,7 @@ function itemToRecurringEntry(item: any): HomeRecurringEntry {
     nextDueDate: item.due_at ?? item.created_at,
     notes: meta.notes ?? undefined,
     spendHistory: Array.isArray(meta.spendHistory) ? meta.spendHistory : undefined,
+    guiltFree: !!item.guilt_free,
   };
 }
 
@@ -263,11 +276,12 @@ export function taskEntryToItemBody(spaceId: string | number, entry: HomeTaskEnt
     type: TYPE_TASK,
     title: entry.title,
     due_at: entry.dueDate ?? null,
-    status: entry.completed ? "done" : "pending",
+    status: entry.completed ? "completed" : "pending",
     completed_at: entry.completedAt ?? null,
     amount: entry.price ?? null,
     currency: entry.price != null ? "RON" : null,
     notes: entry.notes ?? null,
+    guilt_free: !!entry.guiltFree,
     metadata: {
       isPurchase: entry.isPurchase ?? false,
       isRecurring: entry.isRecurring ?? false,
@@ -283,7 +297,7 @@ function itemToTaskEntry(item: any): HomeTaskEntry {
     id: String(item.id),
     title: item.title,
     dueDate: item.due_at ?? undefined,
-    completed: item.status === "done",
+    completed: isClosedStatus(item.status),
     completedAt: item.completed_at ?? undefined,
     notes: item.notes ?? undefined,
     isPurchase: meta.isPurchase ?? false,
@@ -292,6 +306,7 @@ function itemToTaskEntry(item: any): HomeTaskEntry {
     recurrenceFrequency: meta.recurrenceFrequency ?? undefined,
     spendHistory: Array.isArray(meta.spendHistory) ? meta.spendHistory : undefined,
     sortOrder: item.sort_order ?? null,
+    guiltFree: !!item.guilt_free,
   };
 }
 
