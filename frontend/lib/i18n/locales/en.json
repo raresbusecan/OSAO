@@ -1,0 +1,16 @@
+{
+  "common": {
+    "cancel": "Cancel",
+    "save": "Save",
+    "days_one": "{{count}} day",
+    "days_other": "{{count}} days"
+  },
+  "settings": {
+    "language": {
+      "row": "Language",
+      "sheetTitle": "Language",
+      "sheetSubtitle": "The language orgOS shows its text in.",
+      "inProgress": "Translation in progress: some text is still in Romanian for now."
+    }
+  }
+}

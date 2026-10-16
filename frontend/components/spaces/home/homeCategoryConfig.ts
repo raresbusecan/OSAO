@@ -192,6 +192,15 @@ function formatDate(dateString: string): string {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
+/** A date field's value for buildEntry: the form's value when the field
+ * is in `values` (an emptied field = explicitly cleared -> undefined),
+ * the existing entry's value only when the form never had the key. A
+ * plain `values.x || existing.x` used to turn a cleared date into a
+ * silent no-op that kept the old one. */
+function dateValue(values: Record<string, string>, key: string, existing: string | undefined): string | undefined {
+  return key in values ? values[key] || undefined : existing;
+}
+
 const FREQUENCY_LABEL: Record<string, string> = { weekly: "Săptămânal", monthly: "Lunar", yearly: "Anual" };
 const UNIT: Record<string, [string, string]> = { weekly: ["săptămână", "săptămâni"], monthly: ["lună", "luni"], yearly: ["an", "ani"] };
 
@@ -224,8 +233,8 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       documentType: values.documentType || "Other",
       title: values.title,
       issuer: existing?.issuer,
-      issueDate: values.issueDate || existing?.issueDate,
-      expiryDate: values.expiryDate || existing?.expiryDate,
+      issueDate: dateValue(values, "issueDate", existing?.issueDate),
+      expiryDate: dateValue(values, "expiryDate", existing?.expiryDate),
     }),
     valuesFromEntry: (entry: HomeDocumentEntry) => ({
       title: entry.title,
@@ -332,7 +341,9 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
     entries: (data) => data.maintenanceEntries.filter((entry) => !entry.completed),
     buildEntry: (values, existing?: HomeMaintenanceEntry): HomeMaintenanceEntry => {
       const isRecurring = values.isRecurring === "true";
-      const date = values.date || existing?.date || today();
+      // Always has a date (today when none is picked); the picker offers
+      // "Azi", not "Fără dată".
+      const date = dateValue(values, "date", existing?.date) || today();
       const frequency = (values.recurrenceFrequency as HomeMaintenanceEntry["recurrenceFrequency"]) || "monthly";
       const interval = Math.max(1, Number(values.recurrenceInterval) || 1);
 
@@ -362,6 +373,10 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
         recurrenceFrequency: isRecurring ? frequency : undefined,
         recurrenceInterval: isRecurring ? interval : undefined,
         completed: existing?.completed ?? false,
+        // Carried forward like `completed`: the mapper always sends
+        // completed_at, so dropping it here would wipe a resolved
+        // entry's completion date on its next edit.
+        completedAt: existing?.completedAt,
         // Preserved, never derived from the form -- only
         // HomeMaintenanceResolveSheet's own confirm (via
         // handleMaintenanceResolveConfirm) is allowed to append to
@@ -462,7 +477,8 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       category: existing?.category ?? "Other",
       amount: parseLeadingNumber(values.amount) ?? 0,
       frequency: (values.frequency as HomeRecurringEntry["frequency"]) || existing?.frequency || "monthly",
-      nextDueDate: values.nextDueDate || existing?.nextDueDate || today(),
+      // A bill always has a next payment (today when none is picked).
+      nextDueDate: dateValue(values, "nextDueDate", existing?.nextDueDate) || today(),
       notes: existing?.notes,
       // Preserved, never derived from the form -- only resolveCategoryEntry
       // appends to this. An unrelated edit (amount, title) must not wipe

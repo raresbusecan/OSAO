@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { View, Text, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { TopBar, Identity, Segmented, Group, Row, IconWell, EmptyState } from "@/components/ui/primitives";
 import { lei, roCount, roDate } from "@/lib/format";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
@@ -64,7 +64,7 @@ function formatResolvedAt(dateString: string): string {
  * same calculation functions rather than re-deriving the data.
  */
 export function HomeArchivePage({ homeData, onBack }: HomeArchivePageProps) {
-  const { colors, spacing, radius, isDark } = useTheme();
+  const { colors, spacing, radius } = useTheme();
   const [tab, setTab] = useState<ArchiveKind | "all">("all");
 
   const { rows, spentThisMonth } = useMemo(() => {
@@ -81,8 +81,9 @@ export function HomeArchivePage({ homeData, onBack }: HomeArchivePageProps) {
 
   const visibleRows = tab === "all" ? rows : rows.filter((r) => r.kind === tab);
 
-  const HOME = SPACE_IDENTITY_COLORS.home!;
-  const tint = spaceTextColor("home", isDark) ?? HOME;
+  const homeColors = useSpaceColors("home");
+  const HOME = homeColors.color;
+  const tint = homeColors.tint;
 
   return (
     <SwipeBackView onBack={onBack} style={{ backgroundColor: colors.surface }}>

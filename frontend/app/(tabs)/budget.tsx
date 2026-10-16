@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator, DeviceEventEmitter } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -6,6 +6,7 @@ import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { REFRESH_EVENT } from "./_layout";
 import { useFocusEffect } from "expo-router";
+import { useTabDepth } from "@/lib/navigation/returnTrail";
 import { notifyAction, chooseAction } from "@/lib/confirm";
 import { RingProgress } from "@/components/dashboard/RingProgress";
 import { BudgetSpaceDetailPage } from "@/components/dashboard/BudgetSpaceDetailPage";
@@ -25,7 +26,10 @@ import { useRouter } from "expo-router";
 import { severityColor, budgetSeverity } from "@/lib/statusColors";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { Sheet } from "@/components/ui/Sheet";
-import { PageTitle, SectionHeader, Group, IconWell, InfoButton, Button, Field, EmptyState, Row } from "@/components/ui/primitives";
+import { PageTitle, SectionHeader, Group, IconWell, InfoButton, Button, Field, EmptyState, Row, Pill } from "@/components/ui/primitives";
+import { useTourScroll, useTourTarget } from "@/components/ui/tourTargets";
+import { useAutoTour } from "@/lib/useAutoTour";
+import { SHOW_TOUR_TEST_BUTTON, startTour, type TourCtx } from "@/lib/tours";
 import { motion } from "@/lib/motion";
 import { lei, roNumber, roDate } from "@/lib/format";
 
@@ -119,6 +123,8 @@ export default function BudgetScreen() {
   // and the first Cheltuieli space, where credits are managed.
   const [spaceKindById, setSpaceKindById] = useState<Record<string, SpaceKind>>({});
   const [spaceNameById, setSpaceNameById] = useState<Record<string, string>>({});
+  // String(space id) -> spaces.color, so a linked-space chip shows THAT space's colour.
+  const [spaceColorById, setSpaceColorById] = useState<Record<string, string | null>>({});
   const [expensesSpaceId, setExpensesSpaceId] = useState<string | null>(null);
 
   // Every space row opens this detail page -- setting, changing and
@@ -127,6 +133,9 @@ export default function BudgetScreen() {
   const [showOverview, setShowOverview] = useState(false);
   const [showGuiltFree, setShowGuiltFree] = useState(false);
   const [showCredit, setShowCredit] = useState(false);
+  // Return trail (lib/navigation/returnTrail.ts): a sub-page open = "deep",
+  // so leaving Buget by a tab tap is remembered for 60 s.
+  useTabDepth("budget", !!spaceDetailFor || showOverview || showGuiltFree || showCredit);
 
   const [incomeOpen, setIncomeOpen] = useState(false);
   // An income typed but not saved yet (the keep/re-split dialog was
@@ -142,6 +151,17 @@ export default function BudgetScreen() {
   const [goalTarget, setGoalTarget] = useState("");
   const [goalCurrent, setGoalCurrent] = useState("");
   const [savingGoal, setSavingGoal] = useState(false);
+
+  // First-use tour (lib/tours.ts "budget"): what it points at, and the
+  // page's ScrollView so a step can scroll its target into view. "budget.top"
+  // = the onboarding card without a plan, the hero with one; "budget.split"
+  // = the onboarding bar + legend here, or IncomeSplitCard's income block.
+  const scrollRef = useRef<ScrollView>(null);
+  const tourScroll = useTourScroll("budget", scrollRef);
+  const topTarget = useTourTarget("budget.top");
+  const onboardingSplitTarget = useTourTarget("budget.split");
+  const spacesTarget = useTourTarget("budget.spaces");
+  const recurringTarget = useTourTarget("budget.recurring");
 
   const load = useCallback(async () => {
     try {
@@ -181,11 +201,13 @@ export default function BudgetScreen() {
       const kinds: SpaceKindMeta[] = [];
       const byId: Record<string, SpaceKind> = {};
       const nameById: Record<string, string> = {};
+      const colorById: Record<string, string | null> = {};
       let expensesId: string | null = null;
       (spacesRes.spaces || []).forEach((s: any) => {
         const kind = detectSpaceType(s, profileFromSpace(s));
         byId[String(s.id)] = kind;
         nameById[String(s.id)] = s.name ?? "";
+        colorById[String(s.id)] = s.color ?? null;
         if (kind === "expenses" && !expensesId) expensesId = String(s.id);
         const meta = SPACE_KIND_META[kind];
         if (meta && !seen.has(kind)) {
@@ -196,6 +218,7 @@ export default function BudgetScreen() {
       setSpaceKinds(kinds);
       setSpaceKindById(byId);
       setSpaceNameById(nameById);
+      setSpaceColorById(colorById);
       setExpensesSpaceId(expensesId);
     } catch {}
   }, []);
@@ -352,6 +375,12 @@ export default function BudgetScreen() {
   const heroRatio = plan ? (envelope > 0 ? needsCommitted / envelope : 0) : totalRatio;
   const heroLabel = plan ? "Cheltuit din necesități" : "Cheltuit din buget";
 
+  const tourCtx: TourCtx = { hasPlan: !!plan, hasSpaces: spaceKinds.length > 0, hasBudgets: limits.length > 0, hasCredit };
+  useAutoTour("budget", {
+    ready: !loading && !spaceDetailFor && !showOverview && !showGuiltFree && !showCredit && !incomeOpen && !splitOpen && !resplitOpen && !editingGoal,
+    ctx: tourCtx,
+  });
+
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="budget-screen">
       {spaceDetailFor ? (
@@ -375,6 +404,7 @@ export default function BudgetScreen() {
           items={planSummary.credit.items}
           spaceKindById={spaceKindById}
           spaceNameById={spaceNameById}
+          spaceColorById={spaceColorById}
           onOpenExpenses={expensesSpaceId ? () => router.push(`/${expensesSpaceId}` as any) : null}
           onBack={() => setShowCredit(false)}
         />
@@ -389,8 +419,15 @@ export default function BudgetScreen() {
           onBack={() => setShowOverview(false)}
         />
       ) : (
-      <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 140, gap: spacing.section }}>
+      <ScrollView ref={scrollRef} {...tourScroll} contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 140, gap: spacing.section }}>
         <PageTitle info="budget.page">Buget</PageTitle>
+
+        {SHOW_TOUR_TEST_BUTTON ? (
+          // TEMP for testing -- see SHOW_TOUR_TEST_BUTTON (lib/tours.ts).
+          <View style={{ flexDirection: "row", marginTop: -spacing.md }}>
+            <Pill testID="budget-tour-test" icon="play-circle-outline" label="Pornește ghidul" onPress={() => startTour("budget", tourCtx)} />
+          </View>
+        ) : null}
 
         {loading ? (
           <ActivityIndicator color={colors.onSurfaceTertiary} />
@@ -399,7 +436,7 @@ export default function BudgetScreen() {
             {/* The whole month at a glance -- opens the overview page
                 (composition ring + ranked spend list). */}
             {!plan ? (
-              <View testID="income-onboarding" style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: 14 }}>
+              <View testID="income-onboarding" {...topTarget} style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: 14 }}>
                 <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}>
                   <Ionicons name="wallet-outline" size={20} color={colors.onSurface} />
                 </View>
@@ -409,23 +446,28 @@ export default function BudgetScreen() {
                     Spune-ne cât câștigi net pe lună. Îl împărțim în cinci și fiecare spațiu își primește bugetul din necesități.
                   </Text>
                 </View>
-                <View accessible accessibilityRole="image" accessibilityLabel="Împărțirea implicită: 55, 5, 10, 15, 15 la sută" style={{ flexDirection: "row", gap: 2, height: 10 }}>
-                  {JAR_ORDER.map((k) => (
-                    <View key={k} style={{ flex: DEFAULT_SPLIT[k], borderRadius: 5, backgroundColor: jarFill(k, colors, isDark), opacity: k === "needs" ? 0.85 : 1 }} />
-                  ))}
-                </View>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: 4 }}>
-                  {ONBOARDING_LEGEND.map(([p, t]) => (
-                    <Text key={t} style={{ width: "50%", fontSize: 13, color: colors.onSurfaceTertiary }}>
-                      <Text style={{ fontWeight: "600", color: colors.onSurface }}>{p}</Text> {t}
-                    </Text>
-                  ))}
+                {/* Tour step 2 ("Cele cinci părți") without a plan. */}
+                <View {...onboardingSplitTarget} style={{ gap: 14 }}>
+                  <View accessible accessibilityRole="image" accessibilityLabel="Împărțirea implicită: 55, 5, 10, 15, 15 la sută" style={{ flexDirection: "row", gap: 2, height: 10 }}>
+                    {JAR_ORDER.map((k) => (
+                      <View key={k} style={{ flex: DEFAULT_SPLIT[k], borderRadius: 5, backgroundColor: jarFill(k, colors, isDark), opacity: k === "needs" ? 0.85 : 1 }} />
+                    ))}
+                  </View>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: 4 }}>
+                    {ONBOARDING_LEGEND.map(([p, t]) => (
+                      <Text key={t} style={{ width: "50%", fontSize: 13, color: colors.onSurfaceTertiary }}>
+                        <Text style={{ fontWeight: "600", color: colors.onSurface }}>{p}</Text> {t}
+                      </Text>
+                    ))}
+                  </View>
                 </View>
                 <Button testID="income-onboarding-add" label="Adaugă venitul" onPress={() => setIncomeOpen(true)} />
               </View>
             ) : null}
 
             {plan || limits.length > 0 ? (
+              // Tour step 1 with a plan (without one it's the onboarding card).
+              <View {...(plan ? topTarget : {})}>
               <PressableScale
                 testID="budget-overview-entry"
                 onPress={() => setShowOverview(true)}
@@ -457,6 +499,7 @@ export default function BudgetScreen() {
                   </Text>
                 </View>
               </PressableScale>
+              </View>
             ) : null}
 
             {plan && planSummary ? (
@@ -483,12 +526,12 @@ export default function BudgetScreen() {
                 action={plan && spaceKinds.length > 0 ? { label: "Reîmparte", onPress: () => setResplitOpen(true), testID: "resplit-open", tone: colors.onSurface } : undefined}
               />
               {spaceKinds.length === 0 ? (
-                <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card }}>
+                <View {...spacesTarget} style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card }}>
                   <EmptyState icon="wallet-outline" message="Creează un spațiu Mașină, Casă, Cumpărături sau Cheltuieli ca să-i poți pune un buget." />
                 </View>
               ) : (
                 <Group inset={62}>
-                  {spaceKinds.map((meta) => {
+                  {spaceKinds.map((meta, i) => {
                     const name = SPACE_KIND_LABEL[meta.kind] ?? meta.label;
                     const color = SPACE_IDENTITY_COLORS[meta.kind] ?? colors.onSurfaceTertiary;
                     const tint = spaceTextColor(meta.kind, isDark) ?? color;
@@ -531,8 +574,9 @@ export default function BudgetScreen() {
                     const creditNote = creditByKind[meta.kind] ? `+ rată ${lei(Math.round(creditByKind[meta.kind]!))} pe lună, socotită la Credit` : null;
 
                     return (
+                      // Tour step 3 points at the first space row.
+                      <View key={meta.kind} {...(i === 0 ? spacesTarget : {})}>
                       <PressableScale
-                        key={meta.kind}
                         testID={limit ? `space-budget-${meta.kind}` : `space-budget-unset-${meta.kind}`}
                         onPress={() => setSpaceDetailFor({ label: meta.label, icon: meta.icon, monthlyLimit: limit?.monthly_limit })}
                         scaleTo={1}
@@ -579,6 +623,7 @@ export default function BudgetScreen() {
                           <Text testID={`space-credit-note-${meta.kind}`} style={{ marginLeft: 46, fontSize: 13, lineHeight: 18, color: colors.onSurfaceTertiary }}>{creditNote}</Text>
                         ) : null}
                       </PressableScale>
+                      </View>
                     );
                   })}
                   {plan ? (
@@ -641,7 +686,10 @@ export default function BudgetScreen() {
             ) : null}
 
             <View style={{ gap: spacing.sm }} testID="section-recurring">
-              <SectionHeader title="Plăți recurente" info="budget.recurring" />
+              {/* Tour step 4. */}
+              <View {...recurringTarget}>
+                <SectionHeader title="Plăți recurente" info="budget.recurring" />
+              </View>
               {recurringBills.length === 0 && creditItems.length === 0 ? (
                 <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card }}>
                   <EmptyState icon="repeat" message="Nicio plată recurentă. Le adaugi din spațiul Casă, la Plăți recurente." />

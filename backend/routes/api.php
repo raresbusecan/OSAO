@@ -85,6 +85,7 @@ Route::middleware(['auth:sanctum', 'throttle:api', SyncUserTimezone::class])->gr
     Route::put('/spaces/{id}', [SpaceController::class, 'update']);
     Route::delete('/spaces/{id}', [SpaceController::class, 'destroy']);
     Route::put('/spaces/{id}/car-profile', [SpaceController::class, 'updateCarProfile']);
+    Route::put('/spaces/{id}/car-profile/odometer', [SpaceController::class, 'updateCarOdometer']);
     Route::put('/spaces/{id}/home-profile', [SpaceController::class, 'updateHomeProfile']);
     Route::get('/spaces/{id}/members', [SpaceController::class, 'members']);
     Route::post('/spaces/{id}/members', [SpaceController::class, 'addMember']);

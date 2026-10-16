@@ -137,7 +137,7 @@ export function socialReturnUrl(): string {
  * Codes = backend SocialAuthException::MESSAGES (keep in sync); JSON
  * errors (POST /auth/apple, /auth/exchange) carry the server's own
  * Romanian `message` instead and go through apiErrorMessage. */
-export function socialErrorMessage(code?: string | null, provider?: SocialProvider | null): string {
+export function socialErrorMessage(code?: string | null, provider?: SocialProvider | null, hint?: string | null): string {
   const who = provider ? PROVIDER_LABEL[provider] : "acest furnizor";
   switch (code) {
     case "cancelled":
@@ -145,7 +145,11 @@ export function socialErrorMessage(code?: string | null, provider?: SocialProvid
     case "email_missing":
       return `Nu am primit adresa de email de la ${who}. Permite accesul la email și încearcă din nou.`;
     case "email_unverified_exists":
-      return `Există deja un cont orgOS cu acest email, iar ${who} nu l-a confirmat. Intră cu emailul și parola.`;
+      // hint=no_password: the matching account was created without a
+      // password (social sign-in), so "use your password" alone is a dead end.
+      return hint === "no_password"
+        ? `Există deja un cont orgOS cu acest email, iar ${who} nu l-a confirmat. Intră cu emailul și parola sau folosește „Ai uitat parola?”.`
+        : `Există deja un cont orgOS cu acest email, iar ${who} nu l-a confirmat. Intră cu emailul și parola.`;
     case "provider_disabled":
       return `Autentificarea cu ${who} nu este disponibilă momentan.`;
     case "invalid_state":
@@ -202,7 +206,7 @@ export async function signInWithWebProvider(provider: "google" | "facebook"): Pr
   const error = first(queryParams?.error);
   if (error) {
     if (isCancelCode(error)) return null;
-    throw new Error(socialErrorMessage(error, provider));
+    throw new Error(socialErrorMessage(error, provider, first(queryParams?.hint)));
   }
   if (!code) throw new Error(socialErrorMessage(null, provider));
   // If the OS also opened the deep link, auth-callback.tsx sees this code

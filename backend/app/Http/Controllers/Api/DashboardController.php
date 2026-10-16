@@ -3,8 +3,10 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CarProfile;
 use App\Models\Item;
 use App\Services\EventSpend;
+use App\Services\HomeSpend;
 use App\Services\RecurrenceProjector;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -18,7 +20,7 @@ class DashboardController extends Controller
         $user = Auth::user();
 
         if (!$user) {
-            return response()->json(['message' => 'Unauthorized'], 401);
+            return response()->json(['message' => 'Nu ești autentificat.'], 401);
         }
 
         // Tagged with the user's own stored timezone (same pattern
@@ -61,7 +63,7 @@ class DashboardController extends Controller
             ->whereNull('recurrence')
             ->whereNotNull('due_at')
             ->whereNotIn('status', Item::CLOSED_STATUSES)
-            ->with('space:id,name,icon,type')
+            ->with('space:id,name,icon,type,color')
             ->get()
             ->map(function (Item $item) use ($user) {
                 $item->due_at = $item->effectiveDueAt($user->timezone);
@@ -78,7 +80,7 @@ class DashboardController extends Controller
             ->where('type', 'home_maintenance')
             ->whereNull('recurrence')
             ->whereNotIn('status', Item::CLOSED_STATUSES)
-            ->with('space:id,name,icon,type')
+            ->with('space:id,name,icon,type,color')
             ->get()
             ->map(function (Item $item) {
                 $next = $item->maintenanceNextDue();
@@ -98,7 +100,7 @@ class DashboardController extends Controller
             ->whereNotNull('recurrence')
             ->whereNotNull('due_at')
             ->whereNotIn('status', Item::CLOSED_STATUSES)
-            ->with('space:id,name,icon,type')
+            ->with('space:id,name,icon,type,color')
             ->get()
             ->map(function (Item $item) use ($now) {
                 $next = RecurrenceProjector::currentDue($item, $now);
@@ -139,7 +141,7 @@ class DashboardController extends Controller
         $credits = Item::where('user_id', $user->id)
             ->activeCredits($now)
             ->whereNotNull('due_at')
-            ->with('space:id,name,icon,type')
+            ->with('space:id,name,icon,type,color')
             ->get();
         foreach ($credits as $credit) {
             $due = $credit->creditDueIn($now);
@@ -175,7 +177,7 @@ class DashboardController extends Controller
         $monthEndUtc = $now->copy()->endOfMonth()->setTimezone('UTC');
 
         $monthItems = Item::where('user_id', $user->id)
-            ->whereIn('type', array_values(array_diff(Item::SPENDING_TYPES, ['custom_event'])))
+            ->whereIn('type', array_values(array_diff(Item::SPENDING_TYPES, ['custom_event'], HomeSpend::TYPES)))
             ->whereBetween('due_at', [$monthStartUtc, $monthEndUtc])
             ->get(['type', 'amount']);
 
@@ -187,6 +189,14 @@ class DashboardController extends Controller
             }
             $totals[$meta['label']] ??= ['icon' => $meta['icon'], 'amount' => 0.0];
             $totals[$meta['label']]['amount'] += (float) $item->amount;
+        }
+        // Casă purchases / maintenance count on the day they were paid
+        // (spendHistory), not on their due_at -- HomeSpend.
+        $homeSpent = HomeSpend::total($user->id, $now);
+        if ($homeSpent > 0) {
+            $meta = Item::SPENDING_TYPE_SPACE['home_task'];
+            $totals[$meta['label']] ??= ['icon' => $meta['icon'], 'amount' => 0.0];
+            $totals[$meta['label']]['amount'] += $homeSpent;
         }
         // Calendar purchases count as spent only from their day on (a
         // planned one is Budget's `planned`, never "Cheltuit") -- EventSpend.
@@ -257,6 +267,12 @@ class DashboardController extends Controller
             'monthlyExpenses' => [
                 'total' => $monthlyTotal,
                 'sources' => $sources,
+                // Casă bills, outside `total` (Complet shows them as a
+                // monthly commitment, "plăți recurente de plătit"). Simplu's
+                // Acasă adds `billsPaid` to its total and shows `billsDue`
+                // (still unpaid up to month end) as "de plătit".
+                'billsPaid' => HomeSpend::billsPaid($user->id, $now),
+                'billsDue' => HomeSpend::billsDue($user->id, $now),
             ],
         ]);
     }
@@ -275,7 +291,7 @@ class DashboardController extends Controller
         $entries = Item::where('user_id', $userId)
             ->where('type', 'car_maintenance')
             ->whereNotIn('status', Item::CLOSED_STATUSES)
-            ->with('space:id,name,icon,type')
+            ->with('space:id,name,icon,type,color')
             ->get();
         if ($entries->isEmpty()) {
             return collect();
@@ -289,6 +305,8 @@ class DashboardController extends Controller
             ->get(['space_id', 'metadata'])
             ->groupBy('space_id')
             ->map(fn ($rows) => $rows->max(fn ($r) => (float) ($r->metadata['odometer'] ?? 0)));
+        // ... or the reading typed on the Mașină top card, if higher.
+        $odometer = CarProfile::withManualOdometers($odometer, $entries->pluck('space_id'));
 
         $appTz = config('app.timezone');
         $horizon = $now->copy()->addDays(7)->endOfDay();
@@ -304,7 +322,7 @@ class DashboardController extends Controller
                 return !$entries->contains(fn (Item $o) => $o->id !== $e->id
                     && $o->space_id === $e->space_id
                     && $o->title === $e->title
-                    && $o->due_at && $e->due_at && $o->due_at->gt($e->due_at));
+                    && Item::isNewerVisit($o, $e));
             })
             ->map(function (Item $e) use ($odometer, $now, $appTz, $horizon) {
                 $nextKm = $e->metadata['nextServiceOdometer'] ?? null;
@@ -354,7 +372,7 @@ class DashboardController extends Controller
         return Item::where('user_id', $userId)
             ->where('type', 'home_document')
             ->whereNotIn('status', Item::CLOSED_STATUSES)
-            ->with('space:id,name,icon,type')
+            ->with('space:id,name,icon,type,color')
             ->get()
             ->map(function (Item $item) use ($now, $horizon, $appTz) {
                 $expiry = $item->metadata['expiryDate'] ?? null;
@@ -467,15 +485,21 @@ class DashboardController extends Controller
         $items = Item::where('user_id', $userId)
             ->whereIn('type', ['car_fuel', 'car_maintenance', 'car_expense', 'car_document'])
             ->whereNotNull('space_id')
-            ->with('space:id,name,icon,type')
+            ->with('space:id,name,icon,type,color')
             ->get();
         if ($items->isEmpty()) {
             return collect();
         }
         $superseded = Item::supersededCarDocumentIds($userId);
+        // Reading typed on the Mașină top card (null = never set by hand).
+        $manualOdo = CarProfile::whereIn('space_id', $items->pluck('space_id')->unique())
+            ->whereNotNull('odometer')->pluck('odometer', 'space_id');
 
-        return $items->groupBy('space_id')->map(function (Collection $rows) use ($superseded) {
-            $odo = (int) round($rows->max(fn (Item $r) => (float) ($r->metadata['odometer'] ?? 0)));
+        return $items->groupBy('space_id')->map(function (Collection $rows, $spaceId) use ($superseded, $manualOdo) {
+            $odo = (int) round(max(
+                (float) $rows->max(fn (Item $r) => (float) ($r->metadata['odometer'] ?? 0)),
+                (float) ($manualOdo[$spaceId] ?? 0),
+            ));
             $services = $rows->where('type', 'car_maintenance')->filter(fn (Item $r) => !in_array($r->status, Item::CLOSED_STATUSES, true));
             $nextService = $services
                 ->filter(fn (Item $r) => is_numeric($r->metadata['nextServiceOdometer'] ?? null)

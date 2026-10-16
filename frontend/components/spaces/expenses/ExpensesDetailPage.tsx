@@ -2,9 +2,11 @@ import React, { useMemo, useState } from "react";
 import { View, Text, ScrollView } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
-import { TopBar, Identity, Pill } from "@/components/ui/primitives";
+import { TopBar, Identity } from "@/components/ui/primitives";
+import { PeriodPicker } from "@/components/ui/PeriodPicker";
+import type { PeriodPreset } from "@/lib/period";
 import { roCount } from "@/lib/format";
 import type { ExpensesData } from "./expenses.data.types";
 import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
@@ -23,20 +25,15 @@ export type ExpensesDetailPageProps = {
   onEntryDelete?: (entry: ExpenseEntry) => void;
 };
 
-const PERIOD_PRESETS: { label: string; period: ExpensesPeriod }[] = [
-  // Same labels, same order as Casă's and Mașină's Cheltuieli pages.
-  { label: "Luna asta", period: { kind: "thisMonth" } },
-  { label: "3 luni", period: { kind: "months", count: 3 } },
-  { label: "6 luni", period: { kind: "months", count: 6 } },
-  { label: "1 an", period: { kind: "years", count: 1 } },
+// Mașină's picker and row look (components/ui/PeriodPicker.tsx), this
+// page's own presets -- incl. "Luna asta", which Mașină doesn't have.
+const PERIOD_PRESETS: PeriodPreset<ExpensesPeriod>[] = [
   { label: "Tot timpul", period: { kind: "all" } },
+  { label: "Luna asta", period: { kind: "thisMonth" } },
+  { label: "Ultimele 3 luni", period: { kind: "months", count: 3 } },
+  { label: "Ultimele 6 luni", period: { kind: "months", count: 6 } },
+  { label: "Ultimul an", period: { kind: "years", count: 1 } },
 ];
-
-function periodsEqual(a: ExpensesPeriod, b: ExpensesPeriod): boolean {
-  if (a.kind !== b.kind) return false;
-  if (a.kind === "all" || a.kind === "thisMonth") return true;
-  return (a as { count: number }).count === (b as { count: number }).count;
-}
 
 /**
  * Opened by tapping the "All time" card on the space's own screen --
@@ -50,6 +47,7 @@ function periodsEqual(a: ExpensesPeriod, b: ExpensesPeriod): boolean {
  */
 export function ExpensesDetailPage({ expensesData, onBack, onEntryPress, onEntryDelete }: ExpensesDetailPageProps) {
   const { colors, spacing, radius, typography } = useTheme();
+  const TEAL = useSpaceColors("expenses").color;
 
   const [period, setPeriod] = useState<ExpensesPeriod>({ kind: "all" });
 
@@ -72,19 +70,9 @@ export function ExpensesDetailPage({ expensesData, onBack, onEntryPress, onEntry
       contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >
       <TopBar onBack={onBack} backTestID="expenses-detail-back" />
-      <Identity color={SPACE_IDENTITY_COLORS.expenses} kicker="Cheltuieli" title="Toate cheltuielile" info="expenses.space" />
+      <Identity color={TEAL} kicker="Cheltuieli" title="Toate cheltuielile" info="expenses.space" />
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-        {PERIOD_PRESETS.map((preset) => (
-          <Pill
-            key={preset.label}
-            testID={`expenses-detail-period-option-${preset.label}`}
-            label={preset.label}
-            active={periodsEqual(period, preset.period)}
-            onPress={() => setPeriod(preset.period)}
-          />
-        ))}
-      </ScrollView>
+      <PeriodPicker value={period} onChange={setPeriod} presets={PERIOD_PRESETS} testIDPrefix="expenses-detail" />
 
       <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: 2 }}>
         <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{formatExpensesPeriodLabel(period)}</Text>

@@ -99,7 +99,7 @@ class SocialWebController extends Controller
                 $providerUser->getName(),
             );
         } catch (SocialAuthException $e) {
-            return $this->back($appRedirect, ['error' => $e->errorCode]);
+            return $this->back($appRedirect, array_filter(['error' => $e->errorCode, 'hint' => $e->hint]));
         }
 
         return $this->back($appRedirect, ['code' => $this->social->createExchangeCode($user, $created)]);

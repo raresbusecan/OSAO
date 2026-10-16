@@ -1,4 +1,5 @@
 import type { HomeData } from "@/components/spaces/home/home.data.types";
+import { roCount } from "@/lib/format";
 
 /**
  * The single place that knows how to turn Home's separate category
@@ -166,6 +167,7 @@ export function getTotalHomeSpend(records: HomeSpendRecord[]): number {
 export type HomeSpendPeriod =
   | { kind: "all" }
   | { kind: "thisMonth" }
+  | { kind: "weeks"; count: number }
   | { kind: "months"; count: number }
   | { kind: "years"; count: number };
 
@@ -184,7 +186,8 @@ export function filterSpendByPeriod(
   }
 
   const cutoff = new Date(referenceDate);
-  if (period.kind === "months") cutoff.setMonth(cutoff.getMonth() - period.count);
+  if (period.kind === "weeks") cutoff.setDate(cutoff.getDate() - period.count * 7);
+  else if (period.kind === "months") cutoff.setMonth(cutoff.getMonth() - period.count);
   else cutoff.setFullYear(cutoff.getFullYear() - period.count);
 
   return records.filter((record) => new Date(record.date).getTime() >= cutoff.getTime());
@@ -193,7 +196,8 @@ export function filterSpendByPeriod(
 export function formatSpendPeriodLabel(period: HomeSpendPeriod): string {
   if (period.kind === "all") return "Tot timpul";
   if (period.kind === "thisMonth") return "Luna aceasta";
-  if (period.kind === "months") return period.count === 1 ? "Ultima lună" : `Ultimele ${period.count} luni`;
+  if (period.kind === "weeks") return period.count === 1 ? "Ultima săptămână" : `Ultimele ${roCount(period.count, "săptămână", "săptămâni")}`;
+  if (period.kind === "months") return period.count === 1 ? "Ultima lună" : `Ultimele ${roCount(period.count, "lună", "luni")}`;
   return period.count === 1 ? "Ultimul an" : `Ultimii ${period.count} ani`;
 }
 

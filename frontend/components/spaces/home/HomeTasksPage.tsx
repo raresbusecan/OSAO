@@ -20,7 +20,7 @@ import {
   recurringWarningTierColor,
   type HomeTaskRow,
 } from "@/lib/spaces/home/calculations/dashboard.calculations";
-import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 
 export type HomeTasksPageProps = {
   homeData: HomeData;
@@ -42,7 +42,6 @@ export type HomeTasksPageProps = {
   onReorder: (orderedIds: string[]) => void;
 };
 
-const HOME = SPACE_IDENTITY_COLORS.home!;
 
 /** The urgency chip for a task: Restant / Azi / în N zile. */
 function TaskChip({ row }: { row: HomeTaskRow }) {
@@ -69,7 +68,9 @@ function TaskChip({ row }: { row: HomeTaskRow }) {
  * "Gata"), so a long press always means "actions" in Casă.
  */
 export function HomeTasksPage({ homeData, onBack, onAdd, onPreview, onActions, onCheckboxPress, onDelete, onReorder }: HomeTasksPageProps) {
-  const { colors, spacing, radius, isDark } = useTheme();
+  const { colors, spacing, radius } = useTheme();
+  const homeColors = useSpaceColors("home");
+  const HOME = homeColors.color;
   const [reordering, setReordering] = useState(false);
 
   const { dueSoon, upcoming, recentDone } = getHomeTasksView(homeData);
@@ -148,7 +149,7 @@ export function HomeTasksPage({ homeData, onBack, onAdd, onPreview, onActions, o
             title="Toate"
             action={
               reordering
-                ? { label: "Gata", onPress: () => setReordering(false), testID: "home-tasks-reorder-done", tone: spaceTextColor("home", isDark) ?? HOME }
+                ? { label: "Gata", onPress: () => setReordering(false), testID: "home-tasks-reorder-done", tone: homeColors.tint }
                 : upcoming.length > 1
                   ? { label: "Ordonează", onPress: () => setReordering(true), testID: "home-tasks-reorder" }
                   : undefined
@@ -214,6 +215,8 @@ function TaskRow({
   showDate?: boolean;
 }) {
   const { colors, spacing } = useTheme();
+  const homeColors = useSpaceColors("home");
+  const HOME = homeColors.color;
 
   const meta = [
     row.isPurchase && done && row.price ? lei(row.price) : null,
@@ -252,7 +255,7 @@ function TaskRow({
             justifyContent: "center",
           }}
         >
-          {done ? <Ionicons name="checkmark" size={15} color="#FFFFFF" /> : null}
+          {done ? <Ionicons name="checkmark" size={15} color={homeColors.ink} /> : null}
         </Pressable>
         )}
         <PressableScale

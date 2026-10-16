@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { View, Text, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button } from "@/components/ui/primitives";
 import { PressableScale } from "@/components/ui/PressableScale";
@@ -49,6 +49,7 @@ export type GrocerySuggestionModalProps = {
  * shared Sheet, one row per supply with an editable quantity and a "+". */
 export function GrocerySuggestionModal({ visible, suggestions, onAdd, onClose }: GrocerySuggestionModalProps) {
   const { spacing } = useTheme();
+  const GROC = useSpaceColors("grocery").color;
   return (
     <Sheet
       visible={visible}
@@ -57,7 +58,7 @@ export function GrocerySuggestionModal({ visible, suggestions, onAdd, onClose }:
       title="Probabil pe terminate"
       subtitle="Din ritmul în care cumperi proviziile din Casă"
       icon="basket-outline"
-      tone={SPACE_IDENTITY_COLORS.grocery}
+      tone={GROC}
       footer={<Button variant="secondary" label="Nu acum" onPress={onClose} />}
     >
       <View style={{ gap: spacing.sm }}>
@@ -78,7 +79,8 @@ function SuggestionRow({
 }) {
   const { colors, spacing, radius } = useTheme();
   const [quantity, setQuantity] = useState(String(suggestion.defaultQuantity || 1));
-  const GROC = SPACE_IDENTITY_COLORS.grocery!;
+  const groc = useSpaceColors("grocery");
+  const GROC = groc.color;
 
   const handleAdd = () => {
     const value = Number(quantity.replace(",", "."));
@@ -111,7 +113,7 @@ function SuggestionRow({
         accessibilityLabel={`Adaugă ${suggestion.name}`}
         style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: GROC, alignItems: "center", justifyContent: "center" }}
       >
-        <Ionicons name="add" size={20} color={SPACE_ON_FILL.grocery} />
+        <Ionicons name="add" size={20} color={groc.ink} />
       </PressableScale>
     </View>
   );

@@ -1,0 +1,17 @@
+{
+  "common": {
+    "cancel": "Renunță",
+    "save": "Salvează",
+    "days_one": "{{count}} zi",
+    "days_few": "{{count}} zile",
+    "days_other": "{{count}} de zile"
+  },
+  "settings": {
+    "language": {
+      "row": "Limbă",
+      "sheetTitle": "Limbă",
+      "sheetSubtitle": "Limba în care îți arată orgOS textele.",
+      "inProgress": "Traducerea e în lucru: o parte din texte rămân deocamdată în română."
+    }
+  }
+}

@@ -3,7 +3,7 @@ import { View, Text, type TextInput } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { confirmAction } from "@/lib/confirm";
 import { groceryCategoryLabel, type GroceryCategory, type GroceryItem } from "@/lib/spaces/grocery/grocery.types";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field } from "@/components/ui/primitives";
 import { matchIngredientCategory, useIngredientReferences } from "@/lib/spaces/grocery/ingredientLookup";
@@ -136,7 +136,7 @@ export function GroceryProductModal({
   };
 
 
-  const GROC = SPACE_IDENTITY_COLORS.grocery!;
+  const GROC = useSpaceColors("grocery").color;
 
   return (
     <Sheet

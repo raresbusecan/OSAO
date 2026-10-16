@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, spaceTextColor, type SpaceKind } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { motion } from "@/lib/motion";
 
@@ -13,10 +13,11 @@ export type SpaceQuickAction = { key: string; icon: string; label: string };
  * label underneath, all alike (a filled first one read as "selected").
  * Order is the hint: most frequent first. Used by Mașină and Casă.
  */
-export function SpaceQuickActions({ kind, actions, onAction }: { kind: SpaceKind; actions: SpaceQuickAction[]; onAction?: (key: string) => void }) {
-  const { colors, spacing, isDark } = useTheme();
-  const fill = SPACE_IDENTITY_COLORS[kind] ?? colors.onSurfaceTertiary;
-  const tint = spaceTextColor(kind, isDark) ?? fill;
+export function SpaceQuickActions({ kind, actions, onAction }: { kind: "car" | "home"; actions: SpaceQuickAction[]; onAction?: (key: string) => void }) {
+  const { colors, spacing } = useTheme();
+  const spaceColors = useSpaceColors(kind);
+  const fill = spaceColors.color;
+  const tint = spaceColors.tint;
 
   return (
     <View style={{ flexDirection: "row", justifyContent: "space-between", gap: actions.length > 4 ? spacing.xs : spacing.sm }}>

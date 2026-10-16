@@ -315,7 +315,8 @@ class SocialLoginTest extends TestCase
 
         $this->apple(['email_verified' => 'false'])
             ->assertStatus(409)->assertJsonPath('error', 'email_unverified_exists')
-            ->assertJsonPath('message', 'Există deja un cont cu acest email. Intră cu emailul și parola.');
+            ->assertJsonPath('message', 'Există deja un cont cu acest email. Intră cu emailul și parola.')
+            ->assertJsonMissingPath('hint');
 
         $this->assertSame(0, SocialAccount::count());
         $this->assertSame(1, User::count());
@@ -381,13 +382,18 @@ class SocialLoginTest extends TestCase
         $this->assertSame(0, SocialAccount::where('provider_user_id', 'fb-2')->count());
     }
 
+    /** Unverified links that did NOT create the account with the proven
+     * address are dropped: u1/u2 carry a link flagged as not the creator
+     * (e.g. a backfilled row), u3 is the creator but the address proven is
+     * a NEW one (email change), so the link's address was never proven. */
     public function test_proving_the_address_drops_unverified_links(): void
     {
         $this->withoutMiddleware(ThrottleRequests::class);
         Notification::fake();
 
-        $mk = function (string $email, bool $verified, string $sub) {
+        $mk = function (string $email, bool $createdAccount, string $sub) {
             [$user] = app(SocialAuthService::class)->resolveUser('facebook', $sub, $email, false);
+            SocialAccount::where('user_id', $user->id)->update(['created_account' => $createdAccount]);
             SocialAccount::create(['user_id' => $user->id, 'provider' => 'apple', 'provider_user_id' => $sub . '-a', 'email' => $email, 'email_verified' => true]);
             return $user;
         };
@@ -415,11 +421,128 @@ class SocialLoginTest extends TestCase
         $this->assertSame(['apple'], SocialAccount::where('user_id', $u2->id)->pluck('provider')->all());
 
         // 3. confirm-email-change success
-        $u3 = $mk('three@example.com', false, 'fb-3');
+        $u3 = $mk('three@example.com', true, 'fb-3');
         $changeToken = str_repeat('c', 64);
         DB::table('email_change_requests')->insert(['user_id' => $u3->id, 'new_email' => 'three-new@example.com', 'token' => \Illuminate\Support\Facades\Hash::make($changeToken), 'created_at' => now()]);
         $this->postJson('/api/confirm-email', ['email' => 'three-new@example.com', 'token' => $changeToken])->assertOk();
         $this->assertSame(['apple'], SocialAccount::where('user_id', $u3->id)->pluck('provider')->all());
+    }
+
+    // ---- Account created by an unverified provider (NEW-1) -------------
+
+    /** Full Facebook web sign-in (provider mocked once per test). */
+    private function facebookSignIn()
+    {
+        // State minted directly: once the provider is mocked, /redirect
+        // would hit the mock too.
+        $state = app(SocialAuthService::class)->createState('facebook', 'exp://front.example.test/--/auth-callback');
+
+        return $this->postJson('/api/auth/exchange', ['code' => $this->callbackCode('facebook', $state)]);
+    }
+
+    public function test_facebook_created_account_keeps_facebook_after_verify_email(): void
+    {
+        $this->withoutMiddleware(ThrottleRequests::class);
+        $this->mockProvider('facebook', ['id' => 'fb-1', 'email' => 'Nou@Example.com', 'name' => 'Nou']);
+        $userId = $this->facebookSignIn()->assertOk()->assertJsonPath('created', true)->json('user.id');
+        $user = User::find($userId);
+
+        // An unrelated unverified link on the same account (not its creator).
+        SocialAccount::create(['user_id' => $userId, 'provider' => 'google', 'provider_user_id' => 'g-x', 'email' => 'nou@example.com', 'email_verified' => false, 'created_account' => false]);
+
+        $token = str_repeat('v', 64);
+        DB::table('email_verification_tokens')->insert(['user_id' => $userId, 'token' => hash('sha256', $token), 'created_at' => now()]);
+        $this->postJson('/api/email/verify', ['email' => 'nou@example.com', 'token' => $token])->assertOk();
+
+        $this->assertDatabaseHas('social_accounts', ['provider' => 'facebook', 'user_id' => $userId, 'email_verified' => true, 'created_account' => true]);
+        $this->assertDatabaseMissing('social_accounts', ['provider' => 'google']);
+        $this->assertNotNull($user->fresh()->email_verified_at);
+
+        $this->app['auth']->forgetGuards();
+        $this->facebookSignIn()->assertOk()->assertJsonPath('created', false)->assertJsonPath('user.id', $userId);
+        $this->assertSame(1, User::count());
+    }
+
+    public function test_facebook_created_account_keeps_facebook_after_reset_password(): void
+    {
+        $this->withoutMiddleware(ThrottleRequests::class);
+        Notification::fake();
+        $this->mockProvider('facebook', ['id' => 'fb-1', 'email' => 'nou@example.com']);
+        $userId = $this->facebookSignIn()->assertOk()->json('user.id');
+        SocialAccount::create(['user_id' => $userId, 'provider' => 'google', 'provider_user_id' => 'g-x', 'email' => 'nou@example.com', 'email_verified' => false, 'created_account' => false]);
+
+        $this->postJson('/api/forgot-password', ['email' => 'nou@example.com'])->assertOk();
+        $resetToken = null;
+        Notification::assertSentTo(User::find($userId), ResetPasswordNotification::class, function ($n) use (&$resetToken) {
+            $resetToken = $n->token;
+            return true;
+        });
+        $this->postJson('/api/reset-password', [
+            'email' => 'nou@example.com', 'token' => $resetToken,
+            'password' => 'newpass1', 'password_confirmation' => 'newpass1',
+        ])->assertOk();
+
+        $this->assertSame(['facebook'], SocialAccount::where('user_id', $userId)->pluck('provider')->all());
+        $this->assertTrue(SocialAccount::where('provider', 'facebook')->first()->email_verified);
+
+        $this->app['auth']->forgetGuards();
+        $this->facebookSignIn()->assertOk()->assertJsonPath('created', false)->assertJsonPath('user.id', $userId)
+            ->assertJsonPath('user.has_password', true);
+        $this->postJson('/api/login', ['email' => 'nou@example.com', 'password' => 'newpass1'])->assertOk();
+    }
+
+    /** Someone creates the account via an unverified Facebook email; the
+     * provider-verified owner then signs in with Apple. The eviction must
+     * still drop the Facebook link (promotion only happens on reset /
+     * verify / confirm, never on eviction). */
+    public function test_eviction_still_drops_unverified_creator_link(): void
+    {
+        $this->mockProvider('facebook', ['id' => 'fb-evil', 'email' => 'ana@example.com']);
+        $userId = $this->facebookSignIn()->assertOk()->json('user.id');
+        $this->assertDatabaseHas('social_accounts', ['provider' => 'facebook', 'created_account' => true]);
+
+        $this->app['auth']->forgetGuards();
+        $this->apple()->assertOk()->assertJsonPath('created', false)->assertJsonPath('user.id', $userId);
+
+        $this->assertSame(['apple'], SocialAccount::where('user_id', $userId)->pluck('provider')->all());
+        $this->assertSame(1, User::find($userId)->tokens()->count()); // the Facebook session is gone
+        $this->get('/auth/facebook/callback?code=x&state=' . app(SocialAuthService::class)->createState('facebook', 'exp://front.example.test/--/auth-callback'))
+            ->assertRedirect('exp://front.example.test/--/auth-callback?error=email_unverified_exists&hint=no_password');
+    }
+
+    public function test_unverified_exists_hints_reset_when_account_has_no_password(): void
+    {
+        // Social-only account (has_password=false), unverified provider.
+        $this->apple(['sub' => 'apple-1'])->assertOk();
+        $this->assertFalse(User::first()->has_password);
+
+        $this->apple(['sub' => 'apple-2', 'email_verified' => 'false'])
+            ->assertStatus(409)->assertJsonPath('error', 'email_unverified_exists')
+            ->assertJsonPath('hint', 'no_password')
+            ->assertJsonPath('message', 'Există deja un cont cu acest email. Intră cu emailul și parola sau folosește „Ai uitat parola?”.');
+
+        $state = $this->startWebFlow('facebook');
+        $this->mockProvider('facebook', ['id' => 'fb-9', 'email' => 'ana@example.com']);
+        $this->get('/auth/facebook/callback?code=x&state=' . $state)
+            ->assertRedirect('exp://front.example.test/--/auth-callback?error=email_unverified_exists&hint=no_password');
+    }
+
+    public function test_deadlock_on_first_sign_in_is_retried(): void
+    {
+        // Thrown before the first write of the attempt: inside RefreshDatabase's
+        // outer transaction Laravel doesn't roll the savepoint back on a
+        // concurrency error (MySQL rolls back the whole real transaction).
+        $fired = false;
+        User::creating(function () use (&$fired) {
+            if (!$fired) {
+                $fired = true;
+                throw new \Illuminate\Database\QueryException('mysql', 'insert', [], new \PDOException('SQLSTATE[40001]: Serialization failure: 1213 Deadlock found when trying to get lock; try restarting transaction'));
+            }
+        });
+
+        $this->apple()->assertOk()->assertJsonPath('created', true);
+        $this->assertSame(1, User::count());
+        $this->assertSame(1, SocialAccount::count());
     }
 
     // ---- has_password / set-password -----------------------------------

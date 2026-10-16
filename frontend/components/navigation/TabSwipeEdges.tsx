@@ -2,6 +2,12 @@ import React, { useRef } from "react";
 import { View, Dimensions } from "react-native";
 import { PanGestureHandler, State } from "react-native-gesture-handler";
 import { useRouter, useSegments } from "expo-router";
+import { TAB_ORDER, clearTrail, markTrailReturn, trailDirection, trailFor } from "@/lib/navigation/returnTrail";
+import { useAppMode } from "@/lib/appMode";
+
+// Simplu mode (lib/appMode.tsx) has only these two tabs in its bar --
+// the edges never swipe to the hidden Spații / Buget.
+const SIMPLE_ORDER = ["home", "calendar"] as const;
 
 /**
  * Swipe-from-either-edge to switch between the 4 main tabs (Acasă/
@@ -20,8 +26,15 @@ import { useRouter, useSegments } from "expo-router";
  * Hidden entirely inside a Space detail screen ([id].tsx) -- that's not
  * one of the 4 tabs being cycled, and it already has its own edge swipe
  * (SwipeBackView, "go back") that this must not compete with.
+ *
+ * Return trail (lib/navigation/returnTrail.ts): while a valid trail
+ * applies on this tab, the swipe pointing toward the origin's position in
+ * the tab bar (origin to the right -> drag left from the right edge;
+ * origin to the left -> drag right from the left edge) goes back to the
+ * origin route instead of the neighbour, and consumes the trail. The
+ * other edge keeps its normal behaviour. Checked at gesture END by wall
+ * clock, so an expired trail never hijacks a swipe.
  */
-const TAB_ORDER = ["home", "spaces", "calendar", "budget"] as const;
 const SCREEN_WIDTH = Dimensions.get("window").width;
 const EDGE_WIDTH = 24;
 const TRIGGER_DISTANCE = SCREEN_WIDTH * 0.25;
@@ -30,8 +43,10 @@ const TRIGGER_VELOCITY = 700;
 export function TabSwipeEdges() {
   const router = useRouter();
   const segments = useSegments() as string[];
+  const { isSimple } = useAppMode();
+  const order: readonly string[] = isSimple ? SIMPLE_ORDER : TAB_ORDER;
   const current = segments[1] as (typeof TAB_ORDER)[number] | undefined;
-  const index = current ? TAB_ORDER.indexOf(current) : -1;
+  const index = current ? order.indexOf(current) : -1;
 
   // Guards against the blank-screen bug a real device hit: calling
   // router.navigate() synchronously from inside the native gesture
@@ -47,12 +62,21 @@ export function TabSwipeEdges() {
   if (index === -1) return null;
 
   const goTo = (direction: 1 | -1) => {
-    const next = index + direction;
-    if (next < 0 || next >= TAB_ORDER.length) return;
     if (navigatingRef.current) return;
+    const trail = isSimple ? null : trailFor(current);
+    let href: string;
+    if (trail && current && trailDirection(trail, current) === direction) {
+      href = trail.originHref;
+      clearTrail();
+      markTrailReturn(href);
+    } else {
+      const next = index + direction;
+      if (next < 0 || next >= order.length) return;
+      href = `/(tabs)/${order[next]}`;
+    }
     navigatingRef.current = true;
     requestAnimationFrame(() => {
-      router.navigate(`/(tabs)/${TAB_ORDER[next]}` as any);
+      router.navigate(href as any);
       // Released on the following frame, not immediately -- the goal is
       // only to block a second native event from the SAME gesture, not
       // to debounce a genuinely new swipe a moment later.

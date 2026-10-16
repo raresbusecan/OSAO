@@ -1,9 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Pressable, Animated, StyleSheet, Easing } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useSegments } from "expo-router";
+import { usePathname, useSegments } from "expo-router";
 import { useTheme } from "@/lib/theme";
+import { TAB_ORDER, type MainTab, isTabDeep, recordTabLeave, setTabBarHeight } from "@/lib/navigation/returnTrail";
 import { useTourTarget } from "@/components/ui/tourTargets";
+import { useAppMode } from "@/lib/appMode";
+import { SimpleTabBar } from "./SimpleTabBar";
 
 // A Revolut-style bottom bar, per explicit user request: a soft pill
 // slides smoothly to sit behind whichever icon is active. Per a later
@@ -46,7 +49,14 @@ export type MainTabBarProps = {
 // from the bar (href: null in _layout.tsx) but still exist as routes.
 const VISIBLE_NAMES = ["home", "spaces", "calendar", "budget"];
 
-export function MainTabBar({ state, descriptors, navigation }: MainTabBarProps) {
+/** Simplu mode (lib/appMode.tsx) gets its own 3-cell bar; the full app's
+ * bar below is untouched. */
+export function MainTabBar(props: MainTabBarProps) {
+  const { isSimple } = useAppMode();
+  return isSimple ? <SimpleTabBar {...props} /> : <FullTabBar {...props} />;
+}
+
+function FullTabBar({ state, descriptors, navigation }: MainTabBarProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   // Same "Spații stays lit while inside a Space" rule as _layout.tsx's
@@ -55,6 +65,7 @@ export function MainTabBar({ state, descriptors, navigation }: MainTabBarProps) 
   // pill needs this same override to land in the right place.
   const segments = useSegments() as string[];
   const inSpace = segments[1] === "[id]";
+  const pathname = usePathname();
 
   const routes = state.routes.filter((r) => VISIBLE_NAMES.includes(r.name));
   const focusedName = inSpace ? "spaces" : state.routes[state.index]?.name;
@@ -128,7 +139,10 @@ export function MainTabBar({ state, descriptors, navigation }: MainTabBarProps) 
         paddingTop: 10,
         paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
       }}
-      onLayout={(e) => setCellWidth(e.nativeEvent.layout.width / routes.length)}
+      onLayout={(e) => {
+        setCellWidth(e.nativeEvent.layout.width / routes.length);
+        setTabBarHeight(e.nativeEvent.layout.height);
+      }}
     >
       {cellWidth > 0 ? (
         <Animated.View
@@ -155,7 +169,17 @@ export function MainTabBar({ state, descriptors, navigation }: MainTabBarProps) 
 
         const onPress = () => {
           const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
-          if (!focused && !event.defaultPrevented) {
+          // Inside a Space the Spații cell counts as focused (pill rule
+          // above), but the real route is "[id]" -- a tap there must still
+          // take the user to the Spații list (tab bar actions win).
+          const leaveSpace = inSpace && route.name === "spaces";
+          if ((!focused || leaveSpace) && !event.defaultPrevented) {
+            if (!focused && focusedName && (TAB_ORDER as readonly string[]).includes(focusedName)) {
+              // Return trail (lib/navigation/returnTrail.ts): remember a
+              // deep origin -- a Buget sub-page, or being inside a Space.
+              const origin = focusedName as MainTab;
+              recordTabLeave(origin, pathname, route.name as MainTab, origin === "spaces" ? inSpace : isTabDeep(origin));
+            }
             navigation.navigate(route.name);
           }
         };

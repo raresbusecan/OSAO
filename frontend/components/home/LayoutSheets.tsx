@@ -7,7 +7,7 @@ import { Button, Field, Group, IconWell, Pill, Row, Segmented, SectionHeader } f
 import { PressableScale } from "@/components/ui/PressableScale";
 import { motion } from "@/lib/motion";
 import { roCount } from "@/lib/format";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { spaceColors, type SpaceKind } from "@/lib/spaces/spaceProfile";
 import {
   LAYOUT_TEMPLATES, ROW_CHOICES, WIDGET_META, WIDGET_PALETTE, newWidget,
   type Widget, type WidgetSettings, type WidgetSize, type WidgetType,
@@ -21,6 +21,9 @@ type CatalogEntry = { key: string; type: WidgetType; name: string; description: 
 
 function catalogEntries(ctx: HomeCtx): CatalogEntry[] {
   const out: CatalogEntry[] = [];
+  // The icon takes that particular space's colour (its pick, else the kind's).
+  const toneOf = (spaceId: unknown, kind: SpaceKind) =>
+    spaceColors({ kind, color: ctx.spaces.find((s) => s.id === String(spaceId))?.color }, false)?.color;
   (Object.keys(WIDGET_META) as WidgetType[]).forEach((type) => {
     const meta = WIDGET_META[type];
     if (!meta.perInstance) {
@@ -29,16 +32,16 @@ function catalogEntries(ctx: HomeCtx): CatalogEntry[] {
     }
     if (meta.perInstance === "car") {
       (ctx.dashboard?.cars ?? []).forEach((c: any) =>
-        out.push({ key: `car-${c.space_id}`, type, name: `Mașină · ${c.name}`, description: meta.description, settings: { spaceId: String(c.space_id) }, color: SPACE_IDENTITY_COLORS.car }),
+        out.push({ key: `car-${c.space_id}`, type, name: `Mașină · ${c.name}`, description: meta.description, settings: { spaceId: String(c.space_id) }, color: toneOf(c.space_id, "car") }),
       );
     } else if (meta.perInstance === "list") {
       (ctx.dashboard?.toBuyLists ?? []).forEach((l: any) =>
-        out.push({ key: `list-${l.list_id}`, type, name: `Listă · ${l.title}`, description: `${roCount(l.count, "produs", "produse")} de cumpărat`, settings: { listId: String(l.list_id) }, color: SPACE_IDENTITY_COLORS.grocery }),
+        out.push({ key: `list-${l.list_id}`, type, name: `Listă · ${l.title}`, description: `${roCount(l.count, "produs", "produse")} de cumpărat`, settings: { listId: String(l.list_id) }, color: toneOf(l.space_id, "grocery") }),
       );
     } else {
       const kind = meta.perInstance === "home" ? "home" : "expenses";
       ctx.spaces.filter((s) => s.kind === kind).forEach((s) =>
-        out.push({ key: `${type}-${s.id}`, type, name: `${meta.label} · ${s.name}`, description: meta.description, settings: { spaceId: s.id }, color: SPACE_IDENTITY_COLORS[kind] }),
+        out.push({ key: `${type}-${s.id}`, type, name: `${meta.label} · ${s.name}`, description: meta.description, settings: { spaceId: s.id }, color: toneOf(s.id, kind) }),
       );
     }
   });
@@ -168,7 +171,9 @@ function SettingsBody({ widget, onClose, onSave, onRemove, ctx }: { widget: Widg
       footer={
         <>
           <Button testID="home-widget-settings-save" label="Salvează" onPress={() => onSave({ ...widget, size, color, settings })} />
-          <Button testID="home-widget-settings-remove" variant="ghost" icon="trash-outline" label="Scoate cardul de pe Acasă" onPress={() => onRemove(widget.id)} />
+          {widget.type !== "spend" ? (
+            <Button testID="home-widget-settings-remove" variant="ghost" icon="trash-outline" label="Scoate cardul de pe Acasă" onPress={() => onRemove(widget.id)} />
+          ) : null}
         </>
       }
     >

@@ -4,14 +4,15 @@ import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { confirmAction, notifyAction } from "@/lib/confirm";
 import { refreshBudgetPlan } from "@/lib/budget/plan";
-import { SPACE_BUTTON_FILL, SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL } from "@/lib/spaces/spaceProfile";
+import { SPACE_KIND_LABEL, spaceColors } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { creditToItemBody, type CreditEntry } from "@/lib/spaces/expenses/credits";
 import { CreditFields, creditDraftError, emptyCreditDraft, parseCreditAmount, type CreditDraft } from "./CreditFields";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Pill } from "@/components/ui/primitives";
 
 /** A car/home space a credit can be shown in ("Arată-l și în spațiul"). */
-export type LinkableSpace = { id: string; kind: "car" | "home"; name: string };
+export type LinkableSpace = { id: string; kind: "car" | "home"; name: string; color?: string | null };
 
 
 export type CreditSheetProps = {
@@ -54,8 +55,9 @@ function apiErrorText(error: any): string {
 }
 
 function CreditSheetBody({ credit, spaceId, linkable, onClose, onChanged }: CreditSheetProps & { credit: CreditEntry | "new" }) {
-  const { colors, spacing } = useTheme();
-  const TEAL = SPACE_IDENTITY_COLORS.expenses!;
+  const { colors, spacing, isDark } = useTheme();
+  const exp = useSpaceColors("expenses");
+  const TEAL = exp.color;
   const isNew = credit === "new";
   const initial = isNew ? null : credit;
 
@@ -119,7 +121,7 @@ function CreditSheetBody({ credit, spaceId, linkable, onClose, onChanged }: Cred
       testID="credit-sheet"
       footer={
         <>
-          <Button testID="credit-save" label="Salvează creditul" tone={SPACE_BUTTON_FILL.expenses} onPress={handleSave} loading={saving} />
+          <Button testID="credit-save" label="Salvează creditul" tone={exp.fill} onPress={handleSave} loading={saving} />
           {!isNew ? <Button testID="credit-delete" variant="ghost" icon="trash-outline" label="Șterge creditul" onPress={handleDelete} /> : null}
         </>
       }
@@ -140,7 +142,7 @@ function CreditSheetBody({ credit, spaceId, linkable, onClose, onChanged }: Cred
                 label={s.name || SPACE_KIND_LABEL[s.kind]!}
                 icon={s.kind === "car" ? "car-outline" : "home-outline"}
                 active={linkedId === s.id}
-                tone={SPACE_IDENTITY_COLORS[s.kind]}
+                tone={spaceColors({ kind: s.kind, color: s.color }, isDark)?.color}
                 onPress={() => setLinkedId(s.id)}
               />
             ))}

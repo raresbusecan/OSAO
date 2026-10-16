@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text } from "react-native";
 import { useTheme } from "@/lib/theme";
+import { useAppMode } from "@/lib/appMode";
 import { api } from "@/lib/api";
 import { notifyAction } from "@/lib/confirm";
 import { Sheet } from "@/components/ui/Sheet";
@@ -10,15 +11,17 @@ import {
   homeProfileName,
   homeProfileToApiBody,
   homeProfileFromApi,
-  SPACE_IDENTITY_COLORS,
-  SPACE_BUTTON_FILL,
+  spaceColors,
   type HomeProfile,
+  type SpaceColorKey,
 } from "@/lib/spaces/spaceProfile";
+import { SpaceColorPicker, initialSpaceColor, spaceColorForApi } from "@/components/spaces/SpaceColorPicker";
+import { SpaceThemeProvider } from "@/lib/spaces/spaceTheme";
 
 export type HomeProfileFormProps = {
   visible: boolean;
   mode: "create" | "edit";
-  space?: { id: string | number } | null;
+  space?: { id: string | number; color?: string | null } | null;
   initialProfile?: HomeProfile | null;
   onClose: () => void;
   onSaved: (space: any, profile: HomeProfile) => void;
@@ -38,7 +41,11 @@ export function HomeProfileForm({
   onClose,
   onSaved,
 }: HomeProfileFormProps) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+  // Simplu mode: just Județ + Localitate -- no ownership, price, credit or space colour.
+  const { isSimple } = useAppMode();
+  // The space's colour (spaces.color) -- previewed live by the whole sheet.
+  const [spaceColor, setSpaceColor] = useState<SpaceColorKey>(initialSpaceColor(null, "home"));
   const [county, setCounty] = useState("");
   const [city, setCity] = useState("");
   const [bought, setBought] = useState(true);
@@ -53,6 +60,7 @@ export function HomeProfileForm({
   useEffect(() => {
     if (!visible) return;
     resetCredit();
+    setSpaceColor(initialSpaceColor(mode === "edit" ? space?.color : null, "home"));
 
     if (initialProfile) {
       setCounty(initialProfile.county);
@@ -65,9 +73,9 @@ export function HomeProfileForm({
       setBought(true);
       setPurchasePrice("0");
     }
-  }, [visible, initialProfile, resetCredit]);
+  }, [visible, initialProfile, resetCredit, mode, space?.color]);
 
-  const creditOn = mode === "create" && bought && credit.on;
+  const creditOn = mode === "create" && bought && !isSimple && credit.on;
   // Save stays disabled while "În rate" is on and the credit isn't valid.
   const creditBlocked = creditOn && !!credit.error;
   const canSubmit = county.trim().length > 0 && city.trim().length > 0 && !creditBlocked;
@@ -97,7 +105,7 @@ export function HomeProfileForm({
         const created = await api.createSpace({
           name: derivedName,
           icon: "home-outline",
-          color: "#374151",
+          color: spaceColorForApi(spaceColor, "home"),
           type: "home",
           profile: homeProfileToApiBody(profile),
           ...(creditOn ? { credit: credit.apiBody } : {}),
@@ -109,7 +117,7 @@ export function HomeProfileForm({
       }
       if (!space) return;
 
-      const result = await api.updateSpace(space.id, { name: derivedName });
+      const result = await api.updateSpace(space.id, { name: derivedName, color: spaceColorForApi(spaceColor, "home") });
       const targetSpace = result?.space ?? { ...space, name: derivedName };
       const profileResult = await api.saveHomeProfile(
         targetSpace.id,
@@ -127,9 +135,11 @@ export function HomeProfileForm({
     }
   };
 
-  const tone = SPACE_IDENTITY_COLORS.home;
+  const palette = spaceColors(spaceColor, isDark)!;
+  const tone = palette.color;
 
   return (
+    <SpaceThemeProvider color={spaceColor}>
     <Sheet
       visible={visible}
       onClose={onClose}
@@ -142,7 +152,7 @@ export function HomeProfileForm({
         <Button
           testID="home-profile-save"
           label={mode === "create" ? "Adaugă casa" : "Salvează"}
-          tone={SPACE_BUTTON_FILL.home}
+          tone={palette.fill}
           onPress={submit}
           loading={busy}
           disabled={!canSubmit}
@@ -151,6 +161,7 @@ export function HomeProfileForm({
     >
       <Field label="Județ" value={county} onChangeText={setCounty} placeholder="ex. Maramureș" tone={tone} />
       <Field label="Localitate" value={city} onChangeText={setCity} placeholder="ex. Băiuț" tone={tone} />
+      {isSimple ? null : (
       <View style={{ gap: 6 }}>
         <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Cum ai obținut-o</Text>
         <Segmented
@@ -163,7 +174,8 @@ export function HomeProfileForm({
           onChange={(k) => setBought(k === "bought")}
         />
       </View>
-      {bought ? (
+      )}
+      {bought && !isSimple ? (
         <Field
           label="Preț de cumpărare (opțional)"
           value={purchasePrice}
@@ -174,10 +186,12 @@ export function HomeProfileForm({
           tone={tone}
         />
       ) : null}
-      {mode === "create" && bought ? <SpaceCreditToggle kind="home" credit={credit} /> : null}
+      {isSimple ? null : <SpaceColorPicker kind="home" value={spaceColor} onChange={setSpaceColor} />}
+      {mode === "create" && bought && !isSimple ? <SpaceCreditToggle kind="home" credit={credit} /> : null}
       {creditBlocked ? (
         <Text testID="home-credit-missing" style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{credit.error}</Text>
       ) : null}
     </Sheet>
+    </SpaceThemeProvider>
   );
 }

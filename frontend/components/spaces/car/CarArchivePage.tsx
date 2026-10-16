@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { View, Text, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { TopBar, Identity, Group, Row, IconWell, EmptyState } from "@/components/ui/primitives";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import type { CarData } from "./car.data.types";
@@ -30,12 +30,13 @@ export type CarArchivePageProps = {
  * getArchivedCarRecords -- this component only renders it.
  */
 export function CarArchivePage({ carData, onBack, onRecordPress }: CarArchivePageProps) {
-  const { colors, spacing, isDark } = useTheme();
+  const { colors, spacing } = useTheme();
 
   const records = useMemo(() => getArchivedCarRecords(carData), [carData]);
 
-  const CAR = SPACE_IDENTITY_COLORS.car!;
-  const tint = spaceTextColor("car", isDark) ?? CAR;
+  const carColors = useSpaceColors("car");
+  const CAR = carColors.color;
+  const tint = carColors.tint;
 
   return (
     <SwipeBackView onBack={onBack}>

@@ -3,6 +3,7 @@ import React, {
   useEffect,
   useState,
 } from "react";
+import { consumeTrailReturn } from "@/lib/navigation/returnTrail";
 import {
   View,
   ActivityIndicator,
@@ -63,6 +64,9 @@ import { expenseEntryToItemBody as expensesSpaceEntryToItemBody, loadExpenseItem
 import { EditSpaceModal } from "@/components/spaces/EditSpaceModal";
 import { CarProfileForm } from "@/components/spaces/car/CarProfileForm";
 import { HomeProfileForm } from "@/components/spaces/home/HomeProfileForm";
+import { SpaceThemeProvider } from "@/lib/spaces/spaceTheme";
+import { useAppMode } from "@/lib/appMode";
+import { SimpleSpaceScreen } from "@/components/simple/space/SimpleSpaceScreen";
 import {
   profileFromSpace,
   detectSpaceType,
@@ -93,6 +97,7 @@ export default function SpaceDetail() {
 
   const { colors } = useTheme();
   const router = useRouter();
+  const { isSimple } = useAppMode();
 
   const [carData, setCarData] = useState<CarData>(initialCarData);
   const [homeData, setHomeData] = useState<HomeData>(initialHomeData);
@@ -874,7 +879,22 @@ export default function SpaceDetail() {
       if (detectSpaceType(result, loadedProfile) === "car") {
         try {
           const entries = await loadCarItems(result.id);
-          setCarData((current) => ({ ...current, ...entries }));
+          // The vehicle comes from THIS space's profile (no demo values):
+          // mileage = the km typed on the top card (0 if never set), so
+          // getCurrentOdometer = max(that, logged readings), and the
+          // consumption math uses the real tank capacity.
+          setCarData((current) => ({
+            ...current,
+            ...entries,
+            vehicle: {
+              ...initialCarData.vehicle,
+              make: loadedProfile && "make" in loadedProfile ? loadedProfile.make : "",
+              model: loadedProfile && "model" in loadedProfile ? loadedProfile.model : "",
+              year: loadedProfile && "year" in loadedProfile ? Number(loadedProfile.year) || 0 : 0,
+              tank_capacity_liters: loadedProfile && "tankCapacity" in loadedProfile ? Number(loadedProfile.tankCapacity) || 0 : 0,
+              mileage: loadedProfile && "odometer" in loadedProfile ? Number(loadedProfile.odometer) || 0 : 0,
+            },
+          }));
         } catch (error) {
           console.error("[CAR ITEMS] failed to load:", error);
         }
@@ -973,9 +993,11 @@ export default function SpaceDetail() {
     useCallback(() => {
       load();
       // See visitId's own declaration above -- forces every Dashboard
-      // below to remount on each fresh visit to this screen.
-      setVisitId((v) => v + 1);
-    }, [load]),
+      // below to remount on each fresh visit to this screen. Skipped when
+      // coming back along the tab-bar return trail (lib/navigation/
+      // returnTrail.ts): that must land on the exact sub-page left.
+      if (!consumeTrailReturn(`/${id}`)) setVisitId((v) => v + 1);
+    }, [load, id]),
   );
 
   /*
@@ -1200,6 +1222,33 @@ export default function SpaceDetail() {
   // for why the name alone can no longer be trusted here.
   const detectedKind = detectSpaceType(space, profile);
 
+  /*
+   * orgOS Simplu (lib/appMode.tsx): one simple screen per space. A deep
+   * link to one record (?itemId=, e.g. "Modifică informațiile" from a
+   * resolve dialog) still opens the full dashboard below, because that
+   * record's own resolve/renew step lives there.
+   */
+  if (isSimple && !itemId) {
+    return (
+      <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="space-detail-screen">
+        <SpaceThemeProvider color={space.color}>
+          <SimpleSpaceScreen
+            key={`${space.id}-${visitId}`}
+            space={space}
+            kind={detectedKind}
+            profile={profile}
+            carData={carData}
+            homeData={homeData}
+            expensesData={expensesData}
+            calendarPurchases={calendarPurchases}
+            onChanged={load}
+            onBack={() => (router.canGoBack() ? router.back() : router.navigate("/(tabs)/home" as any))}
+          />
+        </SpaceThemeProvider>
+      </SafeAreaView>
+    );
+  }
+
   const isCar = detectedKind === "car";
   const isHome = detectedKind === "home";
   const isGrocery = detectedKind === "grocery";
@@ -1221,11 +1270,22 @@ export default function SpaceDetail() {
         }}
         testID="space-detail-screen"
       >
+        <SpaceThemeProvider color={space.color}>
         <CarDashboard
           key={`${space.id}-${visitId}`}
           space={space}
           carData={carData}
           profile={profile as CarProfile | null}
+          onOdometerSaved={(saved) => {
+            // Top card "Actualizează kilometrajul": the profile keeps the
+            // date for the caption, vehicle.mileage feeds getCurrentOdometer
+            // so "Urmează" (km-based services) recalculates right away.
+            setProfile(saved);
+            setCarData((current) => ({
+              ...current,
+              vehicle: { ...current.vehicle, mileage: saved.odometer ?? 0 },
+            }));
+          }}
           onEdit={handleEdit}
           onFuelSave={handleFuelSave}
           onMaintenanceSave={handleMaintenanceSave}
@@ -1235,6 +1295,7 @@ export default function SpaceDetail() {
           onMaintenanceDelete={handleMaintenanceDelete}
           onDocumentDelete={handleDocumentDelete}
           onExpenseDelete={handleExpenseDelete}
+          tourBlocked={editModalVisible}
           initialOpenEntry={
             itemId && itemType === "car_document"
               ? { type: "document", id: itemId, renew: action === "renew" }
@@ -1255,6 +1316,7 @@ export default function SpaceDetail() {
             setProfile(updatedProfile);
           }}
         />
+      </SpaceThemeProvider>
       </SafeAreaView>
     );
   }
@@ -1275,6 +1337,7 @@ export default function SpaceDetail() {
         }}
         testID="space-detail-screen"
       >
+        <SpaceThemeProvider color={space.color}>
         <HomeDashboard
           key={`${space.id}-${visitId}`}
           space={space}
@@ -1312,6 +1375,7 @@ export default function SpaceDetail() {
             setProfile(updatedProfile);
           }}
         />
+      </SpaceThemeProvider>
       </SafeAreaView>
     );
   }
@@ -1339,6 +1403,7 @@ export default function SpaceDetail() {
             Grocery space's data while switching), but does nothing when
             re-entering the SAME space, since space.id never changes
             then. visitId covers that case too, for all 4 dashboards. */}
+        <SpaceThemeProvider color={space.color}>
         <GroceryDashboard
           key={`${space.id}-${visitId}`}
           space={space}
@@ -1351,6 +1416,7 @@ export default function SpaceDetail() {
           onClose={() => setEditModalVisible(false)}
           onSaved={(updated) => setSpace(updated)}
         />
+      </SpaceThemeProvider>
       </SafeAreaView>
     );
   }
@@ -1371,6 +1437,7 @@ export default function SpaceDetail() {
         }}
         testID="space-detail-screen"
       >
+        <SpaceThemeProvider color={space.color}>
         <ExpensesDashboard
           key={`${space.id}-${visitId}`}
           space={space}
@@ -1387,6 +1454,7 @@ export default function SpaceDetail() {
           onClose={() => setEditModalVisible(false)}
           onSaved={(updated) => setSpace(updated)}
         />
+      </SpaceThemeProvider>
       </SafeAreaView>
     );
   }

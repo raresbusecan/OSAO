@@ -85,7 +85,7 @@ class RecipeController extends Controller
         $recipe = $this->visibleTo($request)->with('ingredients')->find($id);
 
         if (!$recipe) {
-            return response()->json(['message' => 'Recipe not found.'], 404);
+            return response()->json(['message' => 'Rețeta nu a fost găsită.'], 404);
         }
 
         return response()->json($recipe);
@@ -98,7 +98,7 @@ class RecipeController extends Controller
         $recipe = Recipe::where('id', $id)->where('user_id', $request->user()->id)->first();
 
         if (!$recipe) {
-            return response()->json(['message' => 'Recipe not found or not editable.'], 404);
+            return response()->json(['message' => 'Rețeta nu a fost găsită sau nu poate fi modificată.'], 404);
         }
 
         $validator = Validator::make($request->all(), array_merge([
@@ -135,12 +135,12 @@ class RecipeController extends Controller
         $recipe = Recipe::where('id', $id)->where('user_id', $request->user()->id)->first();
 
         if (!$recipe) {
-            return response()->json(['message' => 'Recipe not found or not deletable.'], 404);
+            return response()->json(['message' => 'Rețeta nu a fost găsită sau nu poate fi ștearsă.'], 404);
         }
 
         $recipe->delete();
 
-        return response()->json(['message' => 'Recipe deleted.']);
+        return response()->json(['message' => 'Rețeta a fost ștearsă.']);
     }
 
     private function visibleTo(Request $request)

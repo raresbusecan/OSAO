@@ -6,6 +6,18 @@ ones under "Open", move finished ones to "Done" with the date.
 
 ## Future features (user-requested, parked)
 
+### Per-record "resolved on" history list (parked 2026-10-10)
+
+**Status: parked by the user, needs discussion per record type.** Idea: every record that isn't a stored document (Car fuel/service/expenses, Casă tasks/maintenance/recurring/supplies, Cumpărături, Cheltuieli, credits...) gets a button somewhere on the record that shows the list of dates it was resolved/done. What "resolved" means, and where the button goes, differs per type (a one-off task has one date; recurring bills/maintenance have many; fuel is already one row per fill-up) -- decide type by type before building. Casă already keeps a per-resolve `spendHistory` for tasks (see "Home's per-resolve spend history" below), which is the natural data source there. `[from: user, backlog review 2026-10-10]`
+
+### Car service form: replace the "Altceva" field with an "add another service" pop-up (parked 2026-10-10)
+
+**Status: parked by the user, needs a careful design pass.** `CarMaintenanceForm.tsx`'s "Altceva" free-text field (next to its Add button) isn't intuitive. User wants, at the END of the classic service form, a new button that opens a small pop-up OVER the existing form to add the extra item. Related: the form's optional fields still aren't behind `Disclosure` ("Still open from this pass"). `[from: user, backlog review 2026-10-10]`
+
+### User decisions from the 2026-10-10 backlog review
+
+Kept as they are for now (no change wanted yet): Provizii card on Acasă showing "Ok · nimic pe terminate" for a home without supplies (a whole-app update is coming); "Pornește ghidul" TEMP test buttons + ONE_AUTO_TOUR_PER_SESSION=false (still testing); confirm dialogs instead of Undo toasts (dialog is fine); Acasă car card skipping a manual-only-odometer car (fine as a small preview). Parked, discuss later: Mașină "Urmează" row anatomy vs Casă; Casă supplies without price; Buget monthly archive discoverability; tap = preview / long press = actions in the remaining spaces; tours for Casă/Cumpărături/Cheltuieli (need polishing); telling apart 2 spaces of the same kind (undecided); new ideas (Cumpărături monthly estimate, per-product restock rhythm, real app icon). `[from: user, backlog review 2026-10-10]`
+
 ### DONE, awaiting qa-lead (built 2026-10-08, uncommitted on feat/redesign): credit toggle when creating a Car / Home space
 
 Built: `SpaceCreditToggle.tsx` ("În rate" ToggleRow + shared `expenses/CreditFields.tsx`, which CreditSheet now uses too) on the CREATE forms of `CarProfileForm` / `HomeProfileForm` (Casă: only when "Cumpărată"). `POST /spaces` takes an optional `credit` {title, amount, day_of_month, end_date}; one DB transaction creates the space, reuses the first typed Cheltuieli space or creates "Default", and the linked `expense_credit` through `App\Support\ItemBudgetRules` (extracted from ItemController, same rules). Tests: `tests/Feature/SpaceCreditTest.php`. Not built (out of scope): adding a credit from the Edit form of an existing car/home -- a "Adaugă un credit" shortcut there that opens CreditSheet pre-linked would be the natural follow-up.
@@ -83,9 +95,9 @@ drifted a day across the 25 Oct DST change; plus the known
 - Undo toasts instead of confirm dialogs app-wide (P3-9e): only "De făcut"
   has inline undo. Needs a global toast host and real restore-after-delete
   -- worth a device test first.
-- Car: `CarHistoryPage` still uses the period-sheet trigger (only the Car
+- ~~Car: `CarHistoryPage` still uses the period-sheet trigger (only the Car
   Cheltuieli page got the inline pills); Car presets have no "Luna asta"
-  (`CarExpensePeriod` has no calendar-month kind).
+  (`CarExpensePeriod` has no calendar-month kind).~~ Reversed 2026-10-10 by user decision: Car Istoric's sheet trigger is now the shared `PeriodPicker` used by every history page.
 - `CarMaintenanceForm`'s optional fields aren't behind `Disclosure` yet
   (multi-service form, needs its own pass).
 - Device checks: `DatePickerSheet` opened from inside a form Sheet is a
@@ -103,13 +115,80 @@ drifted a day across the 25 Oct DST change; plus the known
 - Customizable Acasă (2026-10-04): built per the "orgOS Acasă personalizabil"
   canvas. Phone checks: long press on an empty spot opens edit mode (and a
   long press on a card does NOT), dragging cards by the ☰ handle
-  (react-native-draggable-flatlist, same as Spații's reorder -- if that
-  doesn't drag in Expo Go, neither will this). Ideas left for later: a
+  (now `components/ui/ReorderList.tsx`, shared with Spații, 2026-10-12 --
+  rapid repeated drags must not overlap / leave gaps). Ideas left for later: a
   "Nu expiră" option for documents, per-card refresh of Buget numbers.
 - Seed data titles are misleading ("[SEED] Completed today" is pending,
   "[SEED] Due today" is 4+ days old) -- data, not app.
 
 ## Found along the way (not yet fixed)
+
+### Bugs spotted while building Simplu mode (2026-10-12) [from: orgOS Simplu mode build]
+
+1. **Car service resolved from Acasă/Calendar/De făcut loses or miscalculates the next service date.** `lib/dashboard/itemActions.ts:212` `logCarServiceAgain` computes the day interval as `nextServiceDate - item.due_at`, but `DashboardController::carServiceDue` (~:321/336) has already replaced `due_at` with the next-service date (or yesterday when overdue by km), so the interval is 0 or wrong. Simplu's Mașină hero avoids it by using the raw item from `api.getItem`.
+2. `components/spaces/car/CarDocsPage.tsx:68` filters only `!archived`, not `isDocumentSuperseded`: a renewed, not-yet-expired document is listed next to its replacement until auto-archive runs.
+3. `lib/spaces/car/calculations/dashboard.calculations.ts:192` `getDocumentStatus` counts days with ms `Math.ceil` instead of `daysFromToday`, so it can be off by one near midnight (breaks lib/format.ts's one day-difference rule).
+4. `components/spaces/car/forms/CarExpenseForm.tsx:103`: with no category and no title it sends `title: ""` → 422 from `ItemController`.
+5. `components/spaces/home/homeCategoryConfig.ts:193` `today()` uses `toISOString().slice(0,10)` (UTC): between 00:00 and 03:00 RO time, home expenses/documents/bills get yesterday's date. Simplu quick-add inherits it via `buildEntry`.
+6. `components/ui/primitives.tsx:371`: an unselected `Pill` uses `surfaceSecondary`, the same as the Sheet background, so the type/category pills in car forms have no visible fill inside a sheet.
+7. Import cycle: `components/simple/QuickAddSheet.tsx` imports `REFRESH_EVENT` from `app/(tabs)/_layout.tsx`, which imports it back. It works, but move `REFRESH_EVENT` into a small lib file.
+8. Car profile has no plate/registration field (`CarVehicle.registration_number` is typed but never filled), and car document types are stored raw ("Rovinieta", "Tax") with no Romanian display map in the full app.
+9. Simplu vs full Acasă spend totals differ when an income plan exists: Simplu shows raw `monthlyExpenses.total`, full Acasă shows necessities only (`needsSpend`, home.tsx ~146-155). Decide which one Simplu should show.
+
+### Complet never moves a paid bill into "Cheltuit" (2026-10-15) [from: Simplu month-total card]
+
+User expectation (2026-10-15): a recurring bill is "de plătit" until it's marked paid, then it's spent. Simplu's Acasă now does exactly that (`monthlyExpenses.billsPaid` added to the total, `billsDue` shown as "+ X lei facturi de plătit"). Complet doesn't: Acasă's "Cheltuit" never includes a paid bill and its "+ X plăți recurente de plătit" = the monthly equivalent of EVERY active bill, paid or not; Buget folds that same flat figure into each month's `spent` (`recurringMonthlyForLabel`) and the archive. So after upgrading, the Simplu total and the Complet one differ by the bills. Fix = switch Complet to billsPaid/billsDue too (Acasă card + Buget + archive/savings formula) -- a deliberate Buget-wide change, needs its own pass.
+
+### Error dialogs opened on top of an open Sheet -- likely app freeze on iOS (2026-10-15) [from: car document 422 investigation]
+
+The user's RCA saves from Simplu "Adaugă" all got a 422 ("Data emiterii este obligatorie." -- fixed: the server now accepts a document without an issue date, `tests/Feature/DocumentDatesTest.php`), and the app froze instead of showing it. QuickAddSheet called `notifyAction` (ConfirmHost = a second, root-level Modal) while its own Sheet Modal was open; the user tapped Salvează 6 times (6 POSTs in backend.log). QuickAddSheet now shows the error inline. NOT yet confirmed on a device that stacked Modals were the freeze. `EditRecordSheet.tsx` fixed 2026-10-15 (the user couldn't delete records: its "Șterge" confirm was such a dialog; now the footer itself asks "Ștergi definitiv ...?", save errors inline). Still in `NewEventSheet.tsx` (1 call): show it inline too, or make ConfirmHost render inside the top Sheet. Also: `backend/tests/Feature/TmpCarDocReplayTest.php` is a skipped placeholder to delete (agent can't delete files).
+
+### Complet's Mașină "Documente" page colors expiry coarser than its own dashboard (2026-10-15) [from: Simplu Mașină document colors]
+
+`components/spaces/car/CarDocsPage.tsx` `statusColor` = expired red / ANY expiring_soon (0-45 days) orange / valid green, while CarDashboard's "Urmează" and now Simplu's Mașină use the 3 bands (45-31 yellow, 30-16 orange, ≤15 red) via `urgencyTierColor` (lib/statusColors.ts). Same RCA can read orange on Documente and red on the dashboard. Fix: use `getDocumentUrgencyTier` + `urgencyTierColor` there too.
+
+### A new car record can still log fewer km than the car has -- Complet + server (2026-10-15) [from: Simplu odometer floor]
+
+Simplu's "Adaugă" now refuses a new fuel / service / car expense whose km is below the car's current one (`odometerBelowCurrent` in `components/simple/quickAdd/kinds.ts`, floor = GET /spaces `odometer`). Complet's forms don't: `CarMaintenanceForm` and `CarExpenseForm` have no check, `CarFuelForm` only compares to the latest FUEL entry. The server accepts anything (only `PUT car-profile/odometer` checks `loggedOdometer`). Found live: item 2085 (Oil Change, 100 km on a 250 km car, user 104). Decide the backdating rule first (an old receipt entered late can rightly be lower -- maybe "not below the highest reading dated on/before this record's date") and enforce it on `ItemController` store/update so both modes agree.
+
+### Simplu's "one space per kind" is client-side only (2026-10-15) [from: Simplu space limit]
+
+User decision: in Simplu you can create only one space of each kind. Enforced in `lib/simpleLimits.ts` (SimpleHome's create entry + spaces.tsx when `isSimple`). The mode is a local test switch, so the server can't enforce it yet. When a server plan/entitlement drives the mode (lib/appMode.tsx `entitlement`), `SpaceController::store` must reject a second space of a kind for free-plan users (Romanian 422), or an old client / direct API call can bypass it. Existing duplicates (made in Complet before downgrading) stay visible -- decide then whether a downgrade should hide/lock extras.
+
+### Purchase tasks resolved outside Casă record no price (2026-10-15) [from: Simplu month-total card]
+
+`lib/dashboard/itemActions.ts` `resolveWithSaved` for a `home_task` with `isPurchase` and no saved amount just completes it -- no `spendHistory`, so nothing counts. Hit from Acasă "Urmează" / "De făcut" circles and the Calendar day rows (both modes). Simplu's Casă hero now opens `HomeTaskResolveSheet` for the price; the summary screens should do the same (or `savedSummary` should offer "Introdu prețul").
+
+### Casă Sarcini "Ordonează" still uses react-native-draggable-flatlist -- same rapid-drag overlap/gap risk as Acasă had (2026-10-12) [from: Acasă "Aranjează" rapid-reorder overlap fix]
+
+`components/spaces/home/HomeTasksPage.tsx` (~:160) reorders with `NestableDraggableFlatList`. Acasă and Spații moved to the project-owned `components/ui/ReorderList.tsx` because of three defects in draggable-flatlist 4.0.3's own source: (1) `CellRendererComponent` holds each cell's last translate (`heldTanslate`) until that cell's NEXT onLayout -- a cell whose layout doesn't change (drop back in place, or a neighbor still mid-spring) keeps a stale offset; (2) cell offsets come only from async onLayout/measureLayout, so a drag started right after a drop reads the previous order's positions; (3) `DraggableFlatList` resets its drag state via `InteractionManager.runAfterInteractions(reset)` when data changes, which can land in the middle of the next drag. Rows there are fixed-height, so it shows less, but quick repeated drags can still misplace rows. Fix: port it to ReorderList -- it's inside an outer page scroll (Nestable), so ReorderList needs an "embedded, no own ScrollView" mode (auto-scroll via the parent's ref) first. After that, `react-native-draggable-flatlist` has no importer left and can be uninstalled.
+
+### Calendar month cards: the current month's "resolved" ring is hidden -- /calendar has no resolved items (2026-10-12) [from: Calendar 3-month bubble cards + capacity model]
+
+The approved "Bule cu inel" card shows, on the current month, an outer ring = resolved effort / total effort. `CalendarController::index` only returns OPEN items (`whereNotIn('status', CLOSED_STATUSES)`), and a paid recurring bill's `due_at` moves past the paid date, so `RecurrenceProjector::occurrencesBetween` stops projecting the paid occurrence. Result: the frontend can't know what was resolved this month, and the current month's fill also UNDER-counts (resolved items are missing from "the whole month"). `calendar.tsx` passes `resolvedShare: null` (ring hidden; the ring itself is built and wired in `MonthBubbleCard`). Fix: have `/calendar` return, per month, the items closed in it (`completed_at` in the month, by type) and the paid recurring occurrences (a `resolved: true` flag, or a separate `resolved` list with type + day), then compute `resolvedShare` in `monthLoads`.
+
+### ~~Budget/Acasă date a resolved Casă purchase task by its DUE date, Casă by when it was paid (2026-10-10)~~ FIXED 2026-10-15 (uncommitted on feat/redesign, awaiting qa-lead)
+
+Fixed server-side: `app/Services/HomeSpend.php` sums `home_task` (purchases only) and `home_maintenance` per `spendHistory` event (fallback: completed_at / due_at snapshot), used by Dashboard's `monthlyExpenses` and every Budget sum/list. Test: `tests/Feature/HomeSpendTest.php`. Original note:
+
+`Item::SPENDING_TYPES`' comment says a `home_task`'s `due_at` "is repointed to the resolution date" when it's resolved as a purchase, but `HomeDashboard.tsx` `resolveTask` (~398) never does that. A one-off task keeps its original `dueDate`, and a recurring one ADVANCES it to the next occurrence. Casă's own spend (`getThisMonthHomeExpenses`) is keyed off `completedAt`/`spendHistory`, while Budget/Dashboard sum `amount` by `due_at`. The result:
+- A purchase task due last month but paid today counts in last month's budget.
+- A purchase task with NO due date never counts in Budget at all (`due_at` null).
+- A recurring purchase task's latest price lands in the NEXT occurrence's month.
+
+Fix on either side: set `dueDate` to the resolution date for a priced one-off, or have the backend sum `home_task` by `completed_at`/`spendHistory`. The demo seed sidesteps this by giving its resolved purchase tasks `due_at` = the resolution date. `[from: backend-lead DemoSeeder 2026-10-10]`
+
+### Month pager / period picker leftovers (2026-10-10)
+
+(1) Two chevron taps during the ~140ms month slide can apply twice (Calendar re-applies the same month; DatePickerSheet can skip a month) -- `MonthSwipe.tsx` `slide` needs an in-flight guard. (2) `CarPeriodSheet.tsx` now only holds `CAR_PERIOD_PRESETS` -- rename/fold into `carPeriods.ts`. (3) ExpensesDetailPage total card and HomeSpendPage still use their own label functions ("Luna aceasta" vs PeriodPicker's "Luna asta"). (4) Android only, unchecked: RNGH gestures inside a `<Modal>` (Sheet) may need a GestureHandlerRootView inside the Modal (same exposure as the existing Sheet handle). (5) Casă Mentenanță "Data" and Facturi "Următoarea plată" can no longer be cleared at all ("Fără dată" removed -- they live in `due_at`, which reads back as created_at when null, and a bill needs a next date); undated bills/maintenance would need a data-model change. `[from: frontend-lead calendars/period pass 2026-10-10]`
+
+### Casă: saving a form whose record vanished silently creates a duplicate (2026-10-10)
+
+`HomeDashboard.tsx` (~856 and ~970) `onSubmit` looks up `existing` by `editingId`; if the record is gone (deleted/archived elsewhere, or a refresh while the form is open), `buildEntry(values, undefined)` quietly creates a NEW record. Should refuse/notify instead. Root of the old "row resolve checkbox vs open form" worry (that exact path is no longer reachable -- the form is a modal Sheet covering the list; a guard was added in `HomeCategoryPage.tsx` anyway). `[from: frontend-lead backlog sweep 2026-10-10]`
+
+### BudgetSplitBar ignores a 0 limit (2026-10-10)
+
+`BudgetSplitBar.tsx:93` (`overByUpcoming`) and `:42` (`budgetAt`) require `limit > 0`, so with a 0 limit plus unpaid bills there's no "bills push you over" note and no budget line. Minor; same whether 0 came from Reîmparte or the space page. `[from: frontend-lead 0-limit fix 2026-10-10]`
 
 Things noticed while working on something else — not the task at hand,
 not worth derailing it for, but real enough to not just forget. Add an
@@ -117,6 +196,14 @@ entry the moment something like this turns up (even mid-task); pick
 one up like any other "Open" item once nothing more pressing is ahead
 of it. Mark it `[from: <task>]` so there's a trail back to how it was
 found.
+
+### Old `spaces.color` hexes are left in the DB (2026-10-09)
+
+Before the space colour picker, the create forms wrote fixed hexes into `spaces.color` (`#111111` car, `#374151` home, `#4B5563` grocery, `#14B8A6` for the server-made "Default" Cheltuieli, `#22c55e` on an old "Work" space). The frontend now ignores anything that isn't a `SPACE_PALETTE` key, so these spaces show their kind's default colour, which is correct. The values are still in the column, though, and any client that sends `space.color` back unchanged would hit the new 422. None does today: EditSpaceModal and the Car/Home forms send the picker's key or null. A one-line data migration (`UPDATE spaces SET color = NULL WHERE color NOT IN (<PALETTE_KEYS>)`) would clean this up. Left out of the feature on purpose, because it rewrites user data. `[from: space colour picker, 2026-10-09]`
+
+### Acasă's car card skips a car that has only a manual odometer (2026-10-09)
+
+`DashboardController::carSummaries` builds one row per car from that car's `car_fuel`/`car_maintenance`/`car_expense`/`car_document` items only, so a car with no logged entries never gets a row, even after the user sets its km on the Mașină top card (`car_profiles.odometer`). A car WITH entries already uses max(logged, manual). The fix is to also seed rows from the user's `car_profiles` with a non-null odometer. Small, but it changes what the Acasă car card shows for brand-new cars, so check the card's visibility rule (`lib/dashboard/widgetVisibility.ts`) at the same time. Also: the dashboard/calendar "current odometer" queries filter by `user_id` (Dashboard) and `visibleTo` (Calendar), but the new `CarProfile::loggedOdometer` (the "can't go lower" minimum) reads every member's entries in the space. In a shared car those can differ: the minimum can come from a co-member's entry that the owner's Acasă doesn't count. `[from: car odometer update, 2026-10-09]`
 
 ### `composer audit` reports 2 advisories in already-installed packages (2026-10-08)
 
@@ -143,13 +230,15 @@ Original report:
 
 `App\Support\SpaceProfileRules` (same rules the profile endpoints had before) has no upper bound on `tank_capacity` (`decimal(6,2)`, max 9999.99) or `purchase_price` (`decimal(12,2)`), and `ItemBudgetRules` / ItemController none on `amount` (`decimal(12,2)`). Seen live: `POST /spaces` with `profile.tank_capacity: 100000` or `credit.amount: 1000000000000` -> HTTP 500, body `"SQLSTATE[22003]: Numeric value out of range ..."` (+ stack trace, APP_DEBUG), which the Car form shows verbatim in "Nu am putut salva". The transaction rolls back correctly (0 rows left), so it's a message/validation gap, not data loss; PUT car-profile and POST /items have the same gap. Fix: `max:9999.99` / `max:9999999999.99` with Romanian messages. Related: `$request->validate()` 422s with 2+ errors (PUT car-profile/home-profile) get Laravel's English suffix, e.g. "Scrie marca mașinii. (and 5 more errors)" -- see the English-validation-messages entries. `[from: qa-lead verification of În rate / one-request space create, 2026-10-08]`
 
-### Tab bar: tapping "Spații" while inside a Space does nothing (2026-10-08)
+### ~~Tab bar: tapping "Spații" while inside a Space does nothing (2026-10-08)~~ FIXED 2026-10-10 (uncommitted on feat/redesign, awaiting qa-lead)
+
+**Fix:** `MainTabBar.tsx` onPress now navigates when `!focused || (inSpace && route.name === "spaces")` -- exactly the fix idea below. Shipped together with the return trail (`lib/navigation/returnTrail.ts`, `ReturnTrailHint.tsx`, `TabSwipeEdges.tsx`; see frontend/CLAUDE.md "Tab navigation"). Needs a phone check. `[from: tab bar + return trail task]`
 
 `components/navigation/MainTabBar.tsx`: inside a Space (`segments[1] === "[id]"`) `activeIndex` is forced onto "spaces" so the pill stays lit, which also makes that cell `focused` -- and `onPress` only navigates when `!focused`. No `tabPress` listener exists anywhere else, so from e.g. a Mașină space, tapping "Spații" in the bar emits the event and stays put; the grid is reachable only via the screen's own back. Expected (and the stock tab bar's behavior): go to the Spații grid. Fix idea: `if ((!focused || (inSpace && route.name === "spaces")) && !event.defaultPrevented) navigation.navigate(route.name)`. Static trace only, not tried on a phone; the file was never committed, so whether this predates the TabCell extraction can't be told from git. `[from: qa-lead verification of first-use tour, 2026-10-08]`
 
 ### First-use tour: two TEMP testing switches to undo after phone testing (2026-10-08)
 
-`app/(tabs)/home.tsx` `SHOW_TOUR_TEST_BUTTON = true` renders a "Pornește ghidul" pill (testID `home-tour-test`) under the Acasă header that starts the tour on demand -- set false and delete the pill once the user has tried the tour. `lib/tours.ts` `ONE_AUTO_TOUR_PER_SESSION = false` -- flip to true when more screens get tours, so a new user isn't hit by several auto tours in one session (design-lead's spec wants the limit). `[from: first-use tour build]`
+`lib/tours.ts` `SHOW_TOUR_TEST_BUTTON = true` (one shared flag since 2026-10-09; was a local const in home.tsx) renders a "Pornește ghidul" pill that starts the screen's tour on demand: Acasă under the header (testID `home-tour-test`) Calendar under the month title (testID `calendar-tour-test`, `app/(tabs)/calendar.tsx`) Buget under its title (testID `budget-tour-test`, `app/(tabs)/budget.tsx`, added 2026-10-09) and Mașină in the car dashboard's TopBar, left of the pencil (testID `car-tour-test`, `components/spaces/car/CarDashboard.tsx`, added 2026-10-09) -- set false and delete all four pills once the user has tried the tours. `lib/tours.ts` `ONE_AUTO_TOUR_PER_SESSION = false` -- flip to true when more screens get tours, so a new user isn't hit by several auto tours in one session (design-lead's spec wants the limit). Calendar now has the 2nd auto tour (2026-10-09), Buget the 3rd and Mașină (`space_car`, first open of any car space) the 4th (both 2026-10-09), so with the flag still false a brand-new user gets Acasă's, Calendar's, Buget's and Mașină's on their first visit to each. `[from: first-use tour build]`
 
 ### `hooks/` holds two more dead Expo-template files (2026-10-08)
 
@@ -199,13 +288,23 @@ Spec + mockup "orgOS Buget din venit" (https://claude.ai/artifact/1w4h13z2dXQVSF
 
 **[FIXED 2026-10-08: forgot-password + email change now try/catch → log + Romanian 503; email change deletes its pending row on failure. Note: forgot-password's 503 only happens when the account exists, a minor enumeration leak while SMTP is down. 429 English copy still open.]** Mail is sent inside the request (no queue worker in dev). `register` and `POST /email/verification-notification` catch transport failures (account still created / Romanian 503), but `POST /forgot-password` (`Password::sendResetLink`) and `PUT /profile/email` (`requestEmailChange`, after it has already stored the pending row) don't -- once `MAIL_MAILER=smtp`, a Brevo outage/bad key/daily-quota hit turns them into a raw 500. Options: try/catch + log + Romanian 503 (forgot-password must keep its don't-reveal-the-account wording), or queue the notifications (`ShouldQueue` + a worker in `dev.ps1`). Also: the shared `password-reset` throttle group (now also `/email/verify`) answers 429 with Laravel's English "Too Many Attempts." (related to `lib/api.ts`'s own English 429 copy, item (5) under budget-from-income frontend findings). `[from: auth-emails backend 2026-10-08]`
 
+### Google sign-in works via ngrok free domain; ngrok "Visit Site" interstitial (2026-10-09)
+
+Google login now shows and works in Expo Go through the fixed ngrok domain (dev.ps1 DEV_NGROK_DOMAIN). ngrok's free-domain browser warning appears in the in-app browser before the Google redirect (and can on the callback) -- unavoidable for browser navigations on free ngrok (API calls skip it via the `ngrok-skip-browser-warning` header). Removed only by a paid ngrok plan or an own domain + Cloudflare named tunnel (~10 USD/yr) -- plan that together with the dedicated-Gmail move. `[from: user test 2026-10-09]`
+
+### PARKED (user decision 2026-10-09): all social login (Apple, Google, Facebook) until there's budget
+
+User: social login (incl. the NEW-1 Facebook/Google fix and the Apple own-build) waits until money is available; meanwhile only free work. Code stays in place, buttons hidden. Note for later: Google/Facebook themselves are free (only need a fixed URL, e.g. free ngrok static domain + credentials); Apple needs the 99 USD/yr developer account. `[from: user 2026-10-09]`
+
 ### Apple sign-in does NOT work in Expo Go (confirmed on the user's iPhone 2026-10-09)
 
 Expo Go (SDK 57) doesn't ship the native expo-apple-authentication module: `isAvailableAsync()` → false and `AppleAuthenticationButton` renders "Unimplemented component: <ViewManagerAdapter_ExpoAppleAuthentication>". The button stays hidden (frontend gate is correct). Backend + app code are done and QA'd; Apple needs an own development build (EAS/`expo prebuild`) signed with an Apple Developer account (99 USD/yr), then add the bundle id to APPLE_CLIENT_IDS and REMOVE `host.exp.Exponent`. Same build decision unblocks the bank-notification feature (Android) and `orgos://` links. `[from: Apple sign-in device test 2026-10-09]`
 
 ### Social login: fix BEFORE enabling Google/Facebook credentials (2026-10-08)
 
-QA re-verify passed all security fixes; Apple is ready. Open: (NEW-1, MEDIUM) a Facebook / unverified-Google user who verifies their email or resets the password LOSES that sign-in forever: `dropUnverifiedLinks()` in verifyEmail/resetPassword/confirmEmailChange deletes the link, next sign-in 409 "Intră cu emailul și parola" though has_password=false. Fix idea: when the link was created with the account and its email equals the address just proven, mark it verified instead of deleting; at least point the 409 copy to "Ai uitat parola?" when the account has no password. (NEW-2, LOW) verify-email doesn't revoke the registrant's tokens/password, so a victim who clicks "confirm" on an attacker-created account and later links Apple inherits an account the attacker still controls (standard email-verification limitation). (NEW-3, LOW) first-sign-in race on MySQL can deadlock (1213) instead of unique violation → use `DB::transaction($cb, 3)`. Notes: `pendingWebFlowAt` not cleared on cancel/error (10-min trust window); set-password needs no re-auth (stolen token can lock in); stale has_password after a 409 on set-password; apple-nonce limiter effectively global behind the tunnel (same as TrustProxies item). `[from: qa-lead social login re-verify 2026-10-08]`
+**2026-10-09 backend-lead: NEW-1 and NEW-3 FIXED, awaiting qa-lead** (uncommitted on feat/redesign). NEW-1: new `social_accounts.created_account` (migration `2026_10_09_000001`, applied to dev MySQL); `SocialAuthService::settleLinksAfterAddressProven($user, $address)` replaces `dropUnverifiedLinks` in verifyEmail/resetPassword/confirmEmailChange: the unverified link that created the account with exactly the proven address is promoted to verified, every other unverified link is still deleted; the eviction path still drops all. 409 `email_unverified_exists` on a no-password account now says "... Intră cu emailul și parola sau folosește „Ai uitat parola?”." + `hint: no_password` (JSON) / `&hint=no_password` (web-flow deep link). NEW-3: resolveUser retries up to 3x on concurrency errors (own loop, since `DB::transaction($cb, 3)` doesn't retry when nested). NEW-2: unchanged by design, documented in backend/CLAUDE.md -- note the NEW-1 fix widens it slightly: someone who created an account via an unverified Facebook email for someone else's address keeps that Facebook link if the real owner later verifies or resets (before: dropped). Tests: SocialLoginTest +5 (verify / reset keep Facebook, unrelated link dropped, eviction still drops the creator link, no-password hint, deadlock retry); full suite 74/74. **Frontend follow-up (DONE 2026-10-09 -- socialErrorMessage takes the hint; web flow + auth-callback pass it):** `frontend/lib/socialAuth.ts` `socialErrorMessage` ignores `hint`, so the Google/Facebook web flow still shows the old "Intră cu emailul și parola" copy -- read `hint=no_password` from the callback params and append the „Ai uitat parola?” pointer. `[from: backend-lead social-login NEW-1/NEW-3 fix 2026-10-09]`
+
+Original QA finding: (NEW-1, MEDIUM) a Facebook / unverified-Google user who verifies their email or resets the password LOSES that sign-in forever: `dropUnverifiedLinks()` in verifyEmail/resetPassword/confirmEmailChange deletes the link, next sign-in 409 "Intră cu emailul și parola" though has_password=false. Fix idea: when the link was created with the account and its email equals the address just proven, mark it verified instead of deleting; at least point the 409 copy to "Ai uitat parola?" when the account has no password. (NEW-2, LOW) verify-email doesn't revoke the registrant's tokens/password, so a victim who clicks "confirm" on an attacker-created account and later links Apple inherits an account the attacker still controls (standard email-verification limitation). (NEW-3, LOW) first-sign-in race on MySQL can deadlock (1213) instead of unique violation → use `DB::transaction($cb, 3)`. Notes: `pendingWebFlowAt` not cleared on cancel/error (10-min trust window); set-password needs no re-auth (stolen token can lock in); stale has_password after a 409 on set-password; apple-nonce limiter effectively global behind the tunnel (same as TrustProxies item). `[from: qa-lead social login re-verify 2026-10-08]`
 
 ### Spații create-templates design review side findings (2026-10-08)
 
@@ -241,7 +340,7 @@ From the design-lead review of the Casă dashboard (mockup "Casă dashboard rede
 
 ### Redesign follow-ups needing a decision or a device (2026-10-04)
 
-From design-lead's verification of the redesign (phase 0-1), not done because they change behavior or need a real phone: (C) pin Grocery's quick-add bar above the tab bar with keyboard avoidance -- on a 20-item list it's off-screen today (departs from the mockup); (D) `Haptics.selectionAsync()` on ticking a grocery item (expo-haptics is installed, works in Expo Go) -- a new feedback channel; (E) Home tab's space tiles say "La zi" when there are no to-dos/spend -- per-type figures (km, restanțe, "de luat") need backend summary fields. Device checks: the native font shim (lib/globalFont.native.ts) -- Plex actually applied, nested `<Text>` inheriting its parent's weight; the tab bar keeping "Spații" lit inside a Space. Done in the same pass (no decision needed): sign-out moved from Home's header into Settings behind a confirmation (matches the approved Settings mockup), Grocery "Golește" relabelled "Debifează tot". `[from: design verify of feat/redesign phase 0-1]`
+From design-lead's verification of the redesign (phase 0-1), not done because they change behavior or need a real phone: (C) ~~pin Grocery's quick-add bar above the tab bar with keyboard avoidance -- on a 20-item list it's off-screen today (departs from the mockup)~~ obsolete 2026-10-10: the bar now sits at the TOP of the list (`GroceryDashboard.tsx`), never pushed down; (D) `Haptics.selectionAsync()` on ticking a grocery item (expo-haptics is installed, works in Expo Go) -- a new feedback channel; (E) Home tab's space tiles say "La zi" when there are no to-dos/spend -- per-type figures (km, restanțe, "de luat") need backend summary fields. Device checks: the native font shim (lib/globalFont.native.ts) -- Plex actually applied, nested `<Text>` inheriting its parent's weight; the tab bar keeping "Spații" lit inside a Space. Done in the same pass (no decision needed): sign-out moved from Home's header into Settings behind a confirmation (matches the approved Settings mockup), Grocery "Golește" relabelled "Debifează tot". `[from: design verify of feat/redesign phase 0-1]`
 
 ### Backend validation/auth messages are still English (2026-10-04)
 
@@ -348,7 +447,7 @@ call sites, not just Documents.
 
 **Found:** `[from: qa-lead review of feat/home-due-date-urgency-tiers, 2026-09-28]`.
 
-### Home's per-resolve spend history isn't visible to the backend's own cross-space aggregates
+### ~~Home's per-resolve spend history isn't visible to the backend's own cross-space aggregates~~ FIXED 2026-10-15 (HomeSpend, see the entry above; bills still summed as a flat monthly commitment in Complet -- see "Complet never moves a paid bill into Cheltuit")
 
 **Where:** `backend/app/Http/Controllers/Api/DashboardController.php`'s
 `monthlyExpenses` query and `BudgetController`'s Home-category total —
@@ -638,7 +737,7 @@ used elsewhere in this file.
 
 **Found:** `[from: design-lead Phase 3 Home tab audit, 2026-09-22]`.
 
-### Home tab's sign-out icon fires with no confirmation
+### ~~Home tab's sign-out icon fires with no confirmation~~ ALREADY FIXED (confirmed 2026-10-10: sign-out lives only in Settings, behind confirmAction "Ieși din cont?")
 
 **Where:** `frontend/app/(tabs)/home.tsx` lines 173-181 —
 `onPress={signOut}` directly, no `confirmAction` gate, unlike this app's
@@ -1005,6 +1104,21 @@ working well in practice.
   needed, just aggregation and a place to show it.
 
 ### B. Multi-language support (i18n)
+
+**STATUS 2026-10-15 -- infrastructure in, translation not started.**
+Romanian audit done first (1.528 on-screen strings checked, all Romanian;
+fixed: api.ts fallback, Buget pages showing stored English titles via
+`todoTitle`, 22 English/no-diacritics server messages, server locale ro with
+`lang/ro/validation.php`). Built: `frontend/lib/i18n` (i18next, ro/en JSON,
+CLDR plurals, Settings > Limbă sheet, Accept-Language on every request) and
+the backend's SetLocale middleware. Next, in order: (1) move Simplu screens
+to `t()` keys + write en.json; (2) make lib/format.ts dates/numbers follow
+the language; (3) Complet screens; (4) help.ts + tours.ts; (5) wrap
+controller messages in `__()` + lang/en; (6) emails per user language (needs
+the choice saved on the account -- `users.locale`, today it's per device);
+(7) flip `FOLLOW_DEVICE_LANGUAGE`. The original note below predates all
+this (it says the app is English -- it has been Romanian since 2026-10).
+
 
 Right now every visible string in the app is a hardcoded English literal
 written directly in JSX — there's no translation infrastructure at all

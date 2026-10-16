@@ -22,9 +22,28 @@ class SocialAuthException extends \RuntimeException
         'invalid_code' => 'Codul de autentificare nu este valid sau a expirat. Încearcă din nou.',
     ];
 
-    public function __construct(public readonly string $errorCode, public readonly int $status = 422)
+    /** $hint: optional machine hint sent alongside `error` (JSON body and
+     * the web flow's ?hint=), e.g. `no_password`. */
+    public function __construct(
+        public readonly string $errorCode,
+        public readonly int $status = 422,
+        ?string $message = null,
+        public readonly ?string $hint = null,
+    ) {
+        parent::__construct($message ?? self::MESSAGES[$errorCode] ?? self::MESSAGES['provider_error']);
+    }
+
+    /** email_unverified_exists for an account with no password of its own
+     * (created by social login): "sign in with email and password" alone is
+     * a dead end there, so point at "Ai uitat parola?". */
+    public static function unverifiedExistsWithoutPassword(): self
     {
-        parent::__construct(self::MESSAGES[$errorCode] ?? self::MESSAGES['provider_error']);
+        return new self(
+            'email_unverified_exists',
+            409,
+            'Există deja un cont cu acest email. Intră cu emailul și parola sau folosește „Ai uitat parola?”.',
+            'no_password',
+        );
     }
 
     public static function invalidToken(): self
@@ -39,6 +58,10 @@ class SocialAuthException extends \RuntimeException
 
     public function toResponse(): \Illuminate\Http\JsonResponse
     {
-        return response()->json(['message' => $this->getMessage(), 'error' => $this->errorCode], $this->status);
+        return response()->json(array_filter([
+            'message' => $this->getMessage(),
+            'error' => $this->errorCode,
+            'hint' => $this->hint,
+        ], fn ($v) => $v !== null), $this->status);
     }
 }

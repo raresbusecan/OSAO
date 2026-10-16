@@ -2,9 +2,10 @@ import React, { useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { capitalize, lei, roCount, roDate } from "@/lib/format";
-import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { creditEndAsDate, remainingRates } from "@/lib/spaces/expenses/credits";
 import { Sheet } from "@/components/ui/Sheet";
+import { MonthSwipeView, useMonthPager } from "@/components/ui/MonthSwipe";
 import { CircleButton, Field, FieldButton } from "@/components/ui/primitives";
 
 /**
@@ -72,8 +73,9 @@ export function creditDraftToApi(d: CreditDraft) {
 export function CreditFields({
   draft,
   onChange,
-  tone = SPACE_IDENTITY_COLORS.expenses!,
-  onTone = SPACE_ON_FILL.expenses!,
+  tone: toneProp,
+  fill: fillProp,
+  onTone: onToneProp,
   allowPastEnd = false,
   testIDPrefix = "credit",
   namePlaceholder = "ex. Leasing mașină",
@@ -82,7 +84,10 @@ export function CreditFields({
   onChange: (next: CreditDraft) => void;
   /** Fill color of the selected day/month (the Space's identity color). */
   tone?: string;
-  /** Ink on `tone`. */
+  /** Background of the selected day/month -- the Space's button fill
+   * (its `ink` is only contrast-checked on fill, not on the base colour). */
+  fill?: string;
+  /** Ink on `fill`. */
   onTone?: string;
   /** Editing an existing credit may keep a past end month. */
   allowPastEnd?: boolean;
@@ -90,6 +95,10 @@ export function CreditFields({
   namePlaceholder?: string;
 }) {
   const { colors, spacing } = useTheme();
+  const exp = useSpaceColors("expenses");
+  const tone = toneProp ?? exp.color;
+  const fill = fillProp ?? exp.fill;
+  const onTone = onToneProp ?? exp.ink;
   const [dayPickerOpen, setDayPickerOpen] = useState(false);
   const [monthPickerOpen, setMonthPickerOpen] = useState(false);
 
@@ -141,13 +150,13 @@ export function CreditFields({
       ) : null}
 
       {dayPickerOpen ? (
-        <DayPickerSheet value={draft.dayOfMonth} tone={tone} onTone={onTone} testIDPrefix={testIDPrefix} onSelect={changeDay} onClose={() => setDayPickerOpen(false)} />
+        <DayPickerSheet value={draft.dayOfMonth} tone={fill} onTone={onTone} testIDPrefix={testIDPrefix} onSelect={changeDay} onClose={() => setDayPickerOpen(false)} />
       ) : null}
       {monthPickerOpen ? (
         <MonthPickerSheet
           value={end}
           allowPast={allowPastEnd}
-          tone={tone}
+          tone={fill}
           onTone={onTone}
           testIDPrefix={testIDPrefix}
           onClose={() => setMonthPickerOpen(false)}
@@ -214,42 +223,52 @@ function MonthPickerSheet({
   const minYear = allowPast ? Math.min(now.getFullYear(), value?.getFullYear() ?? now.getFullYear()) - 5 : now.getFullYear();
   const maxYear = now.getFullYear() + 40;
   const [year, setYear] = useState(value?.getFullYear() ?? now.getFullYear());
+  // Same sideways swipe as every month grid, here paging the year.
+  const pager = useMonthPager();
+  const canPrev = year > minYear;
+  const canNext = year < maxYear;
+  const page = (dir: 1 | -1) => {
+    if (dir === 1 ? !canNext : !canPrev) return;
+    pager.slide(dir, () => setYear((y) => Math.min(maxYear, Math.max(minYear, y + dir))));
+  };
 
   return (
     <Sheet visible onClose={onClose} title="Ultima rată">
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <CircleButton icon="chevron-back" label="Anul trecut" onPress={() => setYear((y) => Math.max(minYear, y - 1))} disabled={year <= minYear} />
+        <CircleButton icon="chevron-back" label="Anul trecut" onPress={() => page(-1)} disabled={!canPrev} />
         <Text style={{ fontSize: 17, fontWeight: "600", color: colors.onSurface }}>{year}</Text>
-        <CircleButton icon="chevron-forward" label="Anul următor" onPress={() => setYear((y) => Math.min(maxYear, y + 1))} disabled={year >= maxYear} />
+        <CircleButton icon="chevron-forward" label="Anul următor" onPress={() => page(1)} disabled={!canNext} />
       </View>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: 8 }}>
-        {Array.from({ length: 12 }, (_, m) => {
-          const disabled = !allowPast && (year < now.getFullYear() || (year === now.getFullYear() && m < now.getMonth()));
-          const on = !!value && value.getFullYear() === year && value.getMonth() === m;
-          const label = capitalize(new Date(year, m, 1).toLocaleDateString("ro-RO", { month: "short" }).replace(".", ""));
-          return (
-            <View key={m} style={{ width: "33.333%", paddingHorizontal: 4 }}>
-              <Pressable
-                testID={`${testIDPrefix}-end-month-${m + 1}`}
-                disabled={disabled}
-                onPress={() => onSelect(year, m)}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on, disabled }}
-                style={{
-                  height: 48,
-                  borderRadius: radius.control,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: on ? tone : colors.surfaceTertiary,
-                  opacity: disabled ? 0.35 : 1,
-                }}
-              >
-                <Text style={{ fontSize: 15, fontWeight: on ? "600" : "400", color: on ? onTone : colors.onSurface }}>{label}</Text>
-              </Pressable>
-            </View>
-          );
-        })}
-      </View>
+      <MonthSwipeView pager={pager} onSwipe={page} canPrev={canPrev} canNext={canNext}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: 8 }}>
+          {Array.from({ length: 12 }, (_, m) => {
+            const disabled = !allowPast && (year < now.getFullYear() || (year === now.getFullYear() && m < now.getMonth()));
+            const on = !!value && value.getFullYear() === year && value.getMonth() === m;
+            const label = capitalize(new Date(year, m, 1).toLocaleDateString("ro-RO", { month: "short" }).replace(".", ""));
+            return (
+              <View key={m} style={{ width: "33.333%", paddingHorizontal: 4 }}>
+                <Pressable
+                  testID={`${testIDPrefix}-end-month-${m + 1}`}
+                  disabled={disabled}
+                  onPress={() => onSelect(year, m)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on, disabled }}
+                  style={{
+                    height: 48,
+                    borderRadius: radius.control,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: on ? tone : colors.surfaceTertiary,
+                    opacity: disabled ? 0.35 : 1,
+                  }}
+                >
+                  <Text style={{ fontSize: 15, fontWeight: on ? "600" : "400", color: on ? onTone : colors.onSurface }}>{label}</Text>
+                </Pressable>
+              </View>
+            );
+          })}
+        </View>
+      </MonthSwipeView>
     </Sheet>
   );
 }

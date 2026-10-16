@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef } from "react";
 import { View, Text, Animated, Pressable, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
@@ -158,6 +158,7 @@ export function ExpensesStats({ entries, allTimeTotal, thisMonthTotal, plannedTh
 
 function Bar({ ratio, highlighted, label, onPress, testID }: { ratio: number; highlighted: boolean; label: string; onPress: () => void; testID: string }) {
   const { colors } = useTheme();
+  const TEAL = useSpaceColors("expenses").color;
   const reduced = useReducedMotion();
   const h = useRef(new Animated.Value(reduced ? ratio : 0)).current;
 
@@ -179,7 +180,7 @@ function Bar({ ratio, highlighted, label, onPress, testID }: { ratio: number; hi
         style={{
           borderRadius: 4,
           minHeight: 4,
-          backgroundColor: highlighted ? SPACE_IDENTITY_COLORS.expenses : colors.surfaceTertiary,
+          backgroundColor: highlighted ? TEAL : colors.surfaceTertiary,
           height: h.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] }),
         }}
       />

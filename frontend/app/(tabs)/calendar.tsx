@@ -1,18 +1,23 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, ScrollView, Pressable, DeviceEventEmitter, ActivityIndicator, Animated, Easing, AppState } from "react-native";
+import { View, Text, ScrollView, Pressable, DeviceEventEmitter, ActivityIndicator, AppState, Animated, Easing } from "react-native";
+import Svg, { Line, Path } from "react-native-svg";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { PanGestureHandler, State } from "react-native-gesture-handler";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { REFRESH_EVENT } from "./_layout";
+import { useAppMode } from "@/lib/appMode";
+import { SimpleCalendar } from "@/components/simple/SimpleCalendar";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { notifyAction, confirmAction } from "@/lib/confirm";
+import { HEAT_LEVELS, heatColor, heatLevel, type HeatLevel } from "@/lib/statusColors";
+import { MONTH_STATUS_LABEL, dayCapacity, dayEffort, dayShare, monthStatus } from "@/lib/calendar/capacity";
+import { RingProgress } from "@/components/dashboard/RingProgress";
 import { useReducedMotion } from "@/lib/motion";
-import { HEAT_LEVELS, heatColor, heatLevel } from "@/lib/statusColors";
-import { detectSpaceType, SPACE_IDENTITY_COLORS, CUSTOM_EVENT_COLOR, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { CUSTOM_EVENT_COLOR, spaceColors, spaceTextColor } from "@/lib/spaces/spaceProfile";
 import { Sheet } from "@/components/ui/Sheet";
 import { DatePickerSheet } from "@/components/ui/DatePickerSheet";
+import { MonthSwipeView, useMonthPager } from "@/components/ui/MonthSwipe";
 import { PageTitle, CircleButton, InfoButton, Group, Row, IconWell, Pill, Button, Field, FieldButton, ToggleRow, Segmented, EmptyState, Disclosure, hexToRgba } from "@/components/ui/primitives";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { capitalize, daysFromToday, lei, roCount, roDate } from "@/lib/format";
@@ -21,14 +26,18 @@ import { CreditReminderRow, isReminder } from "@/components/dashboard/CreditRemi
 import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 import { dueText, expiryText } from "@/components/spaces/home/homeRecordPreview";
 import { todoTitle } from "@/lib/dashboard/spaceDue";
+import { useTourScroll, useTourTarget } from "@/components/ui/tourTargets";
+import { useAutoTour } from "@/lib/useAutoTour";
+import { SHOW_TOUR_TEST_BUTTON, startTour, type TourCtx } from "@/lib/tours";
 
 /*
  * Calendar, 2026-10 redesign (design-lead spec, mockup "orgOS Calendar
  * redesign"; user decisions 2026-10-05):
- *  - "Următoarele 3 luni": a thin strip, one 6px cell per day, weeks as
- *    columns -- today's month + 2, heated by load; tap a week to jump.
- *  - The month grid: each day tile filled by its heat (a plain count of
- *    what falls on it, only today/future -- past days never heat), a lime
+ *  - "Următoarele 3 luni" (2026-10-12, mockup "Bule cu inel"): three cards,
+ *    today's month + 2, each a bubble filled to the month's load against
+ *    its free time (lib/calendar/capacity.ts); tap one to jump the grid.
+ *  - The month grid: each day tile filled by its heat (the day's effort
+ *    over its max capacity, only today/future -- past days never heat), a lime
  *    dot for a custom event, a red dot for a past day still holding
  *    something unresolved. Always 6 rows. Swipe it left/right (or the
  *    chevrons) to change month.
@@ -48,13 +57,6 @@ function monthKeyOf(y: number, m: number) {
 function addMonths(y: number, m: number, delta: number): [number, number] {
   const t = y * 12 + m + delta;
   return [Math.floor(t / 12), ((t % 12) + 12) % 12];
-}
-function addDays(d: Date, n: number) {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
-}
-/** Monday on or before `d`. */
-function mondayOf(d: Date) {
-  return addDays(d, -((d.getDay() + 6) % 7));
 }
 
 const WEEKDAYS = ["L", "M", "M", "J", "V", "S", "D"];
@@ -81,10 +83,15 @@ function itemIcon(type: string): IconName {
   return "ellipse-outline";
 }
 
-export default function CalendarScreen() {
+export default function CalendarRoute() {
+  // orgOS Simplu (lib/appMode.tsx): a weekly agenda; "full" = unchanged.
+  const { isSimple } = useAppMode();
+  return isSimple ? <SimpleCalendar /> : <CalendarScreen />;
+}
+
+function CalendarScreen() {
   const { colors, spacing, radius, isDark } = useTheme();
   const router = useRouter();
-  const reduced = useReducedMotion();
   const { date: dateParam } = useLocalSearchParams<{ date?: string }>();
   // "Today" drives everything date-relative: the strip's 3 months, the
   // months loaded, the heat (today/future only), "Evenimente". The tab
@@ -129,6 +136,15 @@ export default function CalendarScreen() {
   const [newEventVisible, setNewEventVisible] = useState(false);
   const [openEvent, setOpenEvent] = useState<any | null>(null);
   const [eventsExpanded, setEventsExpanded] = useState(false);
+
+  // First-use tour (lib/tours.ts "calendar"): what it points at, and the
+  // page's ScrollView so a step can scroll its target into view.
+  const scrollRef = useRef<ScrollView>(null);
+  const tourScroll = useTourScroll("calendar", scrollRef);
+  const navTarget = useTourTarget("calendar.nav");
+  const gridTarget = useTourTarget("calendar.grid");
+  const dayTarget = useTourTarget("calendar.day");
+  const eventsTarget = useTourTarget("calendar.events");
 
   /* ---------------- data: today's month + 2 (strip) and the displayed month ± 1 ---------------- */
 
@@ -194,8 +210,38 @@ export default function CalendarScreen() {
   const isCurrentDue = (it: any) => currentDueKeys.has(`${it.id}|${ymd(new Date(it.due_at))}`);
   // A credit reminder (`reminder: true`) is never resolvable nor restant.
   const isUnresolved = (it: any) => !!it.space && !isReminder(it) && (!it.is_projected || isCurrentDue(it));
-  const loadOf = (key: string) => (key >= todayKey ? (allDays[key] ?? []).length : 0);
+  // A day's heat: its effort as a share of that day's max capacity
+  // (lib/calendar/capacity.ts), today/future only.
+  const loadOf = (key: string, date: Date) => (key >= todayKey ? dayShare(allDays[key], date) : 0);
+
+  // "Următoarele 3 luni": each month's fill = all its effort / the sum of
+  // its days' MAX capacity. The current month counts the whole month, but
+  // /calendar only returns what is still OPEN (closed items are filtered
+  // out server-side, a paid bill's projection moves past the paid date),
+  // so its resolved share is unknown -> `resolvedShare: null` hides the
+  // ring until the payload carries resolved items (see BACKLOG).
+  const monthLoads = useMemo(
+    () =>
+      [0, 1, 2].map((delta) => {
+        const [yy, mm] = addMonths(ty, tm, delta);
+        const mk = monthKeyOf(yy, mm);
+        const data = cache[mk];
+        let effort = 0;
+        let capacity = 0;
+        for (let day = 1; day <= new Date(yy, mm + 1, 0).getDate(); day++) {
+          const date = new Date(yy, mm, day);
+          capacity += dayCapacity(date).max;
+          effort += dayEffort(data?.days[ymd(date)], date);
+        }
+        return { key: mk, y: yy, m: mm, loaded: !!data, fill: capacity ? effort / capacity : 0, future: delta > 0, resolvedShare: null as number | null };
+      }),
+    [cache, ty, tm],
+  );
   const loading = !cache[monthKeyOf(y, m)];
+
+  // Nothing of the Calendar's own reads the context yet.
+  const tourCtx: TourCtx = {};
+  useAutoTour("calendar", { ready: !loading && !newEventVisible && !openEvent, ctx: tourCtx });
 
   /* ---------------- month navigation (chevrons, swipe, "Azi", strip) ---------------- */
 
@@ -208,48 +254,21 @@ export default function CalendarScreen() {
     return firstLoaded ?? `${prefix}-01`;
   };
 
-  const gridWidth = useRef(320);
-  const [drag] = useState(() => new Animated.Value(0));
+  const pager = useMonthPager();
 
   const goToMonth = (yy: number, mm: number, selectKey?: string) => {
     const delta = yy * 12 + mm - (y * 12 + m);
-    const apply = () => {
-      setY(yy);
-      setM(mm);
-      setSelected(selectKey ?? defaultSelection(yy, mm));
-    };
     if (delta === 0) {
       if (selectKey) setSelected(selectKey);
       return;
     }
-    if (reduced) {
-      apply();
-      drag.setValue(0);
-      return;
-    }
-    const W = gridWidth.current;
-    const dir = delta > 0 ? 1 : -1;
-    Animated.timing(drag, { toValue: -dir * W, duration: 140, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => {
-      apply();
-      drag.setValue(dir * W);
-      Animated.timing(drag, { toValue: 0, duration: 180, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    pager.slide(delta > 0 ? 1 : -1, () => {
+      setY(yy);
+      setM(mm);
+      setSelected(selectKey ?? defaultSelection(yy, mm));
     });
   };
   const changeMonth = (delta: number) => goToMonth(...addMonths(y, m, delta));
-
-  const onGesture = reduced ? undefined : Animated.event([{ nativeEvent: { translationX: drag } }], { useNativeDriver: true });
-  const onPanState = (e: { nativeEvent: { state: number; translationX: number; velocityX: number } }) => {
-    const { state, translationX, velocityX } = e.nativeEvent;
-    if (state !== State.END && state !== State.CANCELLED && state !== State.FAILED) return;
-    const W = gridWidth.current;
-    const sameWay = translationX === 0 || Math.sign(velocityX) === Math.sign(translationX);
-    const commit = state === State.END && (Math.abs(translationX) > W * 0.25 || (Math.abs(velocityX) > 500 && sameWay));
-    if (commit) {
-      changeMonth((translationX || -velocityX) < 0 ? 1 : -1);
-      return;
-    }
-    Animated.spring(drag, { toValue: 0, useNativeDriver: true, speed: 24, bounciness: 0 }).start();
-  };
 
   // ?date= deep link (TodoCarouselSheet): that day's month, that day.
   const appliedDateParamRef = useRef(false);
@@ -362,43 +381,90 @@ export default function CalendarScreen() {
 
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="calendar-screen">
-      <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 140, gap: spacing.section }}>
-        <PageTitle
-          info="calendar.page"
-          right={
-            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-              {selected !== todayKey ? (
-                <Pill testID="cal-today" label="Azi" onPress={() => goToMonth(ty, tm, todayKey)} />
-              ) : null}
-              <CircleButton testID="cal-prev-month" icon="chevron-back" label="Luna trecută" onPress={() => changeMonth(-1)} />
-              <CircleButton testID="cal-next-month" icon="chevron-forward" label="Luna viitoare" onPress={() => changeMonth(1)} />
-            </View>
-          }
-        >
-          {monthName}
-        </PageTitle>
+      <ScrollView ref={scrollRef} {...tourScroll} contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 140, gap: spacing.section }}>
+        {/* Tour step 1: the month title + arrows and the 3 month cards. */}
+        <View {...navTarget} style={{ gap: spacing.section }}>
+          <PageTitle
+            info="calendar.page"
+            right={
+              <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                {selected !== todayKey ? (
+                  <Pill testID="cal-today" label="Azi" onPress={() => goToMonth(ty, tm, todayKey)} />
+                ) : null}
+                <CircleButton testID="cal-prev-month" icon="chevron-back" label="Luna trecută" onPress={() => changeMonth(-1)} />
+                <CircleButton testID="cal-next-month" icon="chevron-forward" label="Luna viitoare" onPress={() => changeMonth(1)} />
+              </View>
+            }
+          >
+            {monthName}
+          </PageTitle>
 
-        <HeatStrip
-          ty={ty}
-          tm={tm}
-          todayKey={todayKey}
-          selectedKey={selected}
-          displayedKey={monthKeyOf(y, m)}
-          loadOf={(k) => (allDays[k] ?? []).length}
-          onPickDay={(d) => {
-            if (!Number.isNaN(d.getTime())) goToMonth(d.getFullYear(), d.getMonth(), ymd(d));
-          }}
-        />
+          {SHOW_TOUR_TEST_BUTTON ? (
+            // TEMP for testing -- see SHOW_TOUR_TEST_BUTTON (lib/tours.ts).
+            <View style={{ flexDirection: "row", marginTop: -spacing.md }}>
+              <Pill testID="calendar-tour-test" icon="play-circle-outline" label="Pornește ghidul" onPress={() => startTour("calendar", tourCtx)} />
+            </View>
+          ) : null}
+
+          <View style={{ gap: 8 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }}>Următoarele 3 luni</Text>
+              <InfoButton topic="calendar.heat" />
+            </View>
+            <View testID="cal-months" style={{ flexDirection: "row", gap: 8 }}>
+              {monthLoads.map((mo) => (
+                <MonthBubbleCard
+                  key={mo.key}
+                  y={mo.y}
+                  m={mo.m}
+                  fill={mo.fill}
+                  loaded={mo.loaded}
+                  future={mo.future}
+                  resolvedShare={mo.resolvedShare}
+                  selected={mo.key === monthKeyOf(y, m)}
+                  onPress={() => goToMonth(mo.y, mo.m)}
+                />
+              ))}
+            </View>
+          </View>
+        </View>
 
         {/* THE MONTH -- swipe it left/right (pan on this card only: the
             rows below already swipe sideways). */}
-        <PanGestureHandler activeOffsetX={[-20, 20]} failOffsetY={[-12, 12]} onGestureEvent={onGesture} onHandlerStateChange={onPanState}>
-          <Animated.View
-            onLayout={(e) => (gridWidth.current = e.nativeEvent.layout.width)}
-            style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card, paddingVertical: 12, paddingHorizontal: 10, overflow: "hidden" }}
+        <View {...gridTarget}>
+          <MonthSwipeView
+            pager={pager}
+            onSwipe={changeMonth}
+            style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card, paddingVertical: 12, paddingHorizontal: 10 }}
+            after={
+              <>
+                {/* Legend -- one row on a phone (user, 2026-10-05): strictly the
+                    8 shades (no "Liber" label, no empty swatch), tight (2px
+                    apart, 10px); it only wraps on a very narrow screen. */}
+                <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", rowGap: 6, paddingTop: 10, paddingHorizontal: 4 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+                      {HEAT_LEVELS.filter((l) => l > 0).map((l) => (
+                        <View key={l} style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: heatColor(l, isDark) }} />
+                      ))}
+                    </View>
+                    <Text style={{ fontSize: 12, color: muted }}>Aglomerat</Text>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: eventDot }} />
+                      <Text style={{ fontSize: 12, color: muted }}>Eveniment</Text>
+                    </View>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                      <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: colors.error }} />
+                      <Text style={{ fontSize: 12, color: muted }}>Restant</Text>
+                    </View>
+                  </View>
+                </View>
+              </>
+            }
           >
-            <Animated.View
-              style={{ transform: [{ translateX: drag }] }}
+            <View
               accessible
               accessibilityRole="adjustable"
               accessibilityLabel={`Calendar, ${monthName}`}
@@ -416,7 +482,7 @@ export default function CalendarScreen() {
                   const key = `${monthKeyOf(y, m)}-${String(d).padStart(2, "0")}`;
                   const items = allDays[key] ?? [];
                   const past = key < todayKey;
-                  const level = heatLevel(loadOf(key));
+                  const level = heatLevel(loadOf(key, new Date(y, m, d)));
                   const hasEvent = items.some((it) => !it.space);
                   const lateMark = past && items.some(isUnresolved);
                   const isSelected = key === selected;
@@ -462,36 +528,12 @@ export default function CalendarScreen() {
                   );
                 })}
               </View>
-            </Animated.View>
-
-            {/* Legend -- one row on a phone (user, 2026-10-05): strictly the
-                8 shades (no "Liber" label, no empty swatch), tight (2px
-                apart, 10px); it only wraps on a very narrow screen. */}
-            <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", rowGap: 6, paddingTop: 10, paddingHorizontal: 4 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
-                  {HEAT_LEVELS.filter((l) => l > 0).map((l) => (
-                    <View key={l} style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: heatColor(l, isDark) }} />
-                  ))}
-                </View>
-                <Text style={{ fontSize: 12, color: muted }}>Aglomerat</Text>
-              </View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: eventDot }} />
-                  <Text style={{ fontSize: 12, color: muted }}>Eveniment</Text>
-                </View>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                  <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: colors.error }} />
-                  <Text style={{ fontSize: 12, color: muted }}>Restant</Text>
-                </View>
-              </View>
             </View>
-          </Animated.View>
-        </PanGestureHandler>
+          </MonthSwipeView>
+        </View>
 
         {/* DE REZOLVAT -- strictly what falls on the selected day. */}
-        <View style={{ gap: spacing.md }}>
+        <View {...dayTarget} style={{ gap: spacing.md }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, minHeight: 44 }}>
             <View style={{ flex: 1, gap: 2 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
@@ -538,8 +580,9 @@ export default function CalendarScreen() {
           ) : (
             <Group inset={68}>
               {dayRecords.map((it: any) => {
-                const kind = detectSpaceType(it.space, null);
-                const fill = SPACE_IDENTITY_COLORS[kind] ?? muted;
+                // That record's own space colour (its pick, else its kind's).
+                const own = spaceColors(it.space, isDark);
+                const fill = own?.color ?? muted;
                 const timing = recordTiming(it);
                 const timingColor = timing?.tone === "error" ? colors.error : timing?.tone === "warning" ? colors.warning : muted;
                 const amount = it.amount != null && Number(it.amount) > 0 ? Number(it.amount) : null;
@@ -548,7 +591,7 @@ export default function CalendarScreen() {
                     <Row
                       testID={`agenda-item-${it.id}`}
                       onPress={() => openItem(it)}
-                      leading={<IconWell icon={itemIcon(it.type)} color={fill} tint={spaceTextColor(kind, isDark) ?? fill} />}
+                      leading={<IconWell icon={itemIcon(it.type)} color={fill} tint={own?.tint ?? fill} />}
                       title={todoTitle(it)}
                       subtitle={
                         <>
@@ -585,7 +628,7 @@ export default function CalendarScreen() {
 
         {/* EVENIMENTE -- the user's own events, next 3 months, each once. */}
         <View style={{ gap: spacing.md }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, minHeight: 44 }}>
+          <View {...eventsTarget} style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, minHeight: 44 }}>
             <View style={{ flex: 1, gap: 2 }}>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <Text style={{ fontSize: 17, fontWeight: "600", color: colors.onSurface }}>Evenimente</Text>
@@ -593,7 +636,7 @@ export default function CalendarScreen() {
               </View>
               <Text style={{ fontSize: 13, color: muted }}>Următoarele 3 luni</Text>
             </View>
-            <Pill testID="new-event-open" label="Eveniment" icon="add" active tone={colors.onSurface} onPress={() => setNewEventVisible(true)} />
+            <Pill testID="new-event-open" label="Eveniment" icon="add" active tone={CUSTOM_EVENT_COLOR} onPress={() => setNewEventVisible(true)} />
           </View>
 
           {upcomingEvents.length === 0 ? (
@@ -678,130 +721,191 @@ export default function CalendarScreen() {
   );
 }
 
+const BUBBLE = 40; // the liquid's circle
+const RING = 50; // the outer "resolved" ring around it (current month only)
+
 /**
- * "Următoarele 3 luni": today's month and the next two as a thin strip --
- * weeks as columns (Monday on top), one 6px cell per day, heated by load
- * like the grid. Anchored to today (it doesn't move with the grid); a tap
- * picks the week under the finger and jumps the grid to its Monday. The
- * bright outline follows the selected day (same marks as the grid: selected
- * = onSurface, today = a faint outline).
+ * One "Următoarele 3 luni" card (mockup "Bule cu inel", 2026-10-12): a
+ * bubble filled to the month's load (effort / the sum of its days' max
+ * capacity, lib/calendar/capacity.ts) with a gentle wave on top that rises
+ * on first show, a dashed comfort line at 50%, a red drop when the month
+ * runs over 100%, and -- for the current month, once the data exists -- an
+ * outer ring with the share already resolved. Short month + status to the
+ * right ("≈ " on future months: estimates). Tap = jump the grid there; the
+ * displayed month gets a 2px onSurface ring. RN Animated only (no
+ * reanimated worklets in this Expo Go), nothing moves on reduced motion.
  */
-function HeatStrip({
-  ty,
-  tm,
-  todayKey,
-  selectedKey,
-  displayedKey,
-  loadOf,
-  onPickDay,
+function MonthBubbleCard({
+  y,
+  m,
+  fill,
+  loaded,
+  future,
+  resolvedShare,
+  selected,
+  onPress,
 }: {
-  ty: number;
-  tm: number;
-  todayKey: string;
-  selectedKey: string;
-  displayedKey: string;
-  loadOf: (key: string) => number;
-  onPickDay: (d: Date) => void;
+  y: number;
+  m: number;
+  fill: number;
+  loaded: boolean;
+  future: boolean;
+  resolvedShare: number | null;
+  selected: boolean;
+  onPress: () => void;
 }) {
   const { colors, radius, isDark } = useTheme();
-  const windowStart = new Date(ty, tm, 1);
-  const windowEnd = new Date(ty, tm + 3, 0);
-  const gridStart = mondayOf(windowStart);
-  const cols = Math.ceil((Math.round((windowEnd.getTime() - gridStart.getTime()) / 86400000) + 1) / 7);
-  const months = [0, 1, 2].map((d) => {
-    const first = new Date(ty, tm + d, 1);
-    const col = Math.floor(Math.round((first.getTime() - gridStart.getTime()) / 86400000) / 7);
-    const key = ymd(first).slice(0, 7);
-    let total = 0;
-    // From today on, like the heat itself (this month's past days don't count).
-    for (let day = 1; day <= new Date(ty, tm + d + 1, 0).getDate(); day++) {
-      const k = `${key}-${String(day).padStart(2, "0")}`;
-      if (k >= todayKey) total += loadOf(k);
-    }
-    return { key, col, label: first.toLocaleDateString("ro-RO", { month: "short" }).replace(".", ""), long: first.toLocaleDateString("ro-RO", { month: "long" }), total };
-  });
+  const reduced = useReducedMotion();
+  const status = monthStatus(fill);
+  const over = loaded && status === "over";
+  // The grid's own heat palette: comfortable = shade 4, full = 6, over = 8.
+  const level: HeatLevel = status === "over" ? 8 : status === "full" ? 6 : 4;
+  const liquid = heatColor(level, isDark);
+  const height = loaded ? Math.min(fill, 1) * BUBBLE : 0;
+  const ring = loaded && resolvedShare != null;
+  const box = ring ? RING : BUBBLE;
 
-  // Out of the window: nothing; past days: a dim empty cell (never heat);
-  // future: empty or its heat.
-  const cellStyle = (d: Date) => {
-    const key = ymd(d);
-    if (d < windowStart || d > windowEnd) return { backgroundColor: "transparent", opacity: 1 };
-    if (key < todayKey) return { backgroundColor: colors.surfaceTertiary, opacity: 0.5 };
-    const level = heatLevel(loadOf(key));
-    return { backgroundColor: level === 0 ? colors.surfaceTertiary : heatColor(level, isDark), opacity: 1 };
-  };
+  const rise = useRef(new Animated.Value(0)).current; // 0 = below the bubble, 1 = in place
+  const wave = useRef(new Animated.Value(0)).current;
+  const drip = useRef(new Animated.Value(0)).current;
+  const risen = useRef(false);
+
+  // Rise once, the first time the month's data is there.
+  useEffect(() => {
+    if (!loaded || risen.current) return;
+    risen.current = true;
+    if (reduced) {
+      rise.setValue(1);
+      return;
+    }
+    Animated.timing(rise, { toValue: 1, duration: 1300, easing: Easing.bezier(0.2, 0.7, 0.2, 1), useNativeDriver: true }).start();
+  }, [loaded, reduced, rise]);
+
+  // Reduced motion (also when it turns on later): everything at rest.
+  useEffect(() => {
+    if (!reduced) return;
+    rise.stopAnimation();
+    if (risen.current) rise.setValue(1);
+    wave.stopAnimation();
+    wave.setValue(0);
+    drip.stopAnimation();
+    drip.setValue(0);
+  }, [reduced, rise, wave, drip]);
+
+  const showLiquid = loaded && height > 0;
+  useEffect(() => {
+    if (!showLiquid || reduced) return;
+    const loop = Animated.loop(Animated.timing(wave, { toValue: 1, duration: 3000, easing: Easing.linear, useNativeDriver: true }));
+    loop.start();
+    return () => loop.stop();
+  }, [showLiquid, reduced, wave]);
+
+  useEffect(() => {
+    if (!over || reduced) return;
+    const loop = Animated.loop(Animated.timing(drip, { toValue: 1, duration: 1800, easing: Easing.in(Easing.quad), useNativeDriver: true }));
+    loop.start();
+    return () => loop.stop();
+  }, [over, reduced, drip]);
+
+  const first = new Date(y, m, 1);
+  const short = capitalize(first.toLocaleDateString("ro-RO", { month: "short" }).replace(".", ""));
+  const long = `${capitalize(first.toLocaleDateString("ro-RO", { month: "long" }))} ${y}`;
+  const label = MONTH_STATUS_LABEL[status];
+  const statusText = !loaded ? "…" : future ? `≈ ${label}` : label;
+  const a11y = !loaded
+    ? `${long}: se încarcă`
+    : `${long}: ${future ? "estimare: " : ""}${label.toLowerCase()}${ring ? `, ${Math.round((resolvedShare ?? 0) * 100)}% rezolvat` : ""}`;
 
   return (
-    <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card, paddingTop: 14, paddingHorizontal: 16, paddingBottom: 16, gap: 10 }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-        <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }}>Următoarele 3 luni</Text>
-        <InfoButton topic="calendar.heat" />
-      </View>
-      <View style={{ height: 14 }}>
-        {months.map((mo) => (
-          <Text
-            key={mo.key}
+    <PressableScale
+      testID={`cal-month-${monthKeyOf(y, m)}`}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={a11y}
+      accessibilityState={{ selected }}
+      style={{
+        flex: 1,
+        minWidth: 0,
+        height: 72,
+        borderRadius: radius.card,
+        backgroundColor: colors.surfaceSecondary,
+        borderWidth: 2,
+        borderColor: selected ? colors.onSurface : "transparent",
+        flexDirection: "row",
+        alignItems: "center",
+        gap: 6,
+        paddingHorizontal: 6,
+      }}
+    >
+      <View style={{ width: box, height: box, alignItems: "center", justifyContent: "center" }}>
+        {ring ? (
+          <View style={{ position: "absolute", top: 0, left: 0 }}>
+            <RingProgress value={resolvedShare ?? 0} size={RING} strokeWidth={3} color={colors.onSurfaceSecondary} trackColor={colors.surfaceTertiary} />
+          </View>
+        ) : null}
+        <View style={{ width: BUBBLE, height: BUBBLE, borderRadius: BUBBLE / 2, overflow: "hidden", backgroundColor: colors.surfaceTertiary }}>
+          {showLiquid ? (
+            <Animated.View
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                bottom: 0,
+                height,
+                transform: [{ translateY: rise.interpolate({ inputRange: [0, 1], outputRange: [height + 5, 0] }) }],
+              }}
+            >
+              <Animated.View
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  top: -4,
+                  width: BUBBLE * 2,
+                  height: 5,
+                  transform: [{ translateX: wave.interpolate({ inputRange: [0, 1], outputRange: [0, -BUBBLE] }) }],
+                }}
+              >
+                <Svg width={BUBBLE * 2} height={5} viewBox="0 0 200 5" preserveAspectRatio="none">
+                  <Path d="M0 2.5 Q25 0 50 2.5 T100 2.5 T150 2.5 T200 2.5 V5 H0 Z" fill={liquid} />
+                </Svg>
+              </Animated.View>
+              <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: liquid }} />
+            </Animated.View>
+          ) : null}
+          {/* The comfort level: half of the month's max = its comfortable load. */}
+          <Svg width={BUBBLE} height={BUBBLE} style={{ position: "absolute", top: 0, left: 0 }}>
+            <Line x1={0} y1={BUBBLE / 2} x2={BUBBLE} y2={BUBBLE / 2} stroke={hexToRgba(colors.onSurface, 0.5)} strokeWidth={1.5} strokeDasharray="3 2" />
+          </Svg>
+        </View>
+        {over ? (
+          <Animated.View
             style={{
               position: "absolute",
-              left: `${(mo.col / cols) * 100}%`,
-              fontSize: 11,
-              fontWeight: mo.key === displayedKey ? "600" : "500",
-              color: mo.key === displayedKey ? colors.onSurface : colors.onSurfaceTertiary,
+              right: ring ? 2 : -4,
+              top: ring ? 0 : -3,
+              opacity: reduced ? 1 : drip.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 1, 0] }),
+              transform: [{ translateY: drip.interpolate({ inputRange: [0, 1], outputRange: [0, 14] }) }],
             }}
           >
-            {mo.label}
-          </Text>
-        ))}
+            <Svg width={6} height={8} viewBox="0 0 6 8">
+              <Path d="M3 0 C3 0 6 4 6 5.2 A3 3 0 0 1 0 5.2 C0 4 3 0 3 0 Z" fill={colors.error} />
+            </Svg>
+          </Animated.View>
+        ) : null}
       </View>
-      {/* One tap target per week (the whole column, 54px tall): picks that
-          week's Monday -- no touch-position math, so it works the same on
-          the phone and on the web. */}
-      <View
-        testID="cal-heat-strip"
-        accessible
-        accessibilityLabel={`Următoarele 3 luni: ${months.map((mo) => `${mo.long} ${roCount(mo.total, "lucru", "lucruri")}`).join(", ")}`}
-        style={{ flexDirection: "row", gap: 3 }}
-      >
-        {Array.from({ length: cols }, (_, c) => {
-          const monday = addDays(gridStart, c * 7);
-          return (
-            <Pressable
-              key={c}
-              testID={`cal-heat-week-${ymd(monday)}`}
-              onPress={() => onPickDay(monday < windowStart ? windowStart : monday)}
-              hitSlop={{ top: 6, bottom: 6 }}
-              accessibilityRole="button"
-              accessibilityLabel={`Săptămâna din ${roDate(monday < windowStart ? windowStart : monday)}`}
-              style={{ flex: 1, gap: 2 }}
-            >
-              {Array.from({ length: 7 }, (_, r) => {
-                const d = addDays(gridStart, c * 7 + r);
-                const key = ymd(d);
-                const isSelected = key === selectedKey;
-                const isToday = key === todayKey;
-                return (
-                  <View
-                    key={r}
-                    testID={isSelected ? "cal-heat-selected" : undefined}
-                    style={{
-                      height: 6,
-                      borderRadius: 2,
-                      ...cellStyle(d),
-                      ...(isSelected ? { opacity: 1 } : null),
-                      borderWidth: isSelected ? 1.5 : isToday ? 1 : 0,
-                      borderColor: isSelected ? colors.onSurface : colors.onSurfaceTertiary,
-                    }}
-                  />
-                );
-              })}
-            </Pressable>
-          );
-        })}
+      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+        <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }} numberOfLines={1}>
+          {short}
+        </Text>
+        {/* "Liniștită" is one word: on a 360dp phone it gets ~39px, so let it
+            shrink a little instead of breaking mid-word. */}
+        <Text style={{ fontSize: 12, lineHeight: 15, color: colors.onSurfaceTertiary }} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.85}>
+          {statusText}
+        </Text>
       </View>
-    </View>
+    </PressableScale>
   );
 }
-
 /**
  * Add a custom event. Title, then Data + Ora side by side (the date
  * starts on the selected day and can be changed); the purchase amount,
@@ -888,7 +992,7 @@ function NewEventSheet({
       info="calendar.event"
       icon="sparkles-outline"
       tone={CUSTOM_EVENT_COLOR}
-      footer={<Button testID="new-event-save" label="Adaugă evenimentul" onPress={save} loading={saving} disabled={!title.trim()} />}
+      footer={<Button testID="new-event-save" label="Adaugă evenimentul" tone={CUSTOM_EVENT_COLOR} onPress={save} loading={saving} disabled={!title.trim()} />}
     >
       <Field
         testID="new-event-title"

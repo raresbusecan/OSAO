@@ -3,7 +3,7 @@ import { View, Text, ScrollView, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { TopBar, Identity, SectionHeader, Group, Row, IconWell, Chip } from "@/components/ui/primitives";
-import { SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, spaceTextColor, type SpaceKind } from "@/lib/spaces/spaceProfile";
+import { SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, spaceColors, spaceTextColor, type SpaceKind } from "@/lib/spaces/spaceProfile";
 import type { BudgetCreditItem } from "@/lib/spaces/expenses/credits";
 import { lei, roCount, roDate } from "@/lib/format";
 
@@ -20,6 +20,7 @@ export function BudgetCreditPage({
   items,
   spaceKindById,
   spaceNameById = {},
+  spaceColorById = {},
   onOpenExpenses,
   onBack,
 }: {
@@ -31,6 +32,8 @@ export function BudgetCreditPage({
   spaceKindById: Record<string, SpaceKind>;
   /** Each space's own name -- with two homes the chip says which one. */
   spaceNameById?: Record<string, string>;
+  /** Each space's own colour (spaces.color) -- the chip takes THAT space's. */
+  spaceColorById?: Record<string, string | null>;
   /** Opens the Cheltuieli space (null when the user has none). */
   onOpenExpenses: (() => void) | null;
   onBack: () => void;
@@ -83,7 +86,7 @@ export function BudgetCreditPage({
         <Group inset={68}>
           {items.map((c) => {
             const kind = c.linked_space_id != null ? spaceKindById[String(c.linked_space_id)] : undefined;
-            const linkColor = kind ? spaceTextColor(kind, isDark) ?? SPACE_IDENTITY_COLORS[kind] : undefined;
+            const linkColor = kind ? spaceColors({ kind, color: spaceColorById[String(c.linked_space_id)] }, isDark)?.tint : undefined;
             return (
               <Row
                 key={String(c.id)}

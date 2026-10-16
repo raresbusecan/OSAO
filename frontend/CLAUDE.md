@@ -81,17 +81,20 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
   is `lib/dashboard/widgetVisibility.ts` (`visibleWidgets`, applied
   before `toRows` so no gaps, never saved). Edit mode shows every card
   with its own empty state. Changed what a card reads? Update its rule.
+  Edit mode's reorder is `components/ui/ReorderList.tsx` (+ `ReorderHandle`
+  on the ☰), NOT react-native-draggable-flatlist (2026-10-12: rapid drags
+  left cards overlapping / gaps -- see the file's header for why).
   A brand-new account (no space, no plan, 0 spent/planned) gets the
   EMPTY spend card (`EmptySpendCard` in HomeWidgets: legend of the 4
   space colors + "Creează primul spațiu"), and when every other card is
   hidden only by the empty rule (`onlyEmptyDataHidesOthers`) one hint line
   under the cards.
 - `app/(tabs)/spaces.tsx` — the Spaces grid (create/rename/delete). Edit
-  mode = the pencil or a long press on an EMPTY spot (cards are inner
-  responders; a long press on a card does nothing): a ONE-column
-  DraggableFlatList (☰ handle drags, edit, delete), order saved on
-  "Gata". Never put that library on a numColumns grid -- it measures
-  rows as one column and cards jump mid-drag. Creating: `TemplateList`
+  mode = the pencil, a long press on an EMPTY spot, or a long press on a
+  card (haptic; user decision 2026-10-10 -- edit-mode rows are tappable
+  to edit that space): a ONE-column
+  `ReorderList` (☰ handle drags, edit, delete), order saved on
+  "Gata". One column only -- it stacks rows by height. Creating: `TemplateList`
   (same file) = a 2x2 grid of "create" cards, shown in the empty state
   and in the header "+" Sheet. Each card: translucent identity tint
   (12% dark / 8% light), 1.5px DASHED identity border (= "not created
@@ -114,22 +117,42 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
   `BudgetCreditPage.tsx`. `GuiltFree.tsx` = `GuiltFreeToggle` (edit forms
   only, hidden until a plan exists) + `GuiltFreeChip`. The Economii goal
   is the "Termen scurt" row (standalone card only without a plan).
+  First-use tour "budget" (4 steps, copy adapts to TourCtx hasPlan /
+  hasSpaces / hasBudgets / hasCredit): `budget.top` = the onboarding card
+  without a plan, the hero (a View around its PressableScale) with one;
+  `budget.split` = the onboarding bar + legend, or IncomeSplitCard's
+  "Venit net lunar" + 5-part bar block (the hook lives IN
+  IncomeSplitCard); `budget.spaces` = the FIRST space row (or the empty
+  state) -- the whole section is too tall to leave room for the card;
+  `budget.recurring` = the "Plăți recurente" header. useAutoTour ready =
+  loaded, no space detail / overview / fără vină / credit page, no income /
+  split / resplit / goal sheet open.
 - `app/(tabs)/calendar.tsx` — the whole Calendar screen, one file (2026-10
-  redesign, mockup "orgOS Calendar redesign"): `HeatStrip` ("Următoarele 3
-  luni", one 6px cell per day, one tap target per week; bright outline =
-  the selected day, faint = today, like the grid), the month grid
+  redesign, mockup "orgOS Calendar redesign"): "Următoarele 3 luni" =
+  three `MonthBubbleCard`s (2026-10-12, mockup "Bule cu inel": today's
+  month + 2, a 40px bubble filled to the month's load, wave + rise via RN
+  Animated, dashed comfort line at 50%, red drop over 100%, tap = jump the
+  grid; the current month's "resolved" ring is wired but HIDDEN -- /calendar
+  returns open items only, see BACKLOG), the month grid
   (always 6 rows; tiles filled by `heatLevel`/`heatColor` from
-  `lib/statusColors.ts` = a plain count, one shade per thing, 8 shades,
-  8+ = darkest, today/future only; lime dot =
+  `lib/statusColors.ts` = the day's effort / its MAX capacity, 8 shades,
+  full = darkest, today/future only. The capacity model -- workday 2/4,
+  weekend + RO legal holidays 4/8, effort per item type, business-hours
+  x1.5 -- is ONE file: `lib/calendar/capacity.ts`; lime dot =
   custom event, red dot = past day still unresolved; swipe via
-  PanGestureHandler on the grid card + chevrons + "Azi" pill), "De rezolvat"
+  the shared `MonthSwipeView` on the grid card + chevrons + "Azi" pill), "De rezolvat"
   = STRICTLY the Space records on the selected day (events of the day as
   lime chips), "Evenimente" = custom events only, next 3 months, each once,
   and `NewEventSheet` (Data + Ora, DatePickerSheet nested). Data: a cache of
   `/calendar?month=` for today's month + 2 and the displayed month ± 1.
   Everything is relative to `today`, re-read on focus / app foreground /
   midnight (the tab stays mounted for days) -- never hardcode a month.
-  Supports `?date=YYYY-MM-DD` deep-link.
+  Supports `?date=YYYY-MM-DD` deep-link. First-use tour "calendar" (4
+  steps): targets `calendar.nav` (title + arrows + month cards, one wrapper
+  View), `calendar.grid` (a View around the PanGestureHandler -- don't put
+  the ref on the gesture child), `calendar.day` ("De rezolvat" block),
+  `calendar.events` (the Evenimente header row with "+ Eveniment");
+  useAutoTour ready = month loaded, no NewEventSheet / event sheet open.
 - `app/(tabs)/[id].tsx` — **the one route every Space actually renders
   through.** Loads the Space + its items, runs `detectSpaceType()`, and
   mounts `CarDashboard` / `HomeDashboard` / `GroceryDashboard` /
@@ -146,6 +169,183 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
   deleted — file deletion is denied in this environment, same as
   search.tsx above).
 
+### Tab navigation (tab bar, edge swipes, return trail)
+
+- `components/navigation/MainTabBar.tsx` -- custom bar (4 visible tabs:
+  home, spaces, calendar, budget; Simplu mode swaps in SimpleTabBar, see
+  "orgOS Simplu mode" below). Inside a Space (`segments[1] === "[id]"`)
+  the Spații cell is lit/`focused`, but a tap on it still navigates to the
+  Spații list (fixed 2026-10-10). Publishes its height to the trail store.
+- `components/navigation/TabSwipeEdges.tsx` -- 24px edge strips on the 4
+  tab roots (hidden inside a Space; SwipeBackView owns that left edge).
+  Left edge drag right = previous tab, right edge drag left = next tab.
+- Tabs are `lazy:false`, so Buget's sub-page state (overview/space
+  detail/credit/guilt-free) survives a tab switch. EXCEPTION: `[id].tsx`
+  bumps `visitId` on every focus, remounting the Space dashboard (sub-pages
+  reset on a normal re-visit) -- except when arriving via the return trail
+  (`markTrailReturn`/`consumeTrailReturn`), which keeps the sub-page. Don't
+  add a reset-on-blur elsewhere -- the return trail relies on this.
+- **Return trail** (`lib/navigation/returnTrail.ts`, 2026-10-10): a tab-bar
+  TAP away from a DEEP tab records `{originTab, originHref, landingTab,
+  leftAt}` for 60 s (wall clock). Deep = inside a Space for Spații, or a
+  screen that calls `useTabDepth(tab, deep)` (only budget.tsx so far;
+  Acasă/Calendar have only modal sheets, which block the bar anyway). A
+  Space screen counts as Spații for both origin and landing. The trail
+  applies only on its landing tab's root. **Direction rule:** origin to
+  the RIGHT of the current tab in the bar -> the drag-left swipe from the
+  right edge goes to `originHref`; origin to the LEFT -> the drag-right
+  swipe from the left edge does. The other edge stays normal. Used =
+  cleared; reaching the origin tab by any route clears it; a new deep tap
+  overwrites it; a tap from a root tab leaves it alone.
+  `components/navigation/ReturnTrailHint.tsx` (mounted in `_layout.tsx`)
+  shows a tappable "Înapoi la Buget" pill above the bar on the returning
+  edge's side, fading out at expiry (RN Animated, reduced-motion aware).
+
+### orgOS Simplu mode (2026-10-12, test toggle -- future free tier)
+
+- **Mode switch**: `lib/appMode.tsx` -- `AppModeProvider` (in `app/_layout.tsx`)
+  + `useAppMode()` -> `{ mode: "simple" | "full", isSimple, setMode, source }`.
+  Order: a future server `entitlement` prop (plan) > the local test switch
+  (SecureStore / web localStorage key `orgos_app_mode`, read synchronously --
+  no flash) > default `"full"`. Toggle = Settings > Aplicație > "Mod Simplu
+  (test)" (`ToggleRow`, hidden once a plan drives the mode). Off = the full
+  app, untouched: every Simplu screen is a branch at the top of its route
+  (`home.tsx` -> `SimpleHome`, `calendar.tsx` -> `SimpleCalendar`, `[id].tsx`
+  -> `SimpleSpaceScreen` unless the URL has `?itemId=` -- a record deep link
+  ("Modifică informațiile" from a resolve dialog) still opens the FULL
+  dashboard, where that record's resolve/renew step lives).
+- **Navigation**: `MainTabBar` delegates to `components/navigation/
+  SimpleTabBar.tsx` (Acasă · + · Calendar; Acasă stays lit inside a space;
+  no return trail -- `ReturnTrailHint` isn't mounted in simple mode).
+  `TabSwipeEdges` cycles only home <-> calendar. Spații / Buget routes still
+  exist, just no button.
+- **App-wide sheets**: `lib/simpleSheets.ts` (module store) --
+  `openUpgradeSheet()` (host `components/simple/UpgradeSheet.tsx`, root
+  layout), `openQuickAdd(spaceId?)` (host `QuickAddHost` in
+  `components/simple/QuickAddSheet.tsx`, tabs layout, simple mode only),
+  and `setSpaceAccent` / `clearSpaceAccent` (the Simplu space screen
+  publishes its fill/ink on focus: the "+" takes the space colour and
+  quick-add preselects it). Quick-add saves emit REFRESH_EVENT.
+- **Teasers**: `components/simple/Teaser.tsx` -- `TeaserCard` (dashed) and
+  `TeaserRow` ("Complet" pill), both open the upgrade sheet. Rule: at most
+  ONE per screen, next to data the user has; no locks, no launch pop-ups.
+- **Upgrade sheet** (TEST): headline counts items whose `created_at` is in
+  this month (`api.listItems()`), 4 perks, plan cards with "Preț în
+  curând", CTA "Vezi în Complet" = `setMode("full")`.
+- **Acasă** (2026-10-13, mockup "Acasă A · Spațiile sus"): `SimpleHome` =
+  the spend card FIRST (user decision 2026-10-15), then
+  `home/SpacesGrid.tsx` (2 columns: a filled tile per space with its
+  due status, a dashed "Adaugă" tile per KIND still missing -- the only way
+  to create another space in this mode; a second space of a kind the user
+  already has still needs the full Spații tab), then `UpcomingCard`.
+  `StartPicker` only before the first space. Spend card ("Cheltuit în
+  {lună}", `SpendCard` in SimpleHome.tsx) = `monthlyExpenses.total` +
+  `billsPaid` (a paid Casă bill is spent in Simplu, unlike Complet -- see
+  BACKLOG), split by kind; `billsDue` as "+ X lei facturi de plătit".
+  Shopping finished with a price (`grocery_trip`) and Casă purchases count
+  through the same records Complet reads -- no migration on upgrade. Casă's
+  hero "Am rezolvat" on a purchase task opens `HomeTaskResolveSheet` for
+  the price (same saved shape as Complet's `resolveTask`).
+- **No Complet teasers for now** (2026-10-13, user decision): `SHOW_TEASERS`
+  in `components/simple/Teaser.tsx` is `false`, so `TeaserCard`/`TeaserRow`
+  render nothing on every Simplu screen (the calls are still in place; flip
+  the flag to bring them back, and the upgrade sheet with them).
+- **Cumpărături in Simplu** (2026-10-13): `SimpleGrocerySpace` shows ONE
+  list at a time (the "În magazin" mode was tried and removed, user
+  decision). A header pill carries the selected list's NAME and, with
+  several lists, opens a `Sheet` to switch (default = the newest list);
+  under it the full app's `GroceryQuickAddBar` (type a name, it's on that
+  list, the field stays open; no list yet -> a list "Cumpărături" is
+  created on the first product) and the list's products (to buy first, in
+  the cart after; tap = cart, swipe left = delete, long press = editor;
+  "Am terminat cumpărăturile" = the finish sheet). `SimplePage` has a
+  `footer` prop (pinned above the tab bar) -- currently unused. In Adaugă,
+  a grocery space offers ONLY "Listă nouă" (user decision 2026-10-15;
+  `KINDS_BY_SPACE.grocery`, the grocery_item/grocery_trip code is kept
+  unused): name field (NO autoFocus -- user decision 2026-10-15, the
+  keyboard opens only on a tap) + "Idei" name chips (taken names hidden) + "Ai deja
+  listele ..." line, button "Creează lista", sheet titled "Listă nouă" when
+  opened from the space. After a save it opens the space (from Acasă), and
+  SimpleGrocerySpace selects a list that appears on reload (`knownListIds`).
+  QuickAddSheet passes `visible={shown}`: the Sheet slides up only with its
+  first content complete -- mounting it while data still streamed in made
+  it open "in sections" (height jumps mid-spring, user report 2026-10-15),
+  and waiting for the fetch made it slow. So `lib/quickAddCache.ts` keeps
+  the spaces + each grocery space's lists prefetched (QuickAddHost: mount,
+  REFRESH_EVENT, after each close; SimpleHome after a space is created):
+  `bootFromCache` draws the first frame instantly, the sheet revalidates
+  silently. No cache yet -> waits for its own load (0.8 s fallback).
+- **Editing a record in Simplu** (2026-10-13): every record row opens
+  `components/simple/EditRecordSheet.tsx` (host `EditRecordHost` in the tabs
+  layout; `openEditRecord(itemId)` in `lib/simpleSheets.ts`): one generic
+  sheet driven by `RECORD_SPECS` (per item type: which of title / sumă / dată
+  / oră / notă / a few metadata extras), Salvează = a PARTIAL `PUT /items/{id}`
+  with the saved `metadata` merged (advanced fields untouched), Șterge with
+  a confirm. Wired on: space screens (hero, Documente, Urmează, "Luna asta"/
+  "Ultimele cheltuieli" rows; Cumpărături = long-press a product, pencil on a
+  list's title), Calendar day rows + own events, Acasă "Urmează" rows (the
+  circle still resolves). `canEditRecord(type)` = whether a type has a spec;
+  new record type in Simplu = add a spec. Credit reminders aren't editable.
+- **"+" from Acasă = 2 steps** (user decision 2026-10-15): QuickAddSheet's
+  `picking` step shows `SpacePickGrid` -- the spaces as a 2-column grid of
+  squares (aspectRatio 1) filled with each space's `fill`/`ink`; a tap opens
+  that space's form, titled "Adaugă la <name>" with a ‹ (`Sheet`'s new
+  `onBack` prop) back to the grid. Skipped when locked (opened inside a
+  space) or with one space.
+- **Deleting a grocery list in Simplu** (2026-10-15): "Șterge lista" under
+  the list (own-space lists only; page-level confirm) and the list editor's
+  Șterge both delete the list's PRODUCTS too, then the list -- the server's
+  destroy only removes the row asked for (Complet's handleDeleteList does
+  the same client-side).
+- **One space per kind in Simplu** (user decision 2026-10-15):
+  `lib/simpleLimits.ts` (`canCreateSpaceInSimple` / `guardSimpleSpaceCreate`)
+  checked by SimpleHome's `startCreate` and spaces.tsx's
+  `createFromTemplate` when `isSimple`. Existing duplicates stay usable.
+  Client-side only until a server plan exists (BACKLOG).
+- **History in Simplu** (user decision 2026-10-15): 3 months, NO
+  filters -- Mașină and Cheltuieli. Shared in SimpleSpaceParts:
+  `useHistoryMonth()` (offset 0..-2, `inMonth`, `title` "Octombrie",
+  `emptyText`) + `HistoryMonthBadge` (total + ‹ ›, SimpleCard `badge`),
+  `SIMPLE_HISTORY_MONTHS = 3`; "Vezi încă N" (N = hidden rows) folds back on a month change
+  (`useShowAll`'s resetKey). Mașină: 3 rows, total = that month's rows
+  (same sources as getThisMonthExpenses). Cheltuieli: 5 rows, spent only
+  (own expenses + Calendar purchases whose day came); the card's total
+  shows only for a past month (the hero has this month's). Older history /
+  filters / archive = Complet. Casă / Cumpărături: current month only.
+- **Oil change in Adaugă** (user decision 2026-10-15): "Următorul schimb
+  la" sits right under Kilometraj (not in Detalii), prefilled with
+  Kilometraj + `OIL_CHANGE_KM_INTERVAL` (10.000, kinds.ts) until the user
+  types in it (`nextKmTouched`); empty = only the 12-month date reminder.
+  Reminder window = dashboard.calculations' MAINT_TIER_* (2.000 km).
+  The Mașină header subtitle shows it after the km ("250 km · ulei în
+  9.750 km", `oil` in SimpleCarSpace): latest non-superseded Oil Change +
+  getMaintenanceUrgency -- grey outside the window, then urgencyTierColor
+  (2.000 yellow / 1.000 orange / 500 red / overdue "depășit"); the date
+  half takes over only when it decides urgency (≤45 days: "în 20 de zile",
+  "azi"), else no-km cars read "ulei în 11 luni" in grey.
+- **Mașină header pencil** (2026-10-15): `SimplePage` `onEdit` -> the
+  same `CarProfileForm` (edit) with the `odometer` prop = an extra
+  "Kilometraj" field (prefilled with the current km, floor = the highest
+  logged reading via CarOdometerSheet's `odometerError`; saved through
+  `updateCarOdometer` only when changed). Name = Marcă + Model, as always.
+- **Forms in Simplu** (2026-10-13): no space-colour picker anywhere
+  (`CarProfileForm`, `HomeProfileForm`, `EditSpaceModal` check `isSimple`;
+  a saved colour is kept, a new space gets the kind default). Mașină asks
+  only Marcă, Model, An, rezervor (no culoare / preț / "În rate"); Casă only
+  Județ + Localitate (ownership stays "bought", no price / credit).
+- **Calendar** (2026-10-13, mockup "Calendar A · Lună + ziua aleasă"):
+  `SimpleCalendar` = month grid (6 rows, dots in the space's colour / lime
+  event, one red dot on a past day still unresolved; `MonthSwipeView`,
+  chevrons, "Azi") -> the selected day's rows (check circle =
+  `resolveFromSummary`) -> "Restante". No weekly agenda any more. The
+  selected-day header has "Eveniment": `components/simple/NewEventSheet.tsx`
+  (title, Data + Ora, notă; a `custom_event`, dated on the selected day --
+  purchase / repeat stay in Complet's sheet).
+- **Screens**: `components/simple/SimpleHome.tsx`, `SimpleCalendar.tsx`,
+  `QuickAddSheet.tsx`, `space/SimpleSpaceScreen.tsx` (+ per-kind files in
+  `space/`). Tours never auto-start in simple mode (`lib/useAutoTour.ts`);
+  no tour targets / TEMP tour buttons on Simplu screens.
+
 ## Per-Space file map
 
 Each Space's dashboard owns a set of mutually-exclusive local-state
@@ -157,6 +357,27 @@ stacked `<Modal>`s, just early-return branches. `closeAllForms()` /
 - `CarDashboard.tsx` — orchestrator: stats, RECENT/ALL, category tabs,
   `openEntryForEdit(type, id)` (the shared deep-link/edit entry point).
   `CarQuickActions.tsx` is its live quick-action row.
+  First-use tour "space_car" (4 steps, one key for every car space, fires
+  on the first open of ANY of them): targets live in CarDashboard (hooks at
+  the top -- `renderPage()` is not a component): `car.top` = hero card +
+  LinkedCreditsLine wrapper, `car.actions` = a View around
+  CarQuickActions, `car.next` = the "Urmează" block (only registered when
+  something is due; ctx `hasUpcoming` false -> the step shows its
+  `carNext` illustration), `car.pages` = the Documente/Arhivă/Istoric pill
+  row. ctx `hasCredit` = a credit linked to THIS space. useAutoTour ready =
+  no entry form, no sub-page, no profile edit form (`tourBlocked` prop from
+  [id].tsx = its `editModalVisible`). Settings replays it on the user's
+  FIRST car space (`spaceKind` in TOUR_LIST; none -> "După primul spațiu").
+  **Odometer** (2026-10-09): the km on the top card = `getCurrentOdometer`
+  = max(`carData.vehicle.mileage`, `getLoggedOdometer` = highest
+  `odometer` on fuel/maintenance/expense entries); `vehicle.mileage` =
+  `car_profiles.odometer` (CarProfile `odometer`/`odometerUpdatedAt`, set in
+  [id].tsx on load and by `onOdometerSaved`). Tap / long-press the km (or
+  its pencil) -> `CarOdometerSheet.tsx` ("Actualizează kilometrajul", whole
+  km, `odometerError`: > 0, <= 2.000.000, >= logged max) ->
+  `api.updateCarOdometer`. Caption under the km (`getOdometerUpdatedAt`) =
+  newer of the manual update and the latest entry with a reading. Help
+  topic `car.odometer`.
 - `CarDocsPage.tsx`, `CarArchivePage.tsx`, `CarHistoryPage.tsx`,
   `CarExpensesPage.tsx`, `CarProfileForm.tsx`.
 - `forms/CarFuelForm.tsx`, `CarMaintenanceForm.tsx`,
@@ -284,9 +505,15 @@ name + price + date + notes, no sub-categories.
   `CarDashboard.tsx`/`CarQuickActions.tsx` for an unrelated purpose
   (describing that row's own action buttons) -- only the hook is dead.
 - `lib/spaces/spaceProfile.ts` — `detectSpaceType()` (checks
-  `space.type` first, then legacy fallbacks), `SPACE_IDENTITY_COLORS`
-  (Car blue / Home purple / Grocery orange / Expenses teal —
-  deliberately preserved through every theme pass), `profileFromSpace`.
+  `space.type` first, then legacy fallbacks), `profileFromSpace`, and the
+  space colours (see "Space colours" under Theme): `SPACE_PALETTE`,
+  `KIND_DEFAULT_COLOR`, `spaceColors()`, plus the KIND-level
+  `SPACE_IDENTITY_COLORS` / `spaceTextColor` / `SPACE_BUTTON_FILL` /
+  `SPACE_ON_FILL` (Car blue / Home purple / Grocery amber / Expenses teal,
+  derived from the palette's kind defaults).
+- `lib/spaces/spaceTheme.tsx` — `SpaceThemeProvider` (mounted by
+  `[id].tsx` around each space, and by CarProfileForm/HomeProfileForm
+  with the colour being picked) + `useSpaceColors(kind)`.
 - `lib/statusColors.ts` — `severityColor`/`severityTint`/
   `budgetSeverity`/`densityColor`, the one source of truth for
   critical/warning/safe tiers. (`app/(tabs)/home.tsx` hand-rolls its
@@ -319,11 +546,39 @@ sub-pages, sheets, dialogs, login, settings). Rules:
 - **Three surface layers**: `colors.surface` (page) -> `surfaceSecondary`
   (cards, list groups) -> `surfaceTertiary` (inputs, chips, icon wells,
   pressed rows). Cards are FILLED; no outlines as the only depth cue.
-- **Color comes from the Space**: `SPACE_IDENTITY_COLORS` for fills
-  (bars, filled buttons, dots), `spaceTextColor(kind, isDark)` for text
-  and stroke icons, `SPACE_ON_FILL` for ink on a filled identity color,
-  `SPACE_BUTTON_FILL` for a filled button with a text label. No single
-  app-wide accent; outside a Space the primary button is `onSurface`.
+- **Color comes from the Space**: `{color}` for fills (bars, filled
+  dots, IconWell, Field/Sheet tone), `{tint}` for text and stroke icons,
+  `{ink}` for ink on a filled identity color, `{fill}` for a filled button
+  with a text label. No single app-wide accent; outside a Space the
+  primary button is `onSurface`.
+- **Space colours** (2026-10-09): the user picks one per space from
+  `SPACE_PALETTE` (spaceProfile.ts: 9 swatches -- blue, indigo, purple,
+  fuchsia, pink, amber, teal, sky, slate; each with base / text dark+light
+  / fill / ink, contrast table in the file; red, orange, yellow, green and
+  lime are left out on purpose = error / warning / caution / success /
+  Calendar events). `spaces.color` stores the KEY (server validates against
+  `Space::PALETTE_KEYS`, keep both lists in sync); null = the kind's
+  default (`KIND_DEFAULT_COLOR`; forms send null when the pick equals it);
+  legacy hexes in old rows are ignored. Picker =
+  `components/spaces/SpaceColorPicker.tsx` (in CarProfileForm,
+  HomeProfileForm, EditSpaceModal -- create and edit). Resolution:
+  * ONE particular space -> `spaceColors(space, isDark)` (any object with
+    `color` + `type`/`kind`; the API's embedded `item.space` carries
+    `color`), or inside a space screen `useSpaceColors(kind)` (reads the
+    SpaceThemeProvider [id].tsx mounts -- no prop drilling, Modals keep
+    context). Used by: every live file under components/spaces/*, the
+    Spații grid cards, Acasă's "De făcut" rows + Mașină/Listă/Provizii/
+    Cheltuieli cards + the catalog icons (LayoutSheets), Calendar's "De
+    rezolvat" rows, RecurringBillRow, CreditReminderRow, TodoCarouselSheet's
+    stripe, linked-space chips/pills (ExpensesCreditsSection, CreditSheet,
+    BudgetCreditPage).
+  * The KIND -> the kind-level constants above. Kept on purpose for: Buget
+    (per-kind rows/bars/ring/overview, ResplitSheet, GuiltFreePage,
+    BudgetSpaceDetailPage, the credit IconWell), Acasă's spend-by-kind
+    bar/ring + its "not yet paid" legend and the Buget card, the
+    EmptySpendCard legend, the Spații "create" template tiles, the tour
+    illustrations (TourHost), the login marks (AuthShell).
+  New code about one space never indexes `SPACE_IDENTITY_COLORS[kind]`.
 - **Semantic**: `success`/`error` = finance green/red, `warning` = "Azi",
   `caution` = a step earlier. Light-theme values are the deeper shades
   that pass 4.5:1 -- don't lighten them.
@@ -331,9 +586,25 @@ sub-pages, sheets, dialogs, login, settings). Rules:
   the right file automatically). Weights 400/500/600 only -- anything
   heavier renders as 600. Use `typography` tokens (hero/display/
   largeTitle/title/subtitle/body/label/caption/chip/micro).
-- **Romanian only, sentence case** -- no ALL-CAPS labels, no English UI
-  strings. Plurals through `roCount()` (lib/format.ts: "5 zile",
-  "20 de zile"); money `lei()`, dates `roDate()` ("1 octombrie").
+- **Romanian first, sentence case** -- no ALL-CAPS labels. Plurals through
+  `roCount()` (lib/format.ts: "5 zile", "20 de zile"); money `lei()`, dates
+  `roDate()` ("1 octombrie").
+- **Languages (2026-10-15, infrastructure only)**: `lib/i18n/index.ts`
+  (i18next + react-i18next + expo-localization + `intl-pluralrules`
+  polyfill), strings in `lib/i18n/locales/ro.json` (source + fallback) and
+  `en.json`, same key tree. `useLanguage()` -> `{ t, language, setLanguage }`;
+  `currentLanguage()` for non-React code. Plurals = CLDR suffixes (ro
+  `_one/_few/_other` = "1 zi / 2 zile / 20 de zile", en `_one/_other`):
+  `t("common.days", { count })`. Choice per device (Settings > Limbă ->
+  `LanguageSheet`, SecureStore/localStorage `orgos_language`, read
+  synchronously, imported first in app/_layout.tsx). lib/api.ts sends it as
+  `Accept-Language`; the backend's SetLocale answers in it. NOT done yet:
+  only the Limbă row/sheet read `t()` -- every other screen still has its
+  Romanian text inline (move area by area: Simplu, Complet, help.ts,
+  tours.ts, emails); `FOLLOW_DEVICE_LANGUAGE = false` until en.json covers
+  the app; lib/format.ts dates/numbers are still ro-RO for every language.
+  New text in a screen already moved to `t()` must go through the locale
+  files.
 - **Touch targets >= 44px** (rows 56+, buttons 52, circle buttons 44).
 - **Layout tokens**: `spacing.gutter` (page side padding, 20),
   `spacing.section` (gap between sections, 20), `radius.card` (groups/
@@ -353,8 +624,18 @@ sub-pages, sheets, dialogs, login, settings). Rules:
   `components/ui/Sheet.tsx` (the one bottom sheet: spring in, drag handle
   to dismiss; Group/Row/Segmented inside it step up a layer via
   `SurfaceLevelContext`), `components/ui/DatePickerSheet.tsx` (the one
-  date picker, Monday-first, range past/future/any) + `DateField.tsx`
-  (picked "ZZ.LL.AAAA" for Car forms), `PressableScale`,
+  date picker, Monday-first, range past/future/any; month grid swipes) +
+  `DateField.tsx` (picked "ZZ.LL.AAAA" for Car forms),
+  `components/ui/ReorderList.tsx` (drag-to-reorder list: `ReorderList` +
+  `ReorderHandle`, classic PanGestureHandler + RN Animated, slots from row
+  heights, fresh offsets on each commit; Acasă + Spații edit modes -- Casă
+  Sarcini still uses NestableDraggableFlatList, see BACKLOG),
+  `components/ui/MonthSwipe.tsx` (`useMonthPager` + `MonthSwipeView`:
+  horizontal swipe = next/prev month on EVERY month grid -- classic RNGH +
+  RN Animated, no reanimated worklets), `components/ui/PeriodPicker.tsx`
+  + `lib/period.ts` (the ONE history-period selector -- Mașină Istoric's
+  calendar pill + "Perioadă" sheet; used by Car Istoric/Cheltuieli, Casă
+  Cheltuieli, Cheltuieli Toate -- user decision 2026-10-10), `PressableScale`,
   `AnimatedNumber`. Cross-screen rules live in one place each:
   `daysFromToday()` (lib/format.ts) for every day difference/grouping,
   `lib/dashboard/spaceDue.ts` for a Space tile's status ("8 restante" /
@@ -395,11 +676,20 @@ sub-pages, sheets, dialogs, login, settings). Rules:
   ConfirmHost dialog -- `isDialogOpen()` --, no help sheet -- `isHelpOpen()`
   --, no other tour). Seen state = `user.tours` (server `users.tours`,
   `api.markTour`/`api.resetTours`). Replay: a help topic with `tour:` gets
-  "Arată ghidul ..." in HelpHost; Settings > "Revezi ghidurile". Only the
-  Acasă tour exists (targets `home.header`, `home.edit`, `home.card.spend`,
-  `tab.<route>` in MainTabBar); the other 7 keys are listed "În curând".
-  New tour = a TourDef in TOURS + targets + useAutoTour on that screen.
-  TEMP: Acasă's `SHOW_TOUR_TEST_BUTTON` pill (see BACKLOG).
+  "Arată ghidul ..." in HelpHost; Settings > "Revezi ghidurile" (goes to
+  the tour's `href` in TOUR_LIST, then requestTour). Tours that exist:
+  Acasă (targets `home.header`, `home.edit`, `home.card.spend`,
+  `tab.<route>` in MainTabBar), Calendar, Buget and Mașină (see their
+  entries above); the other 4 keys are listed "În curând". A Space tour
+  has `spaceKind` instead of `href` in TOUR_LIST: Settings lists the
+  spaces and opens `/<first space of that kind>`. New tour = a TourDef in TOURS +
+  `href` in TOUR_LIST + targets + useAutoTour on that screen (+ `tour:` on
+  its page help topic). TourCtx fields are all optional: each screen
+  fills what its own steps read. A `placement: "top"` step that has to
+  scroll puts its target at the BOTTOM of the screen (card above it);
+  "bottom" puts it at the top. TEMP: `SHOW_TOUR_TEST_BUTTON` (exported
+  from lib/tours.ts) = the "Pornește ghidul" pills on Acasă, Calendar,
+  Buget and Mașină (TopBar, left of the pencil) (see BACKLOG).
 - **Swipe** (`components/spaces/SwipeRow.tsx`): right = rezolvă, left =
   șterge, everywhere it makes sense. On a document right = reînnoiește:
   `lib/dashboard/documentRenewal.ts` asks "cu datele vechi / modifică" and

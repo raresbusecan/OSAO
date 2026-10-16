@@ -8,6 +8,7 @@ import { SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, SPACE_BUTTON_FILL, spaceTextCo
 import { TopBar, Identity, SectionHeader, Group, Row, IconWell, Button, Field, EmptyState, hexToRgba } from "@/components/ui/primitives";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { capitalize, lei, roCount, roDate } from "@/lib/format";
+import { todoTitle } from "@/lib/dashboard/spaceDue";
 import { GuiltFreeChip } from "@/components/dashboard/GuiltFree";
 import { jarAmounts, parseAmount, ENVELOPE_TOLERANCE, type BudgetPlan } from "@/lib/budget/plan";
 
@@ -122,7 +123,8 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
 
   const saveManualAmount = async () => {
     const amount = parseAmount(manualAmount);
-    if (!(amount > 0)) return;
+    // 0 is a valid limit (same as Reîmparte saving 0); empty/NaN is not.
+    if (!(Number.isFinite(amount) && amount >= 0)) return;
     setSavingManual(true);
     try {
       await api.saveBudgetLimit({ category, monthly_limit: amount });
@@ -154,7 +156,9 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
   // ---- Budget as a share of Necesități ----
   const envelope = plan ? jarAmounts(plan.monthly_income, plan.split).needs : 0;
   const typed = parseAmount(manualAmount);
-  const typedOk = Number.isFinite(typed) && typed > 0;
+  // 0 is a set limit (ResplitSheet saves explicit 0s too); only an empty
+  // or unparseable field is invalid.
+  const typedOk = Number.isFinite(typed) && typed >= 0;
   // Under 1 leu over doesn't count (a fractional envelope can't be matched
   // by whole-lei limits -- see ENVELOPE_TOLERANCE).
   const overRaw = plan && typedOk ? otherLimitsTotal + typed - envelope : 0;
@@ -336,7 +340,7 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
                   <Row
                     key={it.id}
                     leading={<IconWell icon={it.type === "custom_event" ? "calendar-outline" : icon} color={color} tint={tint} />}
-                    title={it.title.replace(/^Cumpărături -- /, "")}
+                    title={todoTitle(it).replace(/^Cumpărături -- /, "")}
                     subtitle={
                       it.due_at
                         ? `${it.planned ? "Planificat pe " : ""}${roDate(it.due_at)}${it.type === "custom_event" ? " · din Calendar" : ""}`

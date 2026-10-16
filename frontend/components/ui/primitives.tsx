@@ -161,7 +161,7 @@ export function SectionHeader({
   title: string;
   /** "ⓘ" right after the title -- see InfoButton. */
   info?: HelpKey;
-  action?: { label: string; onPress: () => void; testID?: string; /** Emphasized action ("Gata"). */ tone?: string };
+  action?: { label: string; onPress: () => void; testID?: string; /** Emphasized action ("Gata"). */ tone?: string; /** Icon before the label, in the same colour ("add" for "Adaugă"). */ icon?: IconName };
   /** Smaller grey heading (month groups, settings groups). */
   muted?: boolean;
 }) {
@@ -179,8 +179,9 @@ export function SectionHeader({
           testID={action.testID}
           onPress={action.onPress}
           accessibilityRole="button"
-          style={{ minHeight: 44, justifyContent: "center", paddingLeft: 12 }}
+          style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 4, paddingLeft: 12 }}
         >
+          {action.icon ? <Ionicons name={action.icon} size={17} color={action.tone ?? colors.onSurfaceTertiary} /> : null}
           <Text style={{ fontSize: 14, color: action.tone ?? colors.onSurfaceTertiary, fontWeight: action.tone ? "600" : "400" }}>{action.label}</Text>
         </Pressable>
       ) : null}

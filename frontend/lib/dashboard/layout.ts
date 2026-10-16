@@ -158,5 +158,16 @@ export function sanitizeLayout(raw: unknown): Widget[] | null {
   const out = raw.filter(
     (w: any) => w && typeof w.id === "string" && w.type in WIDGET_META && (w.size === "wide" || w.size === "compact"),
   ) as Widget[];
-  return out;
+  return ensureSpendCard(out);
+}
+
+/** The monthly spend card (ring chart) is mandatory on Acasă (user decision
+ * 2026-10-09): it can be moved, resized and recoloured, but never removed
+ * or hidden. Puts one first if a layout (saved, template, draft) lacks it
+ * and un-hides an existing one. */
+export function ensureSpendCard(layout: Widget[]): Widget[] {
+  if (layout.some((w) => w.type === "spend")) {
+    return layout.map((w) => (w.type === "spend" && w.hidden ? { ...w, hidden: false } : w));
+  }
+  return [{ id: "spend", type: "spend", size: "wide" }, ...layout];
 }

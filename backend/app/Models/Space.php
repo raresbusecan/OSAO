@@ -14,6 +14,17 @@ class Space extends Model
 {
     use HasFactory;
 
+    /**
+     * The colours a user can pick for a space (`color` column) -- the keys
+     * of the frontend's SPACE_PALETTE (frontend/lib/spaces/spaceProfile.ts),
+     * keep both lists in sync. null = the kind's default colour. Rows from
+     * before 2026-10-09 may still hold an old hex; the frontend ignores
+     * anything that isn't a key.
+     */
+    public const PALETTE_KEYS = ['blue', 'indigo', 'purple', 'fuchsia', 'pink', 'amber', 'teal', 'sky', 'slate'];
+
+    public const COLOR_MESSAGE = 'Culoarea aleasă nu e în paleta orgOS.';
+
     protected $fillable = [
         'user_id',
         'name',

@@ -11,7 +11,7 @@ import { SwipeItemRow } from "@/components/dashboard/SwipeItemRow";
 import { CreditReminderRow } from "@/components/dashboard/CreditReminderRow";
 import { motion, useReducedMotion } from "@/lib/motion";
 import { lei, roCount, roDate, roNumber, roRelativeDays, capitalize, roUnit } from "@/lib/format";
-import { CUSTOM_EVENT_COLOR, SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, spaceTextColor, type SpaceKind } from "@/lib/spaces/spaceProfile";
+import { CUSTOM_EVENT_COLOR, SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, spaceColors, spaceTextColor, type SpaceColors, type SpaceKind } from "@/lib/spaces/spaceProfile";
 import { maintenanceLabel } from "@/lib/spaces/car/maintenanceLabels";
 import { todoHref, todoTitle } from "@/lib/dashboard/spaceDue";
 import { WIDGET_META, type Widget } from "@/lib/dashboard/layout";
@@ -27,16 +27,24 @@ export const KIND_ICON: Partial<Record<SpaceKind, IconName>> = {
   expenses: "receipt-outline",
 };
 
+/** One particular space's colours (its own pick, else its kind's default)
+ * -- for the cards about ONE space (Mașină, Listă, Provizii, Cheltuieli,
+ * "De făcut" rows). Kind-level cards (spend bar, budget) keep the kind's. */
+function spaceTone(ctx: HomeCtx, spaceId: unknown, kind: SpaceKind, isDark: boolean): SpaceColors {
+  const sp = ctx.spaces.find((s) => s.id === String(spaceId));
+  return spaceColors({ kind, color: sp?.color }, isDark)!;
+}
+
 /** Everything the cards read -- computed once by the Acasă screen. */
 export type HomeCtx = {
   dashboard: any;
   budget: any;
-  spaces: { id: string; name: string; kind: SpaceKind }[];
+  spaces: { id: string; name: string; kind: SpaceKind; color?: string | null }[];
   todoRows: any[];
   /** Credit instalments due today (`reminder: true`): shown, never
    * resolved nor counted (not in todoRows / dueRows / overdueCount). */
   reminderRows: any[];
-  dueRows: { key: string; spaceId?: string; name: string; kind?: SpaceKind; top?: any; summary?: string; detail?: string;
+  dueRows: { key: string; spaceId?: string; name: string; kind?: SpaceKind; color?: string | null; top?: any; summary?: string; detail?: string;
     /** What else waits in that space, spelled out ("încă 10 restante · 1 azi"), or null. */
     more: string | null; rank: number }[];
   overdueCount: number;
@@ -502,8 +510,9 @@ function TodoCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
       ) : (
         <Group inset={68} style={widget.color ? { backgroundColor: hexToRgba(widget.color, isDark ? 0.16 : 0.1) } : undefined}>
           {rows.map((r) => {
-            const fill = widget.color ?? (r.kind ? SPACE_IDENTITY_COLORS[r.kind] ?? muted : CUSTOM_EVENT_COLOR);
-            const tint = widget.color ?? spaceTextColor(r.kind ?? "custom", isDark) ?? fill;
+            const own = r.kind ? spaceColors({ kind: r.kind, color: r.color }, isDark) : null;
+            const fill = widget.color ?? (r.kind ? own?.color ?? muted : CUSTOM_EVENT_COLOR);
+            const tint = widget.color ?? (r.kind ? own?.tint : spaceTextColor("custom", isDark)) ?? fill;
             const status = r.top ? ctx.statusOf(r.top) : null;
             const statusColor = status?.tone === "error" ? colors.error : status?.tone === "warning" ? colors.warning : muted;
             const row = (
@@ -691,8 +700,9 @@ function CarCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
   const cars: any[] = ctx.dashboard?.cars ?? [];
   const car = cars.find((c) => String(c.space_id) === widget.settings?.spaceId) ?? cars[0];
   if (!car) return <Missing widget={widget} text="Nicio mașină cu înregistrări încă." />;
-  const accent = widget.color ?? SPACE_IDENTITY_COLORS.car!;
-  const tint = widget.color ?? spaceTextColor("car", isDark) ?? accent;
+  const own = spaceTone(ctx, car.space_id, "car", isDark);
+  const accent = widget.color ?? own.color;
+  const tint = widget.color ?? own.tint;
   const muted = colors.onSurfaceTertiary;
   const service = car.next_service;
   const serviceLine = service
@@ -719,8 +729,7 @@ function GroceryCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
   const lists: any[] = ctx.dashboard?.toBuyLists ?? [];
   const list = lists.find((l) => String(l.list_id) === widget.settings?.listId) ?? (widget.settings?.listId ? null : lists[0]);
   if (!list) return <Missing widget={widget} text="Lista e goală sau a fost ștearsă." />;
-  const accent = widget.color ?? SPACE_IDENTITY_COLORS.grocery!;
-  const tint = widget.color ?? spaceTextColor("grocery", isDark) ?? accent;
+  const tint = widget.color ?? spaceTone(ctx, list.space_id, "grocery", isDark).tint;
   const muted = colors.onSurfaceTertiary;
   const title = widget.settings?.title || list.title;
   const go = ctx.preview ? undefined : () => ctx.navigate(`/${list.space_id}`);
@@ -761,7 +770,7 @@ function SuppliesCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
   const home = homes.find((s) => s.id === widget.settings?.spaceId) ?? homes[0];
   if (!home) return <Missing widget={widget} text="Niciun spațiu Casă." />;
   const low = ctx.dashboard?.lowSupplies?.[home.id] ?? 0;
-  const tint = widget.color ?? spaceTextColor("home", isDark) ?? SPACE_IDENTITY_COLORS.home!;
+  const tint = widget.color ?? spaceTone(ctx, home.id, "home", isDark).tint;
   return (
     <TapCard widget={widget} onPress={ctx.preview ? undefined : () => ctx.navigate(`/${home.id}`)} label={`Provizii ${home.name}: ${low} pe terminate`}>
       <CardHeading icon="basket-outline" text={widget.settings?.title || `Provizii · ${home.name}`} color={tint} info={infoOf(ctx, "card.supplies")} />
@@ -817,7 +826,7 @@ function ExpensesCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
   const space = spaces.find((s) => s.id === widget.settings?.spaceId) ?? spaces[0];
   if (!space) return <Missing widget={widget} text="Niciun spațiu Cheltuieli." />;
   const amount = ctx.segments.find((s) => s.kind === "expenses")?.amount ?? 0;
-  const tint = widget.color ?? spaceTextColor("expenses", isDark) ?? SPACE_IDENTITY_COLORS.expenses!;
+  const tint = widget.color ?? spaceTone(ctx, space.id, "expenses", isDark).tint;
   return (
     <TapCard widget={widget} onPress={ctx.preview ? undefined : () => ctx.navigate(`/${space.id}`)} label={`${space.name}: ${lei(amount)} luna asta`}>
       <CardHeading icon="receipt-outline" text={widget.settings?.title || space.name} color={tint} info={infoOf(ctx, "card.expenses")} />

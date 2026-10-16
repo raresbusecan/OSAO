@@ -3,7 +3,7 @@ import { roDate } from "@/lib/format";
 import { View, Text, TextInput, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { Field, FieldButton, Disclosure } from "@/components/ui/primitives";
 import { motion } from "@/lib/motion";
@@ -63,7 +63,8 @@ export function ExpensesAddBar({ onAdd }: ExpensesAddBarProps) {
     reset();
   };
 
-  const TEAL = SPACE_IDENTITY_COLORS.expenses!;
+  const exp = useSpaceColors("expenses");
+  const TEAL = exp.color;
   const input = {
     height: 52,
     paddingHorizontal: spacing.lg,
@@ -108,7 +109,7 @@ export function ExpensesAddBar({ onAdd }: ExpensesAddBarProps) {
           accessibilityLabel="Adaugă cheltuiala"
           style={{ width: 52, height: 52, borderRadius: radius.control, backgroundColor: canSubmit ? TEAL : `${TEAL}55`, alignItems: "center", justifyContent: "center" }}
         >
-          <Ionicons name="add" size={24} color={SPACE_ON_FILL.expenses} />
+          <Ionicons name="add" size={24} color={exp.ink} />
         </PressableScale>
       </View>
 

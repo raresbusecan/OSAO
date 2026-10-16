@@ -1,5 +1,6 @@
 import type { ExpensesData } from "@/components/spaces/expenses/expenses.data.types";
 import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
+import { roCount } from "@/lib/format";
 
 export function getThisMonthExpensesTotal(data: ExpensesData): number {
   const now = new Date();
@@ -37,6 +38,7 @@ export function getAllTimeExpensesTotal(data: ExpensesData): number {
 export type ExpensesPeriod =
   | { kind: "all" }
   | { kind: "thisMonth" }
+  | { kind: "weeks"; count: number }
   | { kind: "months"; count: number }
   | { kind: "years"; count: number };
 
@@ -55,7 +57,8 @@ export function filterExpensesByPeriod(
   }
 
   const cutoff = new Date(referenceDate);
-  if (period.kind === "months") cutoff.setMonth(cutoff.getMonth() - period.count);
+  if (period.kind === "weeks") cutoff.setDate(cutoff.getDate() - period.count * 7);
+  else if (period.kind === "months") cutoff.setMonth(cutoff.getMonth() - period.count);
   else cutoff.setFullYear(cutoff.getFullYear() - period.count);
 
   return entries.filter((entry) => new Date(entry.date).getTime() >= cutoff.getTime());
@@ -64,6 +67,7 @@ export function filterExpensesByPeriod(
 export function formatExpensesPeriodLabel(period: ExpensesPeriod): string {
   if (period.kind === "all") return "Tot timpul";
   if (period.kind === "thisMonth") return "Luna asta";
-  if (period.kind === "months") return period.count === 1 ? "Ultima lună" : `Ultimele ${period.count} luni`;
+  if (period.kind === "weeks") return period.count === 1 ? "Ultima săptămână" : `Ultimele ${roCount(period.count, "săptămână", "săptămâni")}`;
+  if (period.kind === "months") return period.count === 1 ? "Ultima lună" : `Ultimele ${roCount(period.count, "lună", "luni")}`;
   return period.count === 1 ? "Ultimul an" : `Ultimii ${period.count} ani`;
 }

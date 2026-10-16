@@ -7,14 +7,13 @@ import { HomeCategorySection, type HomeCategoryRow } from "./HomeCategorySection
 import { parseLeadingNumber, type HomeCategoryField } from "./homeCategoryConfig";
 import { HomeDatePickerSheet } from "./HomeDatePickerSheet";
 import { confirmAction } from "@/lib/confirm";
-import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { TopBar, CircleButton, Identity, Field, FieldButton, Segmented, Button, ToggleRow } from "@/components/ui/primitives";
 import { roCount, roDate } from "@/lib/format";
 import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 import type { HomeIcon } from "./home.ui.types";
 
-const HOME = SPACE_IDENTITY_COLORS.home!;
 
 export type HomeCategoryPageProps = {
   title: string;
@@ -94,6 +93,8 @@ export function HomeCategoryPage({
   formOnly,
 }: HomeCategoryPageProps) {
   const { spacing } = useTheme();
+  const homeColors = useSpaceColors("home");
+  const HOME = homeColors.color;
   const [values, setValues] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [datePickerFor, setDatePickerFor] = useState<string | null>(null);
@@ -206,7 +207,7 @@ export function HomeCategoryPage({
       info={info}
       footer={
         <>
-          <Button testID="category-submit" label={editingId ? "Salvează" : submitLabel} tone={SPACE_BUTTON_FILL.home} onPress={submit} disabled={!canSubmit} />
+          <Button testID="category-submit" label={editingId ? "Salvează" : submitLabel} tone={homeColors.fill} onPress={submit} disabled={!canSubmit} />
           {editingId && onResolve ? (
             <Button testID="category-resolve" variant="secondary" icon="checkmark-circle-outline" label="Rezolvă" onPress={resolve} />
           ) : null}
@@ -266,7 +267,9 @@ export function HomeCategoryPage({
         onRowLongPress={onRowActions ? (id) => onRowActions(String(id)) : undefined}
         // No swipe on documents: they're renewed/edited, not swiped away.
         onRowDelete={swipeable === false ? undefined : remove}
-        onRowResolve={onResolve ? (id) => onResolve(String(id)) : undefined}
+        // Same guard as `remove`: never leave the form open on a row that
+        // was just resolved (a later Save would build from a stale entry).
+        onRowResolve={onResolve ? (id) => { if (editingId === String(id)) closeForm(); onResolve(String(id)); } : undefined}
         onRowRenew={onRenew ? (id) => onRenew(String(id)) : undefined}
       />
 
@@ -295,6 +298,7 @@ function CategoryField({
   onOpenDate: () => void;
 }) {
   const { colors, spacing, radius } = useTheme();
+  const HOME = useSpaceColors("home").color;
   const optional = field.required === false;
   const label = optional && field.type !== "toggle" ? `${field.label} (opțional)` : field.label;
 

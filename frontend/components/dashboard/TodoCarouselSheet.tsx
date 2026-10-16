@@ -6,7 +6,7 @@ import { useTheme, type ThemeColors } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { notifyAction } from "@/lib/confirm";
 import { severityColor } from "@/lib/statusColors";
-import { CUSTOM_EVENT_COLOR, SPACE_IDENTITY_COLORS, detectSpaceType } from "@/lib/spaces/spaceProfile";
+import { CUSTOM_EVENT_COLOR, spaceColors } from "@/lib/spaces/spaceProfile";
 import { Sheet } from "@/components/ui/Sheet";
 import { Group, Row, SectionHeader, EmptyState, hexToRgba } from "@/components/ui/primitives";
 import { PressableScale } from "@/components/ui/PressableScale";
@@ -24,7 +24,7 @@ type TodoItem = {
   recurrence?: string | null;
   metadata?: Record<string, any> | null;
   overdue_km?: number | null;
-  space: { id: number | string; name: string; icon: string } | null;
+  space: { id: number | string; name: string; icon: string; type?: string | null; color?: string | null } | null;
 };
 
 export type TodoCarouselSheetProps = {
@@ -151,7 +151,7 @@ export function TodoCarouselSheet({ visible, onClose, overdue, today, upcoming, 
                   : isDoc
                     ? { label: days < 0 ? `Expirat pe ${docDate}` : `Expiră pe ${docDate}`, color: days < 0 ? severityColor("critical", colors) : days === 0 ? colors.warning : colors.onSurfaceTertiary }
                     : statusFor(days, colors);
-                const color = item.space ? SPACE_IDENTITY_COLORS[detectSpaceType(item.space, null)] ?? colors.onSurfaceTertiary : CUSTOM_EVENT_COLOR;
+                const color = item.space ? spaceColors(item.space, false)?.color ?? colors.onSurfaceTertiary : CUSTOM_EVENT_COLOR;
                 const busy = resolvingId === item.id;
                 return (
                   <SwipeItemRow key={item.id} item={item} onChanged={onChanged} canResolve={!isDone} canDelete={!isDone}>

@@ -4,7 +4,7 @@ import { View, Text, Animated } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { confirmAction } from "@/lib/confirm";
-import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import type { GroceryItem } from "@/lib/spaces/grocery/grocery.types";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { SwipeRow } from "@/components/spaces/SwipeRow";
@@ -41,7 +41,8 @@ export type GroceryItemRowProps = {
 export function GroceryItemRow({ item, onToggle, onOpenMenu, onDelete, trailing }: GroceryItemRowProps) {
   const { colors, spacing } = useTheme();
   const reduced = useReducedMotion();
-  const fill = SPACE_IDENTITY_COLORS.grocery!;
+  const groc = useSpaceColors("grocery");
+  const fill = groc.color;
 
   const pop = useRef(new Animated.Value(1)).current;
   const fade = useRef(new Animated.Value(item.inCart ? 0.45 : 1)).current;
@@ -122,7 +123,7 @@ export function GroceryItemRow({ item, onToggle, onOpenMenu, onDelete, trailing 
             transform: [{ scale: pop }],
           }}
         >
-          {item.inCart ? <Ionicons name="checkmark" size={16} color={SPACE_ON_FILL.grocery} /> : null}
+          {item.inCart ? <Ionicons name="checkmark" size={16} color={groc.ink} /> : null}
         </Animated.View>
 
         <Animated.View style={{ flex: 1, opacity: fade, paddingVertical: spacing.sm + 2 }}>

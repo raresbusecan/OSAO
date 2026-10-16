@@ -12,6 +12,17 @@ import type { ThemeColors } from "@/lib/theme";
  */
 export type SeverityTier = "safe" | "caution" | "warning" | "critical";
 
+/** Mașină's 3 urgency bands (documents by days, services by km or days --
+ * lib/spaces/car/calculations: "light" 45-31 days, "medium" 30-16,
+ * "critical" 15 or less incl. expired/overdue) on the scale below:
+ * caution / warning / critical. Shared by Complet's CarDashboard and
+ * Simplu's Mașină so the two always color the same record the same. */
+export function urgencyTierColor(tier: "light" | "medium" | "critical", colors: ThemeColors): string {
+  if (tier === "critical") return severityColor("critical", colors);
+  if (tier === "medium") return severityColor("warning", colors);
+  return severityColor("caution", colors);
+}
+
 export function severityColor(tier: SeverityTier, colors: ThemeColors): string {
   switch (tier) {
     case "critical":
@@ -45,23 +56,25 @@ export function severityTint(tier: SeverityTier, colors: ThemeColors, alpha: str
 
 /**
  * Calendar heat (2026-10 redesign, design-lead spec): how FULL a day is,
- * as a red tint ramp -- one shade per thing on the day, 8 shades, 8+ keeps
- * the darkest (user, 2026-10-05). `error` at 9 / 17 / 26 / 35 / 44 / 54 /
+ * as a red tint ramp, 8 shades. `error` at 9 / 17 / 26 / 35 / 44 / 54 /
  * 65 / 75% over the card (surfaceSecondary), baked to exact hex per theme;
- * the day number (onSurface) stays >= 4.5:1 on every shade. Load = a plain count
- * of what falls on the day (every item and projected occurrence, custom
- * events included), and only today / future days are heated: overdue is
- * a STATUS, shown as full-strength red text or a red dot on past days,
- * so "busy" and "late" never share a tile.
+ * the day number (onSurface) stays >= 4.5:1 on every shade. Load = the
+ * day's effort as a share of its MAX capacity (lib/calendar/capacity.ts,
+ * 2026-10: a weekend holds more than a workday): each shade is 1/8 of the
+ * day, the comfortable half ends at shade 4, a full (or overfull) day is
+ * the darkest. Only today / future days are heated: overdue is a STATUS,
+ * shown as full-strength red text or a red dot on past days, so "busy"
+ * and "late" never share a tile.
  */
 export type HeatLevel = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 export const HEAT_MAX: HeatLevel = 8;
 export const HEAT_LEVELS: readonly HeatLevel[] = [0, 1, 2, 3, 4, 5, 6, 7, 8];
 
-/** The count itself, capped at 8 (8 or more = the darkest shade). */
-export function heatLevel(count: number): HeatLevel {
-  if (!(count > 0)) return 0;
-  return Math.min(Math.floor(count), HEAT_MAX) as HeatLevel;
+/** A share of the day's max capacity (0..1+) -> a shade: anything at all
+ * is at least shade 1, 100% or more is the darkest. */
+export function heatLevel(share: number): HeatLevel {
+  if (!(share > 0)) return 0;
+  return Math.max(1, Math.min(Math.ceil(share * HEAT_MAX - 1e-9), HEAT_MAX)) as HeatLevel;
 }
 
 const HEAT_DARK = ["transparent", "#2B1F28", "#3D222D", "#512632", "#652A37", "#792E3D", "#8F3242", "#A83749", "#BE3B4E"];

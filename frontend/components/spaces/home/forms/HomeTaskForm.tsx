@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Text } from "react-native";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { confirmAction } from "@/lib/confirm";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Disclosure, Field, FieldButton, Segmented, ToggleRow } from "@/components/ui/primitives";
@@ -10,7 +10,6 @@ import { roDate } from "@/lib/format";
 import type { HomeTaskEntry } from "@/lib/spaces/home/home.types";
 import { HomeDatePickerSheet } from "@/components/spaces/home/HomeDatePickerSheet";
 
-const HOME = SPACE_IDENTITY_COLORS.home!;
 
 type HomeTaskFormProps = {
   onCancel: () => void;
@@ -32,6 +31,8 @@ export default function HomeTaskForm({ onCancel, onSave, entry, onDelete }: Home
   const isEditing = entry !== undefined;
 
   const { colors } = useTheme();
+  const homeColors = useSpaceColors("home");
+  const HOME = homeColors.color;
   const [title, setTitle] = useState(entry?.title ?? "");
   const [dueDate, setDueDate] = useState<string | undefined>(entry?.dueDate);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
@@ -89,7 +90,7 @@ export default function HomeTaskForm({ onCancel, onSave, entry, onDelete }: Home
       tone={HOME}
       footer={
         <>
-          <Button testID="home-task-save" label={isEditing ? "Salvează" : "Adaugă sarcina"} tone={SPACE_BUTTON_FILL.home} onPress={handleSave} />
+          <Button testID="home-task-save" label={isEditing ? "Salvează" : "Adaugă sarcina"} tone={homeColors.fill} onPress={handleSave} />
           {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge sarcina" onPress={handleDelete} /> : null}
         </>
       }
@@ -160,6 +161,7 @@ export default function HomeTaskForm({ onCancel, onSave, entry, onDelete }: Home
 
       {datePickerVisible ? (
         <HomeDatePickerSheet
+          clearable
           value={dueDate}
           onCancel={() => setDatePickerVisible(false)}
           onSelect={(picked) => {

@@ -1,5 +1,5 @@
 import React from "react";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field } from "@/components/ui/primitives";
 
@@ -24,6 +24,7 @@ export type GroceryNewListModalProps = {
  */
 /** Name a new grocery list -- the shared Sheet with one field. */
 export function GroceryNewListModal({ visible, name, onChangeName, onClose, onCreate, saving }: GroceryNewListModalProps) {
+  const GROC = useSpaceColors("grocery").color;
   return (
     <Sheet
       visible={visible}
@@ -32,8 +33,8 @@ export function GroceryNewListModal({ visible, name, onChangeName, onClose, onCr
       title="Listă nouă"
       subtitle="Pentru săptămâna asta, o ieșire sau orice cumperi des"
       icon="list-outline"
-      tone={SPACE_IDENTITY_COLORS.grocery}
-      footer={<Button testID="grocery-new-list-create" label="Creează lista" tone={SPACE_IDENTITY_COLORS.grocery} onPress={onCreate} loading={!!saving} disabled={!name.trim()} />}
+      tone={GROC}
+      footer={<Button testID="grocery-new-list-create" label="Creează lista" tone={GROC} onPress={onCreate} loading={!!saving} disabled={!name.trim()} />}
     >
       <Field
         testID="grocery-new-list-input"
@@ -44,7 +45,7 @@ export function GroceryNewListModal({ visible, name, onChangeName, onClose, onCr
         returnKeyType="done"
         autoFocus
         placeholder="ex. Săptămâna 3"
-        tone={SPACE_IDENTITY_COLORS.grocery}
+        tone={GROC}
       />
     </Sheet>
   );

@@ -132,7 +132,7 @@ class ItemController extends Controller
     {
         $space = $this->accessibleSpace($request, $request->input('space_id'));
         if (!$space) {
-            return response()->json(['message' => 'Space-ul specificat nu exista sau nu iti apartine.'], 404);
+            return response()->json(['message' => 'Spațiul nu există sau nu îți aparține.'], 404);
         }
 
         $lists = $this->visibleGroceryLists($request, $space->id);
@@ -164,7 +164,7 @@ class ItemController extends Controller
 
             if (!$space) {
                 return response()->json([
-                    'message' => 'Space-ul specificat nu exista sau nu iti apartine.'
+                    'message' => 'Spațiul nu există sau nu îți aparține.'
                 ], 404);
             }
 
@@ -219,18 +219,22 @@ class ItemController extends Controller
             'guilt_free'    => 'sometimes|boolean',
         ]);
 
-        // A document is created with BOTH validity dates -- urgency,
-        // "Expiră pe" and a renewal's next period are all computed from
-        // them (same rule both forms enforce). Car stores "dd.mm.yyyy",
-        // Casă an ISO date; either is accepted.
+        // A document is created with its expiry date -- urgency and
+        // "Expiră pe" are computed from it. The issue date is optional
+        // (2026-10-15): Simplu's quick add only asks for the expiry, and a
+        // renewal without one assumes a 12-month period (documentRenewal.ts).
+        // The full forms still ask for both. When both are sent they must be
+        // in order. Car stores "dd.mm.yyyy", Casă an ISO date; either is
+        // accepted.
         $validator->after(function ($v) use ($request) {
             if (!in_array($request->input('type'), ['car_document', 'home_document'], true)) {
                 return;
             }
             $issue = $this->documentDate($request->input('metadata.issueDate'));
             $expiry = $this->documentDate($request->input('metadata.expiryDate'));
-            if (!$issue) {
-                $v->errors()->add('metadata.issueDate', 'Data emiterii este obligatorie.');
+            $rawIssue = $request->input('metadata.issueDate');
+            if (!$issue && $rawIssue !== null && $rawIssue !== '') {
+                $v->errors()->add('metadata.issueDate', 'Data emiterii nu e validă.');
             }
             if (!$expiry) {
                 $v->errors()->add('metadata.expiryDate', 'Data expirării este obligatorie.');
@@ -277,7 +281,7 @@ class ItemController extends Controller
 
             if (!$space || $space->user_id !== $request->user()->id) {
                 return response()->json([
-                    'message' => 'Space-ul specificat nu exista sau nu iti apartine.'
+                    'message' => 'Spațiul nu există sau nu îți aparține.'
                 ], 404);
             }
         } elseif (!empty($data['space_id'])) {
@@ -285,7 +289,7 @@ class ItemController extends Controller
 
             if (!$space || !Space::accessibleBy($request->user())->where('id', $space->id)->exists()) {
                 return response()->json([
-                    'message' => 'Space-ul specificat nu exista sau nu iti apartine.'
+                    'message' => 'Spațiul nu există sau nu îți aparține.'
                 ], 404);
             }
         }
@@ -307,7 +311,7 @@ class ItemController extends Controller
         $item = Item::find($id);
 
         if (!$item || !$this->canAccessItem($request, $item)) {
-            return response()->json(['message' => 'Item negasit.'], 404);
+            return response()->json(['message' => 'Înregistrarea nu a fost găsită.'], 404);
         }
 
         return response()->json($item->load('user:id,name,email'));
@@ -319,7 +323,7 @@ class ItemController extends Controller
         $item = Item::find($id);
 
         if (!$item || !$this->canAccessItem($request, $item)) {
-            return response()->json(['message' => 'Item negasit.'], 404);
+            return response()->json(['message' => 'Înregistrarea nu a fost găsită.'], 404);
         }
 
         // Renaming the list itself is more than "can use its items" --
@@ -392,7 +396,7 @@ class ItemController extends Controller
         } elseif (array_key_exists('space_id', $data) && !empty($data['space_id'])) {
             if (!$this->accessibleSpace($request, $data['space_id'])) {
                 return response()->json([
-                    'message' => 'Space-ul specificat nu exista sau nu iti apartine.'
+                    'message' => 'Spațiul nu există sau nu îți aparține.'
                 ], 404);
             }
         }
@@ -427,7 +431,7 @@ class ItemController extends Controller
         $item = Item::find($id);
 
         if (!$item || !$this->canAccessItem($request, $item)) {
-            return response()->json(['message' => 'Item negasit.'], 404);
+            return response()->json(['message' => 'Înregistrarea nu a fost găsită.'], 404);
         }
 
         if ($item->type === 'grocery_list' && !$this->canManageList($request, $item)) {
@@ -436,7 +440,7 @@ class ItemController extends Controller
 
         $item->delete();
 
-        return response()->json(['message' => 'Item sters cu succes.']);
+        return response()->json(['message' => 'Înregistrarea a fost ștearsă.']);
     }
 
     /**
@@ -475,7 +479,7 @@ class ItemController extends Controller
             $position++;
         }
 
-        return response()->json(['message' => 'Order updated.']);
+        return response()->json(['message' => 'Ordinea a fost salvată.']);
     }
 
     /**
@@ -489,7 +493,7 @@ class ItemController extends Controller
         $item = Item::with('space')->find($id);
 
         if (!$item || $item->type !== 'grocery_list' || !$this->canAccessList($request, $item)) {
-            return response()->json(['message' => 'Item negasit.'], 404);
+            return response()->json(['message' => 'Înregistrarea nu a fost găsită.'], 404);
         }
 
         return response()->json([
@@ -510,7 +514,7 @@ class ItemController extends Controller
         $item = Item::with('space')->find($id);
 
         if (!$item || $item->type !== 'grocery_list' || !$item->space || $item->space->user_id !== $request->user()->id) {
-            return response()->json(['message' => 'Item negasit.'], 404);
+            return response()->json(['message' => 'Înregistrarea nu a fost găsită.'], 404);
         }
 
         $validated = $request->validate([
@@ -527,7 +531,7 @@ class ItemController extends Controller
 
         if ($user->id === $item->space->user_id) {
             return response()->json([
-                'message' => 'Este deja proprietarul acestui space.',
+                'message' => 'Este deja proprietarul acestui spațiu.',
             ], 422);
         }
 
@@ -558,7 +562,7 @@ class ItemController extends Controller
         $item = Item::with('space')->find($id);
 
         if (!$item || $item->type !== 'grocery_list' || !$item->space || $item->space->user_id !== $request->user()->id) {
-            return response()->json(['message' => 'Item negasit.'], 404);
+            return response()->json(['message' => 'Înregistrarea nu a fost găsită.'], 404);
         }
 
         $theirItemsOnThisList = Item::where('space_id', $item->space_id)

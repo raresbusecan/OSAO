@@ -2,7 +2,7 @@ import React from "react";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/lib/theme";
 import { Row, IconWell } from "@/components/ui/primitives";
-import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { spaceColors } from "@/lib/spaces/spaceProfile";
 import { lei } from "@/lib/format";
 
 /**
@@ -25,8 +25,10 @@ export function CreditReminderRow({ item, testID, onBeforeOpen }: {
 }) {
   const { isDark } = useTheme();
   const router = useRouter();
-  const fill = SPACE_IDENTITY_COLORS.expenses ?? "#14B8A6";
-  const tint = spaceTextColor("expenses", isDark) ?? fill;
+  // The Cheltuieli space the credit lives in (its pick, else teal).
+  const own = spaceColors(item?.space?.type ? item.space : { kind: "expenses", color: item?.space?.color }, isDark)!;
+  const fill = own.color;
+  const tint = own.tint;
   const amount = item?.amount != null && Number(item.amount) > 0 ? Number(item.amount) : null;
   const spaceId = item?.space?.id ?? item?.space_id;
   return (

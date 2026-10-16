@@ -100,7 +100,7 @@ class SocialAuthController extends Controller
         $token = $user->createToken('mobile-app')->plainTextToken;
 
         return response()->json([
-            'message' => 'Login successful.',
+            'message' => 'Te-ai conectat.',
             'user' => $user->fresh()->toAuthPayload(),
             'token' => $token,
             'created' => $created,

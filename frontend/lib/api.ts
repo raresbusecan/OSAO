@@ -1,5 +1,6 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
+import { currentLanguage } from "@/lib/i18n";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL as string;
 /** The backend origin (no /api) -- social login opens `${BACKEND_URL}/auth/<provider>/redirect` in a browser. */
@@ -67,7 +68,7 @@ export type ApiError = Error & { status?: number; body?: any };
  * own message, else `fallback`. Server messages are Romanian already. */
 export function apiErrorMessage(e: any, fallback: string, field?: string): string {
   const fieldMsg = field ? e?.body?.errors?.[field]?.[0] : null;
-  return (typeof fieldMsg === "string" && fieldMsg) || (typeof e?.message === "string" && e.message && !/^Request failed|^Network request failed|^Failed to fetch/i.test(e.message) ? e.message : null) || fallback;
+  return (typeof fieldMsg === "string" && fieldMsg) || (typeof e?.message === "string" && e.message && !/^Request failed|^Cererea nu a reușit|^Network request failed|^Failed to fetch/i.test(e.message) ? e.message : null) || fallback;
 }
 
 async function request<T = any>(
@@ -84,6 +85,9 @@ async function request<T = any>(
     // API calls over the tunnel get HTML back instead of JSON. Harmless when
     // hitting the backend directly (ignored).
     "Bypass-Tunnel-Reminder": "true",
+    // Same for ngrok's free domains (the dev backend's fixed URL): skips
+    // the "You are about to visit" browser-warning page. Ignored elsewhere.
+    "ngrok-skip-browser-warning": "1",
     // Read fresh on every request (not cached at module load) so it
     // self-corrects immediately if the device's own timezone changes
     // mid-session (travel), instead of only on next app restart. The
@@ -92,6 +96,9 @@ async function request<T = any>(
     // back, so Calendar buckets a day the same way the user's own
     // device would, not UTC.
     "X-Timezone": getDeviceTimezone(),
+    // The app's language (lib/i18n): the backend's SetLocale middleware
+    // answers validation / error messages in it.
+    "Accept-Language": currentLanguage(),
     ...(init.headers as Record<string, string> | undefined),
   };
 
@@ -139,7 +146,7 @@ async function request<T = any>(
       body?.message ||
       body?.error ||
       body?.errors ||
-      `Request failed (${res.status})`;
+      `Cererea nu a reușit (${res.status}). Încearcă din nou.`;
 
     const err = new Error(
       typeof msg === "string" ? msg : JSON.stringify(msg),
@@ -422,7 +429,8 @@ createSpace: (body: {
   name: string;
   description?: string;
   icon?: string;
-  color?: string;
+  /** A SPACE_PALETTE key (lib/spaces/spaceProfile.ts); null = kind default. */
+  color?: string | null;
   /** Fixed permanently at creation -- see spaceProfile.ts's
    * detectSpaceType, which reads this first (before name/icon) so
    * renaming a space later can never change what kind it is. */
@@ -462,10 +470,11 @@ updateSpace: (
     name?: string;
     description?: string;
     icon?: string;
-    color?: string;
+    /** A SPACE_PALETTE key; null = back to the kind default. */
+    color?: string | null;
   },
 ) =>
-  request(`/spaces/${id}`, {
+  request<{ space: any }>(`/spaces/${id}`, {
     method: "PUT",
     body: JSON.stringify(body),
   }),
@@ -489,6 +498,15 @@ saveCarProfile: (
   request(`/spaces/${spaceId}/car-profile`, {
     method: "PUT",
     body: JSON.stringify(body),
+  }),
+
+/** The km typed on the Mașină top card. 422 {message, errors.odometer}
+ * (Romanian) when below the highest logged reading, <= 0 or > 2.000.000.
+ * Answers {profile (car_profile shape), logged_odometer}. */
+updateCarOdometer: (spaceId: string | number, odometer: number) =>
+  request(`/spaces/${spaceId}/car-profile/odometer`, {
+    method: "PUT",
+    body: JSON.stringify({ odometer }),
   }),
 
 saveHomeProfile: (

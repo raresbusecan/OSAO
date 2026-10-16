@@ -9,6 +9,7 @@ use App\Models\Item;
 use App\Models\SavingsGoal;
 use App\Models\User;
 use App\Services\EventSpend;
+use App\Services\HomeSpend;
 use App\Services\RecurrenceProjector;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -122,7 +123,7 @@ class BudgetController extends Controller
         // day, every occurrence of a repeating one counted (EventSpend).
         // Both halves are part of the month's committed total, like the
         // recurring bills; the frontend shows `planned` apart.
-        $datedTypes = array_values(array_diff($types, ['custom_event']));
+        $datedTypes = array_values(array_diff($types, ['custom_event'], HomeSpend::TYPES));
         $dated = $datedTypes
             ? (float) Item::where('user_id', $userId)
                 ->whereIn('type', $datedTypes)
@@ -130,6 +131,10 @@ class BudgetController extends Controller
                 ->whereBetween('due_at', [$startUtc, $endUtc])
                 ->sum('amount')
             : 0.0;
+        // Casă purchases / maintenance: on the day each was paid (HomeSpend).
+        if (array_intersect($types, HomeSpend::TYPES)) {
+            $dated += HomeSpend::total($userId, $month, false);
+        }
         // "Bani fără vină" records are left out of every per-space figure
         // (spent, limits, avg, archive, savings) -- see guiltFreeForMonth.
         $events = in_array('custom_event', $types, true)
@@ -152,7 +157,7 @@ class BudgetController extends Controller
     private function biggestInMonth(int $userId, array $types, Carbon $month): ?array
     {
         [$startUtc, $endUtc] = $this->monthWindowUtc($month);
-        $datedTypes = array_values(array_diff($types, ['custom_event']));
+        $datedTypes = array_values(array_diff($types, ['custom_event'], HomeSpend::TYPES));
         $item = $datedTypes
             ? Item::where('user_id', $userId)
                 ->whereIn('type', $datedTypes)
@@ -163,6 +168,13 @@ class BudgetController extends Controller
                 ->first(['title', 'amount'])
             : null;
         $best = $item ? ['title' => $item->title, 'amount' => (float) $item->amount] : null;
+
+        if (array_intersect($types, HomeSpend::TYPES)) {
+            $payment = HomeSpend::payments($userId, $month->copy()->startOfMonth(), $month->copy()->endOfMonth(), false)->sortByDesc('amount')->first();
+            if ($payment && (!$best || $payment['amount'] > $best['amount'])) {
+                $best = ['title' => $payment['title'], 'amount' => $payment['amount']];
+            }
+        }
 
         if (in_array('custom_event', $types, true)) {
             $event = EventSpend::occurrences($userId, $month->copy()->startOfMonth(), $month->copy()->endOfMonth(), Carbon::now($month->getTimezone()), false)
@@ -217,7 +229,7 @@ class BudgetController extends Controller
      * i.e. not custom_event -- EventSpend -- and not the recurring types). */
     private function guiltFreeDatedTypes(): array
     {
-        return array_values(array_diff(Item::SPENDING_TYPES, ['custom_event'], array_keys(Item::RECURRING_TYPE_SPACE)));
+        return array_values(array_diff(Item::SPENDING_TYPES, ['custom_event'], array_keys(Item::RECURRING_TYPE_SPACE), HomeSpend::TYPES));
     }
 
     /** What the "Bani fără vină" jar used in $month: flagged dated records,
@@ -239,15 +251,17 @@ class BudgetController extends Controller
             ->where('guilt_free', true)
             ->get(['amount', 'recurrence']);
         $events = EventSpend::occurrences($userId, $month->copy()->startOfMonth(), $month->copy()->endOfMonth(), Carbon::now($month->getTimezone()), true);
+        $home = HomeSpend::payments($userId, $month->copy()->startOfMonth(), $month->copy()->endOfMonth(), true);
 
         $spent = (float) $dated->sum('amount')
+            + (float) $home->sum('amount')
             + (float) $recurring->sum(fn (Item $i) => $this->monthlyRecurringEquivalent((float) $i->amount, $i->recurrence))
             + (float) $events->where('planned', false)->sum('amount');
 
         return [
             'spent' => round($spent, 2),
             'planned' => round((float) $events->where('planned', true)->sum('amount'), 2),
-            'count' => $dated->count() + $recurring->count() + $events->count(),
+            'count' => $dated->count() + $home->count() + $recurring->count() + $events->count(),
         ];
     }
 
@@ -608,7 +622,7 @@ class BudgetController extends Controller
             ->whereIn('type', [...array_keys(Item::RECURRING_TYPE_SPACE), 'home_maintenance'])
             ->whereNotNull('recurrence')
             ->whereNotIn('status', Item::CLOSED_STATUSES)
-            ->with('space:id,name,icon,type')
+            ->with('space:id,name,icon,type,color')
             ->get()
             ->map(function (Item $item) use ($now) {
                 $next = RecurrenceProjector::currentDue($item, $now);
@@ -694,7 +708,7 @@ class BudgetController extends Controller
             ['monthly_limit' => $validated['monthly_limit']],
         );
 
-        return response()->json(['message' => 'Budget limit saved.', 'limit' => $limit]);
+        return response()->json(['message' => 'Limita a fost salvată.', 'limit' => $limit]);
     }
 
     public function deleteLimit(Request $request, string $category)
@@ -703,7 +717,7 @@ class BudgetController extends Controller
             ->where('category', $category)
             ->delete();
 
-        return response()->json(['message' => 'Budget limit removed.']);
+        return response()->json(['message' => 'Limita a fost ștearsă.']);
     }
 
     // PUT /api/budget/plan -- the fixed monthly net income and its 5-jar
@@ -775,7 +789,7 @@ class BudgetController extends Controller
         });
 
         return response()->json([
-            'message' => 'Budget limits saved.',
+            'message' => 'Limitele au fost salvate.',
             'limits' => BudgetCategory::where('user_id', $userId)->orderBy('category')->get()
                 ->map(fn (BudgetCategory $l) => ['category' => $l->category, 'monthly_limit' => (float) $l->monthly_limit])
                 ->values(),
@@ -850,7 +864,10 @@ class BudgetController extends Controller
                 'planned' => $e['planned'],
             ]);
 
-        $items = collect($dated)->concat($recurring)->concat($events)
+        $home = HomeSpend::payments($user->id, $now->copy()->startOfMonth(), $now->copy()->endOfMonth(), true)
+            ->map(fn (array $p) => [...$p, 'space_id' => null, 'label' => $labelOf($p['type'])]);
+
+        $items = collect($dated)->concat($home)->concat($recurring)->concat($events)
             ->sortByDesc(fn ($i) => $i['due_at'])
             ->values();
 
@@ -888,12 +905,21 @@ class BudgetController extends Controller
         }
 
         $items = Item::where('user_id', $user->id)
-            ->whereIn('type', array_values(array_diff($types, ['custom_event'])))
+            ->whereIn('type', array_values(array_diff($types, ['custom_event'], HomeSpend::TYPES)))
             ->whereNotNull('amount')
             ->orderByDesc('due_at')
             ->limit(100)
             ->get(['id', 'type', 'title', 'amount', 'currency', 'due_at', 'guilt_free'])
             ->toBase();
+
+        // Casă purchases / maintenance: one row per payment, on its day,
+        // over the same months as the trend above (HomeSpend).
+        if (array_intersect($types, HomeSpend::TYPES)) {
+            $items = $items
+                ->concat(HomeSpend::payments($user->id, $now->copy()->subMonthsNoOverflow(3)->startOfMonth(), $now->copy()->endOfMonth()))
+                ->sortByDesc(fn ($i) => is_array($i) ? $i['due_at'] : $i->due_at->toJSON())
+                ->values();
+        }
 
         // Calendar purchases, one row per occurrence over the months above
         // (a repeating one shows each time); a planned one is flagged so
@@ -955,7 +981,7 @@ class BudgetController extends Controller
             $validated,
         );
 
-        return response()->json(['message' => 'Savings goal saved.', 'goal' => $goal]);
+        return response()->json(['message' => 'Obiectivul de economii a fost salvat.', 'goal' => $goal]);
     }
 
     // GET /api/budget/archive -- the read side of archiveCompletedMonths,

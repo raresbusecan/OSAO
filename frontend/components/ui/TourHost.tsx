@@ -21,8 +21,11 @@ import { useTheme } from "@/lib/theme";
 import { useReducedMotion } from "@/lib/motion";
 import { useAuth } from "@/providers/auth";
 import { api } from "@/lib/api";
-import { SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, spaceTextColor, type SpaceKind } from "@/lib/spaces/spaceProfile";
+import { CUSTOM_EVENT_COLOR, SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, spaceTextColor, type SpaceKind } from "@/lib/spaces/spaceProfile";
+import { heatColor, type HeatLevel } from "@/lib/statusColors";
 import { MultiRingProgress } from "@/components/dashboard/RingProgress";
+import { BudgetSplitBar } from "@/components/dashboard/BudgetSplitBar";
+import { DEFAULT_SPLIT, JAR_ORDER, jarFill, type SplitKey } from "@/lib/budget/plan";
 import {
   markSeenLocally,
   setTourHandler,
@@ -45,7 +48,10 @@ const HOLE_PAD = 6;
 const EDGE = 12;
 // Below this much room for the card next to the hole, the step shows its
 // illustration instead of a cut-out.
-const MIN_CARD_H = 220;
+// Below this much room next to the hole the card can't show its text
+// (seen on an iPhone: Buget step 1 left ~1 line), so the step drops the
+// hole and shows its illustration instead.
+const MIN_CARD_H = 320;
 
 /**
  * The first-use tour overlay (lib/tours.ts). Mounted once at the root next
@@ -170,7 +176,14 @@ function TourOverlay({ active, onFinished }: { active: Active; onFinished: () =>
           const below = r.y + r.h > winH - insets.bottom;
           const noRoom = roomFor(h, step.placement) < MIN_CARD_H;
           if (above || noRoom || (step.scrollIntoView && below)) {
-            const y = Math.max(0, scroller.y.current + (r.y - (insets.top + EDGE)));
+            // A card at the bottom wants the target at the top of the screen;
+            // a card at the top wants it at the bottom.
+            const y = Math.max(
+              0,
+              step.placement === "top"
+                ? scroller.y.current + (r.y + r.h) - (winH - insets.bottom - EDGE - HOLE_PAD)
+                : scroller.y.current + (r.y - (insets.top + EDGE)),
+            );
             scroller.ref.current.scrollTo({ y, animated: !reduced });
             await wait(reduced ? 60 : 400);
             if (cancelled) return;
@@ -295,8 +308,11 @@ function TourOverlay({ active, onFinished }: { active: Active; onFinished: () =>
     // Both translucent flags: the app draws edge to edge (RN 0.86), so the
     // overlay must too, or window coordinates and the scrim would be offset.
     <Modal visible transparent animationType="none" statusBarTranslucent navigationBarTranslucent onRequestClose={() => close("skipped")}>
-      {/* Swallows every touch, inside the hole too. */}
-      <View style={{ flex: 1 }} onStartShouldSetResponder={() => true} testID="tour-overlay">
+      {/* The blocker swallows every touch (inside the hole too). It sits
+          BEHIND the card as a sibling -- as the card's parent it claimed
+          the touch first and the card's text could never scroll. */}
+      <View style={{ flex: 1 }} testID="tour-overlay">
+        <View style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0 }} onStartShouldSetResponder={() => true} />
         <Animated.View
           pointerEvents="none"
           importantForAccessibility="no-hide-descendants"
@@ -359,7 +375,7 @@ function TourOverlay({ active, onFinished }: { active: Active; onFinished: () =>
               transform: [{ translateY: content.interpolate({ inputRange: [0, 1], outputRange: [8, 0] }) }],
             }}
           >
-            <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} contentContainerStyle={{ gap: 14 }} showsVerticalScrollIndicator={false} bounces={false}>
+            <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} contentContainerStyle={{ gap: 14 }} showsVerticalScrollIndicator persistentScrollbar bounces={false}>
               {showIllustration ? <Illustration kind={step.illustration!} /> : null}
               <View ref={headerRef} accessible accessibilityRole="header" accessibilityLabel={`Pasul ${index + 1} din ${total}. ${title}`}>
                 <Text style={{ ...typography.subtitle, color: colors.onSurface }}>{title}</Text>
@@ -433,9 +449,27 @@ const KIND_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   expenses: "receipt-outline",
 };
 
+const CAR_GLYPH_ICONS: Record<"odometer" | "fuel" | "service" | "expense" | "document" | "archive" | "history", keyof typeof Ionicons.glyphMap> = {
+  odometer: "speedometer-outline",
+  fuel: "water-outline",
+  service: "construct-outline",
+  expense: "card-outline",
+  document: "document-text-outline",
+  archive: "archive-outline",
+  history: "time-outline",
+};
+
+// Mașină's quick actions, same order/icons/labels as CarDashboard.
+const CAR_ACTIONS: { label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { label: "Alimentare", icon: "water-outline" },
+  { label: "Service", icon: "construct-outline" },
+  { label: "Cheltuială", icon: "card-outline" },
+  { label: "Document", icon: "document-text-outline" },
+];
+
 /** 28px decorative mark in front of a point -- hidden from screen readers. */
 function Glyph({ glyph, ctx }: { glyph: TourGlyph; ctx: TourCtx }) {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const circle = (children: React.ReactNode) => (
     <View
       accessible={false}
@@ -492,12 +526,68 @@ function Glyph({ glyph, ctx }: { glyph: TourGlyph; ctx: TourCtx }) {
       return slot(<Text style={{ fontSize: 11, fontWeight: "600", color: colors.success }}>Mai</Text>, { paddingTop: 2 });
     case "tap":
       return slot(<Ionicons name="hand-left-outline" size={18} color={colors.onSurfaceTertiary} />, { paddingTop: 1 });
+    case "month":
+      return circle(<Ionicons name="chevron-forward" size={15} color={colors.onSurface} />);
+    case "swipe":
+      return circle(<Ionicons name="swap-horizontal" size={15} color={colors.onSurface} />);
+    case "reminder":
+      return circle(<Ionicons name="card-outline" size={15} color={colors.onSurface} />);
+    case "heat":
+      return slot(
+        <View style={{ flexDirection: "row", gap: 2 }}>
+          {([1, 4, 8] as HeatLevel[]).map((l) => (
+            <View key={l} style={{ width: 7, height: 10, borderRadius: 2, backgroundColor: heatColor(l, isDark) }} />
+          ))}
+        </View>,
+        { paddingTop: 5 },
+      );
+    case "eventDot":
+      return slot(<View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: spaceTextColor("custom", isDark) ?? CUSTOM_EVENT_COLOR }} />, { paddingTop: 6 });
+    case "lateDot":
+      return slot(<View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.error }} />, { paddingTop: 6 });
+    // Buget: a jar's color chip (lib/budget/plan.ts jarFill).
+    case "jarNeeds":
+    case "jarGuiltFree":
+    case "jarThird":
+    case "jarSaving": {
+      const key: SplitKey = glyph === "jarNeeds" ? "needs" : glyph === "jarGuiltFree" ? "guilt_free" : glyph === "jarThird" ? "third" : "short_term";
+      return slot(<View style={{ width: 16, height: 8, borderRadius: 4, backgroundColor: jarFill(key, colors, isDark), opacity: key === "needs" ? 0.85 : 1 }} />, { paddingTop: 6 });
+    }
+    // Buget: the three parts of a space's BudgetSplitBar.
+    case "barSpent":
+      return slot(<BudgetSplitBar style={{ width: 24 }} recorded={1} upcoming={0} limit={1} color={colors.success} />, { paddingTop: 7 });
+    case "barHatched":
+      return slot(<BudgetSplitBar style={{ width: 24 }} recorded={0} upcoming={1} limit={1} color={SPACE_IDENTITY_COLORS.home!} />, { paddingTop: 7 });
+    case "barLine":
+      return slot(<BudgetSplitBar style={{ width: 24 }} recorded={0.5} upcoming={0.5} limit={0.7} color={colors.success} upcomingColor={SPACE_IDENTITY_COLORS.home!} />, { paddingTop: 7 });
+    case "repeat":
+      return circle(<Ionicons name="repeat" size={15} color={colors.onSurface} />);
+    case "savings":
+      return circle(<Ionicons name="flag-outline" size={15} color={colors.success} />);
+    // Mașină: the same icons the car screen uses, in the car's color.
+    case "odometer":
+    case "fuel":
+    case "service":
+    case "expense":
+    case "document":
+    case "archive":
+    case "history":
+      return circle(<Ionicons name={CAR_GLYPH_ICONS[glyph]} size={15} color={spaceTextColor("car", isDark) ?? SPACE_IDENTITY_COLORS.car} />);
     default:
       return slot(null);
   }
 }
 
 /* ---------------- illustrations ---------------- */
+
+// Buget's default split, same words as its onboarding card.
+const JAR_LEGEND: [string, string][] = [
+  [`${DEFAULT_SPLIT.needs}%`, "necesități"],
+  [`${DEFAULT_SPLIT.guilt_free}%`, "bani fără vină"],
+  [`${DEFAULT_SPLIT.third}%`, "investiții sau credit"],
+  [`${DEFAULT_SPLIT.short_term}%`, "termen scurt"],
+  [`${DEFAULT_SPLIT.long_term}%`, "termen lung"],
+];
 
 function Illustration({ kind }: { kind: TourIllustration }) {
   const { colors, isDark } = useTheme();
@@ -547,6 +637,193 @@ function Illustration({ kind }: { kind: TourIllustration }) {
             ]}
           />
           <Text style={{ flex: 1, fontSize: 13, color: colors.onSurfaceTertiary }}>Cardul „Cheltuit” de pe Acasă</Text>
+        </View>
+      );
+    case "heatDays": {
+      // A week of the Calendar grid: heat by load, a green event dot, a
+      // past day with a red "restant" dot.
+      const days: { n: number; level: HeatLevel; past?: boolean; event?: boolean; late?: boolean }[] = [
+        { n: 6, level: 0, past: true, late: true },
+        { n: 7, level: 0 },
+        { n: 8, level: 1 },
+        { n: 9, level: 3, event: true },
+        { n: 10, level: 0 },
+        { n: 11, level: 6 },
+        { n: 12, level: 2 },
+      ];
+      const eventDot = spaceTextColor("custom", isDark) ?? CUSTOM_EVENT_COLOR;
+      return (
+        <View {...hidden} style={{ flexDirection: "row", justifyContent: "space-between" }}>
+          {days.map((d) => (
+            <View key={d.n} style={{ alignItems: "center", gap: 3 }}>
+              <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: d.level ? heatColor(d.level, isDark) : colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ fontSize: 13, color: d.past ? colors.onSurfaceTertiary : colors.onSurface }}>{d.n}</Text>
+              </View>
+              <View style={{ flexDirection: "row", gap: 3, height: 5 }}>
+                {d.event ? <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: eventDot }} /> : null}
+                {d.late ? <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: colors.error }} /> : null}
+              </View>
+            </View>
+          ))}
+        </View>
+      );
+    }
+    case "swipeRow":
+      // A "De rezolvat" row with the two swipe directions under it.
+      return (
+        <View {...hidden} style={{ gap: 6 }}>
+          <View style={{ height: 44, borderRadius: 12, backgroundColor: colors.surfaceTertiary, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12 }}>
+            <Ionicons name="repeat" size={16} color={spaceTextColor("home", isDark) ?? SPACE_IDENTITY_COLORS.home} />
+            <Text style={{ flex: 1, fontSize: 13, color: colors.onSurface }} numberOfLines={1}>Factură curent</Text>
+            <Text style={{ fontSize: 13, color: colors.onSurfaceSecondary }}>azi</Text>
+          </View>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 4 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Ionicons name="arrow-forward" size={13} color={colors.success} />
+              <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>rezolvă</Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>șterge</Text>
+              <Ionicons name="arrow-back" size={13} color={colors.error} />
+            </View>
+          </View>
+        </View>
+      );
+    case "eventChip": {
+      const tint = spaceTextColor("custom", isDark) ?? CUSTOM_EVENT_COLOR;
+      return (
+        <View {...hidden} style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 }}>
+          <View style={{ height: 32, paddingHorizontal: 12, borderRadius: 16, backgroundColor: CUSTOM_EVENT_COLOR, flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <Ionicons name="add" size={15} color={readableOn(CUSTOM_EVENT_COLOR)} />
+            <Text style={{ fontSize: 13, fontWeight: "500", color: readableOn(CUSTOM_EVENT_COLOR) }}>Eveniment</Text>
+          </View>
+          <View style={{ height: 32, paddingHorizontal: 12, borderRadius: 16, backgroundColor: hexToRgba(CUSTOM_EVENT_COLOR, 0.16), flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Ionicons name="sparkles-outline" size={15} color={tint} />
+            <Text style={{ fontSize: 13, fontWeight: "500", color: tint }}>Ziua Anei · 09:00</Text>
+          </View>
+        </View>
+      );
+    }
+    case "jarBar":
+      // The default 55 / 5 / 10 / 15 / 15 split, like the onboarding card.
+      return (
+        <View {...hidden} style={{ gap: 8 }}>
+          <View style={{ flexDirection: "row", gap: 2, height: 10 }}>
+            {JAR_ORDER.map((k) => (
+              <View key={k} style={{ flex: DEFAULT_SPLIT[k], borderRadius: 5, backgroundColor: jarFill(k, colors, isDark), opacity: k === "needs" ? 0.85 : 1 }} />
+            ))}
+          </View>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: 2 }}>
+            {JAR_LEGEND.map(([p, t]) => (
+              <Text key={t} style={{ width: "50%", fontSize: 12, color: colors.onSurfaceTertiary }}>
+                <Text style={{ fontWeight: "600", color: colors.onSurface }}>{p}</Text> {t}
+              </Text>
+            ))}
+          </View>
+        </View>
+      );
+    case "splitBar": {
+      // One "Necesități pe spații" row: spent + hatched past the budget line.
+      const home = SPACE_IDENTITY_COLORS.home!;
+      return (
+        <View {...hidden} style={{ borderRadius: 12, backgroundColor: colors.surfaceTertiary, paddingHorizontal: 12, paddingVertical: 10, gap: 8 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: hexToRgba(home, 0.16), alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="home-outline" size={14} color={spaceTextColor("home", isDark) ?? home} />
+            </View>
+            <Text style={{ flex: 1, fontSize: 13, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>
+              {SPACE_KIND_LABEL.home}
+              <Text style={{ fontWeight: "400", color: colors.onSurfaceTertiary }}> · 40%</Text>
+            </Text>
+            <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>
+              <Text style={{ fontWeight: "600", color: colors.onSurface }}>300</Text> + 250 / 500 lei
+            </Text>
+          </View>
+          <BudgetSplitBar style={{ marginLeft: 38 }} recorded={300} upcoming={250} limit={500} color={colors.success} upcomingColor={home} />
+        </View>
+      );
+    }
+    case "carHero":
+      // Mașină's top card, in small: the odometer, then two stats.
+      return (
+        <View {...hidden} style={{ borderRadius: 12, backgroundColor: colors.surfaceTertiary, paddingHorizontal: 12, paddingVertical: 10, gap: 8 }}>
+          <View style={{ gap: 1 }}>
+            <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>Kilometraj</Text>
+            <Text style={{ fontSize: 20, fontWeight: "600", color: colors.onSurface }}>
+              124.300 <Text style={{ fontSize: 13, fontWeight: "400", color: colors.onSurfaceTertiary }}>km</Text>
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 8 }}>
+            {[
+              ["Luna asta", "620 lei"],
+              ["Consum mediu", "6,4 l/100"],
+            ].map(([k, v]) => (
+              <View key={k} style={{ flex: 1, gap: 1 }}>
+                <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>{k}</Text>
+                <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurface }}>{v}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      );
+    case "carActions": {
+      const fill = SPACE_IDENTITY_COLORS.car!;
+      const tint = spaceTextColor("car", isDark) ?? fill;
+      return (
+        <View {...hidden} style={{ flexDirection: "row", justifyContent: "space-between" }}>
+          {CAR_ACTIONS.map((a) => (
+            <View key={a.label} style={{ flex: 1, alignItems: "center", gap: 4 }}>
+              <View style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: hexToRgba(fill, 0.16), alignItems: "center", justifyContent: "center" }}>
+                <Ionicons name={a.icon} size={18} color={tint} />
+              </View>
+              <Text style={{ fontSize: 11, color: colors.onSurfaceSecondary }} numberOfLines={1}>{a.label}</Text>
+            </View>
+          ))}
+        </View>
+      );
+    }
+    case "carNext": {
+      // One "Urmează" row: a document expiring soon, its chip, the swipe.
+      const fill = SPACE_IDENTITY_COLORS.car!;
+      const tone = colors.warning;
+      return (
+        <View {...hidden} style={{ gap: 6 }}>
+          <View style={{ height: 48, borderRadius: 12, backgroundColor: colors.surfaceTertiary, flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12 }}>
+            <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: hexToRgba(fill, 0.16), alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="document-text-outline" size={14} color={spaceTextColor("car", isDark) ?? fill} />
+            </View>
+            <Text style={{ flex: 1, fontSize: 13, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>RCA</Text>
+            <View style={{ height: 24, paddingHorizontal: 8, borderRadius: 12, backgroundColor: hexToRgba(tone, 0.18), justifyContent: "center" }}>
+              <Text style={{ fontSize: 12, fontWeight: "500", color: tone }}>în 20 de zile</Text>
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 4 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Ionicons name="arrow-forward" size={13} color={colors.success} />
+              <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>reînnoiește</Text>
+            </View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+              <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>șterge</Text>
+              <Ionicons name="arrow-back" size={13} color={colors.error} />
+            </View>
+          </View>
+        </View>
+      );
+    }
+    case "carPages":
+      // The three pills under the car's name.
+      return (
+        <View {...hidden} style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+          {([
+            ["Documente", "document-text-outline"],
+            ["Arhivă", "archive-outline"],
+            ["Istoric", "time-outline"],
+          ] as [string, keyof typeof Ionicons.glyphMap][]).map(([label, icon]) => (
+            <View key={label} style={{ height: 32, paddingHorizontal: 10, borderRadius: 16, backgroundColor: colors.surfaceTertiary, flexDirection: "row", alignItems: "center", gap: 5 }}>
+              <Ionicons name={icon} size={13} color={colors.onSurfaceTertiary} />
+              <Text style={{ fontSize: 12, fontWeight: "500", color: colors.onSurface }}>{label}</Text>
+            </View>
+          ))}
         </View>
       );
     case "spaceDots":

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\CarProfile;
 use App\Models\Item;
 use App\Services\EventSpend;
 use App\Services\RecurrenceProjector;
@@ -92,13 +93,13 @@ class CalendarController extends Controller
         $plainItems = (clone $plainItemsBase)
             ->where('type', '!=', 'car_document')
             ->whereBetween('due_at', [$startUtc, $endUtc])
-            ->with('space:id,name,icon,type')
+            ->with('space:id,name,icon,type,color')
             ->get()
             ->merge(
                 (clone $plainItemsBase)
                     ->where('type', 'car_document')
                     ->whereNotNull('due_at')
-                    ->with('space:id,name,icon,type')
+                    ->with('space:id,name,icon,type,color')
                     ->get()
                     ->map(function (Item $item) use ($userTz) {
                         $item->due_at = $item->effectiveDueAt($userTz);
@@ -115,7 +116,7 @@ class CalendarController extends Controller
                     ->where('type', 'home_maintenance')
                     ->whereNull('recurrence')
                     ->whereNotIn('status', Item::CLOSED_STATUSES)
-                    ->with('space:id,name,icon,type')
+                    ->with('space:id,name,icon,type,color')
                     ->get()
                     ->map(function (Item $item) {
                         $next = $item->maintenanceNextDue();
@@ -137,7 +138,7 @@ class CalendarController extends Controller
                 Item::visibleTo($user)
                     ->where('type', 'home_document')
                     ->whereNotIn('status', Item::CLOSED_STATUSES)
-                    ->with('space:id,name,icon,type')
+                    ->with('space:id,name,icon,type,color')
                     ->get()
                     ->map(function (Item $item) use ($userTz) {
                         $expiry = $item->metadata['expiryDate'] ?? null;
@@ -162,7 +163,7 @@ class CalendarController extends Controller
             ->whereNotNull('recurrence')
             ->whereNotNull('due_at')
             ->whereNotIn('status', Item::CLOSED_STATUSES)
-            ->with('space:id,name,icon,type')
+            ->with('space:id,name,icon,type,color')
             ->get();
 
         $days = [];
@@ -205,7 +206,7 @@ class CalendarController extends Controller
             ->where('type', Item::CREDIT_TYPE)
             ->whereNotIn('status', Item::CLOSED_STATUSES)
             ->whereNotNull('due_at')
-            ->with('space:id,name,icon,type')
+            ->with('space:id,name,icon,type,color')
             ->get();
         foreach ($credits as $credit) {
             $last = $credit->creditEndDate($userTz);
@@ -278,19 +279,7 @@ class CalendarController extends Controller
      */
     private static function projectionAnchor(Item $item): Item
     {
-        $next = $item->metadata['nextDueDate'] ?? null;
-        if ($item->type !== 'home_maintenance' || !is_string($next) || $next === '') {
-            return $item;
-        }
-        try {
-            $anchor = clone $item;
-            // App zone before assigning: the datetime cast drops the zone.
-            $anchor->due_at = Carbon::parse($next)->setTimezone(config('app.timezone'));
-
-            return $anchor;
-        } catch (\Exception $e) {
-            return $item;
-        }
+        return RecurrenceProjector::projectionAnchor($item);
     }
 
     /**
@@ -308,7 +297,7 @@ class CalendarController extends Controller
         $entries = Item::visibleTo($user)
             ->where('type', 'car_maintenance')
             ->whereNotIn('status', Item::CLOSED_STATUSES)
-            ->with('space:id,name,icon,type')
+            ->with('space:id,name,icon,type,color')
             ->get();
         if ($entries->isEmpty()) {
             return collect();
@@ -322,7 +311,7 @@ class CalendarController extends Controller
             return !$entries->contains(fn (Item $o) => $o->id !== $e->id
                 && $o->space_id === $e->space_id
                 && $o->title === $e->title
-                && $o->due_at && $e->due_at && $o->due_at->gt($e->due_at));
+                && Item::isNewerVisit($o, $e));
         });
 
         $odometer = Item::visibleTo($user)
@@ -331,6 +320,7 @@ class CalendarController extends Controller
             ->get(['space_id', 'metadata'])
             ->groupBy('space_id')
             ->map(fn ($rows) => $rows->max(fn ($r) => (float) ($r->metadata['odometer'] ?? 0)));
+        $odometer = CarProfile::withManualOdometers($odometer, $live->pluck('space_id'));
 
         return $live
             ->map(function (Item $e) use ($userTz, $odometer) {

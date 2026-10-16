@@ -5,6 +5,9 @@ namespace App\Services\SocialAuth;
 use App\Models\Role;
 use App\Models\SocialAccount;
 use App\Models\User;
+use Illuminate\Database\DeadlockException;
+use Illuminate\Database\DetectsConcurrencyErrors;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -36,11 +39,16 @@ use Illuminate\Support\Str;
  * NOT NULL) and has_password=false: email+password login fails with the
  * usual "credentials incorrect" until they set one (POST
  * /profile/password/set, or forgot-password). social_accounts.email_verified
- * records whether the provider vouched for the email; unverified links are
- * dropped when the user later proves an address (dropUnverifiedLinks).
+ * records whether the provider vouched for the email; created_account
+ * whether that sign-in created the user. When the user later proves an
+ * address (settleLinksAfterAddressProven), an unverified link that created
+ * the account and carries that same address is promoted to verified (it's
+ * the owner's own sign-in method); every other unverified link is dropped.
  */
 class SocialAuthService
 {
+    use DetectsConcurrencyErrors;
+
     public const STATE_TTL_SECONDS = 600;
     public const CODE_TTL_SECONDS = 120;
 
@@ -64,16 +72,27 @@ class SocialAuthService
             $email = null;
         }
 
-        $attempt = fn () => DB::transaction(
-            fn () => $this->resolveInTransaction($provider, $providerUserId, $email, $emailVerified, $name)
-        );
-
-        try {
-            return $attempt();
-        } catch (UniqueConstraintViolationException $e) {
-            // Two first sign-ins raced (double tap, retried request): the
-            // other one created the user / link first. The retry finds it.
-            return $attempt();
+        // Two first sign-ins racing (double tap, retried request) either hit
+        // the unique index (the other one created the user / link first) or,
+        // on MySQL, deadlock (1213: gap locks from lockForUpdate on a row
+        // that doesn't exist yet). Either way the retry finds the winner's
+        // row. Retried here rather than via DB::transaction($cb, 3), which
+        // never retries when nested inside an outer transaction (Laravel
+        // then rethrows a DeadlockException, a PDOException, instead).
+        for ($try = 1; ; $try++) {
+            try {
+                return DB::transaction(
+                    fn () => $this->resolveInTransaction($provider, $providerUserId, $email, $emailVerified, $name)
+                );
+            } catch (UniqueConstraintViolationException $e) {
+                if ($try >= 2) {
+                    throw $e;
+                }
+            } catch (QueryException|DeadlockException $e) {
+                if ($try >= 3 || !$this->causedByConcurrencyError($e)) {
+                    throw $e;
+                }
+            }
         }
     }
 
@@ -102,14 +121,18 @@ class SocialAuthService
             // Only a provider-verified address may attach to an existing
             // account (never Facebook, never Google email_verified=false).
             if (!$emailVerified) {
-                throw new SocialAuthException('email_unverified_exists', 409);
+                // A social-only account (no password it knows) can't "sign
+                // in with email and password" -- point at the reset flow.
+                throw $existing->has_password
+                    ? new SocialAuthException('email_unverified_exists', 409)
+                    : SocialAuthException::unverifiedExistsWithoutPassword();
             }
 
             if ($existing->email_verified_at === null) {
                 $this->evictUnprovenOwner($existing);
             }
 
-            $this->link($existing, $provider, $providerUserId, $email, true);
+            $this->link($existing, $provider, $providerUserId, $email, true, false);
 
             return [$existing, false];
         }
@@ -127,7 +150,7 @@ class SocialAuthService
             $user->roles()->attach($role->id);
         }
 
-        $this->link($user, $provider, $providerUserId, $email, $emailVerified);
+        $this->link($user, $provider, $providerUserId, $email, $emailVerified, true);
 
         return [$user, true];
     }
@@ -152,16 +175,42 @@ class SocialAuthService
         ])->save();
     }
 
-    /** Call whenever a user proves an address by other means (reset
-     * password, verify email, confirm email change): social links made
-     * from an UNVERIFIED provider email no longer get to keep the
-     * account. */
+    /** Every unverified social link loses the account -- used by the
+     * pre-takeover eviction, where the account itself was never proven. */
     public static function dropUnverifiedLinks(User $user): void
     {
         SocialAccount::where('user_id', $user->id)->where('email_verified', false)->delete();
     }
 
-    private function link(User $user, string $provider, string $providerUserId, ?string $email, bool $emailVerified): void
+    /** Call whenever a user proves an address by other means (reset
+     * password, verify email, confirm email change; $provenEmail = the
+     * address just proven). An unverified link that CREATED this account
+     * and carries exactly that address is the owner's own sign-in method
+     * (e.g. a Facebook-created user verifying their email) -> mark it
+     * verified. Every other unverified link (other address, or one that
+     * didn't create the account) no longer gets to keep the account.
+     *
+     * Known limit (same class as verify-email not revoking the registrant,
+     * see backend/CLAUDE.md): if someone else created the account through
+     * an unverified Facebook email and the real owner of the address then
+     * proves it, the creator's link is kept too. */
+    public static function settleLinksAfterAddressProven(User $user, string $provenEmail): void
+    {
+        $provenEmail = Str::lower(trim($provenEmail));
+
+        SocialAccount::where('user_id', $user->id)
+            ->where('email_verified', false)
+            ->get()
+            ->each(function (SocialAccount $link) use ($provenEmail) {
+                if ($link->created_account && $link->email !== null && Str::lower($link->email) === $provenEmail) {
+                    $link->update(['email_verified' => true]);
+                } else {
+                    $link->delete();
+                }
+            });
+    }
+
+    private function link(User $user, string $provider, string $providerUserId, ?string $email, bool $emailVerified, bool $createdAccount): void
     {
         SocialAccount::create([
             'user_id' => $user->id,
@@ -169,6 +218,7 @@ class SocialAuthService
             'provider_user_id' => $providerUserId,
             'email' => $email,
             'email_verified' => $emailVerified,
+            'created_account' => $createdAccount,
         ]);
     }
 

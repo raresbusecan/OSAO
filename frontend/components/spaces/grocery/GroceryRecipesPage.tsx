@@ -3,7 +3,7 @@ import { View, Text, ScrollView, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
-import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { TopBar, Identity, Segmented, Pill, SectionHeader, Button, EmptyState } from "@/components/ui/primitives";
@@ -357,7 +357,8 @@ export function GroceryRecipesPage({
     });
   };
 
-  const GROC = SPACE_IDENTITY_COLORS.grocery!;
+  const groc = useSpaceColors("grocery");
+  const GROC = groc.color;
   const muted = colors.onSurfaceTertiary;
   const targetList = lists.find((list) => list.id === targetListId);
 
@@ -432,7 +433,7 @@ export function GroceryRecipesPage({
             const selected = targetListId === list.id;
             const canDelete = selected && canManageList(list);
             return (
-              <View key={list.id} style={{ flexDirection: "row", alignItems: "center", borderRadius: radius.pill, backgroundColor: selected ? GROC : colors.surfaceSecondary, paddingRight: canDelete ? spacing.sm : 0 }}>
+              <View key={list.id} style={{ flexDirection: "row", alignItems: "center", borderRadius: radius.pill, backgroundColor: selected ? groc.fill : colors.surfaceSecondary, paddingRight: canDelete ? spacing.sm : 0 }}>
                 <Pressable
                   testID={`grocery-recipes-target-${list.id}`}
                   onPress={() => setTargetListId(list.id)}
@@ -440,7 +441,7 @@ export function GroceryRecipesPage({
                   accessibilityState={{ selected }}
                   style={{ height: 40, paddingLeft: spacing.md + 2, paddingRight: canDelete ? spacing.xs : spacing.md + 2, justifyContent: "center" }}
                 >
-                  <Text style={{ fontSize: 13, fontWeight: selected ? "600" : "500", color: selected ? SPACE_ON_FILL.grocery : colors.onSurface }}>{list.name}</Text>
+                  <Text style={{ fontSize: 13, fontWeight: selected ? "600" : "500", color: selected ? groc.ink : colors.onSurface }}>{list.name}</Text>
                 </Pressable>
                 {canDelete ? (
                   <Pressable
@@ -451,7 +452,7 @@ export function GroceryRecipesPage({
                     accessibilityLabel={`Șterge lista ${list.name}`}
                     style={{ width: 24, height: 24, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(26,18,6,0.12)" }}
                   >
-                    <Ionicons name="close" size={14} color={SPACE_ON_FILL.grocery} />
+                    <Ionicons name="close" size={14} color={groc.ink} />
                   </Pressable>
                 ) : null}
               </View>
@@ -471,7 +472,7 @@ export function GroceryRecipesPage({
                 testID="grocery-recipes-add-selected"
                 icon="cart-outline"
                 label={`Pune pe listă (${selectedRecipeIds.size})`}
-                tone={SPACE_BUTTON_FILL.grocery}
+                tone={groc.fill}
                 onPress={handleAddSelectedRecipes}
                 disabled={!targetListId}
               />
@@ -542,7 +543,7 @@ export function GroceryRecipesPage({
                         borderColor: colors.control,
                       }}
                     >
-                      {checked ? <Ionicons name="checkmark" size={16} color={SPACE_ON_FILL.grocery} /> : null}
+                      {checked ? <Ionicons name="checkmark" size={16} color={groc.ink} /> : null}
                     </Pressable>
                   </View>
 

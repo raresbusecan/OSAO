@@ -2,7 +2,7 @@ import React, { useMemo } from "react";
 import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
 import { Group, IconWell, SectionHeader, EmptyState } from "@/components/ui/primitives";
 import { GuiltFreeChip } from "@/components/dashboard/GuiltFree";
@@ -27,8 +27,9 @@ export type ExpensesListSectionProps = {
  * read-only ("din Calendar", no swipe); a planned one shows muted and
  * stays out of the month's total. */
 export function ExpensesListSection({ entries, onEntryPress, onEntryDelete, emptyMessage, emptyTitle }: ExpensesListSectionProps) {
-  const { colors, spacing, isDark } = useTheme();
-  const tint = spaceTextColor("expenses", isDark) ?? SPACE_IDENTITY_COLORS.expenses!;
+  const { colors, spacing } = useTheme();
+  const exp = useSpaceColors("expenses");
+  const tint = exp.tint;
 
   const groups = useMemo(() => {
     const sorted = [...entries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -66,7 +67,7 @@ export function ExpensesListSection({ entries, onEntryPress, onEntryDelete, empt
               <TitleChipRow
                 testID={`expense-row-${entry.id}`}
                 onPress={onEntryPress ? () => onEntryPress(entry) : undefined}
-                leading={<IconWell icon={entry.source === "calendar" ? "calendar-outline" : "receipt-outline"} color={SPACE_IDENTITY_COLORS.expenses!} tint={tint} />}
+                leading={<IconWell icon={entry.source === "calendar" ? "calendar-outline" : "receipt-outline"} color={exp.color} tint={tint} />}
                 title={entry.name}
                 chip={entry.guiltFree ? <GuiltFreeChip testID={`expense-row-${entry.id}-guilt-free`} /> : undefined}
                 subtitle={

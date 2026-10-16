@@ -3,7 +3,7 @@ import { View, Text, ScrollView, Pressable, DeviceEventEmitter, Animated } from 
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { CircleButton, TopBar, Identity, Button, InfoButton } from "@/components/ui/primitives";
 import { lei, roCount } from "@/lib/format";
 import { confirmAction, notifyAction } from "@/lib/confirm";
@@ -96,6 +96,7 @@ export default function GroceryDashboard({
   onItemsChange,
 }: GroceryDashboardProps) {
   const { colors, spacing, radius } = useTheme();
+  const groceryFill = useSpaceColors("grocery").color;
   const { user } = useAuth();
   const router = useRouter();
   // Wider than the old 2-column wrap's 48% (~half the screen) -- a
@@ -785,7 +786,6 @@ export default function GroceryDashboard({
     setHomeEditingItem(null);
   };
 
-  const groceryFill = SPACE_IDENTITY_COLORS.grocery!;
   const muted = colors.onSurfaceTertiary;
   const activeTotal = toBuyTotal + inCartTotal;
   const activePriced = activeListItems.filter((item) => item.price != null);
@@ -1042,7 +1042,8 @@ function ListPill({
   isShared: boolean;
 }) {
   const { colors, spacing, radius } = useTheme();
-  const fg = active ? SPACE_ON_FILL.grocery! : colors.onSurface;
+  const groc = useSpaceColors("grocery");
+  const fg = active ? groc.ink : colors.onSurface;
 
   return (
     // Pill body and its "x" are siblings, not nested -- a button inside
@@ -1051,7 +1052,7 @@ function ListPill({
       style={{
         height: 40,
         borderRadius: radius.pill,
-        backgroundColor: active ? SPACE_IDENTITY_COLORS.grocery : colors.surfaceSecondary,
+        backgroundColor: active ? groc.fill : colors.surfaceSecondary, // ink is contrast-checked on fill, not on color
         flexDirection: "row",
         alignItems: "center",
         paddingRight: active && canManage ? spacing.sm : 0,

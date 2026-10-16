@@ -4,7 +4,7 @@ import { parseDocDate } from "@/lib/dashboard/documentRenewal";
 import type { CarDocumentEntry } from "@/lib/spaces/car/car.types";
 import { ScrollView } from "react-native";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { TopBar, Identity, Group, Row, IconWell, Chip, EmptyState } from "@/components/ui/primitives";
 import { roCount } from "@/lib/format";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
@@ -61,7 +61,7 @@ function validityLabel(issue?: string, expiry?: string): string | null {
 }
 
 export function CarDocsPage({ carData, onBack, onRecordPress, onRenew, onDelete }: CarDocsPageProps) {
-  const { colors, spacing, isDark } = useTheme();
+  const { colors, spacing } = useTheme();
 
   const documents = useMemo(() => {
     return carData.documentEntries
@@ -72,8 +72,9 @@ export function CarDocsPage({ carData, onBack, onRecordPress, onRenew, onDelete 
       .sort((a, b) => (parseDocDate(a.expiryDate)?.getTime() ?? Infinity) - (parseDocDate(b.expiryDate)?.getTime() ?? Infinity));
   }, [carData.documentEntries]);
 
-  const CAR = SPACE_IDENTITY_COLORS.car!;
-  const tint = spaceTextColor("car", isDark) ?? CAR;
+  const carColors = useSpaceColors("car");
+  const CAR = carColors.color;
+  const tint = carColors.tint;
 
   return (
     <SwipeBackView onBack={onBack}>

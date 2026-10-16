@@ -5,6 +5,19 @@ is one polymorphic `items` table — read `app/Models/Item.php`'s own
 doc comments before touching anything budget/dashboard/calendar
 related, they're extensive and current.
 
+## Language (2026-10-15)
+
+`config app.locale` = **ro** (`APP_LOCALE=ro`), fallback en. Every API
+request runs `App\Http\Middleware\SetLocale` (prepended to the api group in
+`bootstrap/app.php`): `Accept-Language` ro|en (the app sends it, frontend
+lib/i18n), anything else -> ro. Validation messages: `lang/ro/validation.php`
+(full Romanian set + readable `attributes`: amount -> "sumă", due_at ->
+"dată") and `lang/en/validation.php` (published defaults). Controller
+messages are still hard-coded Romanian strings -- wrap them in `__()` with
+lang/en entries when translating. Notifications/emails render in `ro`
+explicitly. Test: `tests/Feature/LocaleTest.php` (Symfony's test request
+defaults to `en-us`: send an empty Accept-Language for "no preference").
+
 ## Controllers (`app/Http/Controllers/Api/`)
 
 - `AuthController.php` — register/login/logout/user. `/register` and
@@ -83,12 +96,29 @@ related, they're extensive and current.
   tokens, `email_change_requests`, `password_reset_tokens`,
   verification tokens and unverified links (pre-account-takeover guard).
   Unverified email matching a user -> 409 `email_unverified_exists`
-  (never links); no email -> 422 `email_missing`; else create (random
+  (never links; when that account has no password, the message adds
+  "sau folosește „Ai uitat parola?”" and the response carries `hint:
+  "no_password"` -- JSON body, or `&hint=no_password` on the web flow's
+  deep link); no email -> 422 `email_missing`; else create (random
   password, has_password=false, verified iff the provider says so,
-  `user` role). Proving an address later (reset-password, verify-email,
-  confirm-email success) deletes the user's `email_verified=false`
-  links (`SocialAuthService::dropUnverifiedLinks`). A first-sign-in race
-  (unique violation) retries the lookup once instead of 500ing.
+  `user` role, link `created_account=true`). Proving an address later
+  (reset-password, verify-email, confirm-email success) runs
+  `SocialAuthService::settleLinksAfterAddressProven($user, $address)`:
+  an `email_verified=false` link with `created_account=true` whose
+  email equals the address just proven is PROMOTED to verified (a
+  Facebook-created user who verifies / resets keeps Facebook sign-in);
+  every other unverified link is deleted. The pre-takeover eviction
+  still uses `dropUnverifiedLinks` (deletes all unverified links, no
+  promotion). Known limits, standard email-verification class (NEW-2,
+  not changed on purpose): verify-email doesn't revoke the registrant's
+  tokens/password, and a promoted creator link stays -- so whoever
+  created an account with someone else's address (password register, or
+  an unverified Facebook email) keeps access if the real owner later
+  clicks "confirm" / resets instead of ignoring the mail. Only a
+  provider-VERIFIED sign-in (eviction) or a password reset (password +
+  tokens; not the promoted link) cuts them off. First-sign-in race: a
+  unique violation retries once, a concurrency error (MySQL 1213
+  deadlock / lock wait) up to 3 attempts, instead of 500ing.
   `POST /profile/password/set` {password, password_confirmation} (auth)
   only when has_password=false (else 409 `password_already_set`);
   resetPassword/updatePassword also set has_password=true;
@@ -103,6 +133,13 @@ related, they're extensive and current.
   IP-keyed limiters (DB cache, everyone is 127.0.0.1) aren't burned.
 - `SpaceController.php` — CRUD on `spaces`, car-profile/home-profile
   sub-updates, space membership (`members`/`addMember`/`removeMember`).
+  **Colour (2026-10-09):** `store`/`update` take `color` = one of
+  `Space::PALETTE_KEYS` (the frontend's SPACE_PALETTE keys, keep in sync)
+  or null (= the kind's default); anything else -> Romanian 422
+  (`Space::COLOR_MESSAGE`). Older rows may still hold a hex, which the
+  frontend ignores. Every `with('space:...')` in Dashboard/Calendar/Budget
+  loads `id,name,icon,type,color` so rows outside the space can show its
+  colour. Tests: `tests/Feature/SpaceColorTest.php`.
   `destroy` cascade-deletes the space's own items too (as of the
   2026-09-29 QA-sweep fix) — `items.space_id` is `cascadeOnDelete`,
   matching `car_profiles`/`home_profiles`/`space_members`.
@@ -122,6 +159,19 @@ related, they're extensive and current.
   `car-profile`/`home-profile` endpoints (edits) and `store` share
   `App\Support\SpaceProfileRules` (rules + Romanian messages).
   Tests: `tests/Feature/SpaceCreditTest.php`.
+  **Odometer (2026-10-09):** `PUT /spaces/{id}/car-profile/odometer`
+  {odometer} (`updateCarOdometer`; owner OR member via `accessibleBy`;
+  404 = not accessible / not a car; 422 = no car profile yet). Whole km,
+  1..`CarProfile::ODOMETER_MAX` (2.000.000), and >=
+  `CarProfile::loggedOdometer($spaceId)` = highest `metadata.odometer` on
+  the space's `car_fuel`/`car_maintenance`/`car_expense` items (all
+  members', archived included, rounded up) -- Romanian 422 naming that
+  minimum. Stamps `odometer_updated_at` only when the value changes.
+  Answers `{message, profile, logged_odometer}`. The full car-profile PUT
+  never touches these two columns. Every server-side "current odometer"
+  (Dashboard `carServiceDue` + `carSummaries`, Calendar
+  `carServicesBetween`) = max(logged, manual) via
+  `CarProfile::withManualOdometers`. Tests: `tests/Feature/CarOdometerTest.php`.
 - `ItemController.php` — the workhorse. `index`/`store`/`show`/
   `update`/`destroy` (apiResource) + `myGrocery` (cross-space grocery
   lists visible to the user) + item-level `members`. `update` already
@@ -210,6 +260,17 @@ related, they're extensive and current.
   Cheltuieli space's "din Calendar" rows). `home_recurring` is deliberately
   excluded — it's summed separately via `RECURRING_TYPE_SPACE` as a
   flat monthly-equivalent, not a due_at-dated transaction.
+  **`home_task` + `home_maintenance` are never summed by due_at either**
+  (2026-10-15): `app/Services/HomeSpend.php` counts them per
+  `metadata.spendHistory` event on the day it was paid (task = purchases
+  only; no history -> completed_at/due_at snapshot), mirroring the
+  frontend's `getHomeSpendRecords`. Every SQL spend sum excludes
+  `HomeSpend::TYPES` and adds `HomeSpend::total/payments` (Dashboard
+  `monthlyExpenses`, Budget's monthly sums, biggest, guilt-free, space
+  detail). Dashboard's `monthlyExpenses` also returns `billsPaid` (bill
+  spendHistory events this month) and `billsDue` (unpaid occurrences from
+  each bill's stored due_at to month end) -- outside `total`, read only by
+  Simplu's Acasă. Test: `tests/Feature/HomeSpendTest.php`.
 - `SPENDING_TYPE_SPACE` / `RECURRING_TYPE_SPACE` — which Space label/
   icon a type rolls up under, for Budget/Dashboard grouped totals.
 - `items.guilt_free` (bool, "Bani fără vină"): only allowed on
@@ -267,13 +328,49 @@ routes `GET /open/{screen}`, `GET /auth/{google|facebook}/redirect|callback`. Ev
 `apiResource('items', ...)` + `/items/{id}/members*`,
 `apiResource('recipes', ...)`, `/ingredient-references`, `/quick-add`.
 
+## Demo seed (`database/seeders/DemoSeeder.php`)
+
+`php artisan db:seed --class=DemoSeeder` (NOT in DatabaseSeeder's default run). It logs in as
+`demo@orgos.test` / `demo1234` ("Demo"), and creates `demo2@orgos.test` / `demo1234` ("Ana") for the sharing features.
+
+**Idempotent.** It first deletes ONLY those two users and everything they own:
+- their spaces, plus those spaces' items, profiles and members;
+- their own items, `list_members`, budget limits, archive, savings goal and recipes;
+- their tokens, social links, verification/reset/email-change rows, sessions and roles.
+
+Then it recreates them. Every date is relative to now in Europe/Bucharest, so a re-run months later is still meaningful. Amounts are fixed by `mt_srand`, so the same numbers come out on every run.
+
+**What it creates:**
+- **Spaces:** Volkswagen Golf (car), Apartament Cluj (home, `indigo`), Cumpărături, Cheltuieli (`sky`), Casa părinților (2nd home, inherited, `pink`). Ana's Renault Clio is shared to Demo via `space_members`, and Ana is a member of the apartment.
+- **Mașină:** 12 months of fill-ups with odometer + tank levels (consumption works), a manual odometer, and an oil change overdue by km. A revizie is due in 5 days by date. Also a multi-service visit, a warranty job (0 lei), a renewed battery (old one archived), RCA expiring in 6 days (old one archived), an expired open ITP, valid Rovinietă/CASCO, car expenses, and a "fără vină" record.
+- **Casă:** tasks of every kind:
+  - one-off with and without a date;
+  - overdue, today;
+  - daily/weekly/monthly recurring;
+  - purchase tasks, open and resolved, plus resolved ones in the archive.
+
+  Also bills (paid this month / restant / upcoming / weekly / yearly / a fără-vină Netflix), recurring and one-off maintenance (one restant, two completed), documents (expiring in 5 days, valid, expired), and supplies (3 estimated low, 3 ok, 1 with a single restock).
+- **Cumpărături:** 3 lists. "Lista săptămânală" has 24 items, 6 in the cart, and one linked to the Casă toilet-paper supply via `linkedSupplyId`. "Petrecere sâmbătă" is shared with Ana via `list_members`, and Ana added items to it. There is also a DIY list, plus Ana's own list. About 50 trips over a year, and one personal recipe.
+- **Cheltuieli:** a year of `expense_item`s, fără-vină ones, and credits: car (day 15), home (day 5), and one that ended 2 months ago.
+- **Calendar:** `custom_event`s: one-off today/overdue/upcoming, weekly/monthly/yearly, with and without a purchase, one done.
+- **Buget:**
+  - Income 10.000 with the default 55/5/10/15/15 split.
+  - Limits Car 1400 / Home 2200 (over this month) / Grocery 1900 / Expenses 0.
+  - Economii goal 6.240 / 15.000.
+  - 12 archived months: `archiveCompletedMonths` is called by reflection with a temporary placeholder row 13 months back, because the controller only bootstraps ONE month on its own.
+- **Acasă / tours:** `dashboard_layout` holds all 10 card kinds. `tours` stays null, so the first-use tours still show.
+
 ## Schema notes
 
 MySQL (`DB_DATABASE=lifeos`). `users` has `monthly_income`
 DECIMAL(12,2), `budget_split` JSON, `budget_plan_set_at` (all null = no
 plan) and `items` has `guilt_free` (migrations `2026_10_08_*`).
-`social_accounts` (`2026_10_08_000005`, `email_verified` in `_000006`) and
+`social_accounts` (`2026_10_08_000005`, `email_verified` in `_000006`,
+`created_account` in `2026_10_09_000001`, backfilled = link created within
+5s of its user) and
 `users.has_password` (`_000007`, default true) back social login.
+`car_profiles.odometer` (unsigned int, null = never typed) +
+`odometer_updated_at` (`2026_10_09_000002`): the km set on the Mașină top card.
 `users.tours` JSON (migration `2026_10_08_000004`, cast `array`): first-use
 tours seen; the migration marked `home` done (v1) for every then-existing
 user, so only accounts created after it get the Acasă tour automatically.

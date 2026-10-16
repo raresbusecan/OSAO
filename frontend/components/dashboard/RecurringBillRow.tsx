@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text } from "react-native";
 import { useTheme } from "@/lib/theme";
-import { CUSTOM_EVENT_COLOR, SPACE_IDENTITY_COLORS, detectSpaceType, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { CUSTOM_EVENT_COLOR, spaceColors, spaceTextColor } from "@/lib/spaces/spaceProfile";
 import { Group, IconWell, InfoButton, Row } from "@/components/ui/primitives";
 import { capitalize, daysFromToday, lei, roDate } from "@/lib/format";
 import { GuiltFreeChip } from "@/components/dashboard/GuiltFree";
@@ -122,9 +122,10 @@ export function RecurringBillRow({
   isCurrentDue?: boolean;
 }) {
   const { colors, isDark } = useTheme();
-  const kind = item.space ? detectSpaceType(item.space, null) : null;
-  const color = kind ? SPACE_IDENTITY_COLORS[kind] ?? colors.onSurfaceTertiary : CUSTOM_EVENT_COLOR;
-  const tint = spaceTextColor(kind ?? "custom", isDark) ?? color;
+  // That bill's own space colour (its pick, else its kind's default).
+  const own = item.space ? spaceColors(item.space, isDark) : null;
+  const color = item.space ? own?.color ?? colors.onSurfaceTertiary : CUSTOM_EVENT_COLOR;
+  const tint = item.space ? own?.tint ?? color : spaceTextColor("custom", isDark) ?? color;
   const freq = FREQUENCY_LABEL[item.recurrence] ?? item.recurrence;
   const isMaintenance = recurringKind(item) === "maintenance";
   const overdue = isCurrentDue && daysFromToday(item.due_at) < 0;

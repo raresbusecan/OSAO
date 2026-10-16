@@ -16,9 +16,9 @@ class SocialAccount extends Model
      * signs in natively instead (POST /api/auth/apple). */
     public const WEB_PROVIDERS = ['google', 'facebook'];
 
-    protected $fillable = ['user_id', 'provider', 'provider_user_id', 'email', 'email_verified'];
+    protected $fillable = ['user_id', 'provider', 'provider_user_id', 'email', 'email_verified', 'created_account'];
 
-    protected $casts = ['email_verified' => 'boolean'];
+    protected $casts = ['email_verified' => 'boolean', 'created_account' => 'boolean'];
 
     public function user(): BelongsTo
     {

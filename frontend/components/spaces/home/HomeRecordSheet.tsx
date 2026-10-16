@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_BUTTON_FILL, SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Group, Row } from "@/components/ui/primitives";
 import type { HomeRecordPreview } from "./homeRecordPreview";
@@ -37,7 +37,8 @@ export function HomeRecordSheet({
   onDelete: () => void;
 }) {
   const { colors, spacing } = useTheme();
-  const HOME = SPACE_IDENTITY_COLORS.home!;
+  const homeColors = useSpaceColors("home");
+  const HOME = homeColors.color;
   const toneColor = (tone: "error" | "warning" | "muted") => (tone === "error" ? colors.error : tone === "warning" ? colors.warning : colors.onSurfaceTertiary);
 
   const run = (fn: () => void) => {
@@ -90,7 +91,7 @@ export function HomeRecordSheet({
       footer={
         <>
           {resolve ? (
-            <Button testID="home-record-resolve" label={resolve.label} icon={resolve.icon} tone={SPACE_BUTTON_FILL.home} onPress={() => run(resolve.run)} />
+            <Button testID="home-record-resolve" label={resolve.label} icon={resolve.icon} tone={homeColors.fill} onPress={() => run(resolve.run)} />
           ) : null}
           <View style={{ flexDirection: "row", gap: spacing.sm }}>
             <View style={{ flex: 1 }}>

@@ -33,10 +33,21 @@ export function dueStatus(d: SpaceDue | undefined): { text: string; tone: "error
   return null;
 }
 
-/** Display title for a "De făcut" item -- car services are stored under
- * an English key ("Oil Change") and shown by their Romanian label. */
+/** Car document types stored as typed keys (CarDocumentForm /
+ * quickAdd's DOCUMENT_TYPES) -- a document saved without its own title
+ * carries the key as its title. */
+const DOCUMENT_TITLE_LABEL: Record<string, string> = { Tax: "Impozit", Rovinieta: "Rovinietă" };
+
+/** Display title for any record that may carry an English storage key as
+ * its title: a car service ("Oil Change" -> "Schimb ulei"), a fill-up
+ * saved without a station ("Fuel fill-up" -> "Alimentare"), a document
+ * titled by its type ("Tax" -> "Impozit"). Everything else as typed. Use it
+ * wherever a server row's title is shown (De făcut, Calendar, Buget). */
 export function todoTitle(item: { type: string; title: string }): string {
-  return item.type === "car_maintenance" ? maintenanceLabel(item.title) : item.title;
+  if (item.type === "car_maintenance") return maintenanceLabel(item.title);
+  if (item.type === "car_fuel" && (!item.title || item.title === "Fuel fill-up")) return "Alimentare";
+  if (item.type === "car_document") return DOCUMENT_TITLE_LABEL[item.title] ?? item.title;
+  return item.title;
 }
 
 /** A car service past its km threshold has no real date; the server

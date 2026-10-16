@@ -3,7 +3,7 @@ import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { Avatar } from "@/components/Avatar";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Group, Row, Chip, Field, Button } from "@/components/ui/primitives";
 import type { SpaceMember } from "@/lib/spaces/grocery/grocery.types";
@@ -76,7 +76,7 @@ export function SpaceMembersModal({ visible, onClose, isOwner, owner, members, o
     }
   };
 
-  const GROC = SPACE_IDENTITY_COLORS.grocery!;
+  const GROC = useSpaceColors("grocery").color;
   const people = [...(owner ? [{ ...owner, isOwner: true }] : []), ...members.map((m) => ({ ...m, isOwner: false }))];
 
   return (

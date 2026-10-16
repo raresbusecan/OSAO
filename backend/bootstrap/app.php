@@ -21,6 +21,10 @@ return Application::configure(basePath: dirname(__DIR__))
         // "application/json" (expectsJson() false), which throws
         // RouteNotFoundException -> a raw 500 instead of a clean 401.
         $middleware->redirectGuestsTo(null);
+
+        // Every API response in the app's language (Accept-Language: ro|en,
+        // default ro) -- public routes (login, forgot-password) included.
+        $middleware->api(prepend: [\App\Http\Middleware\SetLocale::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

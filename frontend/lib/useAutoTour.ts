@@ -1,6 +1,7 @@
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { useIsFocused } from "expo-router";
 import { useAuth } from "@/providers/auth";
+import { useAppMode } from "@/lib/appMode";
 import { isDialogOpen, subscribeDialog } from "@/lib/confirmHost";
 import { isHelpOpen, subscribeHelp } from "@/lib/help";
 import {
@@ -52,6 +53,9 @@ function subscribeGate(listener: () => void) {
  */
 export function useAutoTour(key: TourKey, { ready, ctx }: { ready: boolean; ctx: TourCtx }) {
   const { user } = useAuth();
+  // orgOS Simplu (lib/appMode.tsx) never auto-starts a tour -- the tours
+  // describe the full screens. An explicit replay (requestTour) still runs.
+  const { isSimple } = useAppMode();
   const focused = useIsFocused();
   const gate = useSyncExternalStore(subscribeGate, () => gateVersion, () => 0);
   const ctxRef = useRef(ctx);
@@ -63,6 +67,7 @@ export function useAutoTour(key: TourKey, { ready, ctx }: { ready: boolean; ctx:
     const requested = pendingTour() === key;
     const auto =
       !requested &&
+      !isSimple &&
       !seenOnServer &&
       !isSeenLocally(key) &&
       !(ONE_AUTO_TOUR_PER_SESSION && wasAutoTourShownThisSession());
@@ -77,5 +82,5 @@ export function useAutoTour(key: TourKey, { ready, ctx }: { ready: boolean; ctx:
     return () => clearTimeout(timer);
     // `gate` re-runs it whenever a dialog / help sheet / tour opens or closes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [!!user, seenOnServer, focused, ready, gate, key]);
+  }, [!!user, seenOnServer, focused, ready, gate, key, isSimple]);
 }

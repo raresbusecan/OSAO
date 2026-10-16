@@ -6,6 +6,7 @@ import { TopBar, Identity, SectionHeader, Group, Row, IconWell, EmptyState } fro
 import { SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, spaceTextColor } from "@/lib/spaces/spaceProfile";
 import { LABEL_KIND } from "@/lib/budget/plan";
 import { capitalize, lei, roDate, roNumber } from "@/lib/format";
+import { todoTitle } from "@/lib/dashboard/spaceDue";
 
 type GuiltFreeData = Awaited<ReturnType<typeof api.getGuiltFree>>;
 
@@ -106,7 +107,7 @@ export function GuiltFreePage({ percent, onBack }: { percent: number; onBack: ()
                       key={String(it.id)}
                       testID={`guilt-free-item-${it.id}`}
                       leading={<IconWell icon={it.type === "custom_event" ? "calendar-outline" : meta?.icon ?? "receipt-outline"} color={color} tint={tint} />}
-                      title={it.title.replace(/^Cumpărături -- /, "")}
+                      title={todoTitle(it).replace(/^Cumpărături -- /, "")}
                       subtitle={[when, spaceName].filter(Boolean).join(" · ")}
                       trailing={
                         <Text style={{ fontSize: 15, fontWeight: it.planned ? "400" : "600", color: it.planned ? colors.onSurfaceTertiary : colors.onSurface }}>

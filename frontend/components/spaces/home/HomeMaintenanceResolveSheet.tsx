@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { roDate } from "@/lib/format";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field } from "@/components/ui/primitives";
 
@@ -31,6 +31,7 @@ export type HomeMaintenanceResolveSheetProps = {
  */
 export function HomeMaintenanceResolveSheet({ entry, onCancel, onResolve }: HomeMaintenanceResolveSheetProps) {
   const { colors } = useTheme();
+  const homeColors = useSpaceColors("home");
   const [price, setPrice] = useState(entry.price ? String(entry.price) : "");
   const [error, setError] = useState("");
 
@@ -66,7 +67,7 @@ export function HomeMaintenanceResolveSheet({ entry, onCancel, onResolve }: Home
       subtitle={`Marchezi ca rezolvat. Cât a costat de data asta? Următoarea: ${nextDueLabel}.`}
       footer={
         <>
-          <Button label="Confirmă" tone={SPACE_BUTTON_FILL.home} onPress={handleResolve} />
+          <Button label="Confirmă" tone={homeColors.fill} onPress={handleResolve} />
           <Button testID="maintenance-resolve-free" variant="ghost" label="Fără cost" onPress={() => onResolve(null)} />
         </>
       }
@@ -82,7 +83,7 @@ export function HomeMaintenanceResolveSheet({ entry, onCancel, onResolve }: Home
         autoFocus
         big
         suffix="lei"
-        tone={SPACE_IDENTITY_COLORS.home}
+        tone={homeColors.color}
         error={error || null}
         hint="Intră în totalul lunii, separat de vizitele anterioare."
         accessibilityLabel="Preț plătit"

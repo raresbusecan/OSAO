@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, DeviceEventEmitter, Pressable } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import DraggableFlatList, { ScaleDecorator, type RenderItemParams } from "react-native-draggable-flatlist";
+import { ReorderHandle, ReorderList, type ReorderRenderParams } from "@/components/ui/ReorderList";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/providers/auth";
 import { api } from "@/lib/api";
@@ -17,15 +17,17 @@ import { overdueKmLabel } from "@/lib/dashboard/spaceDue";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { CircleButton, InfoButton, Pill } from "@/components/ui/primitives";
 import { VerifyEmailBanner } from "@/components/auth/VerifyEmailBanner";
+import { useAppMode } from "@/lib/appMode";
+import { SimpleHome } from "@/components/simple/SimpleHome";
 import { VerifiedBadge, emailVerifiedState } from "@/components/auth/VerifiedBadge";
 import { motion } from "@/lib/motion";
 import { confirmAction, notifyAction } from "@/lib/confirm";
 import { capitalize, daysFromToday, roCount, roDate, roRelativeDays } from "@/lib/format";
-import { LAYOUT_TEMPLATES, WIDGET_META, defaultLayout, sanitizeLayout, toRows, type Widget } from "@/lib/dashboard/layout";
+import { LAYOUT_TEMPLATES, WIDGET_META, defaultLayout, ensureSpendCard, sanitizeLayout, toRows, type Widget } from "@/lib/dashboard/layout";
 import { onlyEmptyDataHidesOthers, visibleWidgets } from "@/lib/dashboard/widgetVisibility";
 import { useTourScroll, useTourTarget } from "@/components/ui/tourTargets";
 import { useAutoTour } from "@/lib/useAutoTour";
-import { startTour, type TourCtx } from "@/lib/tours";
+import { SHOW_TOUR_TEST_BUTTON, startTour, type TourCtx } from "@/lib/tours";
 import {
   detectSpaceType,
   profileFromSpace,
@@ -34,10 +36,7 @@ import {
   type SpaceKind,
 } from "@/lib/spaces/spaceProfile";
 
-/** TEMP (testing, 2026-10-08): a "Pornește ghidul" pill under the header
- * that starts the Acasă tour on demand. Set to false (and delete the pill
- * below) once the tour has been tried on the phone. */
-const SHOW_TOUR_TEST_BUTTON = true;
+const widgetKey = (w: Widget) => w.id;
 
 function greeting(name?: string) {
   const h = new Date().getHours();
@@ -49,8 +48,8 @@ function greeting(name?: string) {
  * English label (Item::SPENDING_TYPE_SPACE), not a user-given name. */
 const SOURCE_KIND: Record<string, SpaceKind> = { Car: "car", Home: "home", Grocery: "grocery", Expenses: "expenses" };
 
-type ActionableItem = { id: number | string; type: string; title: string; due_at: string; overdue_km?: number | null; space: { id: number | string; name: string; icon: string } | null };
-type SpaceCard = { id: string; name: string; kind: SpaceKind };
+type ActionableItem = { id: number | string; type: string; title: string; due_at: string; overdue_km?: number | null; space: { id: number | string; name: string; icon: string; type?: string | null; color?: string | null } | null };
+type SpaceCard = { id: string; name: string; kind: SpaceKind; /** spaces.color (palette key or null) -- spaceColors() resolves it. */ color?: string | null };
 type Urgency = "overdue" | "today" | "upcoming";
 type TodoRow = ActionableItem & { urgency: Urgency; days: number };
 
@@ -62,7 +61,13 @@ type TodoRow = ActionableItem & { urgency: Urgency; days: number };
  * spot between/below the cards (the press lands on the screen, not on a
  * card -- a card keeps its own tap). Mockup: "orgOS Acasă personalizabil".
  */
-export default function Home() {
+export default function HomeRoute() {
+  // orgOS Simplu (lib/appMode.tsx) has its own Acasă; "full" = unchanged.
+  const { isSimple } = useAppMode();
+  return isSimple ? <SimpleHome /> : <Home />;
+}
+
+function Home() {
   const { colors, spacing, typography } = useTheme();
   const { user } = useAuth();
   const router = useRouter();
@@ -106,6 +111,7 @@ export default function Home() {
           id: String(s.id),
           name: s.name,
           kind: detectSpaceType(s, profileFromSpace(s)),
+          color: s.color ?? null,
         })),
       );
       const saved = sanitizeLayout(layoutRes.layout);
@@ -227,15 +233,15 @@ export default function Home() {
         soon > 0 ? `${soon} în 7 zile` : null,
         low > 0 ? roCount(low, "provizie", "provizii") : null,
       ].filter(Boolean).join(" · ") || null;
-      rows.push({ key, spaceId: key === "personal" ? undefined : key, name: space?.name ?? sorted[0].space?.name ?? "Personal", kind: space?.kind, top: sorted[0], more, rank: sorted[0].days });
+      rows.push({ key, spaceId: key === "personal" ? undefined : key, name: space?.name ?? sorted[0].space?.name ?? "Personal", kind: space?.kind, color: space?.color ?? sorted[0].space?.color ?? null, top: sorted[0], more, rank: sorted[0].days });
     });
     spaces.forEach((s) => {
       if (groups.has(s.id)) return;
       const low = dashboard?.lowSupplies?.[s.id] ?? 0;
-      if (low > 0) rows.push({ key: s.id, spaceId: s.id, name: s.name, kind: s.kind, summary: `${roCount(low, "provizie", "provizii")} pe terminate`, more: null, rank: 1000 });
+      if (low > 0) rows.push({ key: s.id, spaceId: s.id, name: s.name, kind: s.kind, color: s.color, summary: `${roCount(low, "provizie", "provizii")} pe terminate`, more: null, rank: 1000 });
       (dashboard?.toBuyLists ?? [])
         .filter((l: any) => String(l.space_id) === s.id)
-        .forEach((l: any) => rows.push({ key: `list-${l.list_id}`, spaceId: s.id, name: s.name, kind: s.kind, summary: l.title, detail: `${roCount(l.count, "produs", "produse")} de cumpărat`, more: null, rank: 1001 }));
+        .forEach((l: any) => rows.push({ key: `list-${l.list_id}`, spaceId: s.id, name: s.name, kind: s.kind, color: s.color, summary: l.title, detail: `${roCount(l.count, "produs", "produse")} de cumpărat`, more: null, rank: 1001 }));
     });
     return rows.sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
   }, [todoRows, spaces, spaceById, dashboard]);
@@ -354,39 +360,38 @@ export default function Home() {
     return WIDGET_META[w.type].label;
   };
 
-  const renderEditItem = ({ item: w, drag, isActive }: RenderItemParams<Widget>) => (
-    <ScaleDecorator>
-      <View style={{ gap: 6, marginBottom: spacing.section, opacity: w.hidden ? 0.45 : 1 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-          <Pressable
-            testID={`home-edit-drag-${w.id}`}
-            // The handle drags right away -- no hold needed on the grip.
-            onPressIn={drag}
-            disabled={isActive}
-            accessibilityRole="button"
-            accessibilityLabel={`Mută ${cardLabel(w)}`}
-            hitSlop={6}
-            style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center" }}
-          >
-            <Ionicons name="reorder-three" size={24} color={muted} />
-          </Pressable>
-          <Text style={{ flex: 1, fontSize: 13, color: muted }} numberOfLines={1}>
-            {cardLabel(w)}{w.size === "compact" ? " · compact" : ""}{w.hidden ? " · ascuns" : ""}
-          </Text>
+  // One card of edit mode (in ReorderList -- its own drag, see that file
+  // for why not react-native-draggable-flatlist).
+  const renderEditItem = ({ item: w }: ReorderRenderParams<Widget>) => (
+    <View style={{ gap: 6, marginBottom: spacing.section, opacity: w.hidden ? 0.45 : 1 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+        <ReorderHandle
+          id={w.id}
+          testID={`home-edit-drag-${w.id}`}
+          label={`Mută ${cardLabel(w)}`}
+          style={{ width: 36, height: 36, alignItems: "center", justifyContent: "center" }}
+        >
+          <Ionicons name="reorder-three" size={24} color={muted} />
+        </ReorderHandle>
+        <Text style={{ flex: 1, fontSize: 13, color: muted }} numberOfLines={1}>
+          {cardLabel(w)}{w.size === "compact" ? " · compact" : ""}{w.hidden ? " · ascuns" : ""}
+        </Text>
+        {/* The spend card is mandatory -- no hide toggle (ensureSpendCard). */}
+        {w.type !== "spend" ? (
           <CircleButton
             testID={`home-edit-hide-${w.id}`}
             icon={w.hidden ? "eye-outline" : "eye-off-outline"}
             label={w.hidden ? "Arată cardul" : "Ascunde cardul"}
             onPress={() => updateDraft(w.id, { hidden: !w.hidden })}
           />
-          <CircleButton testID={`home-edit-settings-${w.id}`} icon="options-outline" label="Setările cardului" onPress={() => setSettingsFor(w)} />
-        </View>
-        {/* A preview: the card exactly as it will look, but inert. */}
-        <View pointerEvents="none" style={{ borderRadius: 22, borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.borderStrong, padding: 3 }}>
-          <HomeWidget widget={w} ctx={{ ...ctx, preview: true }} />
-        </View>
+        ) : null}
+        <CircleButton testID={`home-edit-settings-${w.id}`} icon="options-outline" label="Setările cardului" onPress={() => setSettingsFor(w)} />
       </View>
-    </ScaleDecorator>
+      {/* A preview: the card exactly as it will look, but inert. */}
+      <View pointerEvents="none" style={{ borderRadius: 22, borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.borderStrong, padding: 3 }}>
+        <HomeWidget widget={w} ctx={{ ...ctx, preview: true }} />
+      </View>
+    </View>
   );
 
   const header = (
@@ -476,15 +481,17 @@ export default function Home() {
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="home-screen">
       {editing ? (
-        <DraggableFlatList
+        <ReorderList
           testID="home-edit-list"
           data={draft}
-          keyExtractor={(w) => w.id}
-          onDragEnd={({ data }) => setDraft(data)}
+          keyExtractor={widgetKey}
+          onReorder={setDraft}
           renderItem={renderEditItem}
+          // The lifted card is opaque, so the one it passes over doesn't show through.
+          liftedStyle={{ backgroundColor: colors.surface }}
           contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.lg, paddingBottom: 140 }}
-          ListHeaderComponent={<View style={{ marginBottom: spacing.section, gap: spacing.sm }}>{header}<Text style={{ fontSize: 13, color: muted }}>Ține apăsat mânerul ☰ și trage ca să muți un card.</Text></View>}
-          ListFooterComponent={
+          header={<View style={{ marginBottom: spacing.section, gap: spacing.sm }}>{header}<Text style={{ fontSize: 13, color: muted }}>Ține apăsat mânerul ☰ și trage ca să muți un card.</Text></View>}
+          footer={
             <View style={{ gap: spacing.md }}>
               <PressableScale
                 testID="home-edit-add"
@@ -541,7 +548,7 @@ export default function Home() {
           >
             <View {...headerTarget}>{header}</View>
             {SHOW_TOUR_TEST_BUTTON ? (
-              // TEMP for testing -- see SHOW_TOUR_TEST_BUTTON.
+              // TEMP for testing -- see SHOW_TOUR_TEST_BUTTON (lib/tours.ts).
               <View style={{ flexDirection: "row", marginTop: -spacing.sm }}>
                 <Pill testID="home-tour-test" icon="play-circle-outline" label="Pornește ghidul" onPress={() => startTour("home", tourCtx)} />
               </View>
@@ -615,7 +622,7 @@ export default function Home() {
           setSettingsFor(null);
         }}
         onRemove={(id) => {
-          setDraft((d) => d.filter((w) => w.id !== id));
+          setDraft((d) => d.filter((w) => w.id !== id || w.type === "spend"));
           setSettingsFor(null);
         }}
       />
@@ -625,7 +632,7 @@ export default function Home() {
         onClose={() => setTemplatesOpen(false)}
         onPick={(key) => {
           const t = LAYOUT_TEMPLATES.find((x) => x.key === key);
-          if (t) setDraft(t.build({ firstListId, firstCarId }));
+          if (t) setDraft(ensureSpendCard(t.build({ firstListId, firstCarId })));
           setTemplatesOpen(false);
         }}
         onReset={() => {

@@ -5,6 +5,7 @@ import * as AppleAuthentication from "expo-apple-authentication";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/providers/auth";
 import { Button } from "@/components/ui/primitives";
+import { GoogleSignInButton } from "@/components/auth/GoogleSignInButton";
 import {
   signInWithApple,
   signInWithWebProvider,
@@ -87,11 +88,8 @@ export function SocialLogin({ testID = "social" }: { testID?: string }) {
           </View>
         ) : null}
         {providers.google ? (
-          <Button
+          <GoogleSignInButton
             testID={`${testID}-google`}
-            variant="secondary"
-            icon="logo-google"
-            label="Continuă cu Google"
             loading={busy === "google"}
             disabled={!!busy && busy !== "google"}
             onPress={() => run("google", () => signInWithWebProvider("google"))}

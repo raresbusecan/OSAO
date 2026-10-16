@@ -3,7 +3,7 @@ import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import type { Recipe, RecipeMatch } from "@/lib/spaces/grocery/recipeMatching";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Chip, Group, Row, SectionHeader } from "@/components/ui/primitives";
 
@@ -46,6 +46,7 @@ export function GroceryRecipeDetailModal({
   onAddMissing,
 }: GroceryRecipeDetailModalProps) {
   const { colors, spacing } = useTheme();
+  const GROC = useSpaceColors("grocery").color;
   const [snapshot, setSnapshot] = useState<{ recipe: Recipe; match: RecipeMatch; otherTags: string[] } | null>(null);
 
   useEffect(() => {
@@ -56,7 +57,6 @@ export function GroceryRecipeDetailModal({
 
   const complete = snapshot.match.missingIngredients.length === 0;
 
-  const GROC = SPACE_IDENTITY_COLORS.grocery!;
   const have = snapshot.match.matchedIngredients.length;
   const total = snapshot.recipe.ingredients.length;
   const meta = [

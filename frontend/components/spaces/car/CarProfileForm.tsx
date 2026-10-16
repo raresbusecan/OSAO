@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text } from "react-native";
 import { useTheme } from "@/lib/theme";
-import { api } from "@/lib/api";
+import { useAppMode } from "@/lib/appMode";
+import { api, apiErrorMessage } from "@/lib/api";
+import { roNumber } from "@/lib/format";
+import { odometerError } from "./CarOdometerSheet";
 import { notifyAction } from "@/lib/confirm";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field } from "@/components/ui/primitives";
@@ -10,18 +13,25 @@ import {
   carProfileName,
   carProfileToApiBody,
   carProfileFromApi,
-  SPACE_IDENTITY_COLORS,
-  SPACE_BUTTON_FILL,
+  spaceColors,
   type CarProfile,
+  type SpaceColorKey,
 } from "@/lib/spaces/spaceProfile";
+import { SpaceColorPicker, initialSpaceColor, spaceColorForApi } from "@/components/spaces/SpaceColorPicker";
+import { SpaceThemeProvider } from "@/lib/spaces/spaceTheme";
 
 export type CarProfileFormProps = {
   visible: boolean;
   mode: "create" | "edit";
-  space?: { id: string | number } | null;
+  space?: { id: string | number; color?: string | null } | null;
   initialProfile?: CarProfile | null;
   onClose: () => void;
   onSaved: (space: any, profile: CarProfile) => void;
+  /** Edit mode only: also show "Kilometraj" (Simplu's one "Editează
+   * mașina" sheet, user decision 2026-10-15). `current` prefills it,
+   * `minLogged` is the floor (same rules as CarOdometerSheet); saved via
+   * PUT car-profile/odometer only when changed. */
+  odometer?: { current: number; minLogged: number } | null;
 };
 
 
@@ -39,8 +49,17 @@ export function CarProfileForm({
   initialProfile,
   onClose,
   onSaved,
+  odometer,
 }: CarProfileFormProps) {
-  const { colors, spacing } = useTheme();
+  const showKm = mode === "edit" && !!odometer;
+  const [kmText, setKmText] = useState("");
+  const [kmServerError, setKmServerError] = useState<string | null>(null);
+  const { colors, spacing, isDark } = useTheme();
+  // Simplu mode: Marcă, Model, An, rezervor -- no colour, price, credit or space colour.
+  const { isSimple } = useAppMode();
+  // The space's colour (spaces.color) -- previewed live by the whole sheet.
+  const [spaceColor, setSpaceColor] = useState<SpaceColorKey>(initialSpaceColor(null, "car"));
+  const tone = spaceColors(spaceColor, isDark)!;
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
   const [color, setColor] = useState("");
@@ -62,6 +81,9 @@ export function CarProfileForm({
 
     setSubmitAttempted(false);
     resetCredit();
+    setKmText(odometer && odometer.current > 0 ? String(Math.round(odometer.current)) : "");
+    setKmServerError(null);
+    setSpaceColor(initialSpaceColor(mode === "edit" ? space?.color : null, "car"));
 
     // Editing shows exactly what was last saved -- persisted until the
     // next edit, never reset. Creating starts every field genuinely
@@ -83,11 +105,17 @@ export function CarProfileForm({
       setPurchasePrice("");
       setTankCapacity("");
     }
-  }, [visible, initialProfile, resetCredit]);
+    // Prefill once per open, not on every parent re-render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, initialProfile, resetCredit, mode, space?.color]);
 
   const tankCapacityMissing = tankCapacity.trim().length === 0;
+  const kmValue = kmText ? Number(kmText) : null;
+  const kmChanged = showKm && kmValue !== (odometer!.current > 0 ? Math.round(odometer!.current) : null);
+  // An empty field = leave the km as it is.
+  const kmError = showKm && kmChanged && kmText ? odometerError(kmValue, odometer!.minLogged) : null;
 
-  const creditOn = mode === "create" && credit.on;
+  const creditOn = mode === "create" && !isSimple && credit.on;
   const canSubmit =
     make.trim().length > 0 && model.trim().length > 0 && !tankCapacityMissing;
   // Save stays disabled while "În rate" is on and the credit isn't valid.
@@ -95,7 +123,7 @@ export function CarProfileForm({
 
   const submit = async () => {
     if (creditBlocked) return;
-    if (!canSubmit) {
+    if (!canSubmit || kmError) {
       setSubmitAttempted(true);
       return;
     }
@@ -124,7 +152,7 @@ export function CarProfileForm({
         const created = await api.createSpace({
           name: derivedName,
           icon: "car-outline",
-          color: "#111111",
+          color: spaceColorForApi(spaceColor, "car"),
           type: "car",
           profile: carProfileToApiBody(profile),
           ...(creditOn ? { credit: credit.apiBody } : {}),
@@ -136,13 +164,25 @@ export function CarProfileForm({
       }
       if (!space) return;
 
-      const result = await api.updateSpace(space.id, { name: derivedName });
+      const result = await api.updateSpace(space.id, { name: derivedName, color: spaceColorForApi(spaceColor, "car") });
       const targetSpace = result?.space ?? { ...space, name: derivedName };
       const profileResult = await api.saveCarProfile(
         targetSpace.id,
         carProfileToApiBody(profile),
       );
-      const savedProfile = carProfileFromApi(profileResult?.profile) ?? profile;
+      let savedProfile = carProfileFromApi(profileResult?.profile) ?? profile;
+
+      if (kmChanged && kmText && kmValue != null) {
+        try {
+          const res: any = await api.updateCarOdometer(String(targetSpace.id), kmValue);
+          savedProfile = carProfileFromApi(res?.profile) ?? savedProfile;
+        } catch (e) {
+          // The name/details are saved; keep the sheet open on the km error.
+          onSaved(targetSpace, savedProfile);
+          setKmServerError(apiErrorMessage(e, "Nu am putut salva kilometrajul. Încearcă din nou.", "odometer"));
+          return;
+        }
+      }
 
       onSaved(targetSpace, savedProfile);
       onClose();
@@ -158,6 +198,7 @@ export function CarProfileForm({
   const half = { flex: 1 };
 
   return (
+    <SpaceThemeProvider color={spaceColor}>
     <Sheet
       visible={visible}
       onClose={onClose}
@@ -165,12 +206,12 @@ export function CarProfileForm({
       title={mode === "create" ? "Mașină nouă" : "Editează mașina"}
       subtitle="Marca devine numele spațiului"
       icon="car-outline"
-      tone={SPACE_IDENTITY_COLORS.car}
+      tone={tone.color}
       footer={
         <Button
           testID="car-profile-save"
           label={mode === "create" ? "Adaugă mașina" : "Salvează"}
-          tone={SPACE_BUTTON_FILL.car}
+          tone={tone.fill}
           onPress={submit}
           loading={busy}
           disabled={creditBlocked}
@@ -179,20 +220,42 @@ export function CarProfileForm({
     >
       <View style={two}>
         <View style={half}>
-          <Field label="Marcă" value={make} onChangeText={setMake} placeholder="ex. BMW" tone={SPACE_IDENTITY_COLORS.car} error={submitAttempted && !make.trim() ? "Obligatoriu" : null} />
+          <Field label="Marcă" value={make} onChangeText={setMake} placeholder="ex. BMW" tone={tone.color} error={submitAttempted && !make.trim() ? "Obligatoriu" : null} />
         </View>
         <View style={half}>
-          <Field label="Model" value={model} onChangeText={setModel} placeholder="ex. 340d" tone={SPACE_IDENTITY_COLORS.car} error={submitAttempted && !model.trim() ? "Obligatoriu" : null} />
+          <Field label="Model" value={model} onChangeText={setModel} placeholder="ex. 340d" tone={tone.color} error={submitAttempted && !model.trim() ? "Obligatoriu" : null} />
         </View>
       </View>
-      <View style={two}>
-        <View style={half}>
-          <Field label="An" value={year} onChangeText={setYear} placeholder="ex. 2020" keyboardType="number-pad" tone={SPACE_IDENTITY_COLORS.car} />
+      {isSimple ? (
+        <Field label="An" value={year} onChangeText={setYear} placeholder="ex. 2020" keyboardType="number-pad" tone={tone.color} />
+      ) : (
+        <View style={two}>
+          <View style={half}>
+            <Field label="An" value={year} onChangeText={setYear} placeholder="ex. 2020" keyboardType="number-pad" tone={tone.color} />
+          </View>
+          <View style={half}>
+            <Field label="Culoare (opțional)" value={color} onChangeText={setColor} placeholder="ex. Negru" tone={tone.color} />
+          </View>
         </View>
-        <View style={half}>
-          <Field label="Culoare (opțional)" value={color} onChangeText={setColor} placeholder="ex. Negru" tone={SPACE_IDENTITY_COLORS.car} />
-        </View>
-      </View>
+      )}
+      {showKm ? (
+        <Field
+          testID="car-profile-odometer"
+          label="Kilometraj"
+          value={kmText}
+          // Whole km only, like CarOdometerSheet.
+          onChangeText={(t) => {
+            setKmText(t.replace(/\D/g, "").replace(/^0+(?=\d)/, "").slice(0, 9));
+            setKmServerError(null);
+          }}
+          placeholder="0"
+          keyboardType="number-pad"
+          suffix="km"
+          tone={tone.color}
+          error={kmServerError ?? (submitAttempted ? kmError : null)}
+          hint={odometer!.minLogged > 0 ? `Cel puțin ${roNumber(odometer!.minLogged)} km (cel mai mare înregistrat).` : null}
+        />
+      ) : null}
       <Field
         label="Capacitate rezervor"
         value={tankCapacity}
@@ -200,23 +263,29 @@ export function CarProfileForm({
         placeholder="ex. 57"
         keyboardType="decimal-pad"
         suffix="l"
-        tone={SPACE_IDENTITY_COLORS.car}
+        tone={tone.color}
         error={submitAttempted && tankCapacityMissing ? "Obligatoriu: consumul se calculează pe baza ei." : null}
         hint="Folosită la calculul consumului."
       />
-      <Field
-        label="Preț de cumpărare (opțional)"
-        value={purchasePrice}
-        onChangeText={setPurchasePrice}
-        placeholder="0"
-        keyboardType="decimal-pad"
-        suffix="lei"
-        tone={SPACE_IDENTITY_COLORS.car}
-      />
-      {mode === "create" ? <SpaceCreditToggle kind="car" credit={credit} /> : null}
+      {isSimple ? null : (
+        <>
+          <Field
+            label="Preț de cumpărare (opțional)"
+            value={purchasePrice}
+            onChangeText={setPurchasePrice}
+            placeholder="0"
+            keyboardType="decimal-pad"
+            suffix="lei"
+            tone={tone.color}
+          />
+          <SpaceColorPicker kind="car" value={spaceColor} onChange={setSpaceColor} />
+        </>
+      )}
+      {mode === "create" && !isSimple ? <SpaceCreditToggle kind="car" credit={credit} /> : null}
       {creditBlocked ? (
         <Text testID="car-credit-missing" style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{credit.error}</Text>
       ) : null}
     </Sheet>
+    </SpaceThemeProvider>
   );
 }

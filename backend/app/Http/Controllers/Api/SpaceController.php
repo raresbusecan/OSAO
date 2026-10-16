@@ -4,8 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use App\Models\CarProfile;
 use App\Models\Item;
 use App\Models\Space;
+use Illuminate\Support\Carbon;
+use App\Services\RecurrenceProjector;
 use App\Models\User;
 use App\Support\ItemBudgetRules;
 use App\Support\SpaceProfileRules;
@@ -41,12 +45,66 @@ class SpaceController extends Controller
             ->get()
             ->each(function (Space $space) use ($request) {
                 $space->is_owner = $space->user_id === $request->user()->id;
+                // The car's current km for its Spații card: the higher of
+                // the typed reading and the logged entries (same rule as the
+                // Mașină top card). One query per car -- users have few.
+                if ($space->type === 'car' || $space->carProfile) {
+                    $km = max((int) ($space->carProfile?->odometer ?? 0), CarProfile::loggedOdometer($space->id));
+                    $space->odometer = $km > 0 ? $km : null;
+                }
             });
+
+        // One headline number per kind for the Spații cards (user request
+        // 2026-10-09). The kind is decided by the item types a space holds,
+        // so legacy untyped spaces get their number too.
+        $userTz = $request->user()->timezone ?? 'UTC';
+        $now = Carbon::now($userTz);
+        $from = $now->copy()->startOfDay();
+        $to = $now->copy()->endOfMonth();
+        foreach ($spaces as $space) {
+            $space->month_upcoming = $this->homeUpcomingThisMonth($space->id, $from, $to);
+            $space->grocery_lists = Item::where('space_id', $space->id)
+                ->where('type', 'grocery_list')
+                ->whereNotIn('status', Item::CLOSED_STATUSES)
+                ->count();
+            $space->expense_records = Item::where('space_id', $space->id)->where('type', 'expense_item')->count();
+        }
 
         return response()->json([
             'spaces' => $spaces,
         ]);
     }
+    /**
+     * Casă's card number: open tasks / bills / recurring maintenance still
+     * ahead from today to the end of this month (the user's zone). A
+     * recurring item counts once per occurrence in that window (a weekly
+     * bill can be 4); past-due ones are not counted ("doar cele viitoare").
+     */
+    private function homeUpcomingThisMonth(int $spaceId, Carbon $from, Carbon $to): int
+    {
+        $items = Item::where('space_id', $spaceId)
+            ->whereIn('type', ['home_task', 'home_recurring', 'home_maintenance'])
+            ->whereNotIn('status', Item::CLOSED_STATUSES)
+            ->whereNotNull('due_at')
+            ->get();
+
+        $count = 0;
+        foreach ($items as $item) {
+            if ($item->recurrence) {
+                $anchor = RecurrenceProjector::projectionAnchor($item);
+                $count += count(RecurrenceProjector::occurrencesBetween($anchor, $from, $to));
+            } elseif ($item->type !== 'home_maintenance') {
+                // A one-off maintenance visit is a log entry, not a deadline.
+                $due = $item->due_at->copy()->setTimezone($from->getTimezone());
+                if ($due->betweenIncluded($from, $to)) {
+                    $count++;
+                }
+            }
+        }
+
+        return $count;
+    }
+
     /**
      * Store a newly created resource in storage.
      */
@@ -55,7 +113,9 @@ class SpaceController extends Controller
             'name' => ['required', 'string', 'max:100'],
             'description' => ['nullable', 'string'],
             'icon' => ['nullable', 'string', 'max:50'],
-            'color' => ['nullable', 'string', 'max:20'],
+            // A key of the frontend's SPACE_PALETTE (Space::PALETTE_KEYS);
+            // null = the kind's default colour.
+            'color' => ['nullable', 'string', Rule::in(Space::PALETTE_KEYS)],
             // Set once, here, and never accepted by update() below --
             // deliberately not editable, so renaming a space (or changing
             // its icon) can never change what kind of space it is. See
@@ -76,6 +136,7 @@ class SpaceController extends Controller
             'credit.day_of_month' => ['required_with:credit'],
             'credit.end_date' => ['required_with:credit'],
         ], [
+            'color.in' => Space::COLOR_MESSAGE,
             'credit.title.required_with' => 'Scrie un nume pentru credit.',
             'credit.title.max' => 'Numele creditului e prea lung.',
             'credit.amount.required_with' => 'Rata lunară trebuie să fie mai mare decât 0.',
@@ -140,7 +201,7 @@ class SpaceController extends Controller
         $space->load(['carProfile', 'homeProfile']);
         $space->is_owner = true;
         $body = [
-            'message' => 'Space created successfully.',
+            'message' => 'Spațiul a fost creat.',
             'space' => $space,
         ];
         if ($profile !== null) {
@@ -177,7 +238,7 @@ class SpaceController extends Controller
             $expenses = $user->spaces()->create([
                 'name' => 'Default',
                 'icon' => 'receipt-outline',
-                'color' => '#14B8A6',
+                'color' => null,
                 'type' => 'expenses',
             ]);
             $created = true;
@@ -243,11 +304,13 @@ class SpaceController extends Controller
             'name' => ['sometimes', 'required', 'string', 'max:100'],
             'description' => ['sometimes', 'nullable', 'string'],
             'icon' => ['sometimes', 'nullable', 'string', 'max:50'],
-            'color' => ['sometimes', 'nullable', 'string', 'max:20'],
+            'color' => ['sometimes', 'nullable', 'string', Rule::in(Space::PALETTE_KEYS)],
+        ], [
+            'color.in' => Space::COLOR_MESSAGE,
         ]);
         $space->update($validated);
         return response()->json([
-            'message' => 'Space updated successfully.',
+            'message' => 'Spațiul a fost actualizat.',
             'space' => $space->fresh(),
         ]);
     }
@@ -261,7 +324,7 @@ class SpaceController extends Controller
             ->findOrFail($id);
         $space->delete();
         return response()->json([
-            'message' => 'Space deleted successfully.',
+            'message' => 'Spațiul a fost șters.',
         ]);
     }
 
@@ -297,7 +360,7 @@ class SpaceController extends Controller
             $position++;
         }
 
-        return response()->json(['message' => 'Order updated.']);
+        return response()->json(['message' => 'Ordinea a fost salvată.']);
     }
 
     /**
@@ -318,8 +381,59 @@ class SpaceController extends Controller
         );
 
         return response()->json([
-            'message' => 'Car profile saved successfully.',
+            'message' => 'Datele mașinii au fost salvate.',
             'profile' => $profile,
+        ]);
+    }
+
+    /**
+     * PUT /spaces/{id}/car-profile/odometer {odometer} -- the reading typed
+     * on the Mașină top card ("Actualizează kilometrajul"). Any user who can
+     * open the space (owner or member -- members log fuel with odometers
+     * too). Whole km, 1..CarProfile::ODOMETER_MAX, and never below the
+     * highest reading already logged on a fuel/service/expense entry of
+     * this car (CarProfile::loggedOdometer). Stamps odometer_updated_at
+     * when the value changes. 404 = not your space / not a car; 422 = no
+     * profile yet, or a bad value (Romanian {message, errors.odometer}).
+     */
+    public function updateCarOdometer(Request $request, string $id) {
+        $space = Space::accessibleBy($request->user())->findOrFail($id);
+        if ($space->type !== null && $space->type !== 'car') {
+            abort(404);
+        }
+        $profile = $space->carProfile;
+        if (!$profile) {
+            return $this->creditError(['odometer' => ['Completează întâi datele mașinii (Editează mașina).']]);
+        }
+
+        $request->validate([
+            'odometer' => ['required', 'integer', 'min:1', 'max:' . CarProfile::ODOMETER_MAX],
+        ], [
+            'odometer.required' => 'Scrie kilometrajul.',
+            'odometer.integer' => 'Kilometrajul trebuie să fie un număr întreg de km.',
+            'odometer.min' => 'Kilometrajul trebuie să fie mai mare decât 0.',
+            'odometer.max' => 'Kilometrajul nu poate depăși 2.000.000 km.',
+        ]);
+        $odometer = (int) $request->input('odometer');
+
+        $logged = CarProfile::loggedOdometer($space->id);
+        if ($odometer < $logged) {
+            $min = number_format($logged, 0, ',', '.');
+            return $this->creditError(['odometer' => [
+                "Nu poate fi mai mic decât {$min} km, cât e înregistrat la ultima alimentare/service.",
+            ]]);
+        }
+
+        if ($profile->odometer !== $odometer) {
+            $profile->odometer = $odometer;
+            $profile->odometer_updated_at = now();
+            $profile->save();
+        }
+
+        return response()->json([
+            'message' => 'Kilometraj actualizat.',
+            'profile' => $profile->fresh(),
+            'logged_odometer' => $logged,
         ]);
     }
 
@@ -341,7 +455,7 @@ class SpaceController extends Controller
         );
 
         return response()->json([
-            'message' => 'Home profile saved successfully.',
+            'message' => 'Datele casei au fost salvate.',
             'profile' => $profile,
         ]);
     }
@@ -385,7 +499,7 @@ class SpaceController extends Controller
 
         if ($user->id === $space->user_id) {
             return response()->json([
-                'message' => 'Este deja proprietarul acestui space.',
+                'message' => 'Este deja proprietarul acestui spațiu.',
             ], 422);
         }
 

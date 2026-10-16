@@ -4,6 +4,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { Button, CircleButton } from "@/components/ui/primitives";
 import { useTheme } from "@/lib/theme";
 import { capitalize } from "@/lib/format";
+import { MonthSwipeView, useMonthPager } from "@/components/ui/MonthSwipe";
 
 export type DatePickerSheetProps = {
   /** ISO string -- opens on this date's month (today's when unset). */
@@ -38,7 +39,8 @@ function sameDay(a: Date, b: Date) {
 /**
  * The one date picker every form uses (Casă, Cheltuieli, Mașină,
  * Calendar): a Monday-first month grid like the Calendar tab, paged with
- * the chevrons only. Only the visible month is rendered -- no paging
+ * the chevrons or a sideways swipe on the grid (MonthSwipe). Only the
+ * visible month is rendered -- no paging
  * FlatList, whose initial scroll position react-native-web doesn't
  * reliably honor (see the history in ExpenseDatePickerSheet).
  */
@@ -64,6 +66,13 @@ export function DatePickerSheet({ value, onCancel, onSelect, range = "any", clea
     return months.findIndex((m) => m.year === today.getFullYear() && m.month === today.getMonth());
   });
   const current = months[index];
+  const pager = useMonthPager();
+  const canPrev = index > 0;
+  const canNext = index < months.length - 1;
+  const page = (dir: 1 | -1) => {
+    if (dir === 1 ? !canNext : !canPrev) return;
+    pager.slide(dir, () => setIndex((i) => Math.min(months.length - 1, Math.max(0, i + dir))));
+  };
 
   const startWeekday = (new Date(current.year, current.month, 1).getDay() + 6) % 7; // Monday-first
   const dim = new Date(current.year, current.month + 1, 0).getDate();
@@ -87,14 +96,14 @@ export function DatePickerSheet({ value, onCancel, onSelect, range = "any", clea
       }
     >
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <CircleButton icon="chevron-back" label="Luna trecută" onPress={() => setIndex((i) => Math.max(0, i - 1))} disabled={index === 0} />
+        <CircleButton icon="chevron-back" label="Luna trecută" onPress={() => page(-1)} disabled={!canPrev} />
         <Text style={{ fontSize: 17, fontWeight: "600", color: colors.onSurface }}>
           {capitalize(new Date(current.year, current.month, 1).toLocaleDateString("ro-RO", { month: "long", year: "numeric" }))}
         </Text>
-        <CircleButton icon="chevron-forward" label="Luna viitoare" onPress={() => setIndex((i) => Math.min(months.length - 1, i + 1))} disabled={index === months.length - 1} />
+        <CircleButton icon="chevron-forward" label="Luna viitoare" onPress={() => page(1)} disabled={!canNext} />
       </View>
 
-      <View>
+      <MonthSwipeView pager={pager} onSwipe={page} canPrev={canPrev} canNext={canNext}>
         <View style={{ flexDirection: "row", marginBottom: 4 }}>
           {WEEKDAYS.map((d, i) => (
             <Text key={i} style={{ flex: 1, textAlign: "center", fontSize: 12, color: colors.onSurfaceTertiary, paddingBottom: 6 }}>{d}</Text>
@@ -133,7 +142,7 @@ export function DatePickerSheet({ value, onCancel, onSelect, range = "any", clea
             );
           })}
         </View>
-      </View>
+      </MonthSwipeView>
     </Sheet>
   );
 }

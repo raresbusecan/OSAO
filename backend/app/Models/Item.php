@@ -86,10 +86,10 @@ class Item extends Model
         'home_expense',
         'home_maintenance',
         // A home_task only carries an amount once it's resolved as a
-        // purchase (see homeItems.ts's taskEntryToItemBody) -- due_at is
-        // repointed to the resolution date at that same moment, so this
-        // sums correctly by the month the money was actually spent, not
-        // whatever month the task was originally due.
+        // purchase (see homeItems.ts's taskEntryToItemBody). Its due_at is
+        // a deadline, NOT the payment date -- it and home_maintenance are
+        // summed per metadata.spendHistory event by App\Services\HomeSpend,
+        // never by due_at (every SQL sum leaves HomeSpend::TYPES out).
         'home_task',
         // One record per "Finalizează cumpărăturile" tap with a price
         // entered (see groceryItems.ts's groceryTripToItemBody) -- due_at
@@ -351,6 +351,26 @@ class Item extends Model
         } catch (\Exception $e) {
             return null;
         }
+    }
+
+    /** Of two visits of the same car service, is $a the newer one? Decides
+     * which one's "next service" prediction is current (Dashboard
+     * carServiceDue, Calendar carServicesBetween). */
+    public static function isNewerVisit(self $a, self $b): bool
+    {
+        if (!$a->due_at || !$b->due_at) {
+            return false;
+        }
+        if (!$a->due_at->eq($b->due_at)) {
+            return $a->due_at->gt($b->due_at);
+        }
+        // Same moment (every Simplu "Adaugă" save is dated at the day's
+        // midnight): the higher odometer, then the later record --
+        // the frontend's compareMaintenanceRecency.
+        $ka = (float) ($a->metadata['odometer'] ?? -1);
+        $kb = (float) ($b->metadata['odometer'] ?? -1);
+
+        return $ka !== $kb ? $ka > $kb : $a->id > $b->id;
     }
 
     /** Car documents replaced by a renewal: same space + documentType,

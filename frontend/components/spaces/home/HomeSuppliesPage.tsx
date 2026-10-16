@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme, type ThemeColors } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { severityColor, severityTint } from "@/lib/statusColors";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import { SwipeRow } from "@/components/spaces/SwipeRow";
@@ -48,7 +48,7 @@ function statusFor(entry: HomeSupplyEntry, colors: ThemeColors) {
 export function HomeSuppliesPage({ homeData, onBack, onAdd, onPreview, onActions, onRestock, onDelete }: HomeSuppliesPageProps) {
   const { colors, spacing, radius } = useTheme();
   const entries = homeData.supplyEntries;
-  const HOME = SPACE_IDENTITY_COLORS.home!;
+  const HOME = useSpaceColors("home").color;
 
   return (
     <SwipeBackView onBack={onBack} style={{ backgroundColor: colors.surface }}>

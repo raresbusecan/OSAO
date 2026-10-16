@@ -31,6 +31,9 @@ export type SheetProps = {
   centered?: boolean;
   /** "ⓘ" next to the title: how this form/sheet works (lib/help.ts). */
   info?: HelpKey;
+  /** A ‹ before the title: back to the sheet's previous step (e.g.
+   * Simplu's "Adaugă": the space grid). Left-aligned header only. */
+  onBack?: () => void;
   testID?: string;
 };
 
@@ -57,7 +60,7 @@ export function Sheet(props: SheetProps) {
   );
 }
 
-function SheetBody({ onClose, title, subtitle, icon, tone, footer, children, hideClose, centered, info, testID }: SheetProps) {
+function SheetBody({ onClose, title, subtitle, icon, tone, footer, children, hideClose, centered, info, onBack, testID }: SheetProps) {
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
@@ -128,6 +131,7 @@ function SheetBody({ onClose, title, subtitle, icon, tone, footer, children, hid
                 </View>
               ) : (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
+                  {onBack ? <CircleButton icon="chevron-back" label="Înapoi" onPress={onBack} /> : null}
                   {icon ? (
                     <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: tone ?? colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}>
                       <Ionicons name={icon} size={19} color={tone ? readableOn(tone) : colors.onSurface} />

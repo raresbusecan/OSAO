@@ -3,6 +3,10 @@ import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field } from "@/components/ui/primitives";
 import { api } from "@/lib/api";
 import { notifyAction } from "@/lib/confirm";
+import { useTheme } from "@/lib/theme";
+import { useAppMode } from "@/lib/appMode";
+import { detectSpaceType, spaceColors, KIND_DEFAULT_COLOR, type SpaceColorKey } from "@/lib/spaces/spaceProfile";
+import { SpaceColorPicker, initialSpaceColor, spaceColorForApi } from "@/components/spaces/SpaceColorPicker";
 
 export type EditSpaceModalProps = {
   visible: boolean;
@@ -16,7 +20,7 @@ export type EditSpaceModalProps = {
    * mode: the template's own icon/color/type, carried straight through
    * to api.createSpace once the user confirms a name -- id is never
    * read here. */
-  space: { id?: string | number; name: string; icon?: string; color?: string; type?: string } | null;
+  space: { id?: string | number; name: string; icon?: string; color?: string | null; type?: string } | null;
   onClose: () => void;
   onSaved: (updated: any) => void;
 };
@@ -33,14 +37,27 @@ export type EditSpaceModalProps = {
  * afterward); the user names it before it's created at all.
  */
 export function EditSpaceModal({ visible, mode = "edit", space, onClose, onSaved }: EditSpaceModalProps) {
+  const { isDark } = useTheme();
+  // Simplu mode: no colour picking anywhere (the kind default / the saved colour stays).
+  const { isSimple } = useAppMode();
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
+  // The space's colour -- only for the 4 real kinds (a legacy custom space
+  // has no kind default to fall back to, so it keeps its name-only form).
+  const detected = space ? (mode === "create" ? space.type : detectSpaceType(space, null)) : null;
+  const kind = detected && detected in KIND_DEFAULT_COLOR ? (detected as keyof typeof KIND_DEFAULT_COLOR) : null;
+  const [spaceColor, setSpaceColor] = useState<SpaceColorKey | null>(null);
+  const tone = spaceColor ? spaceColors(spaceColor, isDark) : null;
 
+  // Re-seeded on every OPEN too, not just when `space` changes: inside a
+  // space the modal stays mounted with the same object, so a cancelled
+  // name/colour edit used to survive and get saved by the next save.
   useEffect(() => {
-    if (space) {
+    if (space && visible) {
       setName(space.name || "");
+      setSpaceColor(kind ? initialSpaceColor(mode === "create" ? null : space.color, kind) : null);
     }
-  }, [space]);
+  }, [space, kind, mode, visible]);
 
   const save = async () => {
     if (!space || !name.trim()) return;
@@ -51,12 +68,15 @@ export function EditSpaceModal({ visible, mode = "edit", space, onClose, onSaved
         const result = await api.createSpace({
           name: name.trim(),
           icon: space.icon,
-          color: space.color,
+          color: kind && spaceColor ? spaceColorForApi(spaceColor, kind) : null,
           type: space.type,
         });
         onSaved(result?.space ?? result);
       } else {
-        const result = await api.updateSpace(space.id!, { name: name.trim() });
+        const result = await api.updateSpace(space.id!, {
+          name: name.trim(),
+          ...(kind && spaceColor ? { color: spaceColorForApi(spaceColor, kind) } : {}),
+        });
         onSaved(result?.space ?? { ...space, name: name.trim() });
       }
       onClose();
@@ -75,14 +95,15 @@ export function EditSpaceModal({ visible, mode = "edit", space, onClose, onSaved
       visible={visible}
       onClose={onClose}
       info="space.edit"
-      title={mode === "create" ? `${space?.name ?? "Spațiu"} nou` : "Redenumește spațiul"}
+      title={mode === "create" ? `${space?.name ?? "Spațiu"} nou` : kind ? "Editează spațiul" : "Redenumește spațiul"}
       subtitle={mode === "create" ? "Dă-i un nume, ca să-l recunoști ușor" : undefined}
       icon={(space?.icon as any) ?? "grid-outline"}
-      tone={space?.color}
+      tone={tone?.color}
       footer={
         <Button
           testID="edit-space-save-button"
           label={mode === "create" ? "Creează spațiul" : "Salvează"}
+          tone={tone?.fill}
           onPress={save}
           loading={busy}
           disabled={!name.trim()}
@@ -98,8 +119,9 @@ export function EditSpaceModal({ visible, mode = "edit", space, onClose, onSaved
         autoFocus
         returnKeyType="done"
         onSubmitEditing={save}
-        tone={space?.color}
+        tone={tone?.color}
       />
+      {kind && spaceColor && !isSimple ? <SpaceColorPicker kind={kind} value={spaceColor} onChange={setSpaceColor} testID="edit-space-color" /> : null}
     </Sheet>
   );
 }

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { Group, IconWell, Row, SectionHeader, Segmented } from "@/components/ui/primitives";
 import { SwipeRow } from "@/components/spaces/SwipeRow";
@@ -109,9 +109,10 @@ function DueGroup({
   onResolve: (row: HomeDueRow) => void;
   onDelete: (row: HomeDueRow) => void;
 }) {
-  const { colors, spacing, isDark } = useTheme();
-  const fill = SPACE_IDENTITY_COLORS.home!;
-  const tint = spaceTextColor("home", isDark) ?? fill;
+  const { colors, spacing } = useTheme();
+  const homeColors = useSpaceColors("home");
+  const fill = homeColors.color;
+  const tint = homeColors.tint;
   return (
     <View style={{ gap: spacing.xs }}>
       <SectionHeader title={title} muted />

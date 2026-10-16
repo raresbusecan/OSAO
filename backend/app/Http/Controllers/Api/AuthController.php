@@ -57,7 +57,7 @@ class AuthController extends Controller
         $token = $user->createToken('mobile-app')->plainTextToken;
 
         return response()->json([
-            'message' => 'Registration successful.',
+            'message' => 'Cont creat.',
             'user' => $user->fresh()->toAuthPayload(), // fresh(): include email_verified_at: null explicitly
             'token' => $token,
         ], 201);
@@ -81,7 +81,7 @@ class AuthController extends Controller
         $token = $user->createToken('mobile-app')->plainTextToken;
 
         return response()->json([
-            'message' => 'Login successful.',
+            'message' => 'Te-ai conectat.',
             'user' => $user->toAuthPayload(),
             'token' => $token,
         ]);
@@ -137,8 +137,9 @@ class AuthController extends Controller
                 $user->forceFill(['password' => $password, 'has_password' => true])->save();
                 $user->tokens()->delete();
                 // The reset link proved the address: unverified social
-                // links (Facebook / unverified Google) lose the account.
-                SocialAuthService::dropUnverifiedLinks($user);
+                // links (Facebook / unverified Google) lose the account,
+                // except the one that created it with this same address.
+                SocialAuthService::settleLinksAfterAddressProven($user, $user->email);
 
                 event(new PasswordReset($user));
             }
@@ -360,7 +361,7 @@ class AuthController extends Controller
         ])->save();
         DB::table('email_change_requests')->where('user_id', $pending->user_id)->delete();
         DB::table('email_verification_tokens')->where('user_id', $pending->user_id)->delete();
-        SocialAuthService::dropUnverifiedLinks($user);
+        SocialAuthService::settleLinksAfterAddressProven($user, $user->email);
 
         return response()->json([
             'message' => 'Emailul a fost actualizat.',
@@ -405,7 +406,7 @@ class AuthController extends Controller
 
         $user->forceFill(['email_verified_at' => now()])->save();
         DB::table('email_verification_tokens')->where('user_id', $user->id)->delete();
-        SocialAuthService::dropUnverifiedLinks($user);
+        SocialAuthService::settleLinksAfterAddressProven($user, $user->email);
 
         return response()->json([
             'message' => 'Adresa de email a fost confirmată.',
@@ -463,7 +464,7 @@ class AuthController extends Controller
         $request->user()->currentAccessToken()?->delete();
 
         return response()->json([
-            'message' => 'Logout successful.',
+            'message' => 'Te-ai deconectat.',
         ]);
     }
 

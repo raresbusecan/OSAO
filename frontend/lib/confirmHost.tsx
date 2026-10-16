@@ -5,7 +5,7 @@ import { useTheme } from "@/lib/theme";
 import { useReducedMotion } from "@/lib/motion";
 import { Button } from "@/components/ui/primitives";
 
-export type DialogChoice = { key: string; label: string; secondary?: boolean };
+export type DialogChoice = { key: string; label: string; secondary?: boolean; /** Red, like every delete in the app. */ destructive?: boolean };
 
 type DialogRequest = {
   kind: "confirm" | "notify" | "choice";
@@ -171,7 +171,7 @@ function Dialog({ request, close }: { request: DialogRequest; close: (value: any
         {request.kind === "choice" ? (
           <View style={{ gap: spacing.sm }}>
             {(request.choices ?? []).map((c) => (
-              <Button key={c.key} testID={`confirm-host-choice-${c.key}`} compact variant={c.secondary ? "secondary" : "primary"} label={c.label} onPress={() => close(c.key)} />
+              <Button key={c.key} testID={`confirm-host-choice-${c.key}`} compact variant={c.destructive ? "primary" : c.secondary ? "secondary" : "primary"} tone={c.destructive ? colors.error : undefined} label={c.label} onPress={() => close(c.key)} />
             ))}
             <Button testID="confirm-host-cancel" compact variant="ghost" label={request.cancelLabel ?? "Renunță"} onPress={() => close(null)} />
           </View>

@@ -2,20 +2,14 @@ import React, { useMemo, useState } from "react";
 import { View, Text, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { TopBar, Identity, Pill, SectionHeader, Group, Row, IconWell, EmptyState } from "@/components/ui/primitives";
 import { motion } from "@/lib/motion";
 import { GuiltFreeChip } from "@/components/dashboard/GuiltFree";
-import { CarPeriodSheet, periodsEqual } from "./CarPeriodSheet";
-
-const CAR_INLINE_PERIODS: { label: string; period: CarExpensePeriod }[] = [
-  { label: "3 luni", period: { kind: "months", count: 3 } },
-  { label: "6 luni", period: { kind: "months", count: 6 } },
-  { label: "1 an", period: { kind: "months", count: 12 } },
-  { label: "Tot timpul", period: { kind: "all" } },
-];
+import { CAR_PERIOD_PRESETS } from "./CarPeriodSheet";
+import { PeriodPicker } from "@/components/ui/PeriodPicker";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import type { CarData } from "./car.data.types";
 import {
@@ -23,7 +17,6 @@ import {
   getTotalCarExpenses,
   filterRecordsByArchived,
   filterRecordsByPeriod,
-  formatPeriodLabel,
   type CarExpenseCategory,
   type CarExpensePeriod,
   type CarExpenseRecord,
@@ -85,7 +78,7 @@ const CATEGORY_ORDER: CarExpenseCategory[] = [
  * that combination -- not just one filter applied at a time.
  */
 export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: CarExpensesPageProps) {
-  const { colors, spacing, radius, isDark, typography } = useTheme();
+  const { colors, spacing, radius, typography } = useTheme();
 
   // "Introdus" -- purchasePrice is always a number on a saved profile
   // (CarProfileForm defaults it to 0 rather than leaving it undefined),
@@ -122,39 +115,12 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
   // inside the picker for anything the fixed presets don't cover, e.g.
   // "last 2 weeks" or "last 4 months".
   const [period, setPeriod] = useState<CarExpensePeriod>({ kind: "all" });
-  const [usingCustom, setUsingCustom] = useState(false);
-  const [customUnit, setCustomUnit] = useState<"weeks" | "months">("months");
-  const [customMonths, setCustomMonths] = useState(2);
-  const [periodPickerOpen, setPeriodPickerOpen] = useState(false);
-  const isInlinePeriod = !usingCustom && CAR_INLINE_PERIODS.some((p) => periodsEqual(period, p.period));
 
   // ALL starts capped at 5 -- category chips + period + archived toggle
   // already narrow things down, so one "Show more" tap is enough instead
   // of a full month-by-month browser.
   const [allExpanded, setAllExpanded] = useState(false);
   const [recentExpanded, setRecentExpanded] = useState(false);
-
-  const selectPreset = (preset: CarExpensePeriod) => {
-    setPeriod(preset);
-    setUsingCustom(false);
-    setPeriodPickerOpen(false);
-  };
-
-  const selectCustom = () => {
-    setUsingCustom(true);
-    setPeriod({ kind: customUnit, count: customMonths });
-  };
-
-  const selectCustomUnit = (unit: "weeks" | "months") => {
-    setCustomUnit(unit);
-    setPeriod({ kind: unit, count: customMonths });
-  };
-
-  const adjustCustomMonths = (delta: number) => {
-    const next = Math.min(12, Math.max(1, customMonths + delta));
-    setCustomMonths(next);
-    setPeriod({ kind: customUnit, count: next });
-  };
 
   const currentOdometer = useMemo(() => getCurrentOdometer(carData), [carData]);
   const allRecords = useMemo(
@@ -217,8 +183,9 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
     .map((c) => byCategory.find((b) => b.category === c)?.label ?? c)
     .join(", ");
 
-  const CAR = SPACE_IDENTITY_COLORS.car!;
-  const tint = spaceTextColor("car", isDark) ?? CAR;
+  const carColors = useSpaceColors("car");
+  const CAR = carColors.color;
+  const tint = carColors.tint;
   const muted = colors.onSurfaceTertiary;
 
   const renderGroup = (title: string, records: CarExpenseRecord[], expanded: boolean, toggle: () => void, testID: string) => {
@@ -284,26 +251,9 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
       <TopBar onBack={onBack} backTestID="expenses-back" />
       <Identity color={CAR} kicker="Mașină" title="Cheltuieli" subtitle="Tot ce a costat mașina, din toate formularele" info="car.expenses" />
 
-      {/* Period as inline pills -- the same row Casă's and Cheltuieli's
-          own pages use -- plus "Altă perioadă" for a custom N weeks/months
-          (the sheet), and the archived toggle at the end. */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-        {CAR_INLINE_PERIODS.map((preset) => (
-          <Pill
-            key={preset.label}
-            testID={`expenses-period-option-${preset.label}`}
-            label={preset.label}
-            active={!usingCustom && periodsEqual(period, preset.period)}
-            onPress={() => selectPreset(preset.period)}
-          />
-        ))}
-        <Pill
-          testID="expenses-period-trigger"
-          icon="calendar-outline"
-          label={isInlinePeriod ? "Altă perioadă" : formatPeriodLabel(period)}
-          active={!isInlinePeriod}
-          onPress={() => setPeriodPickerOpen(true)}
-        />
+      {/* Period -- the shared picker (same as Istoric), plus the
+          archived toggle in the same row. */}
+      <PeriodPicker value={period} onChange={setPeriod} presets={CAR_PERIOD_PRESETS} testIDPrefix="expenses">
         <Pill
           testID="expenses-archived-toggle"
           icon={includeArchived ? "archive" : "archive-outline"}
@@ -311,7 +261,7 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
           active={includeArchived}
           onPress={() => setIncludeArchived((v) => !v)}
         />
-      </ScrollView>
+      </PeriodPicker>
 
       <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>
         <View style={{ gap: 2 }}>
@@ -376,20 +326,6 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
         </>
       )}
     </ScrollView>
-
-    <CarPeriodSheet
-      visible={periodPickerOpen}
-      onClose={() => setPeriodPickerOpen(false)}
-      period={period}
-      usingCustom={usingCustom}
-      customUnit={customUnit}
-      customCount={customMonths}
-      onPreset={selectPreset}
-      onCustom={selectCustom}
-      onCustomUnit={selectCustomUnit}
-      onCustomCount={adjustCustomMonths}
-      testIDPrefix="expenses"
-    />
     </SwipeBackView>
   );
 }

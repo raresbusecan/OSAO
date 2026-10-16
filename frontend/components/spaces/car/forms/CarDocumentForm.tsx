@@ -3,11 +3,10 @@ import { DateField } from "@/components/ui/DateField";
 import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field, Pill } from "@/components/ui/primitives";
 
-const CAR = SPACE_IDENTITY_COLORS.car!;
 import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 import { confirmAction } from "@/lib/confirm";
 
@@ -62,6 +61,8 @@ export default function CarDocumentForm({
   const isRenewing = !isEditing && renewFrom !== undefined;
 
   const { colors, spacing, radius } = useTheme();
+  const carColors = useSpaceColors("car");
+  const CAR = carColors.color;
 
   const [documentType, setDocumentType] = useState(entry?.documentType ?? renewFrom?.documentType ?? "");
   const [title, setTitle] = useState(entry?.title ?? renewFrom?.title ?? "");
@@ -185,7 +186,7 @@ export default function CarDocumentForm({
       footer={
         <>
           {!readOnly ? (
-            <Button testID="car-document-save" label={isEditing ? "Salvează" : "Salvează documentul"} tone={SPACE_BUTTON_FILL.car} onPress={handleSave} />
+            <Button testID="car-document-save" label={isEditing ? "Salvează" : "Salvează documentul"} tone={carColors.fill} onPress={handleSave} />
           ) : (
             <Button variant="secondary" label="Închide" onPress={onCancel} />
           )}

@@ -2,7 +2,7 @@ import React from "react";
 import { View } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { TopBar, CircleButton, Identity } from "@/components/ui/primitives";
 
 export type ExpensesHeaderProps = {
@@ -14,13 +14,14 @@ export type ExpensesHeaderProps = {
  * header every Space uses (kind dot "Cheltuieli", the space's name). */
 export function ExpensesHeader({ space, onEdit }: ExpensesHeaderProps) {
   const { spacing } = useTheme();
+  const TEAL = useSpaceColors("expenses").color;
   const router = useRouter();
   return (
     <View style={{ gap: spacing.section }}>
       <TopBar onBack={() => router.push("/spaces")}>
         {onEdit ? <CircleButton testID="space-edit" icon="create-outline" label="Editează spațiul" onPress={onEdit} /> : null}
       </TopBar>
-      <Identity color={SPACE_IDENTITY_COLORS.expenses} kicker="Cheltuieli" title={space?.name || "Cheltuieli"} info="expenses.space" />
+      <Identity color={TEAL} kicker="Cheltuieli" title={space?.name || "Cheltuieli"} info="expenses.space" />
     </View>
   );
 }

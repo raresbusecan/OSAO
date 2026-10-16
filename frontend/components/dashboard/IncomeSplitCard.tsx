@@ -7,6 +7,7 @@ import { CircleButton, Group, IconWell, SectionHeader } from "@/components/ui/pr
 import { BudgetSplitBar, BudgetUpcomingNote, budgetUpcomingSuffix } from "@/components/dashboard/BudgetSplitBar";
 import { JAR_ORDER, jarAmounts, jarFill, jarLabel, monthsToTarget, nextMonthName, type BudgetPlan, type SplitKey } from "@/lib/budget/plan";
 import { lei, roCount, roNumber } from "@/lib/format";
+import { useTourTarget } from "@/components/ui/tourTargets";
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -52,6 +53,8 @@ export function IncomeSplitCard({
   const amounts = jarAmounts(plan.monthly_income, split);
   const hasCredit = credit.count > 0;
   const fill = (k: SplitKey) => jarFill(k, colors, isDark);
+  // Buget tour step 2 (lib/tours.ts "jars"): the income + 5-part bar.
+  const splitTarget = useTourTarget("budget.split");
 
   const pct = (k: SplitKey) => <Text style={{ fontWeight: "400", color: colors.onSurfaceTertiary }}>{` · ${split[k]}%`}</Text>;
 
@@ -101,7 +104,7 @@ export function IncomeSplitCard({
       <SectionHeader title="Împărțirea venitului" info="budget.split" action={{ label: "Procente", onPress: onEditSplit, testID: "split-open", tone: colors.onSurface }} />
       <Group inset={62}>
         {/* Income + the 5-segment bar */}
-        <View style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: 18, gap: 14 }}>
+        <View {...splitTarget} style={{ paddingHorizontal: spacing.lg, paddingTop: spacing.lg, paddingBottom: 18, gap: 14 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
             <View style={{ flex: 1 }}>
               <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Venit net lunar</Text>

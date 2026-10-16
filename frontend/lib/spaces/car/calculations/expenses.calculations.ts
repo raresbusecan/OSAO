@@ -1,5 +1,4 @@
 import { maintenanceLabel } from "@/lib/spaces/car/maintenanceLabels";
-import { roCount } from "@/lib/format";
 import type { CarData } from "@/components/spaces/car/car.data.types";
 import type { CarDocumentEntry, CarMaintenanceEntry } from "@/lib/spaces/car/car.types";
 import {
@@ -236,18 +235,8 @@ export function filterRecordsByArchived(
   return includeArchived ? records : records.filter((record) => !record.archived);
 }
 
-/** Short label for the period chip/heading -- "All time", "Last week",
- * "Last 3 months", "Last 1 month", "Last 2 years". */
-export function formatPeriodLabel(period: CarExpensePeriod): string {
-  if (period.kind === "all") return "Tot timpul";
-  if (period.kind === "weeks") {
-    return period.count === 1 ? "Ultima săptămână" : `Ultimele ${roCount(period.count, "săptămână", "săptămâni")}`;
-  }
-  if (period.kind === "months") {
-    return period.count === 1 ? "Ultima lună" : `Ultimele ${roCount(period.count, "lună", "luni")}`;
-  }
-  return period.count === 1 ? "Ultimul an" : `Ultimii ${roCount(period.count, "an", "ani")}`;
-}
+/** The period label now lives with the shared picker (lib/period.ts). */
+export { formatPeriodLabel } from "@/lib/period";
 
 // -------------------------------------------------------------------
 // Archive -- every document/maintenance entry a renewal has superseded

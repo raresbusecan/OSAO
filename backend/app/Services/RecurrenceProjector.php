@@ -183,4 +183,24 @@ class RecurrenceProjector
 
         return $occurrences;
     }
+
+    /** A recurring home_maintenance projects from metadata.nextDueDate when
+     * set (what Casă shows), not from the stored due_at -- shared by
+     * Calendar and the Spații card counts. */
+    public static function projectionAnchor(Item $item): Item
+    {
+        $next = $item->metadata['nextDueDate'] ?? null;
+        if ($item->type !== 'home_maintenance' || !is_string($next) || $next === '') {
+            return $item;
+        }
+        try {
+            $anchor = clone $item;
+            // App zone before assigning: the datetime cast drops the zone.
+            $anchor->due_at = Carbon::parse($next)->setTimezone(config('app.timezone'));
+
+            return $anchor;
+        } catch (\Exception $e) {
+            return $item;
+        }
+    }
 }

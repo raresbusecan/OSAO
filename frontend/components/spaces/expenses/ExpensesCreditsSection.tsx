@@ -6,12 +6,12 @@ import { api } from "@/lib/api";
 import { lei } from "@/lib/format";
 import { useBudgetPlan } from "@/lib/budget/plan";
 import {
-  SPACE_IDENTITY_COLORS,
   SPACE_KIND_LABEL,
   detectSpaceType,
   profileFromSpace,
-  spaceTextColor,
+  spaceColors,
 } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { creditEndAsDate, isCreditActive, type CreditEntry } from "@/lib/spaces/expenses/credits";
 import { Chip, Group, IconWell, SectionHeader } from "@/components/ui/primitives";
 import { TitleChipRow } from "./TitleChipRow";
@@ -41,7 +41,8 @@ function untilLabel(endDate: string): string {
 export function ExpensesCreditsSection({ spaceId, credits, onChanged }: ExpensesCreditsSectionProps) {
   const { colors, spacing, isDark } = useTheme();
   const summary = useBudgetPlan();
-  const tint = spaceTextColor("expenses", isDark) ?? SPACE_IDENTITY_COLORS.expenses!;
+  const exp = useSpaceColors("expenses");
+  const tint = exp.tint;
   const [editing, setEditing] = useState<CreditEntry | "new" | null>(null);
   const [endedOpen, setEndedOpen] = useState(false);
   const [linkable, setLinkable] = useState<LinkableSpace[]>([]);
@@ -56,7 +57,7 @@ export function ExpensesCreditsSection({ spaceId, credits, onChanged }: Expenses
         const out: LinkableSpace[] = [];
         (r?.spaces ?? []).forEach((s: any) => {
           const kind = detectSpaceType(s, profileFromSpace(s));
-          if (kind === "car" || kind === "home") out.push({ id: String(s.id), kind, name: s.name ?? "" });
+          if (kind === "car" || kind === "home") out.push({ id: String(s.id), kind, name: s.name ?? "", color: s.color ?? null });
         });
         setLinkable(out);
       })
@@ -81,9 +82,9 @@ export function ExpensesCreditsSection({ spaceId, credits, onChanged }: Expenses
         testID={`credit-row-${c.id}`}
         onPress={() => setEditing(c)}
         dim={isEnded}
-        leading={<IconWell icon="card-outline" color={SPACE_IDENTITY_COLORS.expenses!} tint={tint} />}
+        leading={<IconWell icon="card-outline" color={exp.color} tint={tint} />}
         title={c.title}
-        chip={linked ? <Chip label={linked.name || SPACE_KIND_LABEL[linked.kind]!} color={spaceTextColor(linked.kind, isDark) ?? SPACE_IDENTITY_COLORS[linked.kind]!} /> : undefined}
+        chip={linked ? <Chip label={linked.name || SPACE_KIND_LABEL[linked.kind]!} color={spaceColors({ kind: linked.kind, color: linked.color }, isDark)!.tint} /> : undefined}
         subtitle={`Pe ${c.dayOfMonth} · ${isEnded ? "încheiat în" : "până în"} ${untilLabel(c.endDate)}`}
         trailing={<Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{lei(c.amount)}</Text>}
       />
@@ -95,7 +96,7 @@ export function ExpensesCreditsSection({ spaceId, credits, onChanged }: Expenses
       <SectionHeader
         title="Credite"
         info="expenses.credits"
-        action={{ label: "Adaugă", onPress: () => setEditing("new"), tone: tint, testID: "credit-add" }}
+        action={{ label: "Adaugă", icon: "add", onPress: () => setEditing("new"), tone: tint, testID: "credit-add" }}
       />
 
       {credits.length === 0 ? (

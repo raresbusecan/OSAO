@@ -1,14 +1,13 @@
 import React, { useState } from "react";
 import { View } from "react-native";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { confirmAction } from "@/lib/confirm";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field } from "@/components/ui/primitives";
 
 import type { HomeSupplyEntry } from "@/lib/spaces/home/home.types";
 
-const HOME = SPACE_IDENTITY_COLORS.home!;
 
 type HomeSupplyFormProps = {
   onCancel: () => void;
@@ -23,6 +22,8 @@ type HomeSupplyFormProps = {
 export default function HomeSupplyForm({ onCancel, onSave, entry, onDelete }: HomeSupplyFormProps) {
   const isEditing = entry !== undefined;
   const { spacing } = useTheme();
+  const homeColors = useSpaceColors("home");
+  const HOME = homeColors.color;
 
   const [name, setName] = useState(entry?.name ?? "");
   const [category, setCategory] = useState(entry?.category ?? "");
@@ -70,7 +71,7 @@ export default function HomeSupplyForm({ onCancel, onSave, entry, onDelete }: Ho
       tone={HOME}
       footer={
         <>
-          <Button label={isEditing ? "Salvează" : "Adaugă provizia"} tone={SPACE_BUTTON_FILL.home} onPress={handleSave} />
+          <Button label={isEditing ? "Salvează" : "Adaugă provizia"} tone={homeColors.fill} onPress={handleSave} />
           {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge provizia" onPress={handleDelete} /> : null}
         </>
       }

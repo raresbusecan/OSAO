@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -7,13 +7,16 @@ import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/providers/auth";
 import { api, apiErrorMessage } from "@/lib/api";
 import { confirmAction, notifyAction } from "@/lib/confirm";
-import { TopBar, SectionHeader, Group, Row, IconWell, Button, Field } from "@/components/ui/primitives";
+import { TopBar, SectionHeader, Group, Row, IconWell, Button, Field, ToggleRow } from "@/components/ui/primitives";
+import { useAppMode } from "@/lib/appMode";
+import { LANGUAGES, useLanguage } from "@/lib/i18n";
 import { Sheet } from "@/components/ui/Sheet";
 import { PasswordField } from "@/components/auth/AuthShell";
 import { VerifyEmailBanner } from "@/components/auth/VerifyEmailBanner";
 import { VerifiedBadge } from "@/components/auth/VerifiedBadge";
 import { PROVIDER_LABEL, type SocialProvider } from "@/lib/socialAuth";
 import { TOUR_LIST, clearSeenLocally, requestTour, tourExists, type TourKey } from "@/lib/tours";
+import { detectSpaceType, profileFromSpace, type SpaceKind } from "@/lib/spaces/spaceProfile";
 
 const PROVIDER_ICON: Record<SocialProvider, keyof typeof Ionicons.glyphMap> = {
   apple: "logo-apple",
@@ -47,6 +50,11 @@ export default function Settings() {
   const [editingEmail, setEditingEmail] = useState(false);
   const [settingPassword, setSettingPassword] = useState(false);
   const [toursOpen, setToursOpen] = useState(false);
+  const [languageOpen, setLanguageOpen] = useState(false);
+  // orgOS Simplu test switch (lib/appMode.tsx) -- local to this device.
+  const { mode, setMode, source } = useAppMode();
+  // lib/i18n -- this row is the first string read from the locale files.
+  const { t, language } = useLanguage();
 
   // Social-only account (signed up with Apple/Google/Facebook, no password
   // yet): both password-protected sheets would be dead ends, so "Parolă"
@@ -69,10 +77,18 @@ export default function Settings() {
       : { key: "password", icon: "lock-closed-outline", label: "Parolă", onPress: () => setEditingPassword(true) },
   ];
   const app: SettingsRow[] = [
-    { key: "language", icon: "language-outline", label: "Limbă", value: "Română" },
+    {
+      key: "language",
+      icon: "language-outline",
+      label: t("settings.language.row"),
+      value: LANGUAGES.find((l) => l.code === language)?.label,
+      onPress: () => setLanguageOpen(true),
+    },
     { key: "colors", icon: "color-palette-outline", label: "Culori" },
     { key: "theme", icon: "contrast-outline", label: "Temă", value: "Automat" },
-    { key: "tours", icon: "map-outline", label: "Revezi ghidurile", onPress: () => setToursOpen(true) },
+    // Simplu screens run no tours, so a replay request would sit pending
+    // until the user switched back to full mode.
+    ...(mode === "simple" ? [] : [{ key: "tours", icon: "map-outline", label: "Revezi ghidurile", onPress: () => setToursOpen(true) } as SettingsRow]),
   ];
 
   // Sign-out lives here, behind a confirmation -- it used to be a
@@ -144,6 +160,18 @@ export default function Settings() {
           <View style={{ gap: spacing.sm }}>
             <SectionHeader title="Aplicație" muted />
             <Group inset={62}>{app.map(renderRow)}</Group>
+            {/* Test-only: flips between orgOS Simplu (future free tier) and
+                the full app. Hidden once a server plan drives the mode. */}
+            {source !== "plan" ? (
+              <ToggleRow
+                testID="settings-simple-mode"
+                icon="leaf-outline"
+                label="Mod Simplu (test)"
+                hint="Varianta gratuită, mai simplă. Doar pentru comparație."
+                value={mode === "simple"}
+                onChange={(on) => setMode(on ? "simple" : "full")}
+              />
+            ) : null}
           </View>
 
           <Button testID="settings-signout" variant="destructive" icon="log-out-outline" label="Ieși din cont" onPress={handleSignOut} />
@@ -174,18 +202,52 @@ export default function Settings() {
 
       <EditEmailModal visible={editingEmail} onClose={() => setEditingEmail(false)} />
 
+      <LanguageSheet visible={languageOpen} onClose={() => setLanguageOpen(false)} />
+
       <ToursSheet
         visible={toursOpen}
         onClose={() => setToursOpen(false)}
-        onStart={(key) => {
+        onStart={(key, href) => {
           setToursOpen(false);
-          // Acasă's useAutoTour picks the request up once it's focused and
-          // this screen (and the sheet's Modal) are gone.
+          // The owning screen's useAutoTour picks the request up once it's
+          // focused and this screen (and the sheet's Modal) are gone.
           requestTour(key);
-          router.dismissTo("/(tabs)/home");
+          router.dismissTo((href ?? "/(tabs)/home") as any);
         }}
       />
     </View>
+  );
+}
+
+/** Settings > Limbă: the app's languages (lib/i18n). A tap switches right
+ * away (every translated text re-renders) and is remembered on this
+ * device; the API follows through Accept-Language. */
+function LanguageSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { colors, spacing } = useTheme();
+  const { t, language, setLanguage } = useLanguage();
+  return (
+    <Sheet visible={visible} onClose={onClose} title={t("settings.language.sheetTitle")} subtitle={t("settings.language.sheetSubtitle")} testID="settings-language-sheet">
+      <Group>
+        {LANGUAGES.map((l) => {
+          const on = l.code === language;
+          return (
+            <Row
+              key={l.code}
+              testID={`settings-language-${l.code}`}
+              title={l.label}
+              onPress={() => {
+                if (!on) setLanguage(l.code);
+                onClose();
+              }}
+              trailing={on ? <Ionicons name="checkmark" size={20} color={colors.onSurface} /> : null}
+            />
+          );
+        })}
+      </Group>
+      {language !== "ro" ? (
+        <Text style={{ fontSize: 13, lineHeight: 19, color: colors.onSurfaceTertiary, paddingHorizontal: spacing.xs }}>{t("settings.language.inProgress")}</Text>
+      ) : null}
+    </Sheet>
   );
 }
 
@@ -519,10 +581,32 @@ function EditEmailModal({ visible, onClose }: { visible: boolean; onClose: () =>
 /** "Revezi ghidurile": every first-use tour (lib/tours.ts) with whether it
  * was seen, skipped or is still new; tap one to run it now. Tours that
  * don't exist yet are listed dimmed as "În curând". */
-function ToursSheet({ visible, onClose, onStart }: { visible: boolean; onClose: () => void; onStart: (key: TourKey) => void }) {
+function ToursSheet({ visible, onClose, onStart }: { visible: boolean; onClose: () => void; onStart: (key: TourKey, href?: string) => void }) {
   const { colors } = useTheme();
   const { user, updateUser } = useAuth();
   const [resetting, setResetting] = useState(false);
+  // A Space tour runs on the user's FIRST space of that kind (Spaces tab
+  // order); looked up each time the sheet opens. null = not loaded yet.
+  const [firstSpaceId, setFirstSpaceId] = useState<Partial<Record<SpaceKind, string>> | null>(null);
+  useEffect(() => {
+    if (!visible) return;
+    let alive = true;
+    api
+      .listSpaces()
+      .then((r) => {
+        if (!alive) return;
+        const first: Partial<Record<SpaceKind, string>> = {};
+        for (const sp of r?.spaces ?? []) {
+          const kind = detectSpaceType(sp, profileFromSpace(sp));
+          if (kind && first[kind] == null) first[kind] = String(sp.id);
+        }
+        setFirstSpaceId(first);
+      })
+      .catch(() => alive && setFirstSpaceId({}));
+    return () => {
+      alive = false;
+    };
+  }, [visible]);
 
   const status = (key: TourKey) => {
     const s = user?.tours?.[key]?.status;
@@ -559,21 +643,26 @@ function ToursSheet({ visible, onClose, onStart }: { visible: boolean; onClose: 
     >
       <Group inset={62}>
         {TOUR_LIST.map((t) => {
+          const spaceId = t.spaceKind ? firstSpaceId?.[t.spaceKind] : undefined;
+          const href = t.spaceKind ? (spaceId ? `/${spaceId}` : undefined) : t.href;
+          // A Space tour with no space of its kind yet stays disabled.
+          const noSpace = !!t.spaceKind && !spaceId;
           const exists = tourExists(t.key);
+          const startable = exists && !noSpace;
           return (
             <Row
               key={t.key}
               testID={`settings-tour-${t.key}`}
               leading={<IconWell icon={t.icon as keyof typeof Ionicons.glyphMap} color={colors.onSurfaceTertiary} tint={colors.onSurfaceSecondary} size={34} />}
               title={t.label}
-              onPress={exists ? () => onStart(t.key) : undefined}
-              dim={!exists}
+              onPress={startable ? () => onStart(t.key, href) : undefined}
+              dim={!startable}
               trailing={
                 <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }} numberOfLines={1}>
-                  {exists ? status(t.key) : "În curând"}
+                  {!exists ? "În curând" : noSpace ? (firstSpaceId ? "După primul spațiu" : "") : status(t.key)}
                 </Text>
               }
-              chevron={exists}
+              chevron={startable}
             />
           );
         })}

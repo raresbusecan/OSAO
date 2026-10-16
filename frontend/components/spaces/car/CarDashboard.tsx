@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import type { ScrollView as ScrollViewType } from "react-native";
 import { askRenewal, parseDocDate, renewalPeriod, renewedTitle, toCarDate } from "@/lib/dashboard/documentRenewal";
 import { SwipeRow } from "@/components/spaces/SwipeRow";
 import { useRouter } from "expo-router";
@@ -7,7 +8,7 @@ import type { CarRecentItem } from "./utils/carEntries.types";
 import { isRecentToday } from "@/lib/spaces/car/utils/recency";
 import { isDocumentLocked } from "@/lib/spaces/car/utils/documentLock";
 import { confirmAction, notifyAction } from "@/lib/confirm";
-import { severityColor } from "@/lib/statusColors";
+import { severityColor, urgencyTierColor } from "@/lib/statusColors";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
@@ -17,6 +18,10 @@ import { LinkedCreditsLine } from "@/components/spaces/LinkedCreditsLine";
 import type { HelpKey } from "@/lib/help";
 import { formatCarDate } from "./utils/carFormatters";
 import { maintenanceLabel } from "@/lib/spaces/car/maintenanceLabels";
+import { useTourScroll, useTourTarget } from "@/components/ui/tourTargets";
+import { useAutoTour } from "@/lib/useAutoTour";
+import { SHOW_TOUR_TEST_BUTTON, startTour, type TourCtx } from "@/lib/tours";
+import { useBudgetPlan } from "@/lib/budget/plan";
 
 import {
     View,
@@ -28,6 +33,9 @@ import {
 import type { SpaceCategory } from "@/lib/spaceCategoryFab";
 
 import { CarQuickActions } from "./CarQuickActions";
+import { CarOdometerSheet } from "./CarOdometerSheet";
+import { daysFromToday, roRelativeDays } from "@/lib/format";
+import { longPressFeedback } from "@/lib/haptics";
 import CarFuelForm from "./forms/CarFuelForm";
 import CarMaintenanceForm from "./forms/CarMaintenanceForm";
 import CarDocumentForm from "./forms/CarDocumentForm";
@@ -58,18 +66,23 @@ import type { CarData } from "./car.data.types";
 import {
     getAverageFuelConsumption,
     getCurrentOdometer,
+    getLoggedOdometer,
+    getOdometerUpdatedAt,
     getThisMonthExpenses,
     getUpcomingItems,
 } from "@/lib/spaces/car/calculations/dashboard.calculations";
 import { filterRecordsByPeriod } from "@/lib/spaces/car/calculations/expenses.calculations";
 import type { CarProfile } from "@/lib/spaces/spaceProfile";
-import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 
 export type CarDashboardProps = {
     space: any;
     carData: CarData;
     /** From the dedicated Car form (Edit -> Make/Model/Color/Year/Price) -- null for a Car space created before this existed. */
     profile?: CarProfile | null;
+    /** "Actualizează kilometrajul" saved -- [id].tsx stores the profile
+     * and sets carData.vehicle.mileage so everything recalculates. */
+    onOdometerSaved?: (profile: CarProfile) => void;
     onEdit?: () => void;
     onFuelSave?: (entry: CarFuelEntry) => void;
     onMaintenanceSave?: (entry: CarMaintenanceEntry) => void;
@@ -87,12 +100,16 @@ export type CarDashboardProps = {
     /** `renew`: open the "log the renewal" form (a swipe from another
      * screen picked "Modifică informațiile") instead of editing it. */
     initialOpenEntry?: { type: "document" | "maintenance"; id: string; renew?: boolean } | null;
+    /** Something of [id].tsx's own is open over the dashboard (the profile
+     * edit form) -- holds back the first-use tour. */
+    tourBlocked?: boolean;
 };
 
 export default function CarDashboard({
     space,
     carData,
     profile,
+    onOdometerSaved,
     onEdit,
     onFuelSave,
     onMaintenanceSave,
@@ -103,8 +120,10 @@ export default function CarDashboard({
     onDocumentDelete,
     onExpenseDelete,
     initialOpenEntry,
+    tourBlocked = false,
 }: CarDashboardProps) {
-    const { colors, spacing, radius, isDark, typography } = useTheme();
+    const { colors, spacing, radius, typography } = useTheme();
+    const carColors = useSpaceColors("car");
     const router = useRouter();
 
     // Make is the space's actual name (big title, above); Model sits here
@@ -118,7 +137,7 @@ export default function CarDashboard({
     // what the user actually set.
     const vehicleForForms = {
         ...carData.vehicle,
-        tank_capacity_liters: profile?.tankCapacity ?? carData.vehicle.tank_capacity_liters,
+        tank_capacity_liters: profile?.tankCapacity ?? carData.vehicle.tank_capacity_liters ?? 0,
     };
 
     const [fuelFormVisible, setFuelFormVisible] = useState(false);
@@ -198,6 +217,8 @@ export default function CarDashboard({
     const [docsPageVisible, setDocsPageVisible] = useState(false);
     const [archivePageVisible, setArchivePageVisible] = useState(false);
     const [historyPageVisible, setHistoryPageVisible] = useState(false);
+    // Top card: tap / long-press the km (or its pencil) -> CarOdometerSheet.
+    const [odometerSheetVisible, setOdometerSheetVisible] = useState(false);
     // Which tab History opens on -- "all" from the pill, or a specific
     // category when the empty state's "See History" link sends you there.
     const [historyInitialTab, setHistoryInitialTab] = useState<CarRecentItem["type"] | "all">("all");
@@ -231,13 +252,41 @@ export default function CarDashboard({
      */
 
     const currentOdometer = getCurrentOdometer(carData);
+    // "Actualizează kilometrajul" can't go below this (server checks too).
+    const loggedOdometer = getLoggedOdometer(carData);
+    // Caption under the km: the newer of the manual update and the latest
+    // entry that logged a reading. A future-dated entry reads as "azi".
+    const odometerUpdatedAt = getOdometerUpdatedAt(carData, profile?.odometerUpdatedAt);
+    const odometerCaption = odometerUpdatedAt
+        ? (() => {
+              const days = Math.min(0, daysFromToday(odometerUpdatedAt));
+              return days === 0 ? "actualizat azi" : days === -1 ? "actualizat ieri" : roRelativeDays(days);
+          })()
+        : "neactualizat încă";
     const thisMonthExpenses = getThisMonthExpenses(carData);
 
     // Hero's second stat -- null until there are 2+ fuel fill-ups and a
     // tank capacity to compare (see getAverageFuelConsumption).
-    const averageConsumption = getAverageFuelConsumption(carData);
+    // Tank capacity from the live profile (edits apply without a reload).
+    const averageConsumption = getAverageFuelConsumption({ ...carData, vehicle: vehicleForForms });
 
     const nextItems: CarNextItem[] = getUpcomingItems(carData, currentOdometer, 3);
+
+    // First-use tour (lib/tours.ts "space_car", any car space): what it
+    // points at, and the dashboard's ScrollView so a step can scroll its
+    // target into view. Hooks live up here -- renderPage() is not a component.
+    const scrollRef = useRef<ScrollViewType>(null);
+    const tourScroll = useTourScroll("space_car", scrollRef);
+    const topTarget = useTourTarget("car.top");
+    const actionsTarget = useTourTarget("car.actions");
+    const nextTarget = useTourTarget("car.next");
+    const pagesTarget = useTourTarget("car.pages");
+    // Same rule as LinkedCreditsLine: a credit linked to THIS space.
+    const budgetSummary = useBudgetPlan();
+    const hasLinkedCredit = (budgetSummary?.credit.items ?? []).some(
+        (c) => c.linked_space_id != null && String(c.linked_space_id) === String(space?.id ?? ""),
+    );
+    const tourCtx: TourCtx = { hasCredit: hasLinkedCredit, hasUpcoming: nextItems.length > 0 };
 
     // Archived entries (superseded by a renewal -- see
     // handleDocumentSave/handleMaintenanceSave) are left out here so the
@@ -317,6 +366,13 @@ export default function CarDashboard({
             label: "Document",
         },
     ];
+
+    // Ready = the dashboard itself is showing: no entry form, no sub-page
+    // (Documente / Arhivă / Istoric / Cheltuieli), no profile edit form.
+    // CarDashboard only mounts once [id].tsx has loaded the space.
+    const anyFormOpen = fuelFormVisible || maintenanceFormVisible || documentFormVisible || expenseFormVisible;
+    const anyPageOpen = expensesPageVisible || docsPageVisible || archivePageVisible || historyPageVisible;
+    useAutoTour("space_car", { ready: !!space && !anyFormOpen && !anyPageOpen && !tourBlocked && !odometerSheetVisible, ctx: tourCtx });
 
     /*
      * =========================================================
@@ -779,8 +835,8 @@ export default function CarDashboard({
          * =========================================================
          */
 
-        const carTint = spaceTextColor("car", isDark) ?? SPACE_IDENTITY_COLORS.car!;
-        const carFill = SPACE_IDENTITY_COLORS.car!;
+        const carTint = carColors.tint;
+        const carFill = carColors.color;
         const muted = colors.onSurfaceTertiary;
         const tabLabel = CATEGORY_TABS.find((t) => t.key === activeTab)?.label.toLowerCase();
 
@@ -788,6 +844,8 @@ export default function CarDashboard({
             <>
                 <SwipeBackView onBack={() => router.push("/spaces")}>
                 <ScrollView
+                    ref={scrollRef}
+                    {...tourScroll}
                     showsVerticalScrollIndicator={false}
                     contentContainerStyle={{
                         paddingHorizontal: spacing.gutter,
@@ -798,6 +856,12 @@ export default function CarDashboard({
                 >
                     {/* TOP BAR -- back to Spaces, edit this car. */}
                     <TopBar onBack={() => router.push("/spaces")}>
+                        {SHOW_TOUR_TEST_BUTTON ? (
+                            // TEMP for testing -- see SHOW_TOUR_TEST_BUTTON (lib/tours.ts).
+                            <View style={{ justifyContent: "center" }}>
+                                <Pill testID="car-tour-test" icon="play-circle-outline" label="Pornește ghidul" onPress={() => startTour("space_car", tourCtx)} />
+                            </View>
+                        ) : null}
                         <CircleButton testID="space-edit" icon="create-outline" label="Editează mașina" onPress={handleEdit} />
                     </TopBar>
 
@@ -807,7 +871,8 @@ export default function CarDashboard({
                         one destination each, always visible. */}
                     <View style={{ gap: spacing.md }}>
                         <Identity color={carFill} kicker="Mașină" title={space?.name || "Mașina mea"} subtitle={vehicleSubtitle || null} info="car.space" />
-                        <View style={{ flexDirection: "row", gap: spacing.sm }}>
+                        {/* Tour step 4 ("Istoric, documente, arhivă"). */}
+                        <View {...pagesTarget} style={{ flexDirection: "row", gap: spacing.sm }}>
                             <Pill testID="car-docs-open" icon="document-text-outline" label="Documente" onPress={() => setDocsPageVisible(true)} />
                             <Pill testID="car-archive-open" icon="archive-outline" label="Arhivă" onPress={() => setArchivePageVisible(true)} />
                             <Pill
@@ -824,18 +889,34 @@ export default function CarDashboard({
 
                     {/* HERO + the linked-credits line right under it (closer
                         than the page's section gap). */}
-                    <View style={{ gap: spacing.sm }}>
+                    {/* Tour step 1 ("Mașina ta"): the hero + credit line. */}
+                    <View {...topTarget} style={{ gap: spacing.sm }}>
                         {/* HERO -- odometer as the headline number; this month's
                             spend (tap -> Expenses page, the one place for "what
                             this car has cost") and average consumption under it. */}
                         <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.lg }}>
-                            <View style={{ gap: 2 }}>
+                            {/* Tap / long-press (shortcut, haptic) the km or its
+                                pencil -> "Actualizează kilometrajul". */}
+                            <PressableScale
+                                testID="car-odometer-open"
+                                onPress={() => setOdometerSheetVisible(true)}
+                                onLongPress={() => {
+                                    longPressFeedback();
+                                    setOdometerSheetVisible(true);
+                                }}
+                                scaleTo={0.98}
+                                accessibilityRole="button"
+                                accessibilityLabel={`Kilometraj: ${currentOdometer.toLocaleString("ro-RO")} km, ${odometerCaption}. Actualizează kilometrajul`}
+                                style={{ gap: 2, alignSelf: "flex-start" }}
+                            >
                                 <Text style={{ fontSize: 13, color: muted }}>Kilometraj</Text>
                                 <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
                                     <AnimatedNumber value={currentOdometer} style={{ ...typography.display, color: colors.onSurface }} />
                                     <Text style={{ fontSize: 16, color: muted }}>km</Text>
+                                    <Ionicons name="pencil" size={15} color={carTint} style={{ marginLeft: 2 }} />
                                 </View>
-                            </View>
+                                <Text testID="car-odometer-caption" style={{ fontSize: 13, color: muted }}>{odometerCaption}</Text>
+                            </PressableScale>
                             <View style={{ flexDirection: "row", borderTopWidth: 1, borderTopColor: colors.border, paddingTop: spacing.md + 2 }}>
                                 <PressableScale
                                     testID="car-expenses-stat"
@@ -866,12 +947,16 @@ export default function CarDashboard({
                     </View>
 
                     {/* QUICK ACTIONS -- the one way into each form. */}
-                    <CarQuickActions actions={carCategories} onAction={handleCarAction} />
+                    <View {...actionsTarget}>
+                        <CarQuickActions actions={carCategories} onAction={handleCarAction} />
+                    </View>
 
                     {/* DUE SOON -- documents/maintenance coming up, each with
                         its urgency chip (see InfoRow / getDocumentUrgencyTier). */}
                     {nextItems.length > 0 && (
-                        <View style={{ gap: spacing.sm }}>
+                        // Tour step 3 -- not registered when there's nothing
+                        // due, the step then shows its illustration.
+                        <View {...nextTarget} style={{ gap: spacing.sm }}>
                             <SectionHeader title="Urmează" info="car.next" />
                             <Group inset={68}>
                                 {nextItems.map((item) => (
@@ -952,6 +1037,14 @@ export default function CarDashboard({
                     </View>
                 </ScrollView>
                 </SwipeBackView>
+                <CarOdometerSheet
+                    visible={odometerSheetVisible}
+                    spaceId={String(space?.id ?? "")}
+                    currentOdometer={currentOdometer}
+                    minLogged={loggedOdometer}
+                    onClose={() => setOdometerSheetVisible(false)}
+                    onSaved={(saved) => onOdometerSaved?.(saved)}
+                />
             </>
         );
     };
@@ -1023,9 +1116,7 @@ function EntryGroup({
 // lib/theme.tsx): 45-31 days left = caution (yellow), 30-16 = warning
 // (orange), 15-0 = error (red).
 function tierColor(tier: "light" | "medium" | "critical", colors: any) {
-    if (tier === "critical") return severityColor("critical", colors);
-    if (tier === "medium") return severityColor("warning", colors);
-    return severityColor("caution", colors);
+    return urgencyTierColor(tier, colors);
 }
 
 // Same 3 colors as tierColor, plus "safe" for the status dot shown
@@ -1050,6 +1141,7 @@ function InfoRow({
     onPress?: () => void;
 }) {
     const { colors, spacing } = useTheme();
+    const carColors = useSpaceColors("car");
     const tone = urgencyTier ? tierColor(urgencyTier, colors) : null;
     return (
         <PressableScale
@@ -1068,7 +1160,7 @@ function InfoRow({
                 backgroundColor: colors.surfaceSecondary,
             }}
         >
-            <IconWell icon={icon} color={SPACE_IDENTITY_COLORS.car!} tint={tint} />
+            <IconWell icon={icon} color={carColors.color} tint={tint} />
             <View style={{ flex: 1 }}>
                 <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>{title}</Text>
                 <Text style={{ marginTop: 2, fontSize: 13, color: colors.onSurfaceTertiary }} numberOfLines={1}>{subtitle}</Text>
@@ -1105,8 +1197,8 @@ export function RecentRow({
     last?: boolean;
     onPress?: () => void;
 }) {
-    const { isDark } = useTheme();
-    const tint = spaceTextColor("car", isDark) ?? SPACE_IDENTITY_COLORS.car!;
+    const carColors = useSpaceColors("car");
+    const tint = carColors.tint;
 
     return (
         <PressableScale
@@ -1132,7 +1224,7 @@ export function RecentRow({
             {/* Icon well = which entry type; the small dot on its corner =
                 document/maintenance status (see statusDotColor). */}
             <View>
-                <IconWell icon={icon} color={SPACE_IDENTITY_COLORS.car!} tint={tint} />
+                <IconWell icon={icon} color={carColors.color} tint={tint} />
                 {statusDot ? (
                     <View
                         style={{

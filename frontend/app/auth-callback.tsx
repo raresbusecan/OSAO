@@ -41,14 +41,14 @@ export default function AuthCallback() {
   const { colors, spacing } = useTheme();
   const router = useRouter();
   const { user, signInWithToken } = useAuth();
-  const params = useLocalSearchParams<{ code?: string | string[]; error?: string | string[]; provider?: string | string[] }>();
+  const params = useLocalSearchParams<{ code?: string | string[]; error?: string | string[]; provider?: string | string[]; hint?: string | string[] }>();
   const code = Array.isArray(params.code) ? params.code[0] : params.code;
   const errorCode = Array.isArray(params.error) ? params.error[0] : params.error;
   const providerParam = Array.isArray(params.provider) ? params.provider[0] : params.provider;
   const provider = providerParam === "google" || providerParam === "facebook" || providerParam === "apple" ? providerParam : null;
   // Cancel is silent everywhere (same as the in-app flow): back, no message.
   const cancelled = isCancelCode(errorCode);
-  const [err, setErr] = useState<string | null>(errorCode && !cancelled ? socialErrorMessage(errorCode, provider) : null);
+  const [err, setErr] = useState<string | null>(errorCode && !cancelled ? socialErrorMessage(errorCode, provider, Array.isArray(params.hint) ? params.hint[0] : params.hint) : null);
 
   useEffect(() => {
     if (errorCode && !cancelled) return;

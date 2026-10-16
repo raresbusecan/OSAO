@@ -15,28 +15,48 @@ import {
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const DOC_ALERT_DAYS = 45;
 
+/** Every logged entry that carries an odometer reading (fuel, services,
+ * expenses) -- the same set the backend's CarProfile::ODOMETER_ITEM_TYPES
+ * reads for the "can't go lower" rule. */
+function odometerEntries(carData: CarData): { odometer?: number; date: string }[] {
+  return [...carData.fuelEntries, ...carData.maintenanceEntries, ...carData.expenseEntries];
+}
+
+/** Highest odometer logged on any fuel/service/expense entry (0 if none),
+ * rounded up to whole km -- the minimum "Actualizează kilometrajul"
+ * accepts (server: CarProfile::loggedOdometer, same rounding). */
+export function getLoggedOdometer(carData: CarData): number {
+  let max = 0;
+  odometerEntries(carData).forEach((entry) => {
+    const odo = Number(entry.odometer);
+    if (Number.isFinite(odo) && odo > max) max = odo;
+  });
+  return Math.ceil(max);
+}
+
+/** The car's current odometer: the reading typed on the top card
+ * (`vehicle.mileage` = car_profiles.odometer, 0 if never set) or the
+ * highest logged one, whichever is higher. */
 export function getCurrentOdometer(carData: CarData): number {
-  let maxOdometer = carData.vehicle.mileage || 0;
+  return Math.max(carData.vehicle.mileage || 0, getLoggedOdometer(carData));
+}
 
-  carData.fuelEntries.forEach((entry) => {
-    if (entry.odometer !== undefined && entry.odometer > maxOdometer) {
-      maxOdometer = entry.odometer;
-    }
+/** When the odometer was last known: the manual update on the top card
+ * (`manualUpdatedAt`) or the newest entry that logged a reading --
+ * whichever is more recent. null = never (no reading at all). */
+export function getOdometerUpdatedAt(carData: CarData, manualUpdatedAt?: string | null): Date | null {
+  let latest: Date | null = null;
+  const consider = (raw: string | null | undefined) => {
+    if (!raw) return;
+    const d = new Date(raw);
+    if (Number.isNaN(d.getTime())) return;
+    if (!latest || d.getTime() > latest.getTime()) latest = d;
+  };
+  if (carData.vehicle.mileage > 0) consider(manualUpdatedAt);
+  odometerEntries(carData).forEach((entry) => {
+    if (Number(entry.odometer) > 0) consider(entry.date);
   });
-
-  carData.maintenanceEntries.forEach((entry) => {
-    if (entry.odometer !== undefined && entry.odometer > maxOdometer) {
-      maxOdometer = entry.odometer;
-    }
-  });
-
-  carData.expenseEntries.forEach((entry) => {
-    if (entry.odometer && entry.odometer > maxOdometer) {
-      maxOdometer = entry.odometer;
-    }
-  });
-
-  return maxOdometer;
+  return latest;
 }
 
 export function getThisMonthExpenses(carData: CarData): number {
@@ -396,8 +416,24 @@ export function isMaintenanceSuperseded(
   return allEntries.some((other) => {
     if (other.id === entry.id) return false;
     if (other.service !== entry.service) return false;
-    return new Date(other.date).getTime() > new Date(entry.date).getTime();
+    return compareMaintenanceRecency(other, entry) > 0;
   });
+}
+
+/**
+ * > 0 when `a` is the newer visit. By date, then -- same day, which is
+ * every Simplu "Adaugă" save (it stores the day at local midnight) -- the
+ * higher odometer, then the later-created record (numeric id). Without
+ * the tie-break, three oil changes logged the same day all stayed
+ * "current" and the pick between them was arbitrary (user report
+ * 2026-10-15: the one with the 10.400 km target lost to an older one).
+ */
+export function compareMaintenanceRecency(a: CarMaintenanceEntry, b: CarMaintenanceEntry): number {
+  const byDate = new Date(a.date).getTime() - new Date(b.date).getTime();
+  if (byDate !== 0) return byDate;
+  const byKm = (a.odometer ?? -1) - (b.odometer ?? -1);
+  if (byKm !== 0) return byKm;
+  return (Number(a.id) || 0) - (Number(b.id) || 0);
 }
 
 export function getUpcomingItems(

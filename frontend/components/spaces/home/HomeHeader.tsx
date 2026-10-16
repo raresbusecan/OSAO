@@ -1,7 +1,7 @@
 import React from "react";
 import { View } from "react-native";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { roCount } from "@/lib/format";
 import { TopBar, CircleButton, Identity, Pill } from "@/components/ui/primitives";
 
@@ -28,13 +28,14 @@ export type HomeHeaderProps = {
  * no tab in "De rezolvat", so their urgent count rides on the pill. */
 export function HomeHeader({ space, subtitle, onBack, onEdit, onHistoryPress, onDocumentsPress, onSuppliesPress, expiredDocuments = 0, lowSupplies = 0 }: HomeHeaderProps) {
   const { spacing } = useTheme();
+  const homeColors = useSpaceColors("home");
   return (
     <View style={{ gap: spacing.section }}>
       <TopBar onBack={onBack}>
         {onEdit ? <CircleButton testID="space-edit" icon="create-outline" label="Editează casa" onPress={onEdit} /> : null}
       </TopBar>
       <View style={{ gap: spacing.md }}>
-        <Identity color={SPACE_IDENTITY_COLORS.home} kicker="Casă" title={space?.name || "Casa mea"} subtitle={subtitle} info="home.space" />
+        <Identity color={homeColors.color} kicker="Casă" title={space?.name || "Casa mea"} subtitle={subtitle} info="home.space" />
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
           {onHistoryPress ? <Pill testID="home-history-open" icon="time-outline" label="Istoric" onPress={onHistoryPress} /> : null}
           {onDocumentsPress ? (

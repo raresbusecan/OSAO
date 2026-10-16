@@ -1,19 +1,19 @@
 import React, { useMemo, useState } from "react";
 import { View, Text, ScrollView, Pressable } from "react-native";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import { SwipeRow } from "@/components/spaces/SwipeRow";
-import { TopBar, Identity, Segmented, Pill, SectionHeader, Group, EmptyState } from "@/components/ui/primitives";
+import { TopBar, Identity, Segmented, SectionHeader, Group, EmptyState } from "@/components/ui/primitives";
 import { capitalize, roCount } from "@/lib/format";
 import { RecentRow } from "./CarDashboard";
-import { CarPeriodSheet, type CustomPeriodUnit } from "./CarPeriodSheet";
+import { CAR_PERIOD_PRESETS } from "./CarPeriodSheet";
+import { PeriodPicker } from "@/components/ui/PeriodPicker";
 import { buildCarRecentItems } from "./utils/carEntries";
 import type { CarRecentItem } from "./utils/carEntries.types";
 import type { CarData } from "./car.data.types";
 import {
   filterRecordsByPeriod,
-  formatPeriodLabel,
   periodCutoffDate,
   type CarExpensePeriod,
 } from "@/lib/spaces/car/calculations/expenses.calculations";
@@ -73,39 +73,13 @@ const CATEGORY_TABS: { key: CarRecentItem["type"] | "all"; label: string }[] = [
  */
 export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPress, onRecordDelete }: CarHistoryPageProps) {
   const { colors, spacing } = useTheme();
+  const carColors = useSpaceColors("car");
   const [activeTab, setActiveTab] = useState<CarRecentItem["type"] | "all">(initialTab);
 
   // "All time" by default, same as Expenses. Custom (1-12 weeks OR
   // months, picked via the unit toggle) covers anything the fixed
-  // presets don't -- see selectCustom/adjustCustomCount below.
+  // presets don't -- PeriodPicker's "Personalizat".
   const [period, setPeriod] = useState<CarExpensePeriod>({ kind: "all" });
-  const [usingCustom, setUsingCustom] = useState(false);
-  const [customUnit, setCustomUnit] = useState<CustomPeriodUnit>("months");
-  const [customCount, setCustomCount] = useState(2);
-  const [periodPickerOpen, setPeriodPickerOpen] = useState(false);
-
-  const selectPreset = (preset: CarExpensePeriod) => {
-    setPeriod(preset);
-    setUsingCustom(false);
-    setPeriodPickerOpen(false);
-  };
-
-  const selectCustom = () => {
-    setUsingCustom(true);
-    setPeriod({ kind: customUnit, count: customCount });
-  };
-
-  const selectCustomUnit = (unit: CustomPeriodUnit) => {
-    setCustomUnit(unit);
-    setPeriod({ kind: unit, count: customCount });
-  };
-
-  const adjustCustomCount = (delta: number) => {
-    const next = Math.min(12, Math.max(1, customCount + delta));
-    setCustomCount(next);
-    setPeriod({ kind: customUnit, count: next });
-  };
-
   const currentOdometer = useMemo(() => getCurrentOdometer(carData), [carData]);
 
   // Documents never reach this feed -- they don't pass through the
@@ -172,20 +146,13 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
       contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >
       <TopBar onBack={onBack} backTestID="history-back" />
-      <Identity color={SPACE_IDENTITY_COLORS.car} kicker="Mașină" title="Istoric" subtitle="Ce a ieșit de pe pagina mașinii după 7 zile" info="car.history" />
+      <Identity color={carColors.color} kicker="Mașină" title="Istoric" subtitle="Ce a ieșit de pe pagina mașinii după 7 zile" info="car.history" />
 
       <Segmented options={CATEGORY_TABS} value={activeTab} onChange={setActiveTab} testIDPrefix="history-tab" />
 
-      <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-        <Pill
-          testID="history-period-trigger"
-          icon="calendar-outline"
-          label={formatPeriodLabel(period)}
-          active={period.kind !== "all"}
-          onPress={() => setPeriodPickerOpen(true)}
-        />
+      <PeriodPicker value={period} onChange={setPeriod} presets={CAR_PERIOD_PRESETS} testIDPrefix="history">
         <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{roCount(items.length, "înregistrare", "înregistrări")}</Text>
-      </View>
+      </PeriodPicker>
 
       {items.length === 0 ? (
         <EmptyState
@@ -193,7 +160,7 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
           message={period.kind === "all" ? "Nimic în istoric încă. Ce adaugi apare aici după 7 zile." : "Nimic în perioada aleasă."}
           action={
             period.kind !== "all" ? (
-              <Pressable testID="history-period-reset" onPress={() => selectPreset({ kind: "all" })} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: spacing.lg }}>
+              <Pressable testID="history-period-reset" onPress={() => setPeriod({ kind: "all" })} style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: spacing.lg }}>
                 <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurface }}>Arată tot timpul</Text>
               </Pressable>
             ) : null
@@ -227,20 +194,6 @@ export function CarHistoryPage({ carData, onBack, initialTab = "all", onRecordPr
         ))
       )}
     </ScrollView>
-
-    <CarPeriodSheet
-      visible={periodPickerOpen}
-      onClose={() => setPeriodPickerOpen(false)}
-      period={period}
-      usingCustom={usingCustom}
-      customUnit={customUnit}
-      customCount={customCount}
-      onPreset={selectPreset}
-      onCustom={selectCustom}
-      onCustomUnit={selectCustomUnit}
-      onCustomCount={adjustCustomCount}
-      testIDPrefix="history"
-    />
     </SwipeBackView>
   );
 }

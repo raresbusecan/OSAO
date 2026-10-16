@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { roDate } from "@/lib/format";
 import { confirmAction } from "@/lib/confirm";
-import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Disclosure, Field, FieldButton } from "@/components/ui/primitives";
@@ -43,7 +43,7 @@ function ExpenseEditSheet({
   onSave: (entry: ExpenseEntry) => void;
   onDelete: (id: string) => void;
 }) {
-  const TEAL = SPACE_IDENTITY_COLORS.expenses!;
+  const TEAL = useSpaceColors("expenses").color;
   const [name, setName] = useState(entry.name);
   const [price, setPrice] = useState(String(entry.price));
   const [date, setDate] = useState(entry.date);

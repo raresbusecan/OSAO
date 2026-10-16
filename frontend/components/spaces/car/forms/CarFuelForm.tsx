@@ -4,12 +4,11 @@ import { View, Text, Pressable } from "react-native";
 import Slider from "@react-native-community/slider";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field, Disclosure } from "@/components/ui/primitives";
 import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 
-const CAR = SPACE_IDENTITY_COLORS.car!;
 import { confirmAction } from "@/lib/confirm";
 
 import type { CarFuelEntry, CarVehicle } from "@/lib/spaces/car/car.types";
@@ -44,6 +43,8 @@ export default function CarFuelForm({
   const isEditing = entry !== undefined;
 
   const { colors, spacing, radius } = useTheme();
+  const carColors = useSpaceColors("car");
+  const CAR = carColors.color;
 
   const [liters, setLiters] = useState(
     entry?.liters !== undefined ? String(entry.liters) : "",
@@ -207,7 +208,7 @@ export default function CarFuelForm({
       tone={CAR}
       footer={
         <>
-          <Button testID="car-fuel-save" label={isEditing ? "Salvează" : "Salvează alimentarea"} tone={SPACE_BUTTON_FILL.car} onPress={handleSave} />
+          <Button testID="car-fuel-save" label={isEditing ? "Salvează" : "Salvează alimentarea"} tone={carColors.fill} onPress={handleSave} />
           {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge alimentarea" onPress={handleDelete} /> : null}
         </>
       }
@@ -304,6 +305,7 @@ export default function CarFuelForm({
 /** 0-100% tank level slider in the car's color. */
 function LevelSlider({ label, value, onChange }: { label: string; value: number | null; onChange: (v: number) => void }) {
   const { colors } = useTheme();
+  const CAR = useSpaceColors("car").color;
   return (
     <View>
       <View style={{ flexDirection: "row", justifyContent: "space-between" }}>

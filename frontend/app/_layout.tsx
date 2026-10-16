@@ -1,5 +1,7 @@
 // Must run before anything renders: makes IBM Plex the default font.
 import "@/lib/globalFont";
+// Languages: initialized synchronously before any screen renders.
+import "@/lib/i18n";
 import React from "react";
 import { Stack, Redirect, useSegments } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -21,6 +23,8 @@ import { ConfirmHost } from "@/lib/confirmHost";
 import { HelpHost } from "@/components/ui/HelpHost";
 import { TourHost } from "@/components/ui/TourHost";
 import { AuthProvider, useAuth } from "@/providers/auth";
+import { AppModeProvider } from "@/lib/appMode";
+import { UpgradeSheetHost } from "@/components/simple/UpgradeSheet";
 
 LogBox.ignoreAllLogs(true);
 SplashScreen.preventAutoHideAsync();
@@ -119,14 +123,19 @@ function RootLayout() {
       <SafeAreaProvider>
         <ThemeProvider>
           <AuthProvider>
+            {/* Simplu / full app mode (lib/appMode.tsx). */}
+            <AppModeProvider>
             <BottomSheetModalProvider>
               <StatusBar style="auto" />
               <AuthGuard />
               <HelpHost />
               {/* First-use tours (lib/tours.ts); renders nothing unless one runs. */}
               <TourHost />
+              {/* orgOS Complet upgrade sheet (Simplu mode teasers). */}
+              <UpgradeSheetHost />
               <ConfirmHost />
             </BottomSheetModalProvider>
+            </AppModeProvider>
           </AuthProvider>
         </ThemeProvider>
       </SafeAreaProvider>

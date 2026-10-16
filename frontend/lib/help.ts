@@ -187,9 +187,10 @@ export const HELP = {
   /* ---------------- Calendar ---------------- */
   "calendar.page": {
     title: "Calendar",
+    tour: "calendar",
     points: [
-      { title: "Culoarea zilelor", text: "Cu cât e mai roșie o zi, cu atât ai mai multe de făcut atunci. Zilele trecute nu se colorează." },
-      { title: "Punctele", text: "Roz: un eveniment al tău. Roșu, pe o zi trecută: a rămas ceva nerezolvat." },
+      { title: "Culoarea zilelor", text: "Culoarea zilei arată cât din timpul tău liber din ziua aceea e ocupat. Weekendul și sărbătorile încap mai mult decât o zi de lucru. Zilele trecute nu se colorează." },
+      { title: "Punctele", text: "Verde: un eveniment al tău. Roșu, pe o zi trecută: a rămas ceva nerezolvat." },
       { title: "Luna", text: "Glisează calendarul stânga-dreapta sau folosește săgețile. „Azi” te aduce înapoi." },
       { title: "Evenimente", text: "Evenimentele tale (zile de naștere, programări) se adaugă cu „+ Eveniment”. Dacă implică o cumpărare, suma intră în cheltuieli." },
     ],
@@ -197,11 +198,12 @@ export const HELP = {
   "calendar.heat": {
     title: "Următoarele 3 luni",
     points: [
-      { text: "Fiecare coloană e o săptămână, de luni (sus) până duminică (jos). Atinge o săptămână ca să sari la ea." },
-      { text: "Pătrățelul conturat e ziua aleasă în calendar; azi are un contur mai șters." },
-      { text: "Fiecare lucru contează o dată, oricât ar costa: sarcini, facturi, mentenanță, documente (mașină și casă), service-urile mașinii programate pe o dată și evenimentele tale. Facturile și tot ce se repetă apar la fiecare scadență, lună de lună." },
-      { text: "Service-urile programate doar pe kilometri și proviziile n-au o zi anume, așa că nu apar aici. Le găsești în Mașină și în Casă." },
-      { title: "Scala", text: "Fiecare lucru în plus face ziua cu o nuanță mai închisă: 1 lucru e cea mai deschisă, 8 sau mai multe au cea mai închisă." },
+      { text: "Fiecare bulă e o lună: luna asta și următoarele două. Cu cât e mai plină, cu atât ai mai mult de făcut față de timpul liber din luna aceea. Atinge o lună ca să sari la ea." },
+      { title: "Linia punctată", text: "E jumătatea bulei: până acolo luna e „Liniștită”, peste ea e „Plină”. O bulă care dă pe dinafară (cu o picătură roșie) e „Prea plină”." },
+      { title: "Timpul liber", text: "Socotim că lucrezi de luni până vineri, 9–17: într-o zi de lucru încap puține lucruri, în weekend și de sărbătorile legale încap de două ori mai multe." },
+      { title: "Cât cântărește un lucru", text: "O factură sau o rată: puțin. O sarcină sau un eveniment: ceva mai mult. Un service, ITP-ul, reînnoirea unui document sau o vizită a unui meșter: cel mai mult, și și mai mult într-o zi de lucru, fiindcă trebuie făcute în program." },
+      { text: "La lunile viitoare vezi „≈”: e o estimare, din ce e deja programat. Facturile și tot ce se repetă apar la fiecare scadență, lună de lună." },
+      { text: "Culoarea zilelor din calendar urmează aceeași regulă: cât din timpul liber al zilei e ocupat. Service-urile programate doar pe kilometri și proviziile n-au o zi anume, așa că nu apar aici." },
     ],
   },
   "calendar.day": {
@@ -226,6 +228,7 @@ export const HELP = {
   /* ---------------- Buget ---------------- */
   "budget.page": {
     title: "Buget",
+    tour: "budget",
     intro: "Pornește de la venitul tău net: îl împărțim în cinci și vezi cât ai cheltuit din fiecare parte.",
     points: [
       { title: "Cheltuit din necesități", text: "Tot ce ai înregistrat luna asta în spații, față de partea de necesități din venit. Cheltuielile marcate „Bani fără vină” nu intră aici." },
@@ -341,12 +344,13 @@ export const HELP = {
   /* ---------------- Mașină ---------------- */
   "car.space": {
     title: "Mașină",
+    tour: "space_car",
     intro: "Tot ce ține de o mașină: plinuri, service-uri, documente, cheltuieli.",
     points: [
       { title: "Urmează", text: "Documentele care expiră în 45 de zile și service-urile care se apropie (sub 2.000 km sau după dată)." },
       { title: "Ultimele 7 zile", text: "Ce ai înregistrat recent. Mai vechi le găsești în Istoric." },
       { title: "Consum mediu", text: "Se calculează din alimentări, când ai cel puțin două și capacitatea rezervorului în profil." },
-      { title: "Kilometraj", text: "Ultimul introdus la o alimentare, un service sau în profil." },
+      { title: "Kilometraj", text: "Cel mai mare introdus la o alimentare, un service sau de mână. Atinge kilometrajul (sau creionul de lângă el) ca să-l actualizezi." },
       SWIPE,
     ],
   },
@@ -413,10 +417,20 @@ export const HELP = {
     title: "Cheltuială mașină",
     points: [{ text: "Orice altceva a costat mașina: spălătorie, parcare, accesorii, amenzi. Doar suma e obligatorie." }],
   },
+  "car.odometer": {
+    title: "Kilometraj",
+    points: [
+      { text: "Scrie cât arată acum bordul. Folosim cel mai mare număr dintre ce scrii aici și ce ai trecut la alimentări, service-uri și cheltuieli." },
+      { title: "Nu poate scădea", text: "Nu poți trece mai puțin decât ai înregistrat deja la o alimentare sau un service. Ai greșit acolo? Corectează înregistrarea respectivă." },
+      { title: "Service-uri", text: "Service-urile programate după km din „Urmează” se recalculează imediat." },
+      { title: "Scurtătură", text: "Ține apăsat pe kilometraj ca să deschizi direct actualizarea." },
+    ],
+  },
   "car.profile": {
     title: "Profilul mașinii",
     points: [
       { text: "Marca, modelul și numărul apar sub numele mașinii." },
+      { title: "Culoarea spațiului", text: "Alege o culoare pentru spațiu: pagina lui, butoanele și rândurile lui din Acasă, Spații și Calendar o folosesc. Bugetul păstrează culorile pe tipuri." },
       { title: "Capacitatea rezervorului", text: "Fără ea nu putem calcula consumul mediu." },
       { title: "În rate", text: "La o mașină nouă, bifează „În rate” dacă e în leasing sau credit. Rata lunară se trece în Cheltuieli, la Credite (dacă nu ai un spațiu Cheltuieli, îl creăm, cu numele „Default”). Creditul îl modifici apoi din Cheltuieli › Credite." },
     ],
@@ -535,6 +549,7 @@ export const HELP = {
     title: "Profilul casei",
     points: [
       { text: "Numele și detaliile locuinței apar sus, sub numele spațiului." },
+      { title: "Culoarea spațiului", text: "Alege o culoare pentru spațiu: pagina lui, butoanele și rândurile lui din Acasă, Spații și Calendar o folosesc. Bugetul păstrează culorile pe tipuri." },
       { title: "În rate", text: "La o casă nouă cumpărată, bifează „În rate” dacă e pe credit. Rata lunară se trece în Cheltuieli, la Credite (dacă nu ai un spațiu Cheltuieli, îl creăm, cu numele „Default”). Creditul îl modifici apoi din Cheltuieli › Credite." },
     ],
   },
@@ -632,6 +647,7 @@ export const HELP = {
     title: "Spațiu",
     points: [
       { text: "Tipul spațiului (Mașină, Casă, Cumpărături, Cheltuieli) nu se mai poate schimba după creare." },
+      { text: "Culoarea spațiului se vede peste tot unde apare spațiul: în pagina lui, pe Spații, Acasă și în Calendar. Bugetul păstrează culorile pe tipuri." },
       { text: "Ștergerea unui spațiu șterge și tot ce conține." },
     ],
   },

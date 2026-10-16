@@ -2,10 +2,12 @@ import React, { useMemo, useState } from "react";
 import { View, Text, ScrollView } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
-import { TopBar, Identity, Pill, SectionHeader, Group, Row, IconWell, EmptyState } from "@/components/ui/primitives";
+import { PeriodPicker } from "@/components/ui/PeriodPicker";
+import type { PeriodPreset } from "@/lib/period";
+import { TopBar, Identity, SectionHeader, Group, Row, IconWell, EmptyState } from "@/components/ui/primitives";
 import { motion } from "@/lib/motion";
 import { lei, roCount, roDate } from "@/lib/format";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
@@ -40,19 +42,16 @@ export type HomeSpendPageProps = {
 
 const CATEGORY_ORDER: HomeSpendCategory[] = ["expense", "maintenance", "task", "recurring"];
 
-const PERIOD_PRESETS: { label: string; period: HomeSpendPeriod }[] = [
-  { label: "Luna asta", period: { kind: "thisMonth" } },
-  { label: "3 luni", period: { kind: "months", count: 3 } },
-  { label: "6 luni", period: { kind: "months", count: 6 } },
-  { label: "1 an", period: { kind: "years", count: 1 } },
+// Mașină's picker and row look (components/ui/PeriodPicker.tsx), this
+// page's own presets -- incl. "Luna asta" (the default here), which
+// Mașină doesn't have.
+const PERIOD_PRESETS: PeriodPreset<HomeSpendPeriod>[] = [
   { label: "Tot timpul", period: { kind: "all" } },
+  { label: "Luna asta", period: { kind: "thisMonth" } },
+  { label: "Ultimele 3 luni", period: { kind: "months", count: 3 } },
+  { label: "Ultimele 6 luni", period: { kind: "months", count: 6 } },
+  { label: "Ultimul an", period: { kind: "years", count: 1 } },
 ];
-
-function periodsEqual(a: HomeSpendPeriod, b: HomeSpendPeriod): boolean {
-  if (a.kind !== b.kind) return false;
-  if (a.kind === "all" || a.kind === "thisMonth") return true;
-  return (a as { count: number }).count === (b as { count: number }).count;
-}
 
 function formatDate(dateString: string): string {
   return roDate(dateString) || dateString;
@@ -70,7 +69,7 @@ function formatDate(dateString: string): string {
  * returns.
  */
 export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: HomeSpendPageProps) {
-  const { colors, spacing, radius, isDark, typography } = useTheme();
+  const { colors, spacing, radius, typography } = useTheme();
 
   // "Introdus" -- purchasePrice is always a number on a saved profile
   // (HomeProfileForm defaults it to 0 rather than leaving it undefined),
@@ -137,8 +136,9 @@ export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: Home
 
   const visibleRecords = listExpanded ? filteredRecords : filteredRecords.slice(0, 8);
 
-  const HOME = SPACE_IDENTITY_COLORS.home!;
-  const tint = spaceTextColor("home", isDark) ?? HOME;
+  const homeColors = useSpaceColors("home");
+  const HOME = homeColors.color;
+  const tint = homeColors.tint;
   const muted = colors.onSurfaceTertiary;
 
   return (
@@ -151,18 +151,8 @@ export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: Home
       <TopBar onBack={onBack} backTestID="home-spend-back" />
       <Identity color={HOME} kicker="Casă" title="Cheltuieli" info="home.spend" />
 
-      {/* Period -- the 5 presets as pills (was a modal picker). */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-        {PERIOD_PRESETS.map((preset) => (
-          <Pill
-            key={preset.label}
-            testID={`home-spend-period-option-${preset.label}`}
-            label={preset.label}
-            active={periodsEqual(period, preset.period)}
-            onPress={() => setPeriod(preset.period)}
-          />
-        ))}
-      </ScrollView>
+      {/* Period -- the shared picker (same as Mașină > Istoric). */}
+      <PeriodPicker value={period} onChange={setPeriod} presets={PERIOD_PRESETS} testIDPrefix="home-spend" />
 
       {/* Total for the period (+ the category chips that filter it). */}
       <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>

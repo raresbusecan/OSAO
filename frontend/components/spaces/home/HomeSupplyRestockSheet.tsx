@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { roUnit } from "@/lib/format";
-import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field } from "@/components/ui/primitives";
 
@@ -30,6 +30,7 @@ export type HomeSupplyRestockSheetProps = {
  * different lengths of time), so getSupplyRestockEstimate needs the
  * quantity per event to learn an actual units/day consumption rate. */
 export function HomeSupplyRestockSheet({ entry, onCancel, onConfirm }: HomeSupplyRestockSheetProps) {
+  const homeColors = useSpaceColors("home");
   const [quantity, setQuantity] = useState(String(entry.quantity ?? ""));
   const [error, setError] = useState("");
 
@@ -50,8 +51,8 @@ export function HomeSupplyRestockSheet({ entry, onCancel, onConfirm }: HomeSuppl
       title={entry.name}
       subtitle="Cât ai cumpărat?"
       icon="basket-outline"
-      tone={SPACE_IDENTITY_COLORS.home}
-      footer={<Button label="Salvează" tone={SPACE_BUTTON_FILL.home} onPress={handleConfirm} />}
+      tone={homeColors.color}
+      footer={<Button label="Salvează" tone={homeColors.fill} onPress={handleConfirm} />}
     >
       <Field
         value={quantity}
@@ -63,7 +64,7 @@ export function HomeSupplyRestockSheet({ entry, onCancel, onConfirm }: HomeSuppl
         autoFocus
         big
         suffix={roUnit(entry.unit)}
-        tone={SPACE_IDENTITY_COLORS.home}
+        tone={homeColors.color}
         error={error || null}
         hint="Cantitatea contează pentru estimare: perioada până la următoarea cumpărătură depinde de cât iei de fiecare dată."
         accessibilityLabel="Cantitate cumpărată"

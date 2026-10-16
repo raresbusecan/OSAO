@@ -40,6 +40,33 @@ function Start-Tunnel($name, $target) {
     throw "Tunnel '$name' did not print a URL in 30s - see $log"
 }
 
+# Fixed backend URL via ngrok's free static domain (needed for OAuth
+# redirect URIs and so email links survive restarts). The domain lives
+# ONLY in backend/.env as DEV_NGROK_DOMAIN (untracked; it will move to a
+# dedicated account later) and the authtoken in ngrok's own config.
+function Get-NgrokDomain {
+    $f = Join-Path $backend '.env'
+    if (-not (Test-Path $f)) { return $null }
+    $m = Select-String -Path $f -Pattern '^DEV_NGROK_DOMAIN=(.+)$' | Select-Object -First 1
+    if (-not $m) { return $null }
+    $d = $m.Matches[0].Groups[1].Value.Trim().Trim('"') -replace '^https?://', '' -replace '/+$', ''
+    if ($d) { return $d } else { return $null }
+}
+
+function Start-Ngrok($domain, $port) {
+    $log = Join-Path $logDir 'ngrok-backend.log'
+    Remove-Item $log -ErrorAction SilentlyContinue
+    $p = Start-Process ngrok -ArgumentList 'http', "$port", '--url', "https://$domain", '--log', $log, '--log-format', 'logfmt' `
+        -WindowStyle Hidden -PassThru
+    $script:started += $p
+    for ($i = 0; $i -lt 40; $i++) {
+        Start-Sleep -Milliseconds 500
+        if ($p.HasExited) { throw "ngrok exited - see $log (is the authtoken set? another ngrok session running?)" }
+        if (Select-String -Path $log -Pattern 'started tunnel|url=https://' -Quiet -ErrorAction SilentlyContinue) { return "https://$domain" }
+    }
+    throw "ngrok did not start in 20s - see $log"
+}
+
 function Wait-Reachable($url) {
     # New trycloudflare hostnames take a few seconds to resolve.
     for ($i = 0; $i -lt 40; $i++) {
@@ -62,6 +89,7 @@ try {
     # 1. Clean slate: old tunnels + old Expo
     Step 'Stopping old cloudflared tunnels and Expo (port 443)'
     Get-Process cloudflared -ErrorAction SilentlyContinue | Stop-Process -Force
+    Get-Process ngrok -ErrorAction SilentlyContinue | Stop-Process -Force
     Stop-PortListener 443
 
     # 2. Backend (reuse if already listening)
@@ -78,7 +106,14 @@ try {
 
     # 3. Tunnels
     Step 'Starting tunnels'
-    $backendUrl  = Start-Tunnel 'backend'  'http://127.0.0.1:8000'
+    $ngrokDomain = Get-NgrokDomain
+    if ($ngrokDomain -and (Get-Command ngrok -ErrorAction SilentlyContinue)) {
+        $backendUrl = Start-Ngrok $ngrokDomain 8000
+        Step "Backend on fixed ngrok domain"
+    } else {
+        if ($ngrokDomain) { Write-Host "!! DEV_NGROK_DOMAIN set but ngrok not installed - using a Cloudflare tunnel" -ForegroundColor Yellow }
+        $backendUrl = Start-Tunnel 'backend' 'http://127.0.0.1:8000'
+    }
     $frontendUrl = Start-Tunnel 'frontend' 'http://127.0.0.1:443'
     Step "Backend tunnel:  $backendUrl  (HTTP $(Wait-Reachable "$backendUrl/api/spaces"))"
     Step "Frontend tunnel: $frontendUrl"

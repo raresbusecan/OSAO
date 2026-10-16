@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { notifyAction } from "@/lib/confirm";
 import { refreshBudgetPlan } from "@/lib/budget/plan";
-import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { ToggleRow } from "@/components/ui/primitives";
 import {
   CreditFields,
@@ -54,7 +54,8 @@ export function useSpaceCredit(autoTitle: string) {
 export type SpaceCredit = ReturnType<typeof useSpaceCredit>;
 
 export function SpaceCreditToggle({ kind, credit }: { kind: "car" | "home"; credit: SpaceCredit }) {
-  const tone = SPACE_IDENTITY_COLORS[kind]!;
+  const spaceColors = useSpaceColors(kind);
+  const tone = spaceColors.color;
   return (
     <>
       <ToggleRow
@@ -71,7 +72,8 @@ export function SpaceCreditToggle({ kind, credit }: { kind: "car" | "home"; cred
           draft={credit.draft}
           onChange={credit.setDraft}
           tone={tone}
-          onTone={SPACE_ON_FILL[kind]!}
+          fill={spaceColors.fill}
+          onTone={spaceColors.ink}
           testIDPrefix={`${kind}-credit`}
           namePlaceholder={kind === "car" ? "ex. Leasing BMW" : "ex. Credit ipotecar"}
         />

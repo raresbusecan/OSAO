@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field, FieldButton } from "@/components/ui/primitives";
 import { roDate } from "@/lib/format";
@@ -29,6 +29,7 @@ export type HomeTaskResolveSheetProps = {
  * notes, toggles) stays exactly as it was set on HomeTaskForm. */
 export function HomeTaskResolveSheet({ entry, onCancel, onResolve }: HomeTaskResolveSheetProps) {
   const { colors } = useTheme();
+  const homeColors = useSpaceColors("home");
   const [price, setPrice] = useState("");
   const [nextDueDate, setNextDueDate] = useState<string | undefined>(
     entry.isRecurring ? nextTaskOccurrence(entry.dueDate, entry.recurrenceFrequency) : undefined,
@@ -77,7 +78,7 @@ export function HomeTaskResolveSheet({ entry, onCancel, onResolve }: HomeTaskRes
       subtitle={`Marchezi ca rezolvat.${entry.isPurchase ? " Cât ai plătit? Intră în cheltuielile lunii." : entry.isRecurring ? " Alege când e data viitoare." : ""}`}
       footer={
         <>
-          <Button label="Rezolvă" tone={SPACE_BUTTON_FILL.home} onPress={handleResolve} />
+          <Button label="Rezolvă" tone={homeColors.fill} onPress={handleResolve} />
           {entry.isPurchase ? <Button variant="ghost" label="Rezolvă fără preț" onPress={() => resolveWith(undefined)} /> : null}
         </>
       }
@@ -94,14 +95,14 @@ export function HomeTaskResolveSheet({ entry, onCancel, onResolve }: HomeTaskRes
           autoFocus
           big
           suffix="lei"
-          tone={SPACE_IDENTITY_COLORS.home}
+          tone={homeColors.color}
           error={error || null}
           accessibilityLabel="Preț plătit"
         />
       ) : null}
 
       {entry.isPurchase ? (
-        <GuiltFreeToggle value={guiltFree} onChange={setGuiltFree} tone={SPACE_IDENTITY_COLORS.home} testID="home-task-resolve-guilt-free" />
+        <GuiltFreeToggle value={guiltFree} onChange={setGuiltFree} tone={homeColors.color} testID="home-task-resolve-guilt-free" />
       ) : null}
 
       {entry.isRecurring ? (

@@ -4,6 +4,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { TabSwipeEdges } from "@/components/navigation/TabSwipeEdges";
 import { MainTabBar } from "@/components/navigation/MainTabBar";
+import { ReturnTrailHint } from "@/components/navigation/ReturnTrailHint";
+import { useAppMode } from "@/lib/appMode";
+import { QuickAddHost } from "@/components/simple/QuickAddSheet";
+import { EditRecordHost } from "@/components/simple/EditRecordSheet";
 
 export const REFRESH_EVENT = "lifeos.refresh";
 
@@ -18,6 +22,7 @@ export const REFRESH_EVENT = "lifeos.refresh";
  */
 export default function TabsLayout() {
   const { colors } = useTheme();
+  const { isSimple } = useAppMode();
   // A Space screen ([id], hidden from the bar) still belongs to "Spații"
   // -- keep that tab lit there instead of no tab looking active.
   const segments = useSegments() as string[];
@@ -109,6 +114,10 @@ export default function TabsLayout() {
         <Tabs.Screen name="[id]" options={{ href: null }} />
       </Tabs>
       <TabSwipeEdges />
+      {/* Simplu mode (lib/appMode.tsx): no return trail (2 tabs, nothing
+          deep), and the bar's "+" opens the quick-add sheet. */}
+      {isSimple ? <QuickAddHost /> : <ReturnTrailHint />}
+      {isSimple ? <EditRecordHost /> : null}
     </View>
   );
 }

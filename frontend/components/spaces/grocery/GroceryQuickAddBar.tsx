@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { View, Text, TextInput } from "react-native";
+import { View, Text, TextInput, Keyboard } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, SPACE_ON_FILL, spaceTextColor } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
+import { spaceColors } from "@/lib/spaces/spaceProfile";
 import { groceryCategoryLabel, type GroceryCategory } from "@/lib/spaces/grocery/grocery.types";
 import { matchIngredientCategory, useIngredientReferences } from "@/lib/spaces/grocery/ingredientLookup";
 import { PressableScale } from "@/components/ui/PressableScale";
@@ -10,6 +11,11 @@ import { motion } from "@/lib/motion";
 
 export type GroceryQuickAddBarProps = {
   onAdd: (draft: { name: string; category: GroceryCategory }) => void;
+  /** Overrides the default hint text (Simplu's "În magazin" asks "Ai uitat ceva?"). */
+  placeholder?: string;
+  /** The "+" button also closes the keyboard (Simplu, user decision
+   * 2026-10-15). The keyboard's own return key still keeps it open. */
+  closeKeyboardOnAdd?: boolean;
 };
 
 /**
@@ -24,15 +30,16 @@ export type GroceryQuickAddBarProps = {
  * whole point. Stays open after adding (clears and keeps focus) so
  * several items go in back to back.
  */
-export function GroceryQuickAddBar({ onAdd }: GroceryQuickAddBarProps) {
+export function GroceryQuickAddBar({ onAdd, placeholder, closeKeyboardOnAdd }: GroceryQuickAddBarProps) {
   const { colors, spacing, radius, isDark } = useTheme();
   const [value, setValue] = useState("");
   const [focused, setFocused] = useState(false);
   const ingredientReferences = useIngredientReferences();
-  const fill = SPACE_IDENTITY_COLORS.grocery!;
+  const groc = useSpaceColors("grocery");
+  const fill = groc.color;
   // Amber is 2.1:1 on the light theme's raised layer -- the focus ring
   // uses the deeper text tint there.
-  const ring = isDark ? fill : spaceTextColor("grocery", false)!;
+  const ring = isDark ? fill : spaceColors(groc.key, false)!.tint;
 
   const matchedCategory = matchIngredientCategory(ingredientReferences, value);
   const canSubmit = !!value.trim();
@@ -56,7 +63,7 @@ export function GroceryQuickAddBar({ onAdd }: GroceryQuickAddBarProps) {
           onBlur={() => setFocused(false)}
           returnKeyType="done"
           blurOnSubmit={false}
-          placeholder="Adaugă un produs, ex. 2 l lapte"
+          placeholder={placeholder ?? "Adaugă un produs, ex. 2 l lapte"}
           placeholderTextColor={colors.onSurfaceTertiary}
           accessibilityLabel="Adaugă un produs"
           style={{
@@ -74,7 +81,10 @@ export function GroceryQuickAddBar({ onAdd }: GroceryQuickAddBarProps) {
 
         <PressableScale
           testID="grocery-quick-add-submit"
-          onPress={submit}
+          onPress={() => {
+            submit();
+            if (closeKeyboardOnAdd) Keyboard.dismiss();
+          }}
           disabled={!canSubmit}
           scaleTo={motion.scale.control}
           accessibilityRole="button"
@@ -89,7 +99,7 @@ export function GroceryQuickAddBar({ onAdd }: GroceryQuickAddBarProps) {
             justifyContent: "center",
           }}
         >
-          <Ionicons name="add" size={24} color={SPACE_ON_FILL.grocery} />
+          <Ionicons name="add" size={24} color={groc.ink} />
         </PressableScale>
       </View>
 

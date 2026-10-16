@@ -3,13 +3,12 @@ import { DateField } from "@/components/ui/DateField";
 import { View, Text, TextInput, Pressable, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
-import { SPACE_IDENTITY_COLORS, SPACE_BUTTON_FILL } from "@/lib/spaces/spaceProfile";
+import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field, ToggleRow } from "@/components/ui/primitives";
 import { maintenanceLabel } from "@/lib/spaces/car/maintenanceLabels";
 import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 
-const CAR = SPACE_IDENTITY_COLORS.car!;
 import { confirmAction } from "@/lib/confirm";
 
 import type { CarMaintenanceEntry } from "@/lib/spaces/car/car.types";
@@ -129,6 +128,8 @@ export default function CarMaintenanceForm({
   const isBatchMode = !isEditing && !isRenewing;
 
   const { colors, spacing, radius } = useTheme();
+  const carColors = useSpaceColors("car");
+  const CAR = carColors.color;
 
   // ---- Single-service state (editing or renewing an exact one) ----
   const [service, setService] = useState(entry?.service ?? renewFrom?.service ?? "");
@@ -338,7 +339,7 @@ export default function CarMaintenanceForm({
       tone={CAR}
       footer={
         <>
-          <Button testID="car-maintenance-save" label={saveLabel} tone={SPACE_BUTTON_FILL.car} onPress={handleSave} />
+          <Button testID="car-maintenance-save" label={saveLabel} tone={carColors.fill} onPress={handleSave} />
           {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge lucrarea" onPress={handleDelete} /> : null}
         </>
       }
@@ -397,7 +398,7 @@ export default function CarMaintenanceForm({
                   paddingHorizontal: spacing.md + 2,
                   minHeight: 40,
                   borderRadius: radius.pill,
-                  backgroundColor: selected ? SPACE_BUTTON_FILL.car : colors.surfaceTertiary,
+                  backgroundColor: selected ? carColors.fill : colors.surfaceTertiary,
                   flexDirection: "row",
                   alignItems: "center",
                   gap: 6,
@@ -405,16 +406,16 @@ export default function CarMaintenanceForm({
                 }}
               >
                 {isBatchMode && selected && !isRepeatable ? (
-                  <Ionicons name="checkmark" size={13} color="#FFFFFF" />
+                  <Ionicons name="checkmark" size={13} color={carColors.ink} />
                 ) : null}
                 {isBatchMode && isRepeatable ? (
-                  <Ionicons name="add" size={13} color={selected ? "#FFFFFF" : colors.onSurface} />
+                  <Ionicons name="add" size={13} color={selected ? carColors.ink : colors.onSurface} />
                 ) : null}
                 <Text
                   style={{
                     fontSize: 13,
                     fontWeight: selected ? "600" : "500",
-                    color: selected ? "#FFFFFF" : colors.onSurface,
+                    color: selected ? carColors.ink : colors.onSurface,
                   }}
                 >
                   {maintenanceLabel(type)}
@@ -493,7 +494,7 @@ export default function CarMaintenanceForm({
                 <Ionicons
                   name="add"
                   size={22}
-                  color={customService.trim() ? "#FFFFFF" : colors.onSurfaceTertiary}
+                  color={customService.trim() ? carColors.ink : colors.onSurfaceTertiary}
                 />
               </Pressable>
             </View>
@@ -802,6 +803,7 @@ function WarrantyToggle({
   spacing: any;
   radius: any;
 }) {
+  const CAR = useSpaceColors("car").color;
   return (
     <View style={{ marginBottom: spacing.lg }}>
       <ToggleRow icon="shield-checkmark-outline" label="În garanție / gratuit" hint={value ? "Se salvează cu preț 0." : null} value={value} onChange={onValueChange} tone={CAR} />
@@ -834,6 +836,7 @@ type FormFieldProps = {
 
 /** The shared Field in the car's tone, with this form's spacing. */
 function FormField({ label, value, onChangeText, placeholder, keyboardType = "default", suffix, multiline = false, hideLabel = false, spacing }: FormFieldProps) {
+  const CAR = useSpaceColors("car").color;
   return (
     <View style={{ marginBottom: hideLabel ? 0 : spacing.lg }}>
       <Field
