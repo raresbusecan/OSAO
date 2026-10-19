@@ -169,10 +169,8 @@ export function SimpleGrocerySpace({ space, onBack }: SimpleSpaceProps) {
     }
   };
 
-  /** Deletes a whole list WITH its products (Complet's handleDeleteList:
-   * the server deletes only the row it's asked for, so products left
-   * behind would still count as "de cumpărat" on Acasă). Page-level
-   * confirm (no sheet open). Optimistic; restored on failure. */
+  /** The API deletes a list and all its products atomically.
+   * Page-level confirm, optimistic UI restored on failure. */
   const deleteList = async (list: GroceryList) => {
     const onList = getItemsForList(items, list.id);
     const ok = await confirmAction(
@@ -189,8 +187,6 @@ export function SimpleGrocerySpace({ space, onBack }: SimpleSpaceProps) {
     setItems((cur) => cur.filter((i) => i.listId !== list.id));
     setTargetId(null); // back to the default (the newest remaining list)
     try {
-      // Products first: if the list delete fails, nothing points at a gone list.
-      await Promise.all(onList.filter((i) => isSavedItemId(i.id)).map((i) => api.deleteItem(i.id)));
       if (isSavedItemId(list.id)) await api.deleteItem(list.id);
       DeviceEventEmitter.emit(REFRESH_EVENT);
     } catch (error: any) {

@@ -46,4 +46,29 @@ class DocumentDatesTest extends TestCase
     {
         $this->createDoc(['issueDate' => 'mâine', 'expiryDate' => '15.10.2027'])->assertStatus(422)->assertJsonValidationErrors('metadata.issueDate');
     }
+
+    public function test_impossible_calendar_dates_are_rejected_on_create(): void
+    {
+        $this->createDoc(['expiryDate' => '31.02.2027'])->assertStatus(422)->assertJsonValidationErrors('metadata.expiryDate');
+    }
+
+    public function test_partial_updates_validate_the_merged_document(): void
+    {
+        $id = $this->createDoc(['issueDate' => '15.10.2026', 'expiryDate' => '15.10.2027'])->assertCreated()->json('id');
+        foreach ([['expiryDate' => null], ['expiryDate' => '01.10.2026'], ['expiryDate' => '31.02.2027'], ['issueDate' => 'tomorrow']] as $metadata) {
+            $this->putJson('/api/items/'.$id, ['metadata' => $metadata])->assertStatus(422);
+        }
+        $this->putJson('/api/items/'.$id, ['metadata' => null])->assertStatus(422);
+        $this->putJson('/api/items/'.$id, ['metadata' => ['notes' => 'Kept validity']])
+            ->assertOk()->assertJsonPath('metadata.expiryDate', '15.10.2027');
+        $this->putJson('/api/items/'.$id, ['metadata' => ['expiryDate' => '15.10.2028']])->assertOk();
+    }
+
+    public function test_home_documents_share_the_same_update_rules(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+        $id = $this->postJson('/api/items', ['type' => 'home_document', 'title' => 'Contract', 'metadata' => ['expiryDate' => '2028-02-29T10:00:00.000Z']])->assertCreated()->json('id');
+        $this->putJson('/api/items/'.$id, ['metadata' => ['expiryDate' => '2027-02-29']])->assertStatus(422);
+    }
 }

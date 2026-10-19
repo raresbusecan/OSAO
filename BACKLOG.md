@@ -123,6 +123,16 @@ drifted a day across the 25 Oct DST change; plus the known
 
 ## Found along the way (not yet fixed)
 
+### Audit fixes follow-up (2026-10-19)
+
+Core functional/security corrections are on `codex/audit-fixes`, not merged to main. Per-fix targeted tests, backend regression and smoke passed. Remaining: native phone/emulator QA; legacy React Hooks lint findings (174 errors / 28 warnings after this pass); Budget query consolidation (62–72 queries in the synthetic audit dataset). `[from: mobile audit remediation]`
+
+Independent QA found and prompted fixes for pending social exchange codes and stale credential snapshots surviving mailbox proof, plus a delayed native SecureStore deletion overwriting a newer login. Targeted regression tests now cover these paths. Physical Android/iPhone testing and separate-connection MySQL concurrency testing remain; SQLite cannot verify row-lock contention. Release scope must account for the 23 pre-existing redesign commits between `main` and this branch. `[from: independent audit-fix QA, 2026-10-19]`
+
+Grocery concurrency follow-up: child create/move authorizes its parent before saving without locking that list; list deletion bulk-deletes children inside its transaction. Concurrent requests could therefore leave a product referencing a deleted list (`metadata.listId` has no FK). The pre-existing race is inferred from lock order, not reproduced on MySQL; verify with separate connections and serialize parent checks/writes with deletion. Current tests prove serial authorization and rollback. `[from: independent audit-fix QA, 2026-10-19]`
+
+
+
 ### Bugs spotted while building Simplu mode (2026-10-12) [from: orgOS Simplu mode build]
 
 1. **Car service resolved from Acasă/Calendar/De făcut loses or miscalculates the next service date.** `lib/dashboard/itemActions.ts:212` `logCarServiceAgain` computes the day interval as `nextServiceDate - item.due_at`, but `DashboardController::carServiceDue` (~:321/336) has already replaced `due_at` with the next-service date (or yesterday when overdue by km), so the interval is 0 or wrong. Simplu's Mașină hero avoids it by using the raw item from `api.getItem`.

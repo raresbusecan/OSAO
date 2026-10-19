@@ -177,7 +177,13 @@ export function nextTaskOccurrence(
   const next = new Date(base);
 
   if (frequency === "daily") next.setDate(next.getDate() + 1);
-  else if (frequency === "monthly") next.setMonth(next.getMonth() + 1);
+  else if (frequency === "monthly") {
+    const day = next.getDate();
+    next.setDate(1);
+    next.setMonth(next.getMonth() + 1);
+    const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+    next.setDate(Math.min(day, lastDay));
+  }
   else next.setDate(next.getDate() + 7); // weekly, and the fallback if unset
 
   return next.toISOString();

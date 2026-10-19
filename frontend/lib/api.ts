@@ -1,36 +1,42 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import { currentLanguage } from "@/lib/i18n";
+import { resetSessionCaches, sessionVersion } from "@/lib/sessionCache";
 
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL as string;
 /** The backend origin (no /api) -- social login opens `${BACKEND_URL}/auth/<provider>/redirect` in a browser. */
 export const BACKEND_URL = BASE;
 const TOKEN_KEY = "lifeos_token";
+let tokenWrites: Promise<void> = Promise.resolve();
+let tokenWriteVersion = 0;
+
+function queueTokenMutation(mutate: () => void | Promise<void>): Promise<boolean> {
+  const operation = ++tokenWriteVersion;
+  resetSessionCaches();
+  const pending = tokenWrites.then(mutate);
+  // A failed storage operation must not prevent subsequent sign-ins.
+  tokenWrites = pending.catch(() => {});
+  return pending.then(() => operation === tokenWriteVersion);
+}
 
 // Web fallback because expo-secure-store isn't supported on web preview
 export async function setToken(token: string) {
   console.log("[AUTH] setToken called:", token ? `${token.slice(0, 3)}...` : "EMPTY");
 
-  if (Platform.OS === "web") {
-    try {
+  const current = await queueTokenMutation(async () => {
+    if (Platform.OS === "web") {
       localStorage.setItem(TOKEN_KEY, token);
-
-      console.log(
-        "[AUTH] token saved:",
-        localStorage.getItem(TOKEN_KEY) ? "YES" : "NO",
-      );
-    } catch (error) {
-      console.error("[AUTH] failed to save token:", error);
-      throw error;
+    } else {
+      await SecureStore.setItemAsync(TOKEN_KEY, token);
     }
-
-    return;
+  });
+  if (!current) {
+    throw Object.assign(new Error("Sesiunea s-a schimbat. Reîncearcă."), { code: "SESSION_CHANGED" });
   }
-
-  await SecureStore.setItemAsync(TOKEN_KEY, token);
 }
 
 export async function getToken(): Promise<string | null> {
+  await tokenWrites;
   if (Platform.OS === "web") {
     try {
       return localStorage.getItem(TOKEN_KEY);
@@ -43,14 +49,15 @@ export async function getToken(): Promise<string | null> {
 }
 
 export async function clearToken() {
-  if (Platform.OS === "web") {
-    try {
-      localStorage.removeItem(TOKEN_KEY);
-    } catch {}
-    return;
-  }
-
-  await SecureStore.deleteItemAsync(TOKEN_KEY);
+  return queueTokenMutation(async () => {
+    if (Platform.OS === "web") {
+      try {
+        localStorage.removeItem(TOKEN_KEY);
+      } catch {}
+    } else {
+      await SecureStore.deleteItemAsync(TOKEN_KEY);
+    }
+  });
 }
 
 function getDeviceTimezone(): string {
@@ -75,7 +82,12 @@ async function request<T = any>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
+  const version = sessionVersion();
   const token = await getToken();
+  const requireCurrentSession = () => {
+    if (version !== sessionVersion()) throw Object.assign(new Error("Sesiunea s-a schimbat. Reîncearcă."), { code: "SESSION_CHANGED" });
+  };
+  requireCurrentSession();
 
   const headers: Record<string, string> = {
     Accept: "application/json",
@@ -125,6 +137,7 @@ async function request<T = any>(
   });
 
   const text = await res.text();
+  requireCurrentSession();
 
   let body: any = null;
 
@@ -268,10 +281,10 @@ export const api = {
   // VerifyEmailNotification (opened as /verify-email?token&email). Public:
   // the token is the proof, not a session. 422 errors.token[0] =
   // invalid/used or expired (Romanian).
-  verifyEmail: async (email: string, token: string) => {
+  verifyEmail: async (email: string, token: string, password: string) => {
     return request<{ message: string; email_verified_at: string }>("/email/verify", {
       method: "POST",
-      body: JSON.stringify({ email, token }),
+      body: JSON.stringify({ email, token, password, password_confirmation: password }),
     });
   },
 
@@ -399,13 +412,15 @@ export const api = {
     }),
 
   logout: async () => {
+    const version = sessionVersion();
     try {
       await request("/logout", {
         method: "POST",
       });
-    } finally {
-      await clearToken();
-    }
+    } catch {}
+    // A slow logout must never clear credentials from a newer sign-in.
+    if (version !== sessionVersion()) return false;
+    return clearToken();
   },
 
   // -------------------------

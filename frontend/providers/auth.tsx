@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { api, clearToken, getToken, setToken } from "../lib/api";
+import { sessionVersion } from "@/lib/sessionCache";
 
 /** email_verified_at: ISO string, or null while the registration email
  * hasn't been confirmed yet (see components/auth/VerifyEmailBanner.tsx).
@@ -98,13 +99,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // The local session ends even when POST /logout fails (offline, or the
   // token was already revoked server-side -- a password reset revokes
   // every token, see app/(auth)/reset-password.tsx). api.logout() clears
-  // the stored token in its own finally; before this, a failed request
-  // threw past setUser(null) and left a "logged in" user with no token.
+  // the stored token after the request. A newer sign-in must also survive
+  // a delayed native token deletion and the await before setUser(null).
   const signOut = useCallback(async () => {
-    try {
-      await api.logout();
-    } catch {}
-    setUser(null);
+    const version = sessionVersion();
+    if (await api.logout() && sessionVersion() === version + 1) setUser(null);
   }, []);
 
   const refreshUser = useCallback(async () => {
@@ -117,7 +116,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthCtx.Provider value={{ user, loading, signIn, signUp, signOut, signInWithToken, updateUser, refreshUser }}>
+    <AuthCtx.Provider key={user?.id ?? "signed-out"} value={{ user, loading, signIn, signUp, signOut, signInWithToken, updateUser, refreshUser }}>
       {children}
     </AuthCtx.Provider>
   );

@@ -97,6 +97,26 @@ class SocialLoginTest extends TestCase
 
     // ---- Apple ---------------------------------------------------------
 
+    public function test_apple_rejects_identity_snapshot_changed_before_session_issuance(): void
+    {
+        $snapshot = User::factory()->create(['email' => 'ana@example.com', 'email_verified_at' => null]);
+        $social = Mockery::mock(SocialAuthService::class)->makePartial();
+        $social->shouldReceive('resolveUser')->once()->andReturnUsing(function () use ($snapshot) {
+            DB::table('email_verification_tokens')->insert([
+                'user_id' => $snapshot->id, 'token' => hash('sha256', 'proof-during-sign-in'), 'created_at' => now(),
+            ]);
+            $this->postJson('/api/email/verify', [
+                'email' => $snapshot->email, 'token' => 'proof-during-sign-in',
+                'password' => 'owner-password', 'password_confirmation' => 'owner-password',
+            ])->assertOk();
+
+            return [$snapshot, false];
+        });
+        $this->app->instance(SocialAuthService::class, $social);
+        $this->apple()->assertUnprocessable()->assertJsonPath('error', 'invalid_code');
+        $this->assertSame(0, $snapshot->tokens()->count());
+    }
+
     public function test_apple_creates_verified_user_and_links(): void
     {
         $res = $this->apple([], ['full_name' => ['given' => 'Ana', 'family' => 'Pop']])->assertOk();
@@ -417,7 +437,7 @@ class SocialLoginTest extends TestCase
         $u2 = $mk('two@example.com', false, 'fb-2');
         $token = str_repeat('t', 64);
         DB::table('email_verification_tokens')->insert(['user_id' => $u2->id, 'token' => hash('sha256', $token), 'created_at' => now()]);
-        $this->postJson('/api/email/verify', ['email' => 'two@example.com', 'token' => $token])->assertOk();
+        $this->postJson('/api/email/verify', ['email' => 'two@example.com', 'token' => $token, 'password' => 'owner-secret123', 'password_confirmation' => 'owner-secret123'])->assertOk();
         $this->assertSame(['apple'], SocialAccount::where('user_id', $u2->id)->pluck('provider')->all());
 
         // 3. confirm-email-change success
@@ -440,7 +460,14 @@ class SocialLoginTest extends TestCase
         return $this->postJson('/api/auth/exchange', ['code' => $this->callbackCode('facebook', $state)]);
     }
 
-    public function test_facebook_created_account_keeps_facebook_after_verify_email(): void
+    private function assertUnverifiedFacebookRejected(): void
+    {
+        $state = app(SocialAuthService::class)->createState('facebook', 'exp://front.example.test/--/auth-callback');
+        $this->get('/auth/facebook/callback?state='.$state.'&code=audit-code')
+            ->assertRedirect('exp://front.example.test/--/auth-callback?error=email_unverified_exists');
+    }
+
+    public function test_email_proof_removes_unverified_creator_link(): void
     {
         $this->withoutMiddleware(ThrottleRequests::class);
         $this->mockProvider('facebook', ['id' => 'fb-1', 'email' => 'Nou@Example.com', 'name' => 'Nou']);
@@ -452,18 +479,18 @@ class SocialLoginTest extends TestCase
 
         $token = str_repeat('v', 64);
         DB::table('email_verification_tokens')->insert(['user_id' => $userId, 'token' => hash('sha256', $token), 'created_at' => now()]);
-        $this->postJson('/api/email/verify', ['email' => 'nou@example.com', 'token' => $token])->assertOk();
+        $this->postJson('/api/email/verify', ['email' => 'nou@example.com', 'token' => $token, 'password' => 'owner-secret123', 'password_confirmation' => 'owner-secret123'])->assertOk();
 
-        $this->assertDatabaseHas('social_accounts', ['provider' => 'facebook', 'user_id' => $userId, 'email_verified' => true, 'created_account' => true]);
+        $this->assertDatabaseMissing('social_accounts', ['provider' => 'facebook', 'user_id' => $userId]);
         $this->assertDatabaseMissing('social_accounts', ['provider' => 'google']);
         $this->assertNotNull($user->fresh()->email_verified_at);
 
         $this->app['auth']->forgetGuards();
-        $this->facebookSignIn()->assertOk()->assertJsonPath('created', false)->assertJsonPath('user.id', $userId);
+        $this->assertUnverifiedFacebookRejected();
         $this->assertSame(1, User::count());
     }
 
-    public function test_facebook_created_account_keeps_facebook_after_reset_password(): void
+    public function test_password_reset_removes_unverified_creator_link(): void
     {
         $this->withoutMiddleware(ThrottleRequests::class);
         Notification::fake();
@@ -482,12 +509,10 @@ class SocialLoginTest extends TestCase
             'password' => 'newpass1', 'password_confirmation' => 'newpass1',
         ])->assertOk();
 
-        $this->assertSame(['facebook'], SocialAccount::where('user_id', $userId)->pluck('provider')->all());
-        $this->assertTrue(SocialAccount::where('provider', 'facebook')->first()->email_verified);
+        $this->assertSame([], SocialAccount::where('user_id', $userId)->pluck('provider')->all());
 
         $this->app['auth']->forgetGuards();
-        $this->facebookSignIn()->assertOk()->assertJsonPath('created', false)->assertJsonPath('user.id', $userId)
-            ->assertJsonPath('user.has_password', true);
+        $this->assertUnverifiedFacebookRejected();
         $this->postJson('/api/login', ['email' => 'nou@example.com', 'password' => 'newpass1'])->assertOk();
     }
 

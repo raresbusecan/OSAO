@@ -5,6 +5,7 @@ namespace App\Services\SocialAuth;
 use App\Models\Role;
 use App\Models\SocialAccount;
 use App\Models\User;
+use App\Support\AuthSession;
 use Illuminate\Database\DeadlockException;
 use Illuminate\Database\DetectsConcurrencyErrors;
 use Illuminate\Database\QueryException;
@@ -40,10 +41,8 @@ use Illuminate\Support\Str;
  * usual "credentials incorrect" until they set one (POST
  * /profile/password/set, or forgot-password). social_accounts.email_verified
  * records whether the provider vouched for the email; created_account
- * whether that sign-in created the user. When the user later proves an
- * address (settleLinksAfterAddressProven), an unverified link that created
- * the account and carries that same address is promoted to verified (it's
- * the owner's own sign-in method); every other unverified link is dropped.
+ * whether that sign-in created the user. Address proof drops every
+ * unverified link, including the creator: it may belong to a pre-registrant.
  */
 class SocialAuthService
 {
@@ -115,7 +114,7 @@ class SocialAuthService
             throw new SocialAuthException('email_missing', 422);
         }
 
-        $existing = User::whereRaw('LOWER(email) = ?', [$email])->first();
+        $existing = User::whereRaw('LOWER(email) = ?', [$email])->lockForUpdate()->first();
 
         if ($existing) {
             // Only a provider-verified address may attach to an existing
@@ -182,32 +181,13 @@ class SocialAuthService
         SocialAccount::where('user_id', $user->id)->where('email_verified', false)->delete();
     }
 
-    /** Call whenever a user proves an address by other means (reset
-     * password, verify email, confirm email change; $provenEmail = the
-     * address just proven). An unverified link that CREATED this account
-     * and carries exactly that address is the owner's own sign-in method
-     * (e.g. a Facebook-created user verifying their email) -> mark it
-     * verified. Every other unverified link (other address, or one that
-     * didn't create the account) no longer gets to keep the account.
-     *
-     * Known limit (same class as verify-email not revoking the registrant,
-     * see backend/CLAUDE.md): if someone else created the account through
-     * an unverified Facebook email and the real owner of the address then
-     * proves it, the creator's link is kept too. */
+    /** Address proof does not prove ownership of an unverified social identity.
+     * Called after verification, password recovery and email change. */
     public static function settleLinksAfterAddressProven(User $user, string $provenEmail): void
     {
-        $provenEmail = Str::lower(trim($provenEmail));
-
-        SocialAccount::where('user_id', $user->id)
-            ->where('email_verified', false)
-            ->get()
-            ->each(function (SocialAccount $link) use ($provenEmail) {
-                if ($link->created_account && $link->email !== null && Str::lower($link->email) === $provenEmail) {
-                    $link->update(['email_verified' => true]);
-                } else {
-                    $link->delete();
-                }
-            });
+        // Even a creator link may belong to a pre-registrant. Mailbox proof
+        // cannot prove control of that provider identity; never promote it.
+        self::dropUnverifiedLinks($user);
     }
 
     private function link(User $user, string $provider, string $providerUserId, ?string $email, bool $emailVerified, bool $createdAccount): void
@@ -337,21 +317,34 @@ class SocialAuthService
     public function createExchangeCode(User $user, bool $created): string
     {
         $code = Str::random(64);
+        // Bind the resolved snapshot; refreshing here could authorize a
+        // callback whose credentials were revoked while it was running.
         Cache::put('social:code:' . hash('sha256', $code), [
             'user_id' => $user->id,
             'created' => $created,
+            'credential_state' => AuthSession::fingerprint($user),
         ], self::CODE_TTL_SECONDS);
 
         return $code;
     }
 
-    /** @return array{0: User, 1: bool} @throws SocialAuthException */
+    /** The caller must keep the transaction open through token issuance.
+     * @return array{0: User, 1: bool} @throws SocialAuthException */
     public function consumeExchangeCode(string $code): array
     {
-        $data = strlen($code) === 64 ? Cache::pull('social:code:' . hash('sha256', $code)) : null;
-        $user = is_array($data) ? User::find($data['user_id'] ?? 0) : null;
+        $key = 'social:code:' . hash('sha256', $code);
+        $pending = strlen($code) === 64 ? Cache::get($key) : null;
+        $user = is_array($pending)
+            ? User::whereKey($pending['user_id'] ?? 0)->lockForUpdate()->first()
+            : null;
 
-        if (!$user) {
+        // Pull only after locking the account: parallel exchanges for this
+        // code cannot both consume it before either transaction commits.
+        $data = $user ? Cache::pull($key) : null;
+
+        if (!$user || !is_array($data)
+            || !is_string($data['credential_state'] ?? null)
+            || !hash_equals(AuthSession::fingerprint($user), $data['credential_state'])) {
             throw new SocialAuthException('invalid_code', 422);
         }
 

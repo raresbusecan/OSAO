@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { DateField } from "@/components/ui/DateField";
 import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,7 +14,7 @@ import type { CarDocumentEntry } from "@/lib/spaces/car/car.types";
 
 type CarDocumentFormProps = {
   onCancel: () => void;
-  onSave: (entry: CarDocumentEntry) => void;
+  onSave: (entry: CarDocumentEntry) => Promise<void>;
   /** Pass an existing entry to edit it instead of creating a new one. */
   entry?: CarDocumentEntry;
   /** Only meaningful while editing -- deletes this entry entirely. */
@@ -75,6 +75,8 @@ export default function CarDocumentForm({
 
 
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
 
   const handleTypeSelect = (type: string) => {
     if (!title || title === documentType) {
@@ -83,7 +85,8 @@ export default function CarDocumentForm({
     setDocumentType(type);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (saveLock.current) return;
     setError("");
 
     const priceValue = price
@@ -161,7 +164,16 @@ export default function CarDocumentForm({
       guiltFree,
     };
 
-    onSave(entryToSave);
+    saveLock.current = true;
+    setSaving(true);
+    try {
+      await onSave(entryToSave);
+    } catch (error: any) {
+      setError(error?.message || "Nu am putut salva documentul. Încearcă din nou.");
+    } finally {
+      saveLock.current = false;
+      setSaving(false);
+    }
   };
 
   const handleDelete = async () => {
@@ -177,7 +189,7 @@ export default function CarDocumentForm({
   return (
     <Sheet
       visible
-      onClose={onCancel}
+      onClose={saving ? () => {} : onCancel}
       info="car.documentForm"
       title={readOnly ? title || "Document" : isEditing ? "Editează documentul" : isRenewing ? "Reînnoiește documentul" : "Document nou"}
       subtitle={readOnly ? "Doar citire" : undefined}
@@ -186,7 +198,7 @@ export default function CarDocumentForm({
       footer={
         <>
           {!readOnly ? (
-            <Button testID="car-document-save" label={isEditing ? "Salvează" : "Salvează documentul"} tone={carColors.fill} onPress={handleSave} />
+            <Button testID="car-document-save" label={isEditing ? "Salvează" : "Salvează documentul"} tone={carColors.fill} onPress={handleSave} loading={saving} />
           ) : (
             <Button variant="secondary" label="Închide" onPress={onCancel} />
           )}

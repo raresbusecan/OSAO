@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { onSessionReset, sessionVersion } from "@/lib/sessionCache";
 import type { ThemeColors } from "@/lib/theme";
 import type { BudgetCreditItem } from "@/lib/spaces/expenses/credits";
 
@@ -206,6 +207,12 @@ let cache: BudgetPlanSummary | null = null;
 let cachedAt = 0;
 let inflight: Promise<BudgetPlanSummary | null> | null = null;
 const listeners = new Set<(s: BudgetPlanSummary | null) => void>();
+onSessionReset(() => {
+  cache = null;
+  cachedAt = 0;
+  inflight = null;
+  listeners.forEach((listener) => listener(null));
+});
 
 function pickSummary(b: any): BudgetPlanSummary {
   return {
@@ -227,15 +234,17 @@ export function primeBudgetPlan(budgetResponse: any): void {
 /** Re-fetch /budget (e.g. after a credit was added/changed). */
 export function refreshBudgetPlan(): Promise<BudgetPlanSummary | null> {
   if (inflight) return inflight;
+  const version = sessionVersion();
   inflight = api
     .getBudget()
     .then((b) => {
+      if (version !== sessionVersion()) return null;
       primeBudgetPlan(b);
       return cache;
     })
-    .catch(() => cache)
+    .catch(() => version === sessionVersion() ? cache : null)
     .finally(() => {
-      inflight = null;
+      if (version === sessionVersion()) inflight = null;
     });
   return inflight;
 }

@@ -17,7 +17,7 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
   `user`).
 - **Auth-email screens** (2026-10): `app/(auth)/forgot-password.tsx`,
   `app/(auth)/reset-password.tsx`, `app/verify-email.tsx` (registration
-  confirmation, confirms automatically on open), `app/confirm-email.tsx`
+  confirmation, asks for the owner-chosen password; old sessions are revoked), `app/confirm-email.tsx`
   (email change). Emails link to the backend's `{APP_URL}/open/<screen>`
   page, which redirects to `exp://<frontend-tunnel>/--/<screen>?token&email`
   (Expo Go) or `orgos://<screen>?...` (own build; `app.json` scheme). The

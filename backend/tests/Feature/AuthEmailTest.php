@@ -68,10 +68,12 @@ class AuthEmailTest extends TestCase
     {
         [$user, $token] = $this->register();
 
-        $this->postJson('/api/email/verify', ['email' => $user->email, 'token' => $token])
+        $this->postJson('/api/email/verify', ['email' => $user->email, 'token' => $token, 'password' => 'owner-secret123', 'password_confirmation' => 'owner-secret123'])
             ->assertOk()
             ->assertJsonPath('message', 'Adresa de email a fost confirmată.');
         $this->assertNotNull($user->fresh()->email_verified_at);
+        $this->assertTrue(\Illuminate\Support\Facades\Hash::check('owner-secret123', $user->fresh()->password));
+        $this->assertSame(0, $user->tokens()->count());
 
         $this->postJson('/api/email/verify', ['email' => $user->email, 'token' => $token])
             ->assertStatus(422)
@@ -87,6 +89,26 @@ class AuthEmailTest extends TestCase
         $this->postJson('/api/email/verify', ['email' => 'other@example.com', 'token' => $token])
             ->assertStatus(422)->assertJsonValidationErrors('token');
         $this->assertNull($user->fresh()->email_verified_at);
+    }
+
+    public function test_confirmation_requires_owner_password_without_consuming_the_link_on_error(): void
+    {
+        [$user, $token] = $this->register();
+        $this->postJson('/api/email/verify', ['email' => $user->email, 'token' => $token])
+            ->assertStatus(422)->assertJsonValidationErrors('password');
+        $this->assertNull($user->fresh()->email_verified_at);
+        $this->assertDatabaseHas('email_verification_tokens', ['user_id' => $user->id]);
+    }
+
+    public function test_confirmation_replaces_unproven_password_and_revokes_old_bearer_token(): void
+    {
+        [$user, $token, $registration] = $this->register();
+        $oldToken = $registration->json('token');
+        $this->postJson('/api/email/verify', ['email' => $user->email, 'token' => $token, 'password' => 'owner-secret123', 'password_confirmation' => 'owner-secret123'])->assertOk();
+        $this->app['auth']->forgetGuards();
+        $this->withToken($oldToken)->getJson('/api/user')->assertUnauthorized();
+        $this->withHeader('Authorization', '')->postJson('/api/login', ['email' => $user->email, 'password' => 'secret123'])->assertStatus(422);
+        $this->postJson('/api/login', ['email' => $user->email, 'password' => 'owner-secret123'])->assertOk();
     }
 
     public function test_verify_expired(): void

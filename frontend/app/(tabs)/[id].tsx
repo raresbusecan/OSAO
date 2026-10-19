@@ -327,7 +327,7 @@ export default function SpaceDetail() {
           ? current.documentEntries.map((e) => (e.id === entry.id ? previous! : e))
           : current.documentEntries.filter((e) => e.id !== entry.id),
       }));
-      notifyAction("Nu am putut salva documentul", error?.message || "A apărut o eroare.");
+      throw error;
     }
   };
 

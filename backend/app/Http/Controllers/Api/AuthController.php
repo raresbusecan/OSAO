@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Notifications\ConfirmEmailChangeNotification;
 use App\Notifications\VerifyEmailNotification;
 use App\Services\SocialAuth\SocialAuthService;
+use App\Support\AuthSession;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -54,7 +55,13 @@ class AuthController extends Controller
             Log::warning('Verification email failed on register', ['user_id' => $user->id, 'error' => $e->getMessage()]);
         }
 
-        $token = $user->createToken('mobile-app')->plainTextToken;
+        $issued = AuthSession::issueToken($user);
+        if (!$issued) {
+            throw ValidationException::withMessages([
+                'email' => ['Sesiunea de înregistrare a expirat. Autentifică-te din nou.'],
+            ]);
+        }
+        [$user, $token] = $issued;
 
         return response()->json([
             'message' => 'Cont creat.',
@@ -78,7 +85,13 @@ class AuthController extends Controller
             ]);
         }
 
-        $token = $user->createToken('mobile-app')->plainTextToken;
+        $issued = AuthSession::issueToken($user);
+        if (!$issued) {
+            throw ValidationException::withMessages([
+                'email' => ['The provided credentials are incorrect.'],
+            ]);
+        }
+        [$user, $token] = $issued;
 
         return response()->json([
             'message' => 'Te-ai conectat.',
@@ -138,7 +151,7 @@ class AuthController extends Controller
                 $user->tokens()->delete();
                 // The reset link proved the address: unverified social
                 // links (Facebook / unverified Google) lose the account,
-                // except the one that created it with this same address.
+                // including any link that originally created the account.
                 SocialAuthService::settleLinksAfterAddressProven($user, $user->email);
 
                 event(new PasswordReset($user));
@@ -369,7 +382,7 @@ class AuthController extends Controller
         ]);
     }
 
-    /** POST /email/verify {email, token} -- consumes the link from
+    /** POST /email/verify {email, token, password, password_confirmation} -- consumes the link from
      * VerifyEmailNotification (via /open/verify-email -> the app's
      * verify-email screen). Public (the link may be opened while logged
      * out, same as confirm-email/reset-password), throttled with them.
@@ -385,33 +398,41 @@ class AuthController extends Controller
             'token' => ['required', 'string'],
         ]);
 
-        $user = User::where('email', $validated['email'])->first();
-        $pending = $user
-            ? DB::table('email_verification_tokens')->where('user_id', $user->id)->first()
-            : null;
+        return DB::transaction(function () use ($request, $validated) {
+            $user = User::where('email', $validated['email'])->lockForUpdate()->first();
+            $pending = $user
+                ? DB::table('email_verification_tokens')->where('user_id', $user->id)->lockForUpdate()->first()
+                : null;
 
-        if (!$pending || !hash_equals($pending->token, hash('sha256', $validated['token']))) {
-            throw ValidationException::withMessages([
-                'token' => ['Acest link nu este valid sau a fost deja folosit.'],
-            ]);
-        }
+            if (!$pending || !hash_equals($pending->token, hash('sha256', $validated['token']))) {
+                throw ValidationException::withMessages([
+                    'token' => ['Acest link nu este valid sau a fost deja folosit.'],
+                ]);
+            }
 
-        if (now()->subHours(VerifyEmailNotification::EXPIRE_HOURS)->greaterThan($pending->created_at)) {
+            if (now()->subHours(VerifyEmailNotification::EXPIRE_HOURS)->greaterThan($pending->created_at)) {
+                DB::table('email_verification_tokens')->where('user_id', $user->id)->delete();
+
+                throw ValidationException::withMessages([
+                    'token' => ['Acest link a expirat. Cere unul nou din aplicație.'],
+                ]);
+            }
+
+            // Mailbox proof must establish credentials chosen by the mailbox owner,
+            // rather than preserving a password/session set by a pre-registrant.
+            $credentials = $request->validate(['password' => ['required', 'string', 'min:8', 'confirmed']]);
+            $user->forceFill(['email_verified_at' => now(), 'password' => $credentials['password'], 'has_password' => true])->save();
+            $user->tokens()->delete();
+            DB::table('email_change_requests')->where('user_id', $user->id)->delete();
+            DB::table('password_reset_tokens')->where('email', $user->email)->delete();
             DB::table('email_verification_tokens')->where('user_id', $user->id)->delete();
+            SocialAuthService::settleLinksAfterAddressProven($user, $user->email);
 
-            throw ValidationException::withMessages([
-                'token' => ['Acest link a expirat. Cere unul nou din aplicație.'],
+            return response()->json([
+                'message' => 'Adresa de email a fost confirmată.',
+                'email_verified_at' => $user->email_verified_at,
             ]);
-        }
-
-        $user->forceFill(['email_verified_at' => now()])->save();
-        DB::table('email_verification_tokens')->where('user_id', $user->id)->delete();
-        SocialAuthService::settleLinksAfterAddressProven($user, $user->email);
-
-        return response()->json([
-            'message' => 'Adresa de email a fost confirmată.',
-            'email_verified_at' => $user->email_verified_at,
-        ]);
+        });
     }
 
     /** POST /email/verification-notification -- "Retrimite emailul" from

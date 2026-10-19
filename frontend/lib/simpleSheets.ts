@@ -1,4 +1,5 @@
 import { useSyncExternalStore } from "react";
+import { onSessionReset } from "@/lib/sessionCache";
 
 /**
  * Open/close state of the two app-wide Simplu sheets, so any screen (a
@@ -27,6 +28,7 @@ type State = {
 
 let state: State = { upgrade: false, quickAdd: null, editRecord: null, spaceAccent: null };
 const listeners = new Set<() => void>();
+onSessionReset(() => set({ upgrade: false, quickAdd: null, editRecord: null, spaceAccent: null }));
 
 function set(patch: Partial<State>) {
   state = { ...state, ...patch };

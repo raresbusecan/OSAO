@@ -1,114 +1,80 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, ActivityIndicator } from "react-native";
+import React, { useState } from "react";
+import { View, Text } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useTheme } from "@/lib/theme";
 import { api, apiErrorMessage } from "@/lib/api";
 import { useAuth } from "@/providers/auth";
 import { Button } from "@/components/ui/primitives";
-import { AuthShell, AuthNotice, AuthSwitch, linkEmail } from "@/components/auth/AuthShell";
+import { AuthShell, AuthNotice, AuthSwitch, PasswordField, linkEmail } from "@/components/auth/AuthShell";
 import { useResendVerification } from "@/components/auth/VerifyEmailBanner";
 
-/** Opened from the link in VerifyEmailNotification (registration) --
- * ?token=...&email=..., reached through the backend's /open/verify-email
- * page, which redirects to exp://<host>/--/verify-email (Expo Go) or
- * orgos://verify-email (own build). Public, like confirm-email.tsx (see
- * AuthGuard in app/_layout.tsx): the token is the proof, not a session.
- * Confirms automatically on open. If this device is logged in as that
- * same account, updateUser() hides the "Confirmă-ți adresa" banner right
- * away; logged in as someone else, their session is left alone. */
+/** Mailbox proof establishes a password chosen by its owner and revokes
+ * pre-verification sessions. Opening a link alone never changes credentials. */
 export default function VerifyEmail() {
   const { colors, spacing } = useTheme();
   const router = useRouter();
-  const { user, updateUser } = useAuth();
+  const { user, signOut } = useAuth();
   const { token, email: rawEmail } = useLocalSearchParams<{ token?: string; email?: string }>();
   const email = linkEmail(rawEmail);
-  const [status, setStatus] = useState<"pending" | "done" | "error">("pending");
+  const linkValid = !!token && !!email;
+  const sameAccount = !!user && !!email && user.email.toLowerCase() === email.toLowerCase();
+  const [status, setStatus] = useState<"form" | "done" | "error">(
+    sameAccount && user?.email_verified_at ? "done" : linkValid ? "form" : "error",
+  );
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { resend, busy, note, secondsLeft } = useResendVerification();
+  const canSubmit = linkValid && password.length >= 8 && password === confirm && !saving;
 
-  const linkValid = !!token && !!email;
-  const sameAccount = !!user && !!email && user.email.toLowerCase() === String(email).toLowerCase();
-
-  useEffect(() => {
-    if (!linkValid) {
-      setStatus("error");
-      return;
-    }
-
-    (async () => {
-      try {
-        const res = await api.verifyEmail(email!, token!);
-        if (sameAccount) updateUser({ email_verified_at: res.email_verified_at ?? new Date().toISOString() });
-        setStatus("done");
-      } catch (e: any) {
-        // Opened again after it already worked (the token is single use):
-        // for that same, already-verified account, that's not an error.
-        if (sameAccount && user?.email_verified_at) {
-          setStatus("done");
-          return;
-        }
-        setError(apiErrorMessage(e, "Nu am putut confirma adresa. Încearcă din nou.", "token"));
-        setStatus("error");
+  const submit = async () => {
+    if (!canSubmit) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await api.verifyEmail(email!, token!, password);
+      if (sameAccount) {
+        await signOut();
+        router.replace("/(auth)/login");
+        return;
       }
-    })();
-    // Runs once against the params this screen was opened with -- a new
-    // link means a fresh navigation, not a re-render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+      setPassword("");
+      setConfirm("");
+      setStatus("done");
+    } catch (e: any) {
+      setError(apiErrorMessage(e, "Nu am putut confirma adresa. Încearcă din nou.", "password"));
+      if (e?.body?.errors?.token) setStatus("error");
+    } finally {
+      setSaving(false);
+    }
+  };
   const goOn = () => router.replace(user ? "/(tabs)/home" : "/(auth)/login");
 
   return (
     <AuthShell testID="verify-email-screen" title="Confirmă adresa" subtitle={email ?? null}>
-      {status === "pending" ? (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-          <ActivityIndicator color={colors.onSurfaceTertiary} />
-          <Text style={{ fontSize: 15, color: colors.onSurfaceTertiary }}>Se confirmă...</Text>
+      {status === "form" ? (
+        <View style={{ gap: spacing.lg }}>
+          <Text style={{ color: colors.onSurfaceSecondary, lineHeight: 21 }}>Alege parola pentru contul tău. După confirmare, te vei conecta din nou cu această parolă.</Text>
+          <PasswordField testID="verify-email-password" label="Parola" value={password} onChangeText={setPassword} autoComplete="new-password" textContentType="newPassword" hint="Cel puțin 8 caractere." />
+          <PasswordField testID="verify-email-confirm-password" label="Repetă parola" value={confirm} onChangeText={setConfirm} autoComplete="new-password" onSubmitEditing={submit} error={error} />
+          <Button testID="verify-email-submit" label="Confirmă adresa" onPress={submit} disabled={!canSubmit} loading={saving} />
         </View>
       ) : status === "done" ? (
         <View style={{ gap: spacing.lg }}>
-          <AuthNotice
-            testID="verify-email-done"
-            icon="checkmark-circle-outline"
-            tone={colors.success}
-            title="Adresa de email a fost confirmată"
-            message={user ? "Mulțumim! Poți continua în aplicație." : "Mulțumim! Intră în cont ca să continui."}
-          />
+          <AuthNotice testID="verify-email-done" icon="checkmark-circle-outline" tone={colors.success} title="Adresa de email a fost confirmată" message="Poți intra în cont folosind parola aleasă." />
           <Button testID="verify-email-continue" label={user ? "Mergi la Acasă" : "Intră în cont"} onPress={goOn} />
         </View>
       ) : (
         <View style={{ gap: spacing.lg }}>
-          <AuthNotice
-            testID="verify-email-error"
-            icon="alert-circle-outline"
-            tone={colors.error}
-            title="Linkul nu e valid"
-            message={error || "Deschide din nou linkul din email sau cere unul nou din aplicație."}
-          />
-          {/* A new link can only be requested with a session (the resend
-              endpoint is auth'd and sends to the logged-in account), so
-              logged out the way forward is to log in -- the banner on
-              Acasă then offers "Retrimite emailul". */}
+          <AuthNotice testID="verify-email-error" icon="alert-circle-outline" tone={colors.error} title="Linkul nu e valid" message={error || "Deschide linkul din email sau cere unul nou din aplicație."} />
           {user && user.email_verified_at === null ? (
             <View style={{ gap: spacing.sm }}>
-              {note ? (
-                <Text testID="verify-email-resend-note" style={{ fontSize: 13, lineHeight: 18, color: note.ok ? colors.success : colors.error }}>{note.text}</Text>
-              ) : null}
-              <Button
-                testID="verify-email-resend"
-                label={secondsLeft > 0 ? `Retrimite în ${secondsLeft} s` : "Retrimite emailul"}
-                onPress={resend}
-                loading={busy}
-                disabled={secondsLeft > 0}
-              />
+              {note ? <Text style={{ color: note.ok ? colors.success : colors.error }}>{note.text}</Text> : null}
+              <Button testID="verify-email-resend" label={secondsLeft > 0 ? `Retrimite în ${secondsLeft} s` : "Retrimite emailul"} onPress={resend} loading={busy} disabled={secondsLeft > 0} />
             </View>
           ) : null}
-          <AuthSwitch
-            testID="verify-email-goto"
-            prompt={user ? "Mai târziu?" : "Ai cont?"}
-            action={user ? "Mergi la Acasă" : "Intră în cont"}
-            onPress={goOn}
-          />
+          <AuthSwitch testID="verify-email-goto" prompt={user ? "Mai târziu?" : "Ai cont?"} action={user ? "Mergi la Acasă" : "Intră în cont"} onPress={goOn} />
         </View>
       )}
     </AuthShell>

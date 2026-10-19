@@ -7,8 +7,10 @@ use App\Models\Item;
 use App\Models\Space;
 use App\Models\User;
 use App\Support\ItemBudgetRules;
+use App\Support\DocumentDates;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class ItemController extends Controller
@@ -33,6 +35,8 @@ class ItemController extends Controller
      * any broader relationship to the space it happens to live in. */
     private function canAccessList(Request $request, Item $list): bool
     {
+        if ($list->type !== 'grocery_list') return false;
+
         if (!$list->space_id) {
             return $list->user_id === $request->user()->id;
         }
@@ -42,7 +46,31 @@ class ItemController extends Controller
 
         if ($space->user_id === $request->user()->id) return true;
 
-        return $list->members()->where('users.id', $request->user()->id)->exists();
+        return $list->relationLoaded('members')
+            ? $list->members->contains('id', $request->user()->id)
+            : $list->members()->where('users.id', $request->user()->id)->exists();
+    }
+
+    /** Collection endpoints must enforce the same list-level access as show().
+     * Load parents/members together so filtering does not add one query per product. */
+    private function filterGroceryAccess(Request $request, $items)
+    {
+        $listIds = $items->map(fn (Item $item) => $item->type === 'grocery_list'
+            ? $item->id
+            : ($item->type === 'grocery_item' ? ($item->metadata['listId'] ?? null) : null))
+            ->filter(fn ($id) => is_int($id) || is_string($id))->unique()->values();
+        $lists = Item::where('type', 'grocery_list')->whereIn('id', $listIds)
+            ->with(['space:id,user_id', 'members:id'])->get()->keyBy('id');
+
+        return $items->filter(function (Item $item) use ($request, $lists) {
+            if (!in_array($item->type, ['grocery_list', 'grocery_item'], true)) return true;
+            $listId = $item->type === 'grocery_list' ? $item->id : ($item->metadata['listId'] ?? null);
+            if (!is_int($listId) && !is_string($listId)) return false;
+            $list = $lists->get($listId);
+
+            return $list && (string) $list->space_id === (string) $item->space_id
+                && $this->canAccessList($request, $list);
+        })->values();
     }
 
     /** Whether the current user may see/edit this specific item. A
@@ -61,11 +89,10 @@ class ItemController extends Controller
 
         if ($item->type === 'grocery_item') {
             $listId = $item->metadata['listId'] ?? null;
-            $list = $listId ? Item::find($listId) : null;
-            if ($list) return $this->canAccessList($request, $list);
-            // The list itself couldn't be resolved (shouldn't normally
-            // happen) -- fall through to the plain space-level check
-            // below rather than hard-denying.
+            $list = is_int($listId) || is_string($listId) ? Item::find($listId) : null;
+
+            return $list && (string) $list->space_id === (string) $item->space_id
+                && $this->canAccessList($request, $list);
         }
 
         if ($item->space_id) {
@@ -174,7 +201,7 @@ class ItemController extends Controller
                 $query->where('type', $request->input('type'));
             }
 
-            return response()->json($query->with('user:id,name,email')->get());
+            return response()->json($this->filterGroceryAccess($request, $query->with('user:id,name,email')->get()));
         }
 
         $query = Item::where('user_id', $request->user()->id);
@@ -183,7 +210,7 @@ class ItemController extends Controller
             $query->where('type', $request->input('type'));
         }
 
-        return response()->json($query->with('user:id,name,email')->get());
+        return response()->json($this->filterGroceryAccess($request, $query->with('user:id,name,email')->get()));
     }
 
     // POST /api/items
@@ -227,20 +254,10 @@ class ItemController extends Controller
         // in order. Car stores "dd.mm.yyyy", Casă an ISO date; either is
         // accepted.
         $validator->after(function ($v) use ($request) {
-            if (!in_array($request->input('type'), ['car_document', 'home_document'], true)) {
-                return;
-            }
-            $issue = $this->documentDate($request->input('metadata.issueDate'));
-            $expiry = $this->documentDate($request->input('metadata.expiryDate'));
-            $rawIssue = $request->input('metadata.issueDate');
-            if (!$issue && $rawIssue !== null && $rawIssue !== '') {
-                $v->errors()->add('metadata.issueDate', 'Data emiterii nu e validă.');
-            }
-            if (!$expiry) {
-                $v->errors()->add('metadata.expiryDate', 'Data expirării este obligatorie.');
-            }
-            if ($issue && $expiry && $expiry->lt($issue)) {
-                $v->errors()->add('metadata.expiryDate', 'Data expirării nu poate fi înaintea celei de emitere.');
+            $metadata = $request->input('metadata');
+            if ($metadata !== null && !is_array($metadata)) return;
+            foreach (DocumentDates::errors((string) $request->input('type'), $metadata) as $field => $messages) {
+                $v->errors()->add($field, $messages[0]);
             }
         });
 
@@ -260,7 +277,7 @@ class ItemController extends Controller
             // space instead of the list-owner's), breaking myGrocery()'s
             // per-space item lookup for everyone else on that list.
             $listId = $data['metadata']['listId'] ?? null;
-            $list = $listId ? Item::find($listId) : null;
+            $list = is_int($listId) || is_string($listId) ? Item::find($listId) : null;
 
             if (!$list || !$this->canAccessList($request, $list)) {
                 return response()->json([
@@ -269,6 +286,7 @@ class ItemController extends Controller
             }
 
             $data['space_id'] = $list->space_id;
+            $data['metadata']['listId'] = (string) $list->id;
         } elseif ($data['type'] === 'grocery_list') {
             // Structural and STRICTLY owner-only -- a space is someone's
             // "house"; being a guest on one list inside it (or even on
@@ -385,14 +403,29 @@ class ItemController extends Controller
             ], 422);
         }
 
+        if ($wasGrocery && $newType !== $item->type) {
+            return response()->json(['message' => 'Un produs nu poate fi transformat în listă sau invers.'], 422);
+        }
+
+        if (array_key_exists('metadata', $data) && is_array($data['metadata'])) {
+            $data['metadata'] = array_merge($item->metadata ?? [], $data['metadata']);
+        }
+
         if ($willBeGrocery) {
-            // A list's space is permanent, and a product's space always
-            // tracks its list's (see store() above) -- never move either
-            // via a generic update. groceryItemToItemBody on the
-            // frontend still sends the adder's own space_id on every
-            // save out of habit; silently dropped here rather than
-            // trusted, same reasoning as store().
+            // The client never chooses a grocery record's space. A product
+            // may move only to another accessible list and follows its space.
             unset($data['space_id']);
+            if ($item->type === 'grocery_item') {
+                $meta = array_key_exists('metadata', $data) ? $data['metadata'] : $item->metadata;
+                $listId = $meta['listId'] ?? null;
+                $list = is_int($listId) || is_string($listId) ? Item::find($listId) : null;
+                if (!$list || !$this->canAccessList($request, $list)) {
+                    return response()->json(['message' => 'Lista specificată nu există sau nu ai acces la ea.'], 404);
+                }
+                $data['metadata'] = $meta;
+                $data['metadata']['listId'] = (string) $list->id;
+                $data['space_id'] = $list->space_id;
+            }
         } elseif (array_key_exists('space_id', $data) && !empty($data['space_id'])) {
             if (!$this->accessibleSpace($request, $data['space_id'])) {
                 return response()->json([
@@ -401,19 +434,9 @@ class ItemController extends Controller
             }
         }
 
-        // A partial `metadata` object used to be a whole-column
-        // overwrite via the mass-update below -- silently dropping
-        // every sibling key the caller didn't happen to send. Not hit
-        // by the app today (every real *EntryToItemBody mapper always
-        // sends the FULL metadata object on every save, never a
-        // partial one -- confirmed by this session's own full-app QA
-        // sweep), but a live landmine for any future partial-update
-        // call. Merging is strictly safer than overwriting: a caller
-        // that already sends the full object gets the identical result
-        // either way (merge of "everything" over "everything" IS the
-        // new object), so this can't regress the current behavior.
-        if (array_key_exists('metadata', $data) && is_array($data['metadata'])) {
-            $data['metadata'] = array_merge($item->metadata ?? [], $data['metadata']);
+        $documentErrors = DocumentDates::errors($newType, array_key_exists('metadata', $data) ? $data['metadata'] : $item->metadata);
+        if ($documentErrors) {
+            return response()->json(['message' => array_values($documentErrors)[0][0], 'errors' => $documentErrors], 422);
         }
 
         if ($error = $this->budgetFieldErrors($request, $data, $item)) {
@@ -438,7 +461,15 @@ class ItemController extends Controller
             return response()->json(['message' => 'Doar proprietarul sau cine a creat lista o poate șterge.'], 403);
         }
 
-        $item->delete();
+        DB::transaction(function () use ($item) {
+            if ($item->type === 'grocery_list') {
+                Item::where('type', 'grocery_item')->where('space_id', $item->space_id)
+                    ->where(fn ($q) => $q->where('metadata->listId', (string) $item->id)
+                        ->orWhere('metadata->listId', (int) $item->id))
+                    ->delete();
+            }
+            $item->delete();
+        });
 
         return response()->json(['message' => 'Înregistrarea a fost ștearsă.']);
     }
@@ -606,18 +637,4 @@ class ItemController extends Controller
             : null;
     }
 
-    // "10.10.2026" (Car) or an ISO date (Casă) -> Carbon, null if missing/invalid.
-    private function documentDate($value): ?\Carbon\Carbon
-    {
-        if (!is_string($value) || trim($value) === '') {
-            return null;
-        }
-        try {
-            return preg_match('/^\d{2}\.\d{2}\.\d{4}$/', $value)
-                ? \Carbon\Carbon::createFromFormat('d.m.Y', $value)->startOfDay()
-                : \Carbon\Carbon::parse($value);
-        } catch (\Exception $e) {
-            return null;
-        }
-    }
 }

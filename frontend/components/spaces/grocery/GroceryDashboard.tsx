@@ -682,12 +682,10 @@ export default function GroceryDashboard({
     setCreatingList(false);
   };
 
-  // A list's items reference it only through metadata.listId, not a
-  // real DB foreign key (see groceryItems.ts), so deleting the list's
-  // own row doesn't cascade -- each saved item underneath it has to be
-  // deleted individually too.
+  // The API deletes the list and its products in one transaction.
   const handleDeleteList = async (listId: string) => {
-    const removedItems = getItemsForList(items, listId);
+    const previousLists = lists;
+    const previousItems = items;
 
     setLists((prev) => prev.filter((list) => list.id !== listId));
     setItems((prev) => prev.filter((item) => item.listId !== listId));
@@ -698,14 +696,13 @@ export default function GroceryDashboard({
     if (activeListId === listId) setActiveListId(null);
 
     try {
-      const deletions: Promise<any>[] = [];
-      if (isSavedItemId(listId)) deletions.push(api.deleteItem(listId));
-      removedItems.filter((item) => isSavedItemId(item.id)).forEach((item) => deletions.push(api.deleteItem(item.id)));
-      await Promise.all(deletions);
+      if (isSavedItemId(listId)) await api.deleteItem(listId);
     } catch (error: any) {
+      setLists(previousLists);
+      setItems(previousItems);
       notifyAction(
-        "Ștergerea nu s-a finalizat complet",
-        error?.message || "Unele produse din listă ar putea fi rămas salvate -- reintră în spațiu pentru a verifica.",
+        "Nu am putut șterge lista",
+        error?.message || "Lista și produsele au rămas salvate.",
       );
     }
   };

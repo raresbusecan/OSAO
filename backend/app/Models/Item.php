@@ -381,7 +381,7 @@ class Item extends Model
      * (isDocumentSuperseded in lib/spaces/car/calculations). */
     public static function supersededCarDocumentIds(int $userId): array
     {
-        $docs = self::where('user_id', $userId)
+        $docs = self::visibleTo(User::findOrFail($userId))
             ->where('type', 'car_document')
             ->get(['id', 'space_id', 'metadata'])
             ->map(function (self $d) {
@@ -445,7 +445,7 @@ class Item extends Model
     public function scopeVisibleTo(Builder $query, User $user): Builder
     {
         return $query->where(function (Builder $q) use ($user) {
-            $q->where('user_id', $user->id)
+            $q->where(fn (Builder $private) => $private->whereNull('space_id')->where('user_id', $user->id))
                 ->orWhereHas('space', fn (Builder $q2) => $q2->accessibleBy($user));
         });
     }

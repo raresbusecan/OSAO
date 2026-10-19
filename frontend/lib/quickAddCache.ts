@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import { onSessionReset, sessionVersion } from "@/lib/sessionCache";
 import { loadMyGroceryData } from "@/lib/spaces/grocery/groceryItems";
 import { detectSpaceType, profileFromSpace, type SpaceKind } from "@/lib/spaces/spaceProfile";
 import type { GroceryList } from "@/lib/spaces/grocery/grocery.types";
@@ -15,6 +16,11 @@ export type QuickSpace = { id: string; name: string; kind: Exclude<SpaceKind, "o
 let spaces: QuickSpace[] | null = null;
 const groceryLists = new Map<string, GroceryList[]>();
 let inflight: Promise<void> | null = null;
+onSessionReset(() => {
+  spaces = null;
+  groceryLists.clear();
+  inflight = null;
+});
 
 export function toQuickSpaces(raw: any[]): QuickSpace[] {
   const list: QuickSpace[] = [];
@@ -38,24 +44,26 @@ export const rememberGroceryLists = (spaceId: string, lists: GroceryList[]) => {
 /** Refreshes the cache; concurrent calls share one request. Never throws. */
 export function prefetchQuickAdd(): Promise<void> {
   if (inflight) return inflight;
+  const version = sessionVersion();
   inflight = (async () => {
     try {
       const r = await api.listSpaces();
+      if (version !== sessionVersion()) return;
       const list = toQuickSpaces(r?.spaces ?? []);
       await Promise.all(
         list
           .filter((s) => s.kind === "grocery")
           .map((s) =>
             loadMyGroceryData(s.id)
-              .then(({ lists }) => rememberGroceryLists(s.id, lists))
+              .then(({ lists }) => { if (version === sessionVersion()) rememberGroceryLists(s.id, lists); })
               .catch(() => {}),
           ),
       );
-      spaces = list;
+      if (version === sessionVersion()) spaces = list;
     } catch {
       // keep whatever was cached; the sheet loads on its own as a fallback
     } finally {
-      inflight = null;
+      if (version === sessionVersion()) inflight = null;
     }
   })();
   return inflight;

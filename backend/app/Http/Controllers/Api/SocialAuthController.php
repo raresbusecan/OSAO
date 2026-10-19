@@ -7,8 +7,10 @@ use App\Models\User;
 use App\Services\SocialAuth\AppleIdentityVerifier;
 use App\Services\SocialAuth\SocialAuthException;
 use App\Services\SocialAuth\SocialAuthService;
+use App\Support\AuthSession;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Social login, API half (the Google/Facebook browser redirects live in
@@ -71,11 +73,11 @@ class SocialAuthController extends Controller
                 $claims['email_verified'],
                 $name,
             );
+
+            return $this->signedIn($user, $created);
         } catch (SocialAuthException $e) {
             return $e->toResponse();
         }
-
-        return $this->signedIn($user, $created);
     }
 
     public function exchange(Request $request): JsonResponse
@@ -87,17 +89,23 @@ class SocialAuthController extends Controller
         ]);
 
         try {
-            [$user, $created] = $this->social->consumeExchangeCode($validated['code']);
+            return DB::transaction(function () use ($validated) {
+                [$user, $created] = $this->social->consumeExchangeCode($validated['code']);
+
+                return $this->signedIn($user, $created);
+            });
         } catch (SocialAuthException $e) {
             return $e->toResponse();
         }
-
-        return $this->signedIn($user, $created);
     }
 
     private function signedIn(User $user, bool $created): JsonResponse
     {
-        $token = $user->createToken('mobile-app')->plainTextToken;
+        $issued = AuthSession::issueToken($user);
+        if (!$issued) {
+            throw new SocialAuthException('invalid_code');
+        }
+        [$user, $token] = $issued;
 
         return response()->json([
             'message' => 'Te-ai conectat.',

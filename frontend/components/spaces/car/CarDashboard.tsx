@@ -86,7 +86,7 @@ export type CarDashboardProps = {
     onEdit?: () => void;
     onFuelSave?: (entry: CarFuelEntry) => void;
     onMaintenanceSave?: (entry: CarMaintenanceEntry) => void;
-    onDocumentSave?: (entry: CarDocumentEntry) => void;
+    onDocumentSave: (entry: CarDocumentEntry) => Promise<void>;
     onExpenseSave?: (entry: CarExpenseEntry) => void;
     onFuelDelete?: (id: string) => void;
     onMaintenanceDelete?: (id: string) => void;
@@ -449,11 +449,11 @@ export default function CarDashboard({
     };
 
 
-    const handleDocumentSave = (entry: CarDocumentEntry) => {
+    const handleDocumentSave = async (entry: CarDocumentEntry) => {
         const wasRenewal = documentRenewFrom !== null;
         const previousType = documentRenewFrom?.documentType;
 
-        onDocumentSave?.(entry);
+        await onDocumentSave(entry);
         setDocumentFormVisible(false);
         setEditingDocumentEntry(null);
         setDocumentRenewFrom(null);
@@ -662,8 +662,12 @@ export default function CarDashboard({
             notes: doc.notes,
             renewedFromId: doc.id,
         };
-        onDocumentSave?.(entry);
-        notifyAction("Reînnoit", `${entry.title} e valabil ${entry.issueDate} – ${entry.expiryDate}. Cel vechi rămâne în istoric.`);
+        try {
+            await onDocumentSave(entry);
+            notifyAction("Reînnoit", `${entry.title} e valabil ${entry.issueDate} – ${entry.expiryDate}. Cel vechi rămâne în istoric.`);
+        } catch (error: any) {
+            notifyAction("Nu am putut reînnoi documentul", error?.message || "Încearcă din nou.");
+        }
     };
 
     const handleDocumentDeleteSwipe = async (doc: CarDocumentEntry) => {

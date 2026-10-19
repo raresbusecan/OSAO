@@ -37,7 +37,7 @@ defaults to `en-us`: send an empty Accept-Language for "no preference").
   `FRONTEND_URL`, `APP_DEEP_LINK_BASE` in `backend/.env` on every run.
   Registration verification: `register` emails `VerifyEmailNotification`
   (token sha256-hashed in `email_verification_tokens`, one per user,
-  24h, single use); `POST /email/verify` {email, token} (public,
+  24h, single use); `POST /email/verify` {email, token, password, password_confirmation} (public,
   `password-reset` throttle) and `POST /email/verification-notification`
   (auth, `verification-notification` limiter 1/min + 6/h, Romanian 429
   with `retry_after`). Unverified users are NOT blocked; `/user` returns
@@ -101,24 +101,20 @@ defaults to `en-us`: send an empty Accept-Language for "no preference").
   "no_password"` -- JSON body, or `&hint=no_password` on the web flow's
   deep link); no email -> 422 `email_missing`; else create (random
   password, has_password=false, verified iff the provider says so,
-  `user` role, link `created_account=true`). Proving an address later
-  (reset-password, verify-email, confirm-email success) runs
-  `SocialAuthService::settleLinksAfterAddressProven($user, $address)`:
-  an `email_verified=false` link with `created_account=true` whose
-  email equals the address just proven is PROMOTED to verified (a
-  Facebook-created user who verifies / resets keeps Facebook sign-in);
-  every other unverified link is deleted. The pre-takeover eviction
-  still uses `dropUnverifiedLinks` (deletes all unverified links, no
-  promotion). Known limits, standard email-verification class (NEW-2,
-  not changed on purpose): verify-email doesn't revoke the registrant's
-  tokens/password, and a promoted creator link stays -- so whoever
-  created an account with someone else's address (password register, or
-  an unverified Facebook email) keeps access if the real owner later
-  clicks "confirm" / resets instead of ignoring the mail. Only a
-  provider-VERIFIED sign-in (eviction) or a password reset (password +
-  tokens; not the promoted link) cuts them off. First-sign-in race: a
+  `user` role, link `created_account=true`). Address proof (2026-10-19 audit fixes): verify-email requires a new
+  password + confirmation, revokes every old session and pending reset/email
+  change, and consumes its token under a transaction/row lock. Verification,
+  password recovery and email change drop ALL unverified social links, including
+  creator links; mailbox ownership does not prove that provider identity.
+  Verified provider links remain. First-sign-in race: a
   unique violation retries once, a concurrency error (MySQL 1213
   deadlock / lock wait) up to 3 attempts, instead of 500ing.
+  All access-token issuance uses `Support/AuthSession`: the resolved credential
+  snapshot must still match the locked user row, and token creation stays in
+  that transaction. Social exchange codes bind the same snapshot; mailbox
+  proof/password/email changes invalidate pending codes. Exchange locks the
+  user before consuming its code and holds the lock through token creation.
+  Tests: `tests/Feature/SocialExchangeRevocationTest.php`.
   `POST /profile/password/set` {password, password_confirmation} (auth)
   only when has_password=false (else 409 `password_already_set`);
   resetPassword/updatePassword also set has_password=true;
@@ -179,11 +175,11 @@ defaults to `en-us`: send an empty Accept-Language for "no preference").
   grocery boundary (checked BEFORE the pre-update-type ownership
   check even runs) — confirmed live during the 2026-09-29 QA sweep
   across 3 different retype attempts; this file used to document that
-  as a known, unfixed IDOR, but it no longer reproduces. `index`
-  without `space_id` filters by `user_id` only, unlike `show`/`update`/
-  `destroy` (space-accessible) — a shared space's other-member items
-  don't show up in the generic list (still a real, open inconsistency,
-  unrelated to the two fixed items above). `type` is now whitelisted
+  as a known, unfixed IDOR, but it no longer reproduces. `index` preserves the personal/space query boundary but filters Grocery
+  rows by list-level permission on both paths, with batched parent/member loads.
+  Products require a real accessible parent; moves normalize the destination
+  space, and Grocery list/product retyping is rejected. List deletion removes
+  only its products in the same transaction, retaining grocery_trip history. `type` is now whitelisted
   against `Item::VALID_TYPES` (added 2026-09-29) — a value outside the
   known set is rejected with a 422, not silently accepted. `amount`
   now has a server-side `min:0` floor (added 2026-09-29) on both
@@ -197,9 +193,8 @@ defaults to `en-us`: send an empty Accept-Language for "no preference").
   `toBuyLists` (with first items), `lowSupplies`, `cars` summaries.
   "De făcut" (overdue/today/upcoming),
   scoped by `Item::ACTIONABLE_TYPES`/`RECURRING_ACTIONABLE_TYPES`.
-  Filters strictly by `user_id` — unlike `CalendarController`'s
-  `Item::scopeVisibleTo` (owner OR space member), so a co-member's item
-  in a shared space never appears here (known inconsistency).
+  Deadlines use `Item::visibleTo`, matching Calendar for shared spaces
+  (2026-10-19). Personal spend totals remain scoped to the creator.
 - `CalendarController.php` — month grid data + recurring projection
   (delegates to `app/Services/RecurrenceProjector.php`). Uses
   `Item::visibleTo($user)`, the more permissive scope. Feeds the

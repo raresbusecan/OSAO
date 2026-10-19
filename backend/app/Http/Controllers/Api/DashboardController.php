@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\CarProfile;
 use App\Models\Item;
+use App\Models\User;
 use App\Services\EventSpend;
 use App\Services\HomeSpend;
 use App\Services\RecurrenceProjector;
@@ -58,7 +59,7 @@ class DashboardController extends Controller
         // metadata.expiryDate) correctly showed it as fine -- the exact
         // discrepancy this account hit.
         $superseded = Item::supersededCarDocumentIds($user->id);
-        $plainItems = Item::where('user_id', $user->id)
+        $plainItems = Item::visibleTo($user)
             ->whereIn('type', Item::ACTIONABLE_TYPES)
             ->whereNull('recurrence')
             ->whereNotNull('due_at')
@@ -76,7 +77,7 @@ class DashboardController extends Controller
 
         // One-off maintenance visits with a "next due" date (see
         // Item::maintenanceNextDue) -- deadlines Casă already counts.
-        $maintenanceDue = Item::where('user_id', $user->id)
+        $maintenanceDue = Item::visibleTo($user)
             ->where('type', 'home_maintenance')
             ->whereNull('recurrence')
             ->whereNotIn('status', Item::CLOSED_STATUSES)
@@ -95,7 +96,7 @@ class DashboardController extends Controller
             ->values();
         $plainItems = $plainItems->concat($maintenanceDue);
 
-        $recurringItems = Item::where('user_id', $user->id)
+        $recurringItems = Item::visibleTo($user)
             ->whereIn('type', Item::RECURRING_ACTIONABLE_TYPES)
             ->whereNotNull('recurrence')
             ->whereNotNull('due_at')
@@ -120,8 +121,8 @@ class DashboardController extends Controller
         // (21:00 UTC the day before) used to land in "overdue" here
         // while Calendar and the Casă space correctly said "today".
         $tz = $now->getTimezone();
-        $carService = $this->carServiceDue($user->id, $now);
-        $homeDocuments = $this->homeDocumentsDue($user->id, $now);
+        $carService = $this->carServiceDue($user, $now);
+        $homeDocuments = $this->homeDocumentsDue($user, $now);
 
         foreach ($plainItems->merge($recurringItems)->concat($carService)->concat($homeDocuments) as $item) {
             $localDue = $item->due_at->copy()->setTimezone($tz);
@@ -286,9 +287,9 @@ class DashboardController extends Controller
     // screen uses) or due by date. A km-overdue item has no real date, so
     // it's dated yesterday (sorts into "Restante") and carries
     // `overdue_km` for the label.
-    private function carServiceDue(int $userId, Carbon $now): Collection
+    private function carServiceDue(User $user, Carbon $now): Collection
     {
-        $entries = Item::where('user_id', $userId)
+        $entries = Item::visibleTo($user)
             ->where('type', 'car_maintenance')
             ->whereNotIn('status', Item::CLOSED_STATUSES)
             ->with('space:id,name,icon,type,color')
@@ -299,7 +300,7 @@ class DashboardController extends Controller
 
         // Current odometer per car = the highest reading logged on any of
         // its fuel/service/expense entries (getCurrentOdometer).
-        $odometer = Item::where('user_id', $userId)
+        $odometer = Item::visibleTo($user)
             ->whereIn('type', ['car_fuel', 'car_maintenance', 'car_expense'])
             ->whereIn('space_id', $entries->pluck('space_id')->unique())
             ->get(['space_id', 'metadata'])
@@ -364,12 +365,12 @@ class DashboardController extends Controller
     // or already expired -- the Casă screen's own "Urmează" already shows
     // them; Acasă's "De făcut" didn't. Dated by metadata.expiryDate at the
     // end of that day in the user's zone (same rule as car documents).
-    private function homeDocumentsDue(int $userId, Carbon $now): Collection
+    private function homeDocumentsDue(User $user, Carbon $now): Collection
     {
         $horizon = $now->copy()->addDays(7)->endOfDay();
         $appTz = config('app.timezone');
 
-        return Item::where('user_id', $userId)
+        return Item::visibleTo($user)
             ->where('type', 'home_document')
             ->whereNotIn('status', Item::CLOSED_STATUSES)
             ->with('space:id,name,icon,type,color')
