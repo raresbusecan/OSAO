@@ -18,9 +18,9 @@ import { showChoiceDialog, showConfirmDialog, showNotifyDialog, type DialogChoic
  * did nothing at all, with no error -- the dialog itself just never
  * appeared, so the confirm's promise never resolved true.
  *
- * Now both render through ConfirmHost (lib/confirmHost.tsx, mounted
- * once at the app root) -- our own Modal, not a browser-native dialog,
- * so it actually shows regardless of how the page was opened.
+ * Both render through ConfirmHost: the root hosts page dialogs; visible
+ * Sheets host an overlay inside their own native Modal, so confirmations
+ * cannot be hidden behind the form. dialogCoordinator queues requests.
  *
  * Since the 2026-10 redesign native goes through ConfirmHost too (it
  * used to fall back to Alert.alert there): the system alert can't take

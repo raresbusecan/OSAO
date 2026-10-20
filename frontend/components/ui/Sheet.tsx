@@ -7,6 +7,8 @@ import { useTheme } from "@/lib/theme";
 import { useReducedMotion } from "@/lib/motion";
 import { CircleButton, InfoButton, readableOn, SurfaceLevelContext } from "./primitives";
 import type { HelpKey } from "@/lib/help";
+import { ConfirmHost, DialogLayerContext } from "@/lib/confirmHost";
+import { dismissDialogAtLayer } from "@/lib/dialogCoordinator";
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 const DISMISS_DISTANCE = 120;
@@ -51,14 +53,22 @@ export type SheetProps = {
  * dragged away last time never reopens stuck half-way down.
  */
 export function Sheet(props: SheetProps) {
+  const dialogDepth = React.useContext(DialogLayerContext) + 1;
   const openCount = useRef(0);
   const wasVisible = useRef(false);
   if (props.visible && !wasVisible.current) openCount.current += 1;
   wasVisible.current = props.visible;
 
   return (
-    <Modal visible={props.visible} transparent animationType="none" onRequestClose={props.onClose} statusBarTranslucent>
-      {props.visible ? <SheetBody key={openCount.current} {...props} /> : null}
+    <Modal visible={props.visible} transparent animationType="none" onRequestClose={() => { if (!dismissDialogAtLayer(dialogDepth)) props.onClose(); }} statusBarTranslucent>
+      {props.visible ? (
+        <DialogLayerContext.Provider value={dialogDepth}>
+          <View style={{ flex: 1 }}>
+            <SheetBody key={openCount.current} {...props} />
+            <ConfirmHost inline />
+          </View>
+        </DialogLayerContext.Provider>
+      ) : null}
     </Modal>
   );
 }

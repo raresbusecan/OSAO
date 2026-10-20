@@ -140,6 +140,7 @@ export function HomeCategoryPage({
   const recordAction = useRecordAction();
   const mutationLock = useRef(false);
   const [saving, setSaving] = useState(false);
+  const [pendingAction, setPendingAction] = useState<"save" | "resolve" | "delete" | null>(null);
   const [saveError, setSaveError] = useState("");
   const closeForm = (returnToOrigin = true) => {
     if (mutationLock.current) return;
@@ -152,6 +153,7 @@ export function HomeCategoryPage({
   const submit = async () => {
     if (!canSubmit || mutationLock.current) return;
     mutationLock.current = true;
+    setPendingAction("save");
     setSaving(true);
     setSaveError("");
     try {
@@ -163,6 +165,7 @@ export function HomeCategoryPage({
     } finally {
       mutationLock.current = false;
       setSaving(false);
+      setPendingAction(null);
     }
   };
 
@@ -194,6 +197,7 @@ export function HomeCategoryPage({
   const remove = async (id: string | number) => {
     if (mutationLock.current) return;
     mutationLock.current = true;
+    setPendingAction("delete");
     setSaving(true);
     setSaveError("");
     try {
@@ -211,6 +215,7 @@ export function HomeCategoryPage({
     } finally {
       mutationLock.current = false;
       setSaving(false);
+      setPendingAction(null);
     }
   };
 
@@ -221,6 +226,7 @@ export function HomeCategoryPage({
   const resolve = async () => {
     if (!editingId || !onResolve || mutationLock.current) return;
     mutationLock.current = true;
+    setPendingAction("resolve");
     setSaving(true);
     setSaveError("");
     try {
@@ -232,6 +238,7 @@ export function HomeCategoryPage({
     } finally {
       mutationLock.current = false;
       setSaving(false);
+      setPendingAction(null);
     }
   };
 
@@ -247,12 +254,12 @@ export function HomeCategoryPage({
       info={info}
       footer={
         <>
-          <Button testID="category-submit" label={editingId ? "Salvează" : submitLabel} tone={homeColors.fill} onPress={submit} disabled={!canSubmit} loading={saving} />
+          <Button testID="category-submit" label={editingId ? "Salvează" : submitLabel} tone={homeColors.fill} onPress={submit} disabled={!canSubmit || saving} loading={saving && pendingAction === "save"} />
           {editingId && onResolve ? (
-            <Button testID="category-resolve" variant="secondary" icon="checkmark-circle-outline" label="Rezolvă" onPress={resolve} disabled={saving} />
+            <Button testID="category-resolve" variant="secondary" icon="checkmark-circle-outline" label="Rezolvă" onPress={resolve} disabled={saving} loading={saving && pendingAction === "resolve"} />
           ) : null}
           {editingId ? (
-            <Button testID="category-delete" variant="ghost" icon="trash-outline" label="Șterge" onPress={() => remove(editingId)} disabled={saving} />
+            <Button testID="category-delete" variant="ghost" icon="trash-outline" label="Șterge" onPress={() => remove(editingId)} disabled={saving} loading={saving && pendingAction === "delete"} />
           ) : null}
         </>
       }

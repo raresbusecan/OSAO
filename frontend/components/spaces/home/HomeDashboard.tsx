@@ -502,7 +502,9 @@ export default function HomeDashboard({
     // the usual rhythm (same question as a swipe from any other screen).
     if (categoryKey === "recurring") {
       const entry = existing as HomeRecurringEntry;
-      resolved.nextDueDate = await nextDateAfterResolve(entry.nextDueDate, (base) => addRecurrenceInterval(base, entry.frequency, 1));
+      const nextDueDate = await nextDateAfterResolve(entry.nextDueDate, (base) => addRecurrenceInterval(base, entry.frequency, 1));
+      if (nextDueDate === null) { recordAction?.cancel(); return; }
+      resolved.nextDueDate = nextDueDate;
     }
 
     // Recurring bills' own fixed `amount` counts as this cycle's

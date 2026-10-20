@@ -123,6 +123,14 @@ drifted a day across the 25 Oct DST change; plus the known
 
 ## Found along the way (not yet fixed)
 
+### Deduplicate error notices from contextual record mutations
+
+Some `[id].tsx` persistence handlers (fuel/expense/supply) notify and then
+rethrow; `useRecordMutation` also notifies after catching that rejection.
+The dialog queue preserves both, so an API failure can show two notices.
+Choose one reporting layer while retaining rollback and the editable form.
+`[from: Internet confirmation-spinner fix, independent QA 2026-10-20]`
+
 ### Contextual action return follow-up (2026-10-20)
 
 - Verify the native Sheet handoff on both Android and iPhone: De făcut open and scrolled → document/service action → save/cancel/back → same source Sheet and offset, without a blocked modal. Also test Android Back during a pending save: completion must refresh the source without navigating again. Unit/callback tests and compilation cannot prove UIKit presentation timing. `[from: contextual action return QA]`

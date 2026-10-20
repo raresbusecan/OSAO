@@ -90,19 +90,22 @@ function savedSummary(item: ActionItem): string {
  * Paying/resolving a recurring item BEFORE its date: ask whether the
  * next date counts from today (re-anchor the schedule) or keeps the
  * usual rhythm. `advance(base)` computes the next date from a base.
- * Returns the chosen next date (ISO). Exported for Casă's own resolve.
+ * Returns the chosen date (ISO), or null on cancellation. Exported for Casă.
  */
-export async function nextDateAfterResolve(dueIso: string, advance: (baseIso: string) => string): Promise<string> {
+export async function nextDateAfterResolve(dueIso: string, advance: (baseIso: string) => string): Promise<string | null> {
   const usual = advance(dueIso);
   if (daysFromToday(dueIso) <= 0) return usual;
   const today = new Date();
   const fromToday = advance(new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString());
-  const reanchor = await confirmAction(
+  const choice = await chooseAction(
     "Văd că rezolvi mai devreme",
     `Scadența era pe ${roDate(dueIso)}. Următoarea dată o calculez de azi (${roDate(fromToday)}) sau păstrez programul (${roDate(usual)})?`,
-    { confirmLabel: "De azi", cancelLabel: `Păstrez ${roDate(usual, { short: true })}` },
+    [
+      { key: "today", label: "De azi" },
+      { key: "schedule", label: `Păstrez ${roDate(usual, { short: true })}`, secondary: true },
+    ],
   );
-  return reanchor ? fromToday : usual;
+  return choice === "today" ? fromToday : choice === "schedule" ? usual : null;
 }
 
 /**
@@ -157,6 +160,7 @@ async function resolveWithSaved(item: ActionItem): Promise<boolean> {
     switch (item.type) {
       case "home_recurring": {
         const next = await nextDateAfterResolve(item.due_at, (base) => addRecurrenceInterval(base, (item.recurrence as any) ?? "monthly", 1));
+        if (next === null) return false;
         await api.updateItem(item.id, { due_at: next, metadata: { spendHistory: withSpend } });
         notifyAction("Plătită", `Următoarea scadență: ${roDate(next)}.`);
         return true;
@@ -166,6 +170,7 @@ async function resolveWithSaved(item: ActionItem): Promise<boolean> {
         if (meta.isRecurring || item.recurrence) {
           const freq = (meta.recurrenceFrequency ?? item.recurrence ?? "weekly") as "daily" | "weekly" | "monthly";
           const next = await nextDateAfterResolve(item.due_at, (base) => nextTaskOccurrence(base, freq));
+          if (next === null) return false;
           await api.updateItem(item.id, { due_at: next, completed_at: now, ...spend });
           notifyAction("Rezolvată", `Următoarea dată: ${roDate(next)}.`);
         } else {
@@ -178,6 +183,7 @@ async function resolveWithSaved(item: ActionItem): Promise<boolean> {
           const base = meta.nextDueDate || item.due_at;
           const interval = Number(meta.recurrenceInterval ?? 1) || 1;
           const next = await nextDateAfterResolve(base, (b) => addRecurrenceInterval(b, (item.recurrence as any) ?? "monthly", interval));
+          if (next === null) return false;
           await api.updateItem(item.id, { metadata: { nextDueDate: next, spendHistory: withSpend } });
           notifyAction("Rezolvată", `Următoarea dată: ${roDate(next)}.`);
         } else {

@@ -79,7 +79,7 @@ test('category editing keeps unsaved fields open on failure, prevents duplicate 
   const request = deferred();
   let writes = 0, closes = 0, error = '';
   const context = { canSubmit: true, mutationLock: { current: false }, values: { title: 'Keep me' }, editingId: '42',
-    setSaving() {}, setSaveError: (value) => { error = value; }, closeForm: () => { closes++; },
+    setSaving() {}, setPendingAction() {}, setSaveError: (value) => { error = value; }, closeForm: () => { closes++; },
     onSubmit: () => { writes++; return request.promise; },
   };
   const submit = loadCallback('components/spaces/home/HomeCategoryPage.tsx', 'submit', context);
@@ -103,7 +103,7 @@ for (const file of ['HomeTaskResolveSheet', 'HomeMaintenanceResolveSheet']) {
     const request = deferred();
     let calls = 0, error = '';
     const resolve = loadCallback(`components/spaces/home/${file}.tsx`, 'resolveWith', {
-      saveLock: { current: false }, setSaving() {}, setError: (value) => { error = value; },
+      saveLock: { current: false }, setSaving() {}, setPendingAction() {}, setError: (value) => { error = value; },
       onResolve: () => { calls++; return request.promise; }, nextDueDate: undefined, guiltFree: false,
     });
     const pending = resolve(20);
@@ -120,7 +120,7 @@ test('a pending category resolve excludes another resolve, save and delete until
   let resolves = 0, writes = 0, confirmations = 0, error = '';
   const context = {
     editingId: '42', values: { title: 'Keep me' }, canSubmit: true, mutationLock: { current: false },
-    setSaving() {}, setSaveError: (value) => { error = value; }, closeForm() {},
+    setSaving() {}, setPendingAction() {}, setSaveError: (value) => { error = value; }, closeForm() {},
     onResolve: () => { resolves++; return request.promise; },
     onSubmit: async () => { writes++; }, onDelete: async () => { writes++; },
     confirmAction: async () => { confirmations++; return true; },

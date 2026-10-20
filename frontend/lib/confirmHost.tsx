@@ -4,120 +4,29 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { useReducedMotion } from "@/lib/motion";
 import { Button } from "@/components/ui/primitives";
+import { registerDialogHost, settleDialog, type DialogRequest } from "./dialogCoordinator";
 
-export type DialogChoice = { key: string; label: string; secondary?: boolean; /** Red, like every delete in the app. */ destructive?: boolean };
+export { showConfirmDialog, showChoiceDialog, showNotifyDialog, isDialogOpen, subscribeDialog, type DialogChoice } from "./dialogCoordinator";
 
-type DialogRequest = {
-  kind: "confirm" | "notify" | "choice";
-  title: string;
-  message: string;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  destructive?: boolean;
-  /** kind "choice": stacked full-width buttons, then "Renunță". */
-  choices?: DialogChoice[];
-  resolve: (value: any) => void;
-};
+/** Sheet nesting depth; effects mount children before parents on native. */
+export const DialogLayerContext = React.createContext(0);
 
-// Set by the one <ConfirmHost /> mounted at the app root (see
-// app/_layout.tsx) for as long as it's alive -- which, mounted at the
-// root, is the app's entire lifetime. Module-level rather than a
-// context because confirmAction/notifyAction (lib/confirm.ts) are
-// plain functions called from all over the app, not hooks -- there's
-// no component tree position they could read a context from.
-let currentHandler: ((req: DialogRequest) => void) | null = null;
-
-/** confirm.ts's web path -- resolves false with no dialog at all if
- * the host somehow isn't mounted yet (defensive; it's mounted at the
- * app root before any screen that could call this renders). */
-export function showConfirmDialog(req: {
-  title: string;
-  message: string;
-  confirmLabel?: string;
-  cancelLabel?: string;
-  destructive?: boolean;
-}): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (!currentHandler) {
-      resolve(false);
-      return;
-    }
-    currentHandler({ ...req, kind: "confirm", resolve });
-  });
-}
-
-/** Several answers to one question (e.g. "Rezolvă cu datele salvate" /
- * "Modifică informațiile"); resolves the picked key, or null if dismissed. */
-export function showChoiceDialog(req: { title: string; message: string; choices: DialogChoice[] }): Promise<string | null> {
-  return new Promise((resolve) => {
-    if (!currentHandler) {
-      resolve(null);
-      return;
-    }
-    currentHandler({ ...req, kind: "choice", resolve });
-  });
-}
-
-/** confirm.ts's web path for a plain info notice -- no resolve value
- * anyone reads, just an OK button that dismisses it. */
-export function showNotifyDialog(title: string, message: string): void {
-  if (!currentHandler) return;
-  currentHandler({ kind: "notify", title, message, resolve: () => {} });
-}
-
-/* Whether a dialog is on screen right now -- lib/useAutoTour.ts waits for
- * it to close before starting a first-use tour (never two Modals at once). */
-let dialogOpen = false;
-const dialogListeners = new Set<() => void>();
-export function isDialogOpen(): boolean {
-  return dialogOpen;
-}
-export function subscribeDialog(listener: () => void): () => void {
-  dialogListeners.add(listener);
-  return () => {
-    dialogListeners.delete(listener);
-  };
-}
-
-/**
- * Mounted once at the app root. Replaces window.confirm/window.alert
- * on web (see lib/confirm.ts) -- both are silently no-ops in some
- * contexts a page can be opened in on a phone (most notably: added to
- * the Home Screen and launched standalone on iOS Safari), which made
- * every destructive confirmation (delete a list, delete a product...)
- * appear to just do nothing at all, with no error -- not a
- * button-wiring bug, the dialog itself never showed. Rendering the
- * confirmation as our own Modal instead of asking the browser for one
- * means it always actually appears, regardless of how the page was
- * opened.
- */
-export function ConfirmHost() {
+/** The root uses a Modal. A Sheet hosts its dialog in its own native
+ * window, above the form, avoiding sibling native Modal presentations. */
+export function ConfirmHost({ inline = false }: { inline?: boolean }) {
+  const priority = React.useContext(DialogLayerContext);
   const [request, setRequest] = useState<DialogRequest | null>(null);
-
-  useEffect(() => {
-    currentHandler = (req) => setRequest(req);
-    return () => {
-      currentHandler = null;
-    };
-  }, []);
-
-  const open = !!request;
-  useEffect(() => {
-    dialogOpen = open;
-    dialogListeners.forEach((l) => l());
-  }, [open]);
-
+  useEffect(() => registerDialogHost(priority, setRequest), [priority]);
   if (!request) return null;
-
-  const close = (value: any) => {
-    // A dismissed choice dialog answers null, not false.
-    request.resolve(request.kind === "choice" && value === false ? null : value);
-    setRequest(null);
-  };
-
-  return (
+  const close = (value: any) => settleDialog(request, value);
+  const dialog = <Dialog request={request} close={close} />;
+  return inline ? (
+    <View testID="confirm-host-inline" accessibilityViewIsModal style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, zIndex: 1000 }}>
+      {dialog}
+    </View>
+  ) : (
     <Modal visible transparent animationType="none" onRequestClose={() => close(false)} statusBarTranslucent>
-      <Dialog request={request} close={close} />
+      {dialog}
     </Modal>
   );
 }

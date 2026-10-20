@@ -516,10 +516,15 @@ name + price + date + notes, no sub-categories.
   `typography`) via `useTheme()`.
 - `lib/api.ts` — the one HTTP client every `api.*` call goes through.
   No request timeout/abort anywhere (known issue).
-- `lib/confirm.ts` + `lib/confirmHost.tsx` — global confirm/notify
-  modal (`confirmAction`, `notifyAction`). Single shared `request`
-  state — two calls fired back-to-back will drop/hang the first one
-  (known issue, not yet fixed).
+- `lib/confirm.ts` + `lib/confirmHost.tsx` + `lib/dialogCoordinator.ts` —
+  shared confirm/notify/choice dialogs. Requests queue instead of replacing
+  pending promises. The root hosts page dialogs in a Modal; each visible
+  `Sheet` registers an inline host inside its own native Modal (nested Sheets
+  win by depth), avoiding iOS sibling-Modal presentation failures. Removing
+  a form cancels its queued confirmations; notices can move back to the root.
+  Android Back dismisses the dialog first. `isDialogOpen`/`subscribeDialog`
+  still gate tours. Tests: `tests/dialog-layers.test.cjs`, including Internet
+  resolve/early-payment confirmation with success/cancel/API failure.
 - `lib/spaceCategoryFab.tsx` — dead (orphaned, not deleted -- see
   `app/(tabs)/_layout.tsx` above). Used to be the shared "+" FAB's
   category-fan registration (`useRegisterSpaceCategories`); the
