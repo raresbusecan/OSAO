@@ -327,7 +327,7 @@ export function SimpleCalendar() {
     if (busyId) return;
     setBusyId(String(it.id));
     try {
-      if (await resolveFromSummary(it, (h) => router.push(h as any))) refreshAll();
+      if (await resolveFromSummary(it, (h) => router.navigate(h as any))) refreshAll();
     } finally {
       setBusyId(null);
     }

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
+import { Text } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
@@ -38,8 +39,21 @@ export function HomeTaskResolveSheet({ entry, onCancel, onResolve }: HomeTaskRes
   const [error, setError] = useState("");
   const [guiltFree, setGuiltFree] = useState(!!entry.guiltFree);
 
-  const resolveWith = (value: number | undefined) =>
-    onResolve(value, nextDueDate, value !== undefined ? guiltFree : undefined);
+  const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
+  const resolveWith = async (value: number | undefined) => {
+    if (saveLock.current) return;
+    saveLock.current = true;
+    setSaving(true);
+    try {
+      await onResolve(value, nextDueDate, value !== undefined ? guiltFree : undefined);
+    } catch (error: any) {
+      setError(error?.message || "Nu am putut rezolva. Încearcă din nou.");
+    } finally {
+      saveLock.current = false;
+      setSaving(false);
+    }
+  };
 
   const handleResolve = () => {
     if (!entry.isPurchase) {
@@ -69,7 +83,7 @@ export function HomeTaskResolveSheet({ entry, onCancel, onResolve }: HomeTaskRes
   return (
     <Sheet
       visible
-      onClose={onCancel}
+      onClose={() => { if (!saveLock.current) onCancel(); }}
       info="home.resolve"
       centered
       icon={entry.isPurchase ? "cart-outline" : "checkmark"}
@@ -78,11 +92,12 @@ export function HomeTaskResolveSheet({ entry, onCancel, onResolve }: HomeTaskRes
       subtitle={`Marchezi ca rezolvat.${entry.isPurchase ? " Cât ai plătit? Intră în cheltuielile lunii." : entry.isRecurring ? " Alege când e data viitoare." : ""}`}
       footer={
         <>
-          <Button label="Rezolvă" tone={homeColors.fill} onPress={handleResolve} />
-          {entry.isPurchase ? <Button variant="ghost" label="Rezolvă fără preț" onPress={() => resolveWith(undefined)} /> : null}
+          <Button label="Rezolvă" tone={homeColors.fill} onPress={handleResolve} loading={saving} />
+          {entry.isPurchase ? <Button variant="ghost" label="Rezolvă fără preț" onPress={() => resolveWith(undefined)} disabled={saving} /> : null}
         </>
       }
     >
+      {!entry.isPurchase && error ? <Text accessibilityRole="alert" style={{ color: colors.error }}>{error}</Text> : null}
       {entry.isPurchase ? (
         <Field
           value={price}

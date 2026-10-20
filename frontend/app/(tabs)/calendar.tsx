@@ -25,7 +25,7 @@ import { SwipeItemRow } from "@/components/dashboard/SwipeItemRow";
 import { CreditReminderRow, isReminder } from "@/components/dashboard/CreditReminderRow";
 import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 import { dueText, expiryText } from "@/components/spaces/home/homeRecordPreview";
-import { todoTitle } from "@/lib/dashboard/spaceDue";
+import { todoHref, todoTitle } from "@/lib/dashboard/spaceDue";
 import { useTourScroll, useTourTarget } from "@/components/ui/tourTargets";
 import { useAutoTour } from "@/lib/useAutoTour";
 import { SHOW_TOUR_TEST_BUTTON, startTour, type TourCtx } from "@/lib/tours";
@@ -349,7 +349,7 @@ function CalendarScreen() {
   const openItem = (item: any) => {
     if (item.space) {
       // Lands on the sub-view where this record is resolved, not just the Space root.
-      router.push(`/${item.space.id}?itemId=${item.id}&itemType=${item.type}` as any);
+      router.navigate(todoHref(item) as any);
     } else {
       setOpenEvent(item);
     }

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { roDate } from "@/lib/format";
 import { useTheme } from "@/lib/theme";
 import { useSpaceColors } from "@/lib/spaces/spaceTheme";
@@ -34,6 +34,21 @@ export function HomeMaintenanceResolveSheet({ entry, onCancel, onResolve }: Home
   const homeColors = useSpaceColors("home");
   const [price, setPrice] = useState(entry.price ? String(entry.price) : "");
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
+  const resolveWith = async (value: number | null) => {
+    if (saveLock.current) return;
+    saveLock.current = true;
+    setSaving(true);
+    try {
+      await onResolve(value);
+    } catch (error: any) {
+      setError(error?.message || "Nu am putut rezolva. Încearcă din nou.");
+    } finally {
+      saveLock.current = false;
+      setSaving(false);
+    }
+  };
 
   const nextDueDate = addRecurrenceInterval(
     entry.nextDueDate || entry.date,
@@ -52,13 +67,13 @@ export function HomeMaintenanceResolveSheet({ entry, onCancel, onResolve }: Home
       setError("Preț invalid.");
       return;
     }
-    onResolve(value);
+    void resolveWith(value);
   };
 
   return (
     <Sheet
       visible
-      onClose={onCancel}
+      onClose={() => { if (!saveLock.current) onCancel(); }}
       info="home.resolve"
       centered
       icon="checkmark"
@@ -67,8 +82,8 @@ export function HomeMaintenanceResolveSheet({ entry, onCancel, onResolve }: Home
       subtitle={`Marchezi ca rezolvat. Cât a costat de data asta? Următoarea: ${nextDueLabel}.`}
       footer={
         <>
-          <Button label="Confirmă" tone={homeColors.fill} onPress={handleResolve} />
-          <Button testID="maintenance-resolve-free" variant="ghost" label="Fără cost" onPress={() => onResolve(null)} />
+          <Button label="Confirmă" tone={homeColors.fill} onPress={handleResolve} loading={saving} />
+          <Button testID="maintenance-resolve-free" variant="ghost" label="Fără cost" onPress={() => resolveWith(null)} disabled={saving} />
         </>
       }
     >

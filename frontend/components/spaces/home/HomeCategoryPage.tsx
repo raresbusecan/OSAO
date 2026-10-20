@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useRecordAction } from "@/lib/navigation/recordAction";
 import { View, Text, ScrollView } from "react-native";
 import { useTheme } from "@/lib/theme";
 import type { HelpKey } from "@/lib/help";
@@ -92,7 +93,7 @@ export function HomeCategoryPage({
   onRowActions,
   formOnly,
 }: HomeCategoryPageProps) {
-  const { spacing } = useTheme();
+  const { colors, spacing } = useTheme();
   const homeColors = useSpaceColors("home");
   const HOME = homeColors.color;
   const [values, setValues] = useState<Record<string, string>>({});
@@ -136,16 +137,33 @@ export function HomeCategoryPage({
     setEditingId(null);
   };
 
-  const closeForm = () => {
+  const recordAction = useRecordAction();
+  const mutationLock = useRef(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const closeForm = (returnToOrigin = true) => {
+    if (mutationLock.current) return;
     reset();
     setFormExpanded(false);
     if (formOnly) onBack();
+    if (returnToOrigin) recordAction?.cancel();
   };
 
-  const submit = () => {
-    if (!canSubmit) return;
-    onSubmit(values, editingId ?? undefined);
-    closeForm();
+  const submit = async () => {
+    if (!canSubmit || mutationLock.current) return;
+    mutationLock.current = true;
+    setSaving(true);
+    setSaveError("");
+    try {
+      await onSubmit(values, editingId ?? undefined);
+      mutationLock.current = false;
+      closeForm(false);
+    } catch (error: any) {
+      setSaveError(error?.message || "Nu am putut salva. Încearcă din nou.");
+    } finally {
+      mutationLock.current = false;
+      setSaving(false);
+    }
   };
 
   const startEdit = (id: string | number) => {
@@ -174,31 +192,53 @@ export function HomeCategoryPage({
   }
 
   const remove = async (id: string | number) => {
-    const confirmed = await confirmAction(
-      "Ștergi înregistrarea?",
-      "Nu se poate anula.",
-      { confirmLabel: "Șterge", destructive: true },
-    );
-    if (!confirmed) return;
-
-    if (editingId === String(id)) closeForm();
-    onDelete(String(id));
+    if (mutationLock.current) return;
+    mutationLock.current = true;
+    setSaving(true);
+    setSaveError("");
+    try {
+      const confirmed = await confirmAction(
+        "Ștergi înregistrarea?",
+        "Nu se poate anula.",
+        { confirmLabel: "Șterge", destructive: true },
+      );
+      if (!confirmed) return;
+      await onDelete(String(id));
+      mutationLock.current = false;
+      if (editingId === String(id)) closeForm(false);
+    } catch (error: any) {
+      setSaveError(error?.message || "Nu am putut șterge. Încearcă din nou.");
+    } finally {
+      mutationLock.current = false;
+      setSaving(false);
+    }
   };
 
   // Only ever shown while editing an existing row (never on the "add
   // new" form) of a category that actually has a resolve concept
   // (currently just Maintenance) -- lives in the form itself, right
   // next to Update/Cancel, instead of on the row in the list below.
-  const resolve = () => {
-    if (!editingId || !onResolve) return;
-    onResolve(editingId);
-    closeForm();
+  const resolve = async () => {
+    if (!editingId || !onResolve || mutationLock.current) return;
+    mutationLock.current = true;
+    setSaving(true);
+    setSaveError("");
+    try {
+      await onResolve(editingId);
+      mutationLock.current = false;
+      closeForm(false);
+    } catch (error: any) {
+      setSaveError(error?.message || "Nu am putut rezolva. Încearcă din nou.");
+    } finally {
+      mutationLock.current = false;
+      setSaving(false);
+    }
   };
 
   const formSheet = (
     <Sheet
       visible={formExpanded}
-      onClose={closeForm}
+      onClose={() => closeForm()}
       // "Adaugă factura" -> "Editează factura" (singular, from the category's own label).
       title={editingId ? submitLabel.replace(/^Adaugă/, "Editează") : submitLabel}
       icon={icon}
@@ -207,16 +247,17 @@ export function HomeCategoryPage({
       info={info}
       footer={
         <>
-          <Button testID="category-submit" label={editingId ? "Salvează" : submitLabel} tone={homeColors.fill} onPress={submit} disabled={!canSubmit} />
+          <Button testID="category-submit" label={editingId ? "Salvează" : submitLabel} tone={homeColors.fill} onPress={submit} disabled={!canSubmit} loading={saving} />
           {editingId && onResolve ? (
-            <Button testID="category-resolve" variant="secondary" icon="checkmark-circle-outline" label="Rezolvă" onPress={resolve} />
+            <Button testID="category-resolve" variant="secondary" icon="checkmark-circle-outline" label="Rezolvă" onPress={resolve} disabled={saving} />
           ) : null}
           {editingId ? (
-            <Button testID="category-delete" variant="ghost" icon="trash-outline" label="Șterge" onPress={() => remove(editingId)} />
+            <Button testID="category-delete" variant="ghost" icon="trash-outline" label="Șterge" onPress={() => remove(editingId)} disabled={saving} />
           ) : null}
         </>
       }
     >
+      {saveError ? <Text accessibilityRole="alert" style={{ color: colors.error }}>{saveError}</Text> : null}
       {fields.filter(isFieldVisible).map((field) => (
         <CategoryField
           key={field.key}

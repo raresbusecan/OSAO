@@ -4,6 +4,7 @@ import React, {
   useState,
 } from "react";
 import { consumeTrailReturn } from "@/lib/navigation/returnTrail";
+import { useRecordAction } from "@/lib/navigation/recordAction";
 import {
   View,
   ActivityIndicator,
@@ -98,6 +99,7 @@ export default function SpaceDetail() {
   const { colors } = useTheme();
   const router = useRouter();
   const { isSimple } = useAppMode();
+  const recordAction = useRecordAction();
 
   const [carData, setCarData] = useState<CarData>(initialCarData);
   const [homeData, setHomeData] = useState<HomeData>(initialHomeData);
@@ -254,6 +256,7 @@ export default function SpaceDetail() {
           });
         }
       }
+      recordAction?.complete();
     } catch (error: any) {
       setCarData((current) => ({
         ...current,
@@ -261,6 +264,7 @@ export default function SpaceDetail() {
           ? current.maintenanceEntries.map((e) => (e.id === entry.id ? previous! : e))
           : current.maintenanceEntries.filter((e) => e.id !== entry.id),
       }));
+      if (recordAction) throw error;
       notifyAction("Nu am putut salva intervenția", error?.message || "A apărut o eroare.");
     }
   };
@@ -320,6 +324,7 @@ export default function SpaceDetail() {
           });
         }
       }
+      recordAction?.complete();
     } catch (error: any) {
       setCarData((current) => ({
         ...current,
@@ -409,6 +414,7 @@ export default function SpaceDetail() {
 
     try {
       await api.deleteItem(id);
+      recordAction?.complete();
     } catch (error: any) {
       if (removed) {
         setCarData((current) => ({
@@ -416,6 +422,7 @@ export default function SpaceDetail() {
           maintenanceEntries: [removed, ...current.maintenanceEntries],
         }));
       }
+      if (recordAction) throw error;
       notifyAction("Nu am putut șterge intervenția", error?.message || "A apărut o eroare.");
     }
   };
@@ -431,6 +438,7 @@ export default function SpaceDetail() {
 
     try {
       await api.deleteItem(id);
+      recordAction?.complete();
     } catch (error: any) {
       if (removed) {
         setCarData((current) => ({
@@ -438,6 +446,7 @@ export default function SpaceDetail() {
           documentEntries: [removed, ...current.documentEntries],
         }));
       }
+      if (recordAction) throw error;
       notifyAction("Nu am putut șterge documentul", error?.message || "A apărut o eroare.");
     }
   };
@@ -491,6 +500,7 @@ export default function SpaceDetail() {
         ...current,
         documentEntries: current.documentEntries.map((e) => (e.id === entry.id ? savedEntry : e)),
       }));
+      recordAction?.complete();
     } catch (error: any) {
       setHomeData((current) => ({
         ...current,
@@ -498,6 +508,7 @@ export default function SpaceDetail() {
           ? current.documentEntries.map((e) => (e.id === entry.id ? previous! : e))
           : current.documentEntries.filter((e) => e.id !== entry.id),
       }));
+      if (recordAction) throw error;
       notifyAction("Nu am putut salva documentul", error?.message || "A apărut o eroare.");
     }
   };
@@ -511,10 +522,12 @@ export default function SpaceDetail() {
     if (!isSavedItemId(id)) return;
     try {
       await api.deleteItem(id);
+      recordAction?.complete();
     } catch (error: any) {
       if (removed) {
         setHomeData((current) => ({ ...current, documentEntries: [removed, ...current.documentEntries] }));
       }
+      if (recordAction) throw error;
       notifyAction("Nu am putut șterge documentul", error?.message || "A apărut o eroare.");
     }
   };
@@ -633,6 +646,7 @@ export default function SpaceDetail() {
         ...current,
         maintenanceEntries: current.maintenanceEntries.map((e) => (e.id === entry.id ? savedEntry : e)),
       }));
+      recordAction?.complete();
     } catch (error: any) {
       setHomeData((current) => ({
         ...current,
@@ -640,6 +654,7 @@ export default function SpaceDetail() {
           ? current.maintenanceEntries.map((e) => (e.id === entry.id ? previous! : e))
           : current.maintenanceEntries.filter((e) => e.id !== entry.id),
       }));
+      if (recordAction) throw error;
       notifyAction("Nu am putut salva intervenția", error?.message || "A apărut o eroare.");
     }
   };
@@ -653,10 +668,12 @@ export default function SpaceDetail() {
     if (!isSavedItemId(id)) return;
     try {
       await api.deleteItem(id);
+      recordAction?.complete();
     } catch (error: any) {
       if (removed) {
         setHomeData((current) => ({ ...current, maintenanceEntries: [removed, ...current.maintenanceEntries] }));
       }
+      if (recordAction) throw error;
       notifyAction("Nu am putut șterge intervenția", error?.message || "A apărut o eroare.");
     }
   };
@@ -681,6 +698,7 @@ export default function SpaceDetail() {
         ...current,
         recurringEntries: current.recurringEntries.map((e) => (e.id === entry.id ? savedEntry : e)),
       }));
+      recordAction?.complete();
     } catch (error: any) {
       setHomeData((current) => ({
         ...current,
@@ -688,6 +706,7 @@ export default function SpaceDetail() {
           ? current.recurringEntries.map((e) => (e.id === entry.id ? previous! : e))
           : current.recurringEntries.filter((e) => e.id !== entry.id),
       }));
+      if (recordAction) throw error;
       notifyAction("Nu am putut salva plata recurentă", error?.message || "A apărut o eroare.");
     }
   };
@@ -701,10 +720,12 @@ export default function SpaceDetail() {
     if (!isSavedItemId(id)) return;
     try {
       await api.deleteItem(id);
+      recordAction?.complete();
     } catch (error: any) {
       if (removed) {
         setHomeData((current) => ({ ...current, recurringEntries: [removed, ...current.recurringEntries] }));
       }
+      if (recordAction) throw error;
       notifyAction("Nu am putut șterge plata recurentă", error?.message || "A apărut o eroare.");
     }
   };
@@ -785,6 +806,7 @@ export default function SpaceDetail() {
         ...current,
         taskEntries: current.taskEntries.map((e) => (e.id === entry.id ? savedEntry : e)),
       }));
+      recordAction?.complete();
     } catch (error: any) {
       setHomeData((current) => ({
         ...current,
@@ -792,6 +814,7 @@ export default function SpaceDetail() {
           ? current.taskEntries.map((e) => (e.id === entry.id ? previous! : e))
           : current.taskEntries.filter((e) => e.id !== entry.id),
       }));
+      if (recordAction) throw error;
       notifyAction("Nu am putut salva sarcina", error?.message || "A apărut o eroare.");
     }
   };
@@ -805,10 +828,12 @@ export default function SpaceDetail() {
     if (!isSavedItemId(id)) return;
     try {
       await api.deleteItem(id);
+      recordAction?.complete();
     } catch (error: any) {
       if (removed) {
         setHomeData((current) => ({ ...current, taskEntries: [removed, ...current.taskEntries] }));
       }
+      if (recordAction) throw error;
       notifyAction("Nu am putut șterge sarcina", error?.message || "A apărut o eroare.");
     }
   };
@@ -1295,7 +1320,7 @@ export default function SpaceDetail() {
           onMaintenanceDelete={handleMaintenanceDelete}
           onDocumentDelete={handleDocumentDelete}
           onExpenseDelete={handleExpenseDelete}
-          tourBlocked={editModalVisible}
+          tourBlocked={editModalVisible || !!recordAction}
           initialOpenEntry={
             itemId && itemType === "car_document"
               ? { type: "document", id: itemId, renew: action === "renew" }

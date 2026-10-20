@@ -1,5 +1,6 @@
 import { daysFromToday, roCount, roNumber } from "@/lib/format";
 import { maintenanceLabel } from "@/lib/spaces/car/maintenanceLabels";
+import { recordActionHref } from "@/lib/navigation/recordActionRoute";
 
 /** Per-Space counts of what's due, by LOCAL calendar day. */
 export type SpaceDue = { overdue: number; today: number; upcoming: number };
@@ -57,11 +58,11 @@ export function overdueKmLabel(item: { overdue_km?: number | null }): string | n
   return item.overdue_km ? `Depășit cu ${roNumber(item.overdue_km)} km` : null;
 }
 
-/** Where a "De făcut" item gets resolved: its Space's own sub-view
- * (see [id].tsx's itemId/itemType deep-link), or Calendar on that day
- * for a personal event, which has no space. */
+/** Actionable Space records open a temporary root Stack flow using their
+ * existing forms; completion returns to the unchanged origin. Personal
+ * events open Calendar, and ordinary Space browsing keeps its route. */
 export function todoHref(item: { id: number | string; type: string; due_at: string; space?: { id: number | string } | null }): string {
-  if (item.space) return `/${item.space.id}?itemId=${item.id}&itemType=${item.type}`;
+  if (item.space) return recordActionHref({ ...item, space: item.space });
   const due = new Date(item.due_at);
   if (Number.isNaN(due.getTime())) return "/calendar";
   return `/calendar?date=${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, "0")}-${String(due.getDate()).padStart(2, "0")}`;

@@ -39,7 +39,7 @@ export function SwipeItemRow({
       onResolve={
         canResolve && canSwipeResolve(item)
           ? async () => {
-              if (await resolveFromSummary(item, (href) => router.push(href as any))) onChanged();
+              if (await resolveFromSummary(item, (href) => router.navigate(href as any))) onChanged();
             }
           : undefined
       }

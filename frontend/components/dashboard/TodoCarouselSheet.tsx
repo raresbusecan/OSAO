@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { View, Text, Pressable, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useFocusEffect, useRouter } from "expo-router";
 import { useTheme, type ThemeColors } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { notifyAction } from "@/lib/confirm";
@@ -71,6 +71,15 @@ function canQuickResolve(item: TodoItem): boolean {
 export function TodoCarouselSheet({ visible, onClose, overdue, today, upcoming, onChanged }: TodoCarouselSheetProps) {
   const { colors, spacing, radius } = useTheme();
   const router = useRouter();
+  const [focused, setFocused] = useState(true);
+  const scrollOffset = useRef(0);
+  const [resumeOffset, setResumeOffset] = useState(0);
+  useFocusEffect(useCallback(() => {
+    setResumeOffset(scrollOffset.current);
+    setFocused(true);
+    return () => setFocused(false);
+  }, []));
+  useEffect(() => { if (!visible) scrollOffset.current = 0; }, [visible]);
   const [resolvingId, setResolvingId] = useState<string | number | null>(null);
   // Ticked off during this open of the sheet -- the row stays, struck
   // through, with "Anulează" until the sheet closes.
@@ -93,8 +102,9 @@ export function TodoCarouselSheet({ visible, onClose, overdue, today, upcoming, 
   const openCount = all.filter((r) => !resolved.has(String(r.item.id))).length;
 
   const openTarget = (item: TodoItem) => {
-    onClose();
-    router.push(todoHref(item) as any);
+    const href = todoHref(item);
+    if (!href.startsWith("/record-action?")) onClose();
+    router.navigate(href as any);
   };
 
   const setDone = async (item: TodoItem, done: boolean) => {
@@ -120,7 +130,9 @@ export function TodoCarouselSheet({ visible, onClose, overdue, today, upcoming, 
 
   return (
     <Sheet
-      visible={visible}
+      visible={visible && focused}
+      initialScrollOffset={resumeOffset}
+      onScrollOffsetChange={(offset) => { scrollOffset.current = offset; }}
       info="todo.sheet"
       onClose={() => {
         setResolved(new Set());

@@ -35,6 +35,9 @@ export type SheetProps = {
    * Simplu's "Adaugă": the space grid). Left-aligned header only. */
   onBack?: () => void;
   testID?: string;
+  /** Resume a temporarily hidden source sheet at its previous scroll offset. */
+  initialScrollOffset?: number;
+  onScrollOffsetChange?: (offset: number) => void;
 };
 
 /**
@@ -60,7 +63,7 @@ export function Sheet(props: SheetProps) {
   );
 }
 
-function SheetBody({ onClose, title, subtitle, icon, tone, footer, children, hideClose, centered, info, onBack, testID }: SheetProps) {
+function SheetBody({ onClose, title, subtitle, icon, tone, footer, children, hideClose, centered, info, onBack, testID, initialScrollOffset, onScrollOffsetChange }: SheetProps) {
   const { colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
@@ -152,6 +155,9 @@ function SheetBody({ onClose, title, subtitle, icon, tone, footer, children, hid
         </PanGestureHandler>
 
         <ScrollView
+          contentOffset={initialScrollOffset == null ? undefined : { x: 0, y: initialScrollOffset }}
+          onScroll={onScrollOffsetChange ? (event) => onScrollOffsetChange(event.nativeEvent.contentOffset.y) : undefined}
+          scrollEventThrottle={onScrollOffsetChange ? 16 : undefined}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.sm, paddingBottom: footer ? spacing.md : spacing.sm, gap: spacing.lg }}

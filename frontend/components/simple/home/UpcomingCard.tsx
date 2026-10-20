@@ -90,7 +90,7 @@ export function UpcomingCard({ dashboard, spaces, onChanged }: { dashboard: any;
     if (busyId) return;
     setBusyId(id);
     try {
-      if (await resolveFromSummary(item, (h) => router.push(h as any))) onChanged();
+      if (await resolveFromSummary(item, (h) => router.navigate(h as any))) onChanged();
     } finally {
       setBusyId(null);
     }

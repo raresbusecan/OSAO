@@ -12,6 +12,20 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
 
 ## Routing (Expo Router, file = route)
 
+- **Actions opened from another screen** (2026-10-20): actionable Car/Home
+  rows use `lib/navigation/recordActionRoute.ts` via `todoHref` to open
+  `app/record-action.tsx` on the root Stack. It hosts the existing Space
+  forms under `RecordActionContext`; successful persistence returns to the
+  still-mounted origin, cancellation does the same, and failures stay editable
+  (a direct resolve offers retry/back). Plain Space browsing keeps its normal
+  route. Refresh is emitted even if the user left while a save was pending;
+  delayed responses never navigate. Returning to an originating Space marks
+  `returnTrail` before removal to suppress its normal focus remount. The
+  origin lookup unwraps Expo 57's generated `__root` navigator. De făcut hides
+  its Sheet while blurred and resumes it with its saved scroll offset.
+  `lib/refresh.ts` owns `REFRESH_EVENT` (re-exported by the tabs layout).
+  Tests: `tests/contextual-actions.test.cjs`. Native Sheet handoff still needs
+  phone verification on both Android and iOS.
 - `app/(auth)/login.tsx`, `register.tsx` — auth screens, gated by
   `AuthGuard` in `app/_layout.tsx` (redirects based on `providers/auth.tsx`'s
   `user`).

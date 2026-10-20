@@ -139,7 +139,7 @@ export function SimpleHomeSpace({ space, homeData, onChanged, onBack }: SimpleSp
     try {
       const item = await buildActionItem(hero);
       if (!item) return;
-      const changed = await resolveFromSummary(item, (href) => router.push(href as any));
+      const changed = await resolveFromSummary(item, (href) => router.navigate(href as any));
       // [id].tsx reloads on REFRESH_EVENT (= onChanged), and so do Acasă/Calendar.
       if (changed) DeviceEventEmitter.emit(REFRESH_EVENT);
     } catch {

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { DateField } from "@/components/ui/DateField";
 import { View, Text, TextInput, Pressable, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -225,8 +225,23 @@ export default function CarMaintenanceForm({
   const [focusedField, setFocusedField] = useState<string | null>(null);
 
   const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const saveLock = useRef(false);
+  const persist = async (write: () => unknown) => {
+    if (saveLock.current) return;
+    saveLock.current = true;
+    setSaving(true);
+    try {
+      await write();
+    } catch (error: any) {
+      setError(error?.message || "Nu am putut salva. Încearcă din nou.");
+    } finally {
+      saveLock.current = false;
+      setSaving(false);
+    }
+  };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setError("");
 
     if (!isValidDateInput(date)) {
@@ -272,14 +287,12 @@ export default function CarMaintenanceForm({
 
       const dateIso = parseDateInput(date) ?? new Date().toISOString();
 
-      drafts.forEach((draft, index) => {
-        onSave({
+      await persist(() => Promise.all(drafts.map((draft, index) => onSave({
           id: `maintenance-${Date.now()}-${index}`,
           date: dateIso,
           ...draft,
           guiltFree,
-        });
-      });
+        }))));
 
       return;
     }
@@ -313,12 +326,12 @@ export default function CarMaintenanceForm({
       guiltFree,
     };
 
-    onSave(entryToSave);
+    await persist(() => onSave(entryToSave));
   };
 
   const handleDelete = async () => {
     const confirmed = await confirmAction("Ștergi lucrarea?", "Se șterge definitiv.", { confirmLabel: "Șterge", destructive: true });
-    if (confirmed) onDelete?.();
+    if (confirmed) await persist(() => onDelete?.());
   };
 
 
@@ -331,7 +344,7 @@ export default function CarMaintenanceForm({
   return (
     <Sheet
       visible
-      onClose={onCancel}
+      onClose={() => { if (!saveLock.current) onCancel(); }}
       info="car.maintenanceForm"
       title={isEditing ? "Editează service-ul" : isRenewing ? "Reînnoiește" : "Service nou"}
       subtitle={isBatchMode ? "Tot ce s-a făcut la vizita asta" : undefined}
@@ -339,7 +352,7 @@ export default function CarMaintenanceForm({
       tone={CAR}
       footer={
         <>
-          <Button testID="car-maintenance-save" label={saveLabel} tone={carColors.fill} onPress={handleSave} />
+          <Button testID="car-maintenance-save" label={saveLabel} tone={carColors.fill} onPress={handleSave} loading={saving} />
           {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge lucrarea" onPress={handleDelete} /> : null}
         </>
       }

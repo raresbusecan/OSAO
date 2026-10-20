@@ -301,7 +301,7 @@ function Home() {
     bills: (budget?.recurringBills || []).filter(isRecurringPayment),
     goal,
     goalRatio,
-    navigate: (href) => router.push(href as any),
+    navigate: (href) => href.startsWith("/record-action?") ? router.navigate(href as any) : router.push(href as any),
     openTodoSheet: () => setTodoSheetVisible(true),
     refresh: load,
   };

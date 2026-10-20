@@ -123,6 +123,12 @@ drifted a day across the 25 Oct DST change; plus the known
 
 ## Found along the way (not yet fixed)
 
+### Contextual action return follow-up (2026-10-20)
+
+- Verify the native Sheet handoff on both Android and iPhone: De făcut open and scrolled → document/service action → save/cancel/back → same source Sheet and offset, without a blocked modal. Also test Android Back during a pending save: completion must refresh the source without navigating again. Unit/callback tests and compilation cannot prove UIKit presentation timing. `[from: contextual action return QA]`
+- Existing source fetches may finish out of order when focus and `lifeos.refresh` overlap. Follow up with controlled response ordering and per-screen request generations if reproduced; no general data-fetch refactor in this navigation fix. `[from: contextual action return QA]`
+- `components/simple/EditRecordSheet.tsx` still deletes grocery products individually before deleting their list, although the backend now cascades atomically. Align this remaining editor path with the single list-delete request in its own fix. `[from: contextual action return inspection]`
+
 ### Audit fixes follow-up (2026-10-19)
 
 Core functional/security corrections are on `codex/audit-fixes`, not merged to main. Per-fix targeted tests, backend regression and smoke passed. Remaining: native phone/emulator QA; legacy React Hooks lint findings (174 errors / 28 warnings after this pass); Budget query consolidation (62–72 queries in the synthetic audit dataset). `[from: mobile audit remediation]`

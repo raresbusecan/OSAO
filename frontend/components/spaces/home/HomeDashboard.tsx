@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useRecordAction } from "@/lib/navigation/recordAction";
 import { askRenewal, renewalPeriod, toIsoDate } from "@/lib/dashboard/documentRenewal";
 import { roDate } from "@/lib/format";
 import { ScrollView } from "react-native";
@@ -103,6 +104,7 @@ export default function HomeDashboard({
 }: HomeDashboardProps) {
   const { spacing } = useTheme();
   const router = useRouter();
+  const recordAction = useRecordAction();
 
   const [activeCategory, setActiveCategory] = useState<HomeCategoryKey | null>(null);
   // "De rezolvat"'s type tab -- Sarcini every time the dashboard opens
@@ -395,13 +397,13 @@ export default function HomeDashboard({
   // default, but the resolve sheet lets the user override that computed
   // date -- explicitNextDue, when passed, wins. A plain task's dueDate
   // stays put; it completes and archives normally.
-  const resolveTask = (entry: HomeTaskEntry, price: number | undefined, explicitNextDue?: string, guiltFree?: boolean) => {
+  const resolveTask = async (entry: HomeTaskEntry, price: number | undefined, explicitNextDue?: string, guiltFree?: boolean) => {
     const now = new Date().toISOString();
     const nextDue = entry.isRecurring
       ? (explicitNextDue ?? nextTaskOccurrence(entry.dueDate, entry.recurrenceFrequency))
       : entry.dueDate;
 
-    onTaskSave({
+    await onTaskSave({
       ...entry,
       completed: !entry.isRecurring,
       completedAt: now,
@@ -441,9 +443,9 @@ export default function HomeDashboard({
     resolveTask(entry, undefined);
   };
 
-  const handleResolveConfirm = (price: number | undefined, nextDueDate: string | undefined, guiltFree?: boolean) => {
+  const handleResolveConfirm = async (price: number | undefined, nextDueDate: string | undefined, guiltFree?: boolean) => {
     if (!resolveSheetEntry) return;
-    resolveTask(resolveSheetEntry, price, nextDueDate, guiltFree);
+    await resolveTask(resolveSheetEntry, price, nextDueDate, guiltFree);
     setResolveSheetEntry(null);
   };
 
@@ -492,7 +494,7 @@ export default function HomeDashboard({
         : "Intrarea devine inactivă și dispare din listă.",
       { confirmLabel: "Rezolvă", destructive: !staysActive },
     );
-    if (!confirmed) return;
+    if (!confirmed) { recordAction?.cancel(); return; }
 
     // Paid early: ask whether the next date counts from today or keeps
     // the usual rhythm (same question as a swipe from any other screen).
@@ -517,7 +519,7 @@ export default function HomeDashboard({
           }
         : resolved;
 
-    saveHandlers[categoryKey](finalEntry);
+    await saveHandlers[categoryKey](finalEntry);
     notifyAction(
       "Rezolvat",
       staysActive && nextDueLabel
@@ -530,7 +532,7 @@ export default function HomeDashboard({
   // (same pure resolveEntry Maintenance always used) AND logs the
   // confirmed price as a new spend event, mirroring resolveTask's own
   // accumulation for Tasks.
-  const handleMaintenanceResolveConfirm = (price: number | null) => {
+  const handleMaintenanceResolveConfirm = async (price: number | null) => {
     if (!maintenanceResolveEntry) return;
     const category = HOME_CATEGORIES.find((c) => c.key === "maintenance")!;
     const resolved = category.resolveEntry!(maintenanceResolveEntry) as HomeMaintenanceEntry;
@@ -538,7 +540,7 @@ export default function HomeDashboard({
 
     // "Fără cost" (null): advance the schedule only -- no spend logged,
     // the usual price stays for next time.
-    saveHandlers.maintenance(
+    await saveHandlers.maintenance(
       price === null
         ? resolved
         : {
@@ -563,6 +565,22 @@ export default function HomeDashboard({
   // resolve step (the price sheet for a purchase task, same as tapping
   // its checkbox); home_recurring/home_maintenance land on the matching
   // category page with that row already open for edit.
+  const resolveInitialAction = async (categoryKey: HomeCategoryKey, id: string) => {
+    let retry = true;
+    while (retry) {
+      try {
+        await resolveCategoryEntry(categoryKey, id);
+        return;
+      } catch (error: any) {
+        retry = await confirmAction(
+          "Nu am putut rezolva",
+          error?.message || "A apărut o eroare. Înregistrarea nu a fost modificată.",
+          { confirmLabel: "Reîncearcă", cancelLabel: "Înapoi" },
+        );
+        if (!retry) recordAction?.cancel();
+      }
+    }
+  };
   const openedInitialItemRef = useRef<string | null>(null);
   useEffect(() => {
     if (!initialOpenItem) return;
@@ -574,7 +592,7 @@ export default function HomeDashboard({
       if (!entry) return;
       openedInitialItemRef.current = key;
       setTasksPageVisible(true);
-      if (entry.isPurchase && !entry.completed) setResolveSheetEntry(entry);
+      if ((entry.isPurchase || recordAction) && !entry.completed) setResolveSheetEntry(entry);
       return;
     }
 
@@ -587,7 +605,7 @@ export default function HomeDashboard({
     if (initialOpenItem.resolve && categoryKey !== "documents") {
       // Same resolve as the category page's own swipe/checkbox: a
       // recurring maintenance visit asks for this cycle's cost.
-      resolveCategoryEntry(categoryKey, initialOpenItem.id);
+      void resolveInitialAction(categoryKey, initialOpenItem.id);
       return;
     }
     setActiveCategory(categoryKey);
@@ -778,14 +796,14 @@ export default function HomeDashboard({
         {resolveSheetEntry ? (
           <HomeTaskResolveSheet
             entry={resolveSheetEntry}
-            onCancel={() => setResolveSheetEntry(null)}
+            onCancel={() => { setResolveSheetEntry(null); recordAction?.cancel(); }}
             onResolve={handleResolveConfirm}
           />
         ) : null}
         {maintenanceResolveEntry ? (
           <HomeMaintenanceResolveSheet
             entry={maintenanceResolveEntry}
-            onCancel={() => setMaintenanceResolveEntry(null)}
+            onCancel={() => { setMaintenanceResolveEntry(null); recordAction?.cancel(); }}
             onResolve={handleMaintenanceResolveConfirm}
           />
         ) : null}
@@ -813,7 +831,7 @@ export default function HomeDashboard({
         {resolveSheetEntry ? (
           <HomeTaskResolveSheet
             entry={resolveSheetEntry}
-            onCancel={() => setResolveSheetEntry(null)}
+            onCancel={() => { setResolveSheetEntry(null); recordAction?.cancel(); }}
             onResolve={handleResolveConfirm}
           />
         ) : null}
@@ -857,7 +875,7 @@ export default function HomeDashboard({
             const existing = editingId
               ? category.entries(homeData).find((e) => e.id === editingId)
               : undefined;
-            saveHandlers[activeCategory](category.buildEntry(values, existing));
+            return saveHandlers[activeCategory](category.buildEntry(values, existing));
           }}
           onDelete={(id) => deleteHandlers[activeCategory](id)}
           onResolve={
@@ -878,7 +896,7 @@ export default function HomeDashboard({
         {maintenanceResolveEntry ? (
           <HomeMaintenanceResolveSheet
             entry={maintenanceResolveEntry}
-            onCancel={() => setMaintenanceResolveEntry(null)}
+            onCancel={() => { setMaintenanceResolveEntry(null); recordAction?.cancel(); }}
             onResolve={handleMaintenanceResolveConfirm}
           />
         ) : null}
@@ -969,7 +987,7 @@ export default function HomeDashboard({
           onBack={() => setFormOverlay(null)}
           onSubmit={(values, editingId) => {
             const existing = editingId ? overlayCategory.entries(homeData).find((e) => e.id === editingId) : undefined;
-            saveHandlers[formOverlay.category](overlayCategory.buildEntry(values, existing));
+            return saveHandlers[formOverlay.category](overlayCategory.buildEntry(values, existing));
           }}
           onDelete={(id) => deleteHandlers[formOverlay.category](id)}
           onResolve={overlayCategory.resolveEntry ? (id) => resolveCategoryEntry(formOverlay.category, id) : undefined}
@@ -994,14 +1012,14 @@ export default function HomeDashboard({
     {resolveSheetEntry ? (
       <HomeTaskResolveSheet
         entry={resolveSheetEntry}
-        onCancel={() => setResolveSheetEntry(null)}
+        onCancel={() => { setResolveSheetEntry(null); recordAction?.cancel(); }}
         onResolve={handleResolveConfirm}
       />
     ) : null}
     {maintenanceResolveEntry ? (
       <HomeMaintenanceResolveSheet
         entry={maintenanceResolveEntry}
-        onCancel={() => setMaintenanceResolveEntry(null)}
+        onCancel={() => { setMaintenanceResolveEntry(null); recordAction?.cancel(); }}
         onResolve={handleMaintenanceResolveConfirm}
       />
     ) : null}

@@ -178,7 +178,17 @@ export default function CarDocumentForm({
 
   const handleDelete = async () => {
     const confirmed = await confirmAction("Ștergi documentul?", "Se șterge definitiv.", { confirmLabel: "Șterge", destructive: true });
-    if (confirmed) onDelete?.();
+    if (!confirmed || saveLock.current) return;
+    saveLock.current = true;
+    setSaving(true);
+    try {
+      await onDelete?.();
+    } catch (error: any) {
+      setError(error?.message || "Nu am putut șterge documentul. Încearcă din nou.");
+    } finally {
+      saveLock.current = false;
+      setSaving(false);
+    }
   };
 
   // TEMP (testing only, kept from before): archived documents are

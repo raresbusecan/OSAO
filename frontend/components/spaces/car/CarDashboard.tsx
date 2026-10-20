@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useRecordAction } from "@/lib/navigation/recordAction";
 import type { ScrollView as ScrollViewType } from "react-native";
 import { askRenewal, parseDocDate, renewalPeriod, renewedTitle, toCarDate } from "@/lib/dashboard/documentRenewal";
 import { SwipeRow } from "@/components/spaces/SwipeRow";
@@ -125,6 +126,7 @@ export default function CarDashboard({
     const { colors, spacing, radius, typography } = useTheme();
     const carColors = useSpaceColors("car");
     const router = useRouter();
+    const recordAction = useRecordAction();
 
     // Make is the space's actual name (big title, above); Model sits here
     // as the gray subtitle -- same pattern Home uses (city / county).
@@ -427,7 +429,7 @@ export default function CarDashboard({
         setEditingFuelEntry(null);
     };
 
-    const handleMaintenanceSave = (entry: CarMaintenanceEntry) => {
+    const handleMaintenanceSave = async (entry: CarMaintenanceEntry) => {
         // Captured before the reset below clears it -- this save came from
         // tapping a "Due soon"/"Overdue" NEXT alert, not the regular Add
         // Maintenance flow, so the old alert needs an explicit "handled"
@@ -435,7 +437,7 @@ export default function CarDashboard({
         // from NEXT once this saves, but that's silent -- easy to miss).
         const wasRenewal = maintenanceRenewFrom !== null;
 
-        onMaintenanceSave?.(entry);
+        await onMaintenanceSave?.(entry);
         setMaintenanceFormVisible(false);
         setEditingMaintenanceEntry(null);
         setMaintenanceRenewFrom(null);
@@ -488,14 +490,14 @@ export default function CarDashboard({
         setEditingFuelEntry(null);
     };
 
-    const handleMaintenanceDelete = () => {
-        if (editingMaintenanceEntry) onMaintenanceDelete?.(editingMaintenanceEntry.id);
+    const handleMaintenanceDelete = async () => {
+        if (editingMaintenanceEntry) await onMaintenanceDelete?.(editingMaintenanceEntry.id);
         setMaintenanceFormVisible(false);
         setEditingMaintenanceEntry(null);
     };
 
-    const handleDocumentDelete = () => {
-        if (editingDocumentEntry) onDocumentDelete?.(editingDocumentEntry.id);
+    const handleDocumentDelete = async () => {
+        if (editingDocumentEntry) await onDocumentDelete?.(editingDocumentEntry.id);
         setDocumentFormVisible(false);
         setEditingDocumentEntry(null);
     };
@@ -729,6 +731,7 @@ export default function CarDashboard({
                         setMaintenanceFormVisible(false);
                         setEditingMaintenanceEntry(null);
                         setMaintenanceRenewFrom(null);
+                        recordAction?.cancel();
                     }}
                     onSave={handleMaintenanceSave}
                     onDelete={editingMaintenanceEntry ? handleMaintenanceDelete : undefined}
@@ -743,6 +746,7 @@ export default function CarDashboard({
                         setEditingDocumentEntry(null);
                         setDocumentRenewFrom(null);
                         setDocumentReadOnly(false);
+                        recordAction?.cancel();
                     }}
                     onSave={handleDocumentSave}
                     onDelete={editingDocumentEntry ? handleDocumentDelete : undefined}
