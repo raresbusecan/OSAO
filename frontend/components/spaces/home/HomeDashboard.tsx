@@ -79,7 +79,8 @@ export type HomeDashboardProps = {
    * instead of just landing on this dashboard's own category grid. */
   /** `resolve`: open the item's resolve step (a swipe-right from another
    * screen) instead of its edit form. */
-  initialOpenItem?: { type: "home_task" | "home_recurring" | "home_maintenance" | "home_document"; id: string; resolve?: boolean } | null;
+  initialOpenItem?: { type: "home_task" | "home_recurring" | "home_maintenance" | "home_document" | "home_expense" | "home_supply"; id: string; resolve?: boolean } | null;
+  initialSection?: string;
 };
 
 export default function HomeDashboard({
@@ -101,6 +102,7 @@ export default function HomeDashboard({
   onTaskDelete,
   onTaskReorder,
   initialOpenItem,
+  initialSection,
 }: HomeDashboardProps) {
   const { spacing } = useTheme();
   const router = useRouter();
@@ -357,14 +359,14 @@ export default function HomeDashboard({
     notifyAction("Reînnoit", `${doc.title} e valabil până pe ${roDate(period.expiry, { withYear: true })}.`);
   };
 
-  const handleTaskSave = (entry: HomeTaskEntry) => {
-    onTaskSave(entry);
+  const handleTaskSave = async (entry: HomeTaskEntry) => {
+    await onTaskSave(entry);
     setTaskFormVisible(false);
     setEditingTaskEntry(null);
   };
 
-  const handleTaskDelete = () => {
-    if (editingTaskEntry) onTaskDelete(editingTaskEntry.id);
+  const handleTaskDelete = async () => {
+    if (editingTaskEntry) await onTaskDelete(editingTaskEntry.id);
     setTaskFormVisible(false);
     setEditingTaskEntry(null);
   };
@@ -583,6 +585,9 @@ export default function HomeDashboard({
   };
   const openedInitialItemRef = useRef<string | null>(null);
   useEffect(() => {
+    if (initialSection === "supplies") setSuppliesPageVisible(true);
+  }, [initialSection]);
+  useEffect(() => {
     if (!initialOpenItem) return;
     const key = `${initialOpenItem.type}:${initialOpenItem.id}`;
     if (openedInitialItemRef.current === key) return;
@@ -592,12 +597,24 @@ export default function HomeDashboard({
       if (!entry) return;
       openedInitialItemRef.current = key;
       setTasksPageVisible(true);
-      if ((entry.isPurchase || recordAction) && !entry.completed) setResolveSheetEntry(entry);
+      if (entry.completed) {
+        setEditingTaskEntry(entry);
+        setTaskFormVisible(true);
+      } else if (entry.isPurchase || recordAction) setResolveSheetEntry(entry);
       return;
     }
 
+    if (initialOpenItem.type === "home_supply") {
+      const entry = homeData.supplyEntries.find((e) => e.id === initialOpenItem.id);
+      if (!entry) return;
+      openedInitialItemRef.current = key;
+      setSuppliesPageVisible(true);
+      setEditingSupplyEntry(entry);
+      setSupplyFormVisible(true);
+      return;
+    }
     const categoryKey =
-      initialOpenItem.type === "home_recurring" ? "recurring" : initialOpenItem.type === "home_document" ? "documents" : "maintenance";
+      initialOpenItem.type === "home_recurring" ? "recurring" : initialOpenItem.type === "home_document" ? "documents" : initialOpenItem.type === "home_expense" ? "expenses" : "maintenance";
     const category = HOME_CATEGORIES.find((c) => c.key === categoryKey);
     const exists = category?.entries(homeData).some((e) => e.id === initialOpenItem.id);
     if (!exists) return;
@@ -613,14 +630,14 @@ export default function HomeDashboard({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialOpenItem, homeData]);
 
-  const handleSupplyFormSave = (entry: HomeSupplyEntry) => {
-    onSupplySave(entry);
+  const handleSupplyFormSave = async (entry: HomeSupplyEntry) => {
+    await onSupplySave(entry);
     setSupplyFormVisible(false);
     setEditingSupplyEntry(null);
   };
 
-  const handleSupplyFormDelete = () => {
-    if (editingSupplyEntry) onSupplyDelete(editingSupplyEntry.id);
+  const handleSupplyFormDelete = async () => {
+    if (editingSupplyEntry) await onSupplyDelete(editingSupplyEntry.id);
     setSupplyFormVisible(false);
     setEditingSupplyEntry(null);
   };
@@ -715,6 +732,7 @@ export default function HomeDashboard({
             onCancel={() => {
               setSupplyFormVisible(false);
               setEditingSupplyEntry(null);
+              recordAction?.cancel();
             }}
             onSave={handleSupplyFormSave}
             onDelete={editingSupplyEntry ? handleSupplyFormDelete : undefined}
@@ -841,6 +859,7 @@ export default function HomeDashboard({
             onCancel={() => {
               setTaskFormVisible(false);
               setEditingTaskEntry(null);
+              recordAction?.cancel();
             }}
             onSave={handleTaskSave}
             onDelete={editingTaskEntry ? handleTaskDelete : undefined}

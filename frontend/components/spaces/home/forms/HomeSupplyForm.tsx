@@ -1,3 +1,4 @@
+import { useRecordMutation } from "@/lib/navigation/useRecordMutation";
 import React, { useState } from "react";
 import { View } from "react-native";
 import { useTheme } from "@/lib/theme";
@@ -20,6 +21,7 @@ type HomeSupplyFormProps = {
  * Provizii page. Restocks themselves are logged from that page, not
  * here; this only defines what's tracked. */
 export default function HomeSupplyForm({ onCancel, onSave, entry, onDelete }: HomeSupplyFormProps) {
+  const mutation = useRecordMutation();
   const isEditing = entry !== undefined;
   const { spacing } = useTheme();
   const homeColors = useSpaceColors("home");
@@ -32,7 +34,7 @@ export default function HomeSupplyForm({ onCancel, onSave, entry, onDelete }: Ho
   const [notes, setNotes] = useState(entry?.notes ?? "");
   const [error, setError] = useState("");
 
-  const handleSave = () => {
+  const handleSave = () => mutation.run(async () => {
     setError("");
     if (!name.trim()) {
       setError("Dă un nume proviziei.");
@@ -43,7 +45,7 @@ export default function HomeSupplyForm({ onCancel, onSave, entry, onDelete }: Ho
       setError("Introdu o cantitate validă.");
       return;
     }
-    onSave({
+    await onSave({
       id: entry?.id ?? `supply-${Date.now()}`,
       name: name.trim(),
       category: category.trim() || "Altele",
@@ -53,17 +55,17 @@ export default function HomeSupplyForm({ onCancel, onSave, entry, onDelete }: Ho
       restockHistory: entry?.restockHistory,
       notes: notes.trim() || undefined,
     });
-  };
+  });
 
-  const handleDelete = async () => {
+  const handleDelete = () => mutation.run(async () => {
     const confirmed = await confirmAction("Ștergi provizia?", "Se șterge definitiv, cu tot istoricul ei.", { confirmLabel: "Șterge", destructive: true });
-    if (confirmed) onDelete?.();
-  };
+    if (confirmed) await onDelete?.();
+  });
 
   return (
     <Sheet
       visible
-      onClose={onCancel}
+      onClose={() => { if (mutation.canClose()) onCancel(); }}
       info="home.supplyForm"
       title={isEditing ? "Editează provizia" : "Provizie nouă"}
       subtitle={isEditing ? undefined : "Ceva ce ții mereu în casă"}
@@ -71,8 +73,8 @@ export default function HomeSupplyForm({ onCancel, onSave, entry, onDelete }: Ho
       tone={HOME}
       footer={
         <>
-          <Button label={isEditing ? "Salvează" : "Adaugă provizia"} tone={homeColors.fill} onPress={handleSave} />
-          {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge provizia" onPress={handleDelete} /> : null}
+          <Button label={isEditing ? "Salvează" : "Adaugă provizia"} tone={homeColors.fill} disabled={mutation.busy} onPress={handleSave} />
+          {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge provizia" disabled={mutation.busy} onPress={handleDelete} /> : null}
         </>
       }
     >

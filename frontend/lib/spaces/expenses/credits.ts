@@ -31,6 +31,7 @@ export type CreditEntry = {
 /** What GET /budget's `credit.items[]` carries (active credits only). */
 export type BudgetCreditItem = {
   id: number | string;
+  space_id?: number | string;
   title: string;
   amount: number;
   day_of_month: number;

@@ -5,6 +5,8 @@ import { useTheme } from "@/lib/theme";
 import { TopBar, Identity, SectionHeader, Group, Row, IconWell, Chip } from "@/components/ui/primitives";
 import { SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, spaceColors, spaceTextColor, type SpaceKind } from "@/lib/spaces/spaceProfile";
 import type { BudgetCreditItem } from "@/lib/spaces/expenses/credits";
+import { useRouter } from "expo-router";
+import { todoHref } from "@/lib/dashboard/spaceDue";
 import { lei, roCount, roDate } from "@/lib/format";
 
 /**
@@ -39,6 +41,7 @@ export function BudgetCreditPage({
   onBack: () => void;
 }) {
   const { colors, spacing, radius, typography, isDark } = useTheme();
+  const router = useRouter();
   const over = rates > budget;
   const scale = Math.max(budget, rates, 1);
   const expColor = SPACE_IDENTITY_COLORS.expenses ?? colors.onSurfaceTertiary;
@@ -91,7 +94,7 @@ export function BudgetCreditPage({
               <Row
                 key={String(c.id)}
                 testID={`budget-credit-${c.id}`}
-                onPress={onOpenExpenses ?? undefined}
+                onPress={c.space_id != null ? () => router.navigate(todoHref({ ...c, type: "expense_credit" }) as any) : undefined}
                 leading={<IconWell icon="card-outline" color={expColor} tint={expTint} />}
                 title={c.title}
                 subtitle={

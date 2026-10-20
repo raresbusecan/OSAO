@@ -18,6 +18,7 @@ export type ActionItem = {
   recurrence?: string | null;
   metadata?: Record<string, any> | null;
   space?: { id: number | string } | null;
+  space_id?: number | string | null;
   overdue_km?: number | null;
   current_odometer?: number | null;
 };
@@ -55,7 +56,7 @@ export function canSwipeResolve(item: ActionItem): boolean {
 export function editRoute(item: ActionItem): string {
   const base = todoHref(item);
   if (item.type === "home_maintenance") return `${base}&action=resolve`;
-  if (item.type === "car_document") return `${base}&action=renew`;
+  if (item.type === "car_document" || item.type === "car_maintenance") return `${base}&action=renew`;
   return base;
 }
 

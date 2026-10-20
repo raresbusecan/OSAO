@@ -10,7 +10,7 @@ test('all actionable record types use a temporary route; ordinary browsing keeps
     assert.equal(href, `/record-action?id=3&itemId=42&itemType=${type}`);
     assert.equal(route.validRecordAction('3', '42', type), true);
   }
-  assert.equal(route.recordActionHref({ id: 42, type: 'car_fuel', space: { id: 3 } }), '/3?itemId=42&itemType=car_fuel');
+  assert.equal(route.recordActionHref({ id: 42, type: 'unknown', space: { id: 3 } }), '/3?itemId=42&itemType=unknown');
   for (const [id, item, type] of [['0', '42', 'home_task'], ['3', '../42', 'home_task'], [['3'], '42', 'home_task'], ['3', '42', ['home_task']], ['3', '42', 'unknown']]) {
     assert.equal(route.validRecordAction(id, item, type), false);
   }
@@ -27,6 +27,11 @@ test('return from an action preserves the originating Space, without inventing a
 });
 
 const mutations = [
+  ['handleFuelSave', 'fuelEntries', 'car'], ['handleFuelDelete', 'fuelEntries', 'car'],
+  ['handleExpenseSave', 'expenseEntries', 'car'], ['handleExpenseDelete', 'expenseEntries', 'car'],
+  ['handleHomeExpenseSave', 'expenseEntries', 'home'], ['handleHomeExpenseDelete', 'expenseEntries', 'home'],
+  ['handleHomeSupplySave', 'supplyEntries', 'home'], ['handleHomeSupplyDelete', 'supplyEntries', 'home'],
+  ['handleExpenseEntrySave', 'entries', 'expenses'], ['handleExpenseEntryDelete', 'entries', 'expenses'],
   ['handleMaintenanceSave', 'maintenanceEntries', 'car'], ['handleDocumentSave', 'documentEntries', 'car'],
   ['handleMaintenanceDelete', 'maintenanceEntries', 'car'], ['handleDocumentDelete', 'documentEntries', 'car'],
   ['handleHomeDocumentSave', 'documentEntries', 'home'], ['handleHomeDocumentDelete', 'documentEntries', 'home'],
@@ -39,16 +44,17 @@ for (const [name, field, kind] of mutations) {
     const setup = () => {
       const request = deferred();
       const initial = { id: '42', title: 'Before' };
-      let data = { maintenanceEntries: [initial], documentEntries: [initial], recurringEntries: [initial], taskEntries: [initial] };
+      let data = { fuelEntries: [initial], expenseEntries: [initial], supplyEntries: [initial], entries: [initial], maintenanceEntries: [initial], documentEntries: [initial], recurringEntries: [initial], taskEntries: [initial] };
       let returns = 0;
       const write = () => request.promise;
       const context = {
-        carData: data, homeData: data, space: { id: '3' },
+        carData: data, homeData: data, expensesData: data, space: { id: '3' },
         setCarData: (update) => { data = update(data); }, setHomeData: (update) => { data = update(data); },
+        setExpensesData: (update) => { data = update(data); },
         api: { updateItem: write, createItem: write, deleteItem: write }, isSavedItemId: () => true,
         recordAction: { complete: () => { returns++; } }, notifyAction() {},
       };
-      for (const mapper of ['maintenanceEntryToItemBody', 'documentEntryToItemBody', 'homeDocumentEntryToItemBody', 'homeMaintenanceEntryToItemBody', 'recurringEntryToItemBody', 'taskEntryToItemBody']) context[mapper] = () => ({});
+      for (const mapper of ['fuelEntryToItemBody', 'expenseEntryToItemBody', 'homeExpenseEntryToItemBody', 'supplyEntryToItemBody', 'expensesSpaceEntryToItemBody', 'maintenanceEntryToItemBody', 'documentEntryToItemBody', 'homeDocumentEntryToItemBody', 'homeMaintenanceEntryToItemBody', 'recurringEntryToItemBody', 'taskEntryToItemBody']) context[mapper] = () => ({});
       const callback = loadCallback('app/(tabs)/[id].tsx', name, context);
       const argument = name.endsWith('Delete') ? '42' : { id: '42', title: 'After' };
       return { request, run: () => callback(argument), get data() { return data; }, get returns() { return returns; }, initial };

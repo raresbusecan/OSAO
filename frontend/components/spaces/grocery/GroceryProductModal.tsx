@@ -1,3 +1,4 @@
+import { useRecordMutation } from "@/lib/navigation/useRecordMutation";
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, type TextInput } from "react-native";
 import { useTheme } from "@/lib/theme";
@@ -37,6 +38,7 @@ export function GroceryProductModal({
   item,
   onDelete,
 }: GroceryProductModalProps) {
+  const mutation = useRecordMutation();
   const { colors, spacing, radius } = useTheme();
   const isEditing = !!item;
   const ingredientReferences = useIngredientReferences();
@@ -83,7 +85,7 @@ export function GroceryProductModal({
     };
   }, []);
 
-  const handleSave = () => {
+  const handleSave = () => mutation.run(async () => {
     const trimmedName = name.trim();
     if (!trimmedName) {
       setError("Scrie numele produsului.");
@@ -98,7 +100,7 @@ export function GroceryProductModal({
       return;
     }
 
-    onSave({ name: trimmedName, quantity, category, price: priceValue });
+    await onSave({ name: trimmedName, quantity, category, price: priceValue });
 
     // Editing closes as before (the parent hides the sheet once it gets
     // this callback). Adding stays open instead: clears Name/Amount/Unit
@@ -118,7 +120,7 @@ export function GroceryProductModal({
 
     if (successTimeoutRef.current) clearTimeout(successTimeoutRef.current);
     successTimeoutRef.current = setTimeout(() => setSuccessMessage(""), 2500);
-  };
+  });
 
   // Recognizes a known ingredient (name or alias, case-insensitive) as
   // the user types and sets `category` to it, silently -- there's no
@@ -130,10 +132,10 @@ export function GroceryProductModal({
     if (matched) setCategory(matched);
   };
 
-  const handleDelete = async () => {
+  const handleDelete = () => mutation.run(async () => {
     const confirmed = await confirmAction("Ștergi produsul?", `Scoți „${item?.name}” de pe listă?`, { confirmLabel: "Șterge", destructive: true });
-    if (confirmed) onDelete?.();
-  };
+    if (confirmed) await onDelete?.();
+  });
 
 
   const GROC = useSpaceColors("grocery").color;
@@ -141,15 +143,15 @@ export function GroceryProductModal({
   return (
     <Sheet
       visible={visible}
-      onClose={onClose}
+      onClose={() => { if (mutation.canClose()) onClose(); }}
       info="grocery.product"
       title={isEditing ? "Editează produsul" : "Produs nou"}
       icon="cart-outline"
       tone={GROC}
       footer={
         <>
-          <Button testID="grocery-product-save" label={isEditing ? "Salvează" : "Adaugă pe listă"} tone={GROC} onPress={handleSave} />
-          {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge produsul" onPress={handleDelete} /> : null}
+          <Button testID="grocery-product-save" label={isEditing ? "Salvează" : "Adaugă pe listă"} tone={GROC} disabled={mutation.busy} onPress={handleSave} />
+          {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge produsul" disabled={mutation.busy} onPress={handleDelete} /> : null}
         </>
       }
     >

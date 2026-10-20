@@ -1,3 +1,4 @@
+import { useRecordMutation } from "@/lib/navigation/useRecordMutation";
 import React, { useEffect, useMemo, useState } from "react";
 import { DateField } from "@/components/ui/DateField";
 import { View, Text, Pressable } from "react-native";
@@ -40,6 +41,7 @@ export default function CarFuelForm({
   entry,
   onDelete,
 }: CarFuelFormProps) {
+  const mutation = useRecordMutation();
   const isEditing = entry !== undefined;
 
   const { colors, spacing, radius } = useTheme();
@@ -152,7 +154,7 @@ export default function CarFuelForm({
     );
   }, [previousEntry, odometer, levelBefore, tankCapacity]);
 
-  const handleSave = () => {
+  const handleSave = () => mutation.run(async () => {
     setError("");
 
     const draftEntry: Omit<CarFuelEntry, "id" | "date"> = {
@@ -183,13 +185,13 @@ export default function CarFuelForm({
       guiltFree,
     };
 
-    onSave(entryToSave);
-  };
+    await onSave(entryToSave);
+  });
 
-  const handleDelete = async () => {
+  const handleDelete = () => mutation.run(async () => {
     const confirmed = await confirmAction("Ștergi alimentarea?", "Se șterge definitiv.", { confirmLabel: "Șterge", destructive: true });
-    if (confirmed) onDelete?.();
-  };
+    if (confirmed) await onDelete?.();
+  });
 
   // Sliders, station: secondary details, folded away until asked for
   // (open straight away when editing an entry that already uses them).
@@ -200,7 +202,7 @@ export default function CarFuelForm({
   return (
     <Sheet
       visible
-      onClose={onCancel}
+      onClose={() => { if (mutation.canClose()) onCancel(); }}
       info="car.fuelForm"
       title={isEditing ? "Editează alimentarea" : "Alimentare nouă"}
       subtitle="Doar prețul e obligatoriu"
@@ -208,8 +210,8 @@ export default function CarFuelForm({
       tone={CAR}
       footer={
         <>
-          <Button testID="car-fuel-save" label={isEditing ? "Salvează" : "Salvează alimentarea"} tone={carColors.fill} onPress={handleSave} />
-          {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge alimentarea" onPress={handleDelete} /> : null}
+          <Button testID="car-fuel-save" label={isEditing ? "Salvează" : "Salvează alimentarea"} tone={carColors.fill} disabled={mutation.busy} onPress={handleSave} />
+          {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge alimentarea" disabled={mutation.busy} onPress={handleDelete} /> : null}
         </>
       }
     >

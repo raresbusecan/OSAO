@@ -27,6 +27,36 @@ class SpaceCreditTest extends TestCase
         ], $over);
     }
 
+    public function test_budget_credit_links_identify_the_owning_expenses_space_not_the_linked_asset(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+        // Multiple Expenses spaces and a linked car make a generic Space
+        // shortcut ambiguous: each credit must carry its actual owner.
+        Space::factory()->create(['user_id' => $user->id, 'type' => 'expenses']);
+        $owner = Space::factory()->create(['user_id' => $user->id, 'type' => 'expenses']);
+        $car = Space::factory()->create(['user_id' => $user->id, 'type' => 'car']);
+        $credit = Item::factory()->create([
+            'user_id' => $user->id, 'space_id' => $owner->id,
+            'type' => Item::CREDIT_TYPE, 'amount' => 100, 'recurrence' => 'monthly',
+            'metadata' => [
+                'day_of_month' => 15,
+                'end_date' => Carbon::now()->addYears(3)->format('Y-m-d'),
+                'linked_space_id' => $car->id,
+            ],
+        ]);
+        Item::factory()->create([
+            'type' => Item::CREDIT_TYPE, 'amount' => 200, 'recurrence' => 'monthly',
+            'metadata' => ['day_of_month' => 15, 'end_date' => Carbon::now()->addYears(3)->format('Y-m-d')],
+        ]);
+
+        $this->getJson('/api/budget')->assertOk()
+            ->assertJsonCount(1, 'credit.items')
+            ->assertJsonPath('credit.items.0.id', $credit->id)
+            ->assertJsonPath('credit.items.0.space_id', $owner->id)
+            ->assertJsonPath('credit.items.0.linked_space_id', $car->id);
+    }
+
     public function test_car_with_credit_and_no_expenses_space_creates_default(): void
     {
         $user = User::factory()->create();

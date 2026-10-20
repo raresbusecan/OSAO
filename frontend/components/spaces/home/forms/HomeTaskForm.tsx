@@ -1,3 +1,4 @@
+import { useRecordMutation } from "@/lib/navigation/useRecordMutation";
 import React, { useState } from "react";
 import { Text } from "react-native";
 import { useTheme } from "@/lib/theme";
@@ -28,6 +29,7 @@ type HomeTaskFormProps = {
  * resolved (HomeTaskResolveSheet) -- the real cost isn't known yet.
  */
 export default function HomeTaskForm({ onCancel, onSave, entry, onDelete }: HomeTaskFormProps) {
+  const mutation = useRecordMutation();
   const isEditing = entry !== undefined;
 
   const { colors } = useTheme();
@@ -43,7 +45,7 @@ export default function HomeTaskForm({ onCancel, onSave, entry, onDelete }: Home
   const [notesOpen, setNotesOpen] = useState(!!entry?.notes);
   const [error, setError] = useState("");
 
-  const handleSave = () => {
+  const handleSave = () => mutation.run(async () => {
     setError("");
     if (!title.trim()) {
       setError("Dă un nume sarcinii.");
@@ -54,7 +56,7 @@ export default function HomeTaskForm({ onCancel, onSave, entry, onDelete }: Home
       return;
     }
 
-    onSave({
+    await onSave({
       id: entry?.id ?? `task-${Date.now()}`,
       title: title.trim(),
       dueDate,
@@ -72,17 +74,17 @@ export default function HomeTaskForm({ onCancel, onSave, entry, onDelete }: Home
       // Set by the resolve sheet's purchase step, never here.
       guiltFree: entry?.guiltFree,
     });
-  };
+  });
 
-  const handleDelete = async () => {
+  const handleDelete = () => mutation.run(async () => {
     const confirmed = await confirmAction("Ștergi sarcina?", "Se șterge definitiv.", { confirmLabel: "Șterge", destructive: true });
-    if (confirmed) onDelete?.();
-  };
+    if (confirmed) await onDelete?.();
+  });
 
   return (
     <Sheet
       visible
-      onClose={onCancel}
+      onClose={() => { if (mutation.canClose()) onCancel(); }}
       info="home.taskForm"
       title={isEditing ? "Editează sarcina" : "Sarcină nouă"}
       subtitle={isEditing ? undefined : "Un lucru de făcut prin casă"}
@@ -90,8 +92,8 @@ export default function HomeTaskForm({ onCancel, onSave, entry, onDelete }: Home
       tone={HOME}
       footer={
         <>
-          <Button testID="home-task-save" label={isEditing ? "Salvează" : "Adaugă sarcina"} tone={homeColors.fill} onPress={handleSave} />
-          {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge sarcina" onPress={handleDelete} /> : null}
+          <Button testID="home-task-save" label={isEditing ? "Salvează" : "Adaugă sarcina"} tone={homeColors.fill} disabled={mutation.busy} onPress={handleSave} />
+          {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge sarcina" disabled={mutation.busy} onPress={handleDelete} /> : null}
         </>
       }
     >

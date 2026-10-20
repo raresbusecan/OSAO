@@ -559,7 +559,7 @@ function BillsCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
     const next = ctx.bills[0];
     const overdue = next ? new Date(next.due_at).getTime() < Date.now() : false;
     return (
-      <TapCard widget={widget} onPress={ctx.preview ? undefined : () => ctx.navigate("/calendar")} label={title}>
+      <TapCard widget={widget} onPress={ctx.preview || !next ? undefined : () => ctx.navigate(todoHref(next))} label={title}>
         <CardHeading icon="repeat" text={title} color={widget.color ?? colors.onSurfaceTertiary} info={infoOf(ctx, "card.bills")} />
         {next ? (
           <>
@@ -584,7 +584,7 @@ function BillsCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
             <RecurringBillRow
               testID={`home-recurring-${bill.id}`}
               item={bill}
-              onPress={ctx.preview ? undefined : () => ctx.navigate(`/calendar?date=${ymdLocal(bill.due_at)}`)}
+              onPress={ctx.preview ? undefined : () => ctx.navigate(todoHref(bill))}
             />
           );
           return ctx.preview ? (
@@ -596,12 +596,6 @@ function BillsCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
       </Group>
     </View>
   );
-}
-
-/** "2026-10-05" in local time -- Calendar's ?date= deep-link format. */
-function ymdLocal(iso: string): string {
-  const d = new Date(iso);
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 /* ---------------- Economii ---------------- */
@@ -732,7 +726,7 @@ function GroceryCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
   const tint = widget.color ?? spaceTone(ctx, list.space_id, "grocery", isDark).tint;
   const muted = colors.onSurfaceTertiary;
   const title = widget.settings?.title || list.title;
-  const go = ctx.preview ? undefined : () => ctx.navigate(`/${list.space_id}`);
+  const go = ctx.preview ? undefined : () => ctx.navigate(todoHref({ id: list.list_id, type: "grocery_list", space_id: list.space_id }));
   if (widget.size === "compact") {
     return (
       <TapCard widget={widget} onPress={go} label={`${title}: ${list.count} de cumpărat`}>
@@ -772,7 +766,7 @@ function SuppliesCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
   const low = ctx.dashboard?.lowSupplies?.[home.id] ?? 0;
   const tint = widget.color ?? spaceTone(ctx, home.id, "home", isDark).tint;
   return (
-    <TapCard widget={widget} onPress={ctx.preview ? undefined : () => ctx.navigate(`/${home.id}`)} label={`Provizii ${home.name}: ${low} pe terminate`}>
+    <TapCard widget={widget} onPress={ctx.preview ? undefined : () => ctx.navigate(`/${home.id}?section=supplies`)} label={`Provizii ${home.name}: ${low} pe terminate`}>
       <CardHeading icon="basket-outline" text={widget.settings?.title || `Provizii · ${home.name}`} color={tint} info={infoOf(ctx, "card.supplies")} />
       <Text style={{ fontSize: 22, fontWeight: "600", color: low > 0 ? colors.warning : colors.onSurface }}>{low > 0 ? low : "Ok"}</Text>
       <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>{low > 0 ? (low === 1 ? "pe terminate" : "pe terminate") : "nimic pe terminate"}</Text>
@@ -783,7 +777,8 @@ function SuppliesCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
 /* ---------------- Următoarele 7 zile ---------------- */
 
 function CalendarCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
-  const { colors } = useTheme();
+  const { colors, spacing, radius } = useTheme();
+  const { background } = useCardLook(widget);
   const muted = colors.onSurfaceTertiary;
   const title = widget.settings?.title || (widget.size === "compact" ? "Azi" : "Următoarele 7 zile");
   // Credit reminders are "a thing on that day" too (listed, never counted as late).
@@ -794,7 +789,7 @@ function CalendarCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
     const today = upcoming.filter((r) => r.days === 0);
     const tomorrow = upcoming.filter((r) => r.days === 1).length;
     return (
-      <TapCard widget={widget} onPress={go} label={title}>
+      <TapCard widget={widget} onPress={!ctx.preview && today[0] ? () => ctx.navigate(todoHref(today[0])) : go} label={title}>
         <CardHeading icon="calendar-outline" text={title} color={tint} info={infoOf(ctx, "card.calendar")} />
         <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>{today[0] ? todoTitle(today[0]) : "Nimic azi"}</Text>
         <Text style={{ fontSize: 12, color: muted }} numberOfLines={1}>
@@ -805,16 +800,16 @@ function CalendarCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
   }
   const shown = limitRows(upcoming, widget.settings?.rows, 5);
   return (
-    <TapCard widget={widget} onPress={go} label={title}>
+    <View testID={`home-card-${widget.type}-${widget.id}`} style={{ backgroundColor: background, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.sm }}>
       <CardHeading icon="calendar-outline" text={title} color={tint} info={infoOf(ctx, "card.calendar")} />
       {shown.length === 0 ? <Text style={{ fontSize: 14, color: muted }}>Nimic programat.</Text> : null}
       {shown.map((r: any) => (
-        <View key={`${r.type}-${r.id}`} style={{ flexDirection: "row", alignItems: "center", gap: 12, minHeight: 32 }}>
+        <PressableScale key={`${r.type}-${r.id}`} onPress={ctx.preview ? undefined : () => ctx.navigate(todoHref(r))} accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: 12, minHeight: 32 }}>
           <Text style={{ width: 64, fontSize: 13, color: r.days === 0 ? colors.warning : muted }}>{capitalize(roRelativeDays(r.days))}</Text>
           <Text style={{ flex: 1, fontSize: 15, color: colors.onSurface }} numberOfLines={1}>{todoTitle(r)}</Text>
-        </View>
+        </PressableScale>
       ))}
-    </TapCard>
+    </View>
   );
 }
 

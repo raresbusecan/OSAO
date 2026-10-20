@@ -1,8 +1,9 @@
 export const RECORD_ACTION_TYPES = new Set([
   "car_document", "car_maintenance", "home_task", "home_recurring", "home_maintenance", "home_document",
+  "car_fuel", "car_expense", "home_expense", "home_supply", "expense_item", "expense_credit", "grocery_list", "grocery_item", "grocery_trip",
 ]);
 
-/** Only actionable records use the temporary flow; browsing keeps its route. */
+/** Opening a record preserves the originating screen; Space tiles keep their route. */
 export function recordActionHref(item: { id: number | string; type: string; space: { id: number | string } }): string {
   const query = `itemId=${encodeURIComponent(String(item.id))}&itemType=${encodeURIComponent(item.type)}`;
   return RECORD_ACTION_TYPES.has(item.type)

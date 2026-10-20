@@ -11,7 +11,7 @@ import { capitalize, lei } from "@/lib/format";
 import { CUSTOM_EVENT_COLOR, spaceColors } from "@/lib/spaces/spaceProfile";
 import { heatColor, type HeatLevel } from "@/lib/statusColors";
 import { dayCapacity, dayEffort, monthStatus } from "@/lib/calendar/capacity";
-import { overdueKmLabel, todoTitle } from "@/lib/dashboard/spaceDue";
+import { overdueKmLabel, todoHref, todoTitle } from "@/lib/dashboard/spaceDue";
 import { isReminder } from "@/components/dashboard/CreditReminderRow";
 import { SwipeItemRow } from "@/components/dashboard/SwipeItemRow";
 import { canSwipeResolve, resolveFromSummary } from "@/lib/dashboard/itemActions";
@@ -334,13 +334,13 @@ export function SimpleCalendar() {
   };
 
   const openRow = (it: any) => {
+    if (it.space_id != null || it.space?.id != null) {
+      router.navigate(todoHref(it) as any);
+      return;
+    }
     // Any record (and your own events) opens its editor.
     if (canEditRecord(it.type) && !isReminder(it)) {
       openEditRecord(it.id);
-      return;
-    }
-    if (it.space?.id != null) {
-      router.push(`/${String(it.space.id)}` as any);
       return;
     }
     // A custom event: a light read-only note (the full Calendar owns editing).

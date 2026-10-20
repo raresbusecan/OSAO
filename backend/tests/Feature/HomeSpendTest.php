@@ -45,6 +45,21 @@ class HomeSpendTest extends TestCase
         ], $attrs)));
     }
 
+    public function test_payment_rows_preserve_the_original_record_and_space_for_navigation(): void
+    {
+        $item = $this->item('home_maintenance', [
+            'amount' => 80, 'due_at' => '2026-11-20 10:00:00', 'guilt_free' => true,
+            'metadata' => ['spendHistory' => [['date' => '2026-10-10T10:00:00Z', 'amount' => 80]]],
+        ]);
+        foreach (['/api/budget/spaces/Home', '/api/budget/guilt-free'] as $path) {
+            $response = $this->getJson($path)->assertOk();
+            $payment = collect($response->json('items'))->firstWhere('item_id', $item->id);
+            $this->assertNotNull($payment);
+            $this->assertSame("hs-{$item->id}-0", $payment['id']);
+            $this->assertSame($this->home->id, $payment['space_id']);
+        }
+    }
+
     public function test_home_payments_count_on_their_own_day(): void
     {
         // Recurring visit first due in May, paid twice this month.

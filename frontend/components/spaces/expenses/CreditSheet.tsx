@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+import { useRecordAction } from "@/lib/navigation/recordAction";
+import { useRecordMutation } from "@/lib/navigation/useRecordMutation";
 import { View, Text } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
@@ -55,6 +57,8 @@ function apiErrorText(error: any): string {
 }
 
 function CreditSheetBody({ credit, spaceId, linkable, onClose, onChanged }: CreditSheetProps & { credit: CreditEntry | "new" }) {
+  const recordAction = useRecordAction();
+  const mutation = useRecordMutation();
   const { colors, spacing, isDark } = useTheme();
   const exp = useSpaceColors("expenses");
   const TEAL = exp.color;
@@ -72,7 +76,7 @@ function CreditSheetBody({ credit, spaceId, linkable, onClose, onChanged }: Cred
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const handleSave = async () => {
+  const handleSave = () => mutation.run(async () => {
     const invalid = creditDraftError(draft, isNew);
     if (invalid) return setError(invalid);
     setError(null);
@@ -86,6 +90,7 @@ function CreditSheetBody({ credit, spaceId, linkable, onClose, onChanged }: Cred
       else await api.updateItem(credit.id, body);
       refreshBudgetPlan();
       onChanged();
+      recordAction?.complete();
       onClose();
     } catch (e: any) {
       const msg = apiErrorText(e);
@@ -94,9 +99,9 @@ function CreditSheetBody({ credit, spaceId, linkable, onClose, onChanged }: Cred
     } finally {
       setSaving(false);
     }
-  };
+  });
 
-  const handleDelete = async () => {
+  const handleDelete = () => mutation.run(async () => {
     if (isNew) return;
     const ok = await confirmAction("Ștergi creditul?", `„${credit.title}” se șterge definitiv, cu tot cu mementourile lui.`, { confirmLabel: "Șterge", destructive: true });
     if (!ok) return;
@@ -104,16 +109,17 @@ function CreditSheetBody({ credit, spaceId, linkable, onClose, onChanged }: Cred
       await api.deleteItem(credit.id);
       refreshBudgetPlan();
       onChanged();
+      recordAction?.complete();
       onClose();
     } catch (e: any) {
       notifyAction("Nu am putut șterge creditul", apiErrorText(e));
     }
-  };
+  });
 
   return (
     <Sheet
       visible
-      onClose={onClose}
+      onClose={() => { if (mutation.canClose()) { onClose(); recordAction?.cancel(); } }}
       title={isNew ? "Credit nou" : "Editează creditul"}
       icon="card-outline"
       tone={TEAL}
@@ -121,8 +127,8 @@ function CreditSheetBody({ credit, spaceId, linkable, onClose, onChanged }: Cred
       testID="credit-sheet"
       footer={
         <>
-          <Button testID="credit-save" label="Salvează creditul" tone={exp.fill} onPress={handleSave} loading={saving} />
-          {!isNew ? <Button testID="credit-delete" variant="ghost" icon="trash-outline" label="Șterge creditul" onPress={handleDelete} /> : null}
+          <Button testID="credit-save" label="Salvează creditul" tone={exp.fill} onPress={handleSave} loading={saving} disabled={mutation.busy} />
+          {!isNew ? <Button testID="credit-delete" variant="ghost" icon="trash-outline" label="Șterge creditul" onPress={handleDelete} disabled={mutation.busy} /> : null}
         </>
       }
     >

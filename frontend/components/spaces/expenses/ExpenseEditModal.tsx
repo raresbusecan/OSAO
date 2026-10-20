@@ -1,3 +1,4 @@
+import { useRecordMutation } from "@/lib/navigation/useRecordMutation";
 import React, { useState } from "react";
 import { roDate } from "@/lib/format";
 import { confirmAction } from "@/lib/confirm";
@@ -43,6 +44,7 @@ function ExpenseEditSheet({
   onSave: (entry: ExpenseEntry) => void;
   onDelete: (id: string) => void;
 }) {
+  const mutation = useRecordMutation();
   const TEAL = useSpaceColors("expenses").color;
   const [name, setName] = useState(entry.name);
   const [price, setPrice] = useState(String(entry.price));
@@ -56,31 +58,31 @@ function ExpenseEditSheet({
   const parsedPrice = Number(price.replace(",", "."));
   const canSubmit = name.trim().length > 0 && price.trim().length > 0 && !Number.isNaN(parsedPrice) && parsedPrice >= 0;
 
-  const handleSave = () => {
+  const handleSave = () => mutation.run(async () => {
     if (!canSubmit) {
       setError("Introdu un nume și un preț valid.");
       return;
     }
-    onSave({ ...entry, name: name.trim(), price: parsedPrice, date, notes: notes.trim() || undefined, guiltFree });
-  };
+    await onSave({ ...entry, name: name.trim(), price: parsedPrice, date, notes: notes.trim() || undefined, guiltFree });
+  });
 
-  const handleDelete = async () => {
+  const handleDelete = () => mutation.run(async () => {
     const confirmed = await confirmAction("Ștergi cheltuiala?", `„${entry.name}” se șterge definitiv.`, { confirmLabel: "Șterge", destructive: true });
-    if (confirmed) onDelete(entry.id);
-  };
+    if (confirmed) await onDelete(entry.id);
+  });
 
   return (
     <Sheet
       visible
-      onClose={onClose}
+      onClose={() => { if (mutation.canClose()) onClose(); }}
       info="expenses.edit"
       title="Editează cheltuiala"
       icon="receipt-outline"
       tone={TEAL}
       footer={
         <>
-          <Button testID="expense-edit-save" label="Salvează" tone={TEAL} onPress={handleSave} />
-          <Button testID="expense-edit-delete" variant="ghost" icon="trash-outline" label="Șterge cheltuiala" onPress={handleDelete} />
+          <Button testID="expense-edit-save" label="Salvează" tone={TEAL} disabled={mutation.busy} onPress={handleSave} />
+          <Button testID="expense-edit-delete" variant="ghost" icon="trash-outline" label="Șterge cheltuiala" disabled={mutation.busy} onPress={handleDelete} />
         </>
       }
     >

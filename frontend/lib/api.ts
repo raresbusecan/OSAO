@@ -720,7 +720,7 @@ saveHomeProfile: (
   getGuiltFree: () =>
     request<{
       months: { month: string; budget: number | null; spent: number; planned: number }[];
-      items: { id: number | string; type: string; title: string; amount: number | null; currency: string | null; due_at: string | null; guilt_free: boolean; space_id: number | null; label: string; recurring?: boolean; recurrence?: string | null; planned?: boolean }[];
+      items: { id: number | string; item_id?: number | string; type: string; title: string; amount: number | null; currency: string | null; due_at: string | null; guilt_free: boolean; space_id: number | null; label: string; recurring?: boolean; recurrence?: string | null; planned?: boolean }[];
     }>("/budget/guilt-free"),
 
   saveBudgetLimit: (body: { category: string; monthly_limit: number }) =>
@@ -738,7 +738,7 @@ saveHomeProfile: (
     request<{
       category: string;
       months: { year: number; month: number; label: string; total: number }[];
-      items: { id: number | string; type: string; title: string; amount: number | null; currency: string | null; due_at: string | null; planned?: boolean; guilt_free?: boolean }[];
+      items: { id: number | string; item_id?: number | string; space_id?: number | null; type: string; title: string; amount: number | null; currency: string | null; due_at: string | null; planned?: boolean; guilt_free?: boolean }[];
       recurring_monthly: number;
       /** This month's Calendar purchases still ahead (inside this month's total). */
       planned?: number;

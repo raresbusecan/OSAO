@@ -4,14 +4,14 @@ import { useTheme } from "@/lib/theme";
 import { Row, IconWell } from "@/components/ui/primitives";
 import { spaceColors } from "@/lib/spaces/spaceProfile";
 import { lei } from "@/lib/format";
+import { todoHref } from "@/lib/dashboard/spaceDue";
 
 /**
  * A credit's monthly instalment as a REMINDER row (`reminder: true` from
  * /calendar and /dashboard, type expense_credit). Credits have no paid /
  * restant state and are managed in Cheltuieli > Credite, so this row has
  * no swipe, no checkbox and never counts as overdue. A tap opens the
- * Cheltuieli space the credit lives in (its root -- the Credite list is
- * one tap from there).
+ * exact credit in Cheltuieli > Credite, returning here after save/cancel.
  */
 export function isReminder(item: any): boolean {
   return !!item?.reminder;
@@ -38,7 +38,7 @@ export function CreditReminderRow({ item, testID, onBeforeOpen }: {
         spaceId != null
           ? () => {
               onBeforeOpen?.();
-              router.push(`/${String(spaceId)}` as any);
+              router.navigate(todoHref({ ...item, type: "expense_credit" }) as any);
             }
           : undefined
       }

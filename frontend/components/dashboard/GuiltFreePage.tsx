@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, ScrollView, ActivityIndicator } from "react-native";
+import React, { useCallback, useState } from "react";
+import { View, Text, ScrollView, ActivityIndicator, DeviceEventEmitter } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { TopBar, Identity, SectionHeader, Group, Row, IconWell, EmptyState } from "@/components/ui/primitives";
 import { SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, spaceTextColor } from "@/lib/spaces/spaceProfile";
 import { LABEL_KIND } from "@/lib/budget/plan";
 import { capitalize, lei, roDate, roNumber } from "@/lib/format";
-import { todoTitle } from "@/lib/dashboard/spaceDue";
+import { todoHref, todoTitle } from "@/lib/dashboard/spaceDue";
+import { useFocusEffect, useRouter } from "expo-router";
+import { REFRESH_EVENT } from "@/lib/refresh";
 
 type GuiltFreeData = Awaited<ReturnType<typeof api.getGuiltFree>>;
 
@@ -26,21 +28,29 @@ function signedLei(n: number): string {
  * past 3 months. GET /budget/guilt-free.
  */
 export function GuiltFreePage({ percent, onBack }: { percent: number; onBack: () => void }) {
+  const router = useRouter();
   const { colors, spacing, radius, typography, isDark } = useTheme();
   const [data, setData] = useState<GuiltFreeData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let mounted = true;
-    api
+    let request = 0;
+    const load = () => {
+      const current = ++request;
+      return api
       .getGuiltFree()
-      .then((r) => mounted && setData(r))
+      .then((r) => mounted && current === request && setData(r))
       .catch(() => {})
-      .finally(() => mounted && setLoading(false));
+      .finally(() => mounted && current === request && setLoading(false));
+    };
+    void load();
+    const subscription = DeviceEventEmitter.addListener(REFRESH_EVENT, load);
     return () => {
       mounted = false;
+      subscription.remove();
     };
-  }, []);
+  }, []));
 
   const months = data?.months ?? [];
   const current = months[months.length - 1];
@@ -106,6 +116,7 @@ export function GuiltFreePage({ percent, onBack }: { percent: number; onBack: ()
                     <Row
                       key={String(it.id)}
                       testID={`guilt-free-item-${it.id}`}
+                      onPress={() => router.navigate(todoHref(it) as any)}
                       leading={<IconWell icon={it.type === "custom_event" ? "calendar-outline" : meta?.icon ?? "receipt-outline"} color={color} tint={tint} />}
                       title={todoTitle(it).replace(/^Cumpărături -- /, "")}
                       subtitle={[when, spaceName].filter(Boolean).join(" · ")}

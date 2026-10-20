@@ -12,8 +12,8 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
 
 ## Routing (Expo Router, file = route)
 
-- **Actions opened from another screen** (2026-10-20): actionable Car/Home
-  rows use `lib/navigation/recordActionRoute.ts` via `todoHref` to open
+- **Actions opened from another screen** (2026-10-20): records in all four Spaces
+  use `lib/navigation/recordActionRoute.ts` via `todoHref` to open
   `app/record-action.tsx` on the root Stack. It hosts the existing Space
   forms under `RecordActionContext`; successful persistence returns to the
   still-mounted origin, cancellation does the same, and failures stay editable
@@ -24,7 +24,15 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
   origin lookup unwraps Expo 57's generated `__root` navigator. De făcut hides
   its Sheet while blurred and resumes it with its saved scroll offset.
   `lib/refresh.ts` owns `REFRESH_EVENT` (re-exported by the tabs layout).
-  Tests: `tests/contextual-actions.test.cjs`. Native Sheet handoff still needs
+  All 15 Space item types resolve to their owning section/record, including
+  raw `space_id` payloads and Home payment occurrences (`item_id`). Bills in
+  Acasă compact/wide and Buget, credit reminders, both Calendar modes and
+  Budget detail/guilt-free rows share `todoHref`; Calendar is reserved for
+  personal events. Grocery links select the actual list/product; trips show
+  their saved purchase details. `useRecordMutation` guards the additional
+  forms against overlapping writes and preserves them on failure. Budget
+  subpages refresh on focus and refresh events without resetting their month.
+  Tests: `tests/contextual-actions.test.cjs`, `tests/record-destinations.test.cjs`. Native Sheet handoff still needs
   phone verification on both Android and iOS.
 - `app/(auth)/login.tsx`, `register.tsx` — auth screens, gated by
   `AuthGuard` in `app/_layout.tsx` (redirects based on `providers/auth.tsx`'s

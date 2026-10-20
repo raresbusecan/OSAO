@@ -100,7 +100,7 @@ export type CarDashboardProps = {
      * actionable to-dos, see Item::ACTIONABLE_TYPES on the backend). */
     /** `renew`: open the "log the renewal" form (a swipe from another
      * screen picked "Modifică informațiile") instead of editing it. */
-    initialOpenEntry?: { type: "document" | "maintenance"; id: string; renew?: boolean } | null;
+    initialOpenEntry?: { type: CarRecentItem["type"]; id: string; renew?: boolean } | null;
     /** Something of [id].tsx's own is open over the dashboard (the profile
      * edit form) -- holds back the first-use tour. */
     tourBlocked?: boolean;
@@ -423,8 +423,8 @@ export default function CarDashboard({
      * =========================================================
      */
 
-    const handleFuelSave = (entry: CarFuelEntry) => {
-        onFuelSave?.(entry);
+    const handleFuelSave = async (entry: CarFuelEntry) => {
+        await onFuelSave?.(entry);
         setFuelFormVisible(false);
         setEditingFuelEntry(null);
     };
@@ -471,8 +471,8 @@ export default function CarDashboard({
     };
 
 
-    const handleExpenseSave = (entry: CarExpenseEntry) => {
-        onExpenseSave?.(entry);
+    const handleExpenseSave = async (entry: CarExpenseEntry) => {
+        await onExpenseSave?.(entry);
         setExpenseFormVisible(false);
         setEditingExpenseEntry(null);
     };
@@ -484,8 +484,8 @@ export default function CarDashboard({
      * =========================================================
      */
 
-    const handleFuelDelete = () => {
-        if (editingFuelEntry) onFuelDelete?.(editingFuelEntry.id);
+    const handleFuelDelete = async () => {
+        if (editingFuelEntry) await onFuelDelete?.(editingFuelEntry.id);
         setFuelFormVisible(false);
         setEditingFuelEntry(null);
     };
@@ -502,8 +502,8 @@ export default function CarDashboard({
         setEditingDocumentEntry(null);
     };
 
-    const handleExpenseDelete = () => {
-        if (editingExpenseEntry) onExpenseDelete?.(editingExpenseEntry.id);
+    const handleExpenseDelete = async () => {
+        if (editingExpenseEntry) await onExpenseDelete?.(editingExpenseEntry.id);
         setExpenseFormVisible(false);
         setEditingExpenseEntry(null);
     };
@@ -573,12 +573,13 @@ export default function CarDashboard({
         if (!initialOpenEntry) return;
         const key = `${initialOpenEntry.type}:${initialOpenEntry.id}`;
         if (openedInitialEntryRef.current === key) return;
-        const list = initialOpenEntry.type === "document" ? carData.documentEntries : carData.maintenanceEntries;
-        if (list.length === 0) return;
+        const list = { document: carData.documentEntries, maintenance: carData.maintenanceEntries, fuel: carData.fuelEntries, expense: carData.expenseEntries }[initialOpenEntry.type];
+        if (!list.some((entry) => entry.id === initialOpenEntry.id)) return;
         openedInitialEntryRef.current = key;
+        setActiveTab(initialOpenEntry.type);
         if (initialOpenEntry.type === "document" && initialOpenEntry.renew) {
             handleNextItemPress({ sourceType: "document", sourceId: initialOpenEntry.id } as CarNextItem);
-        } else if (initialOpenEntry.type === "maintenance") {
+        } else if (initialOpenEntry.type === "maintenance" && initialOpenEntry.renew) {
             // A service flagged in "De făcut" (due by km or date) opens the
             // same "log the next one" form its NEXT alert here opens.
             handleNextItemPress({ sourceType: "maintenance", sourceId: initialOpenEntry.id } as CarNextItem);
@@ -586,7 +587,7 @@ export default function CarDashboard({
             openEntryForEdit(initialOpenEntry.type, initialOpenEntry.id);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [initialOpenEntry, carData.documentEntries, carData.maintenanceEntries]);
+    }, [initialOpenEntry, carData]);
 
     /*
      * =========================================================
@@ -719,6 +720,7 @@ export default function CarDashboard({
                     onCancel={() => {
                         setFuelFormVisible(false);
                         setEditingFuelEntry(null);
+                        recordAction?.cancel();
                     }}
                     onSave={handleFuelSave}
                     onDelete={editingFuelEntry ? handleFuelDelete : undefined}
@@ -757,6 +759,7 @@ export default function CarDashboard({
                     onCancel={() => {
                         setExpenseFormVisible(false);
                         setEditingExpenseEntry(null);
+                        recordAction?.cancel();
                     }}
                     onSave={handleExpenseSave}
                     onDelete={editingExpenseEntry ? handleExpenseDelete : undefined}

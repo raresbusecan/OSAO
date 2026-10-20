@@ -94,7 +94,7 @@ import {
 } from "@/lib/spaces/car/calculations/dashboard.calculations";
 
 export default function SpaceDetail() {
-  const { id, itemId, itemType, action } = useLocalSearchParams<{ id: string; itemId?: string; itemType?: string; action?: string }>();
+  const { id, itemId, itemType, action, section } = useLocalSearchParams<{ id: string; itemId?: string; itemType?: string; action?: string; section?: string }>();
 
   const { colors } = useTheme();
   const router = useRouter();
@@ -187,6 +187,7 @@ export default function SpaceDetail() {
           e.id === entry.id ? savedEntry : e,
         ),
       }));
+      recordAction?.complete();
     } catch (error: any) {
       setCarData((current) => ({
         ...current,
@@ -195,6 +196,7 @@ export default function SpaceDetail() {
           : current.fuelEntries.filter((e) => e.id !== entry.id),
       }));
       notifyAction("Nu am putut salva alimentarea", error?.message || "A apărut o eroare.");
+      if (recordAction) throw error;
     }
   };
 
@@ -360,6 +362,7 @@ export default function SpaceDetail() {
           e.id === entry.id ? savedEntry : e,
         ),
       }));
+      recordAction?.complete();
     } catch (error: any) {
       setCarData((current) => ({
         ...current,
@@ -368,6 +371,7 @@ export default function SpaceDetail() {
           : current.expenseEntries.filter((e) => e.id !== entry.id),
       }));
       notifyAction("Nu am putut salva cheltuiala", error?.message || "A apărut o eroare.");
+      if (recordAction) throw error;
     }
   };
 
@@ -392,6 +396,7 @@ export default function SpaceDetail() {
 
     try {
       await api.deleteItem(id);
+      recordAction?.complete();
     } catch (error: any) {
       if (removed) {
         setCarData((current) => ({
@@ -400,6 +405,7 @@ export default function SpaceDetail() {
         }));
       }
       notifyAction("Nu am putut șterge alimentarea", error?.message || "A apărut o eroare.");
+      if (recordAction) throw error;
     }
   };
 
@@ -462,6 +468,7 @@ export default function SpaceDetail() {
 
     try {
       await api.deleteItem(id);
+      recordAction?.complete();
     } catch (error: any) {
       if (removed) {
         setCarData((current) => ({
@@ -470,6 +477,7 @@ export default function SpaceDetail() {
         }));
       }
       notifyAction("Nu am putut șterge cheltuiala", error?.message || "A apărut o eroare.");
+      if (recordAction) throw error;
     }
   };
 
@@ -552,6 +560,7 @@ export default function SpaceDetail() {
         ...current,
         expenseEntries: current.expenseEntries.map((e) => (e.id === entry.id ? savedEntry : e)),
       }));
+      recordAction?.complete();
     } catch (error: any) {
       setHomeData((current) => ({
         ...current,
@@ -560,6 +569,7 @@ export default function SpaceDetail() {
           : current.expenseEntries.filter((e) => e.id !== entry.id),
       }));
       notifyAction("Nu am putut salva cheltuiala", error?.message || "A apărut o eroare.");
+      if (recordAction) throw error;
     }
   };
 
@@ -572,11 +582,13 @@ export default function SpaceDetail() {
     if (!isSavedItemId(id)) return;
     try {
       await api.deleteItem(id);
+      recordAction?.complete();
     } catch (error: any) {
       if (removed) {
         setHomeData((current) => ({ ...current, expenseEntries: [removed, ...current.expenseEntries] }));
       }
       notifyAction("Nu am putut șterge cheltuiala", error?.message || "A apărut o eroare.");
+      if (recordAction) throw error;
     }
   };
 
@@ -601,6 +613,7 @@ export default function SpaceDetail() {
       setExpensesData((current) => ({
         entries: current.entries.map((e) => (e.id === entry.id ? savedEntry : e)),
       }));
+      recordAction?.complete();
     } catch (error: any) {
       setExpensesData((current) => ({
         entries: isExisting
@@ -608,6 +621,7 @@ export default function SpaceDetail() {
           : current.entries.filter((e) => e.id !== entry.id),
       }));
       notifyAction("Nu am putut salva cheltuiala", error?.message || "A apărut o eroare.");
+      if (recordAction) throw error;
     }
   };
 
@@ -618,11 +632,13 @@ export default function SpaceDetail() {
     if (!isSavedItemId(id)) return;
     try {
       await api.deleteItem(id);
+      recordAction?.complete();
     } catch (error: any) {
       if (removed) {
         setExpensesData((current) => ({ entries: [removed, ...current.entries] }));
       }
       notifyAction("Nu am putut șterge cheltuiala", error?.message || "A apărut o eroare.");
+      if (recordAction) throw error;
     }
   };
 
@@ -750,6 +766,7 @@ export default function SpaceDetail() {
         ...current,
         supplyEntries: current.supplyEntries.map((e) => (e.id === entry.id ? savedEntry : e)),
       }));
+      recordAction?.complete();
     } catch (error: any) {
       setHomeData((current) => ({
         ...current,
@@ -758,6 +775,7 @@ export default function SpaceDetail() {
           : current.supplyEntries.filter((e) => e.id !== entry.id),
       }));
       notifyAction("Nu am putut salva proviziile", error?.message || "A apărut o eroare.");
+      if (recordAction) throw error;
     }
   };
 
@@ -770,11 +788,13 @@ export default function SpaceDetail() {
     if (!isSavedItemId(id)) return;
     try {
       await api.deleteItem(id);
+      recordAction?.complete();
     } catch (error: any) {
       if (removed) {
         setHomeData((current) => ({ ...current, supplyEntries: [removed, ...current.supplyEntries] }));
       }
       notifyAction("Nu am putut șterge proviziile", error?.message || "A apărut o eroare.");
+      if (recordAction) throw error;
     }
   };
 
@@ -1253,7 +1273,7 @@ export default function SpaceDetail() {
    * resolve dialog) still opens the full dashboard below, because that
    * record's own resolve/renew step lives there.
    */
-  if (isSimple && !itemId) {
+  if (isSimple && !itemId && !section) {
     return (
       <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="space-detail-screen">
         <SpaceThemeProvider color={space.color}>
@@ -1325,7 +1345,11 @@ export default function SpaceDetail() {
             itemId && itemType === "car_document"
               ? { type: "document", id: itemId, renew: action === "renew" }
               : itemId && itemType === "car_maintenance"
-                ? { type: "maintenance", id: itemId }
+                ? { type: "maintenance", id: itemId, renew: action === "renew" }
+                : itemId && itemType === "car_fuel"
+                  ? { type: "fuel", id: itemId }
+                  : itemId && itemType === "car_expense"
+                    ? { type: "expense", id: itemId }
                 : null
           }
         />
@@ -1367,6 +1391,7 @@ export default function SpaceDetail() {
           key={`${space.id}-${visitId}`}
           space={space}
           homeData={homeData}
+          initialSection={section}
           profile={profile as HomeProfile | null}
           onEdit={handleEdit}
           onDocumentSave={handleHomeDocumentSave}
@@ -1383,7 +1408,7 @@ export default function SpaceDetail() {
           onTaskDelete={handleHomeTaskDelete}
           onTaskReorder={handleHomeTaskReorder}
           initialOpenItem={
-            (itemType === "home_task" || itemType === "home_recurring" || itemType === "home_maintenance" || itemType === "home_document") && itemId
+            (itemType === "home_task" || itemType === "home_recurring" || itemType === "home_maintenance" || itemType === "home_document" || itemType === "home_expense" || itemType === "home_supply") && itemId
               ? { type: itemType, id: itemId, resolve: action === "resolve" }
               : null
           }
@@ -1433,6 +1458,7 @@ export default function SpaceDetail() {
           key={`${space.id}-${visitId}`}
           space={space}
           onEdit={handleEdit}
+          initialOpenItem={itemId && itemType ? { id: itemId, type: itemType } : null}
         />
 
         <EditSpaceModal
@@ -1471,6 +1497,7 @@ export default function SpaceDetail() {
           onEdit={handleEdit}
           onEntrySave={handleExpenseEntrySave}
           onEntryDelete={handleExpenseEntryDelete}
+          initialOpenItem={itemId && itemType ? { id: itemId, type: itemType } : null}
         />
 
         <EditSpaceModal

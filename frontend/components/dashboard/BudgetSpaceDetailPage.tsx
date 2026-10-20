@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, ScrollView, Pressable, ActivityIndicator } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import { View, Text, ScrollView, Pressable, ActivityIndicator, DeviceEventEmitter } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
@@ -8,7 +8,9 @@ import { SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, SPACE_BUTTON_FILL, spaceTextCo
 import { TopBar, Identity, SectionHeader, Group, Row, IconWell, Button, Field, EmptyState, hexToRgba } from "@/components/ui/primitives";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { capitalize, lei, roCount, roDate } from "@/lib/format";
-import { todoTitle } from "@/lib/dashboard/spaceDue";
+import { todoHref, todoTitle } from "@/lib/dashboard/spaceDue";
+import { useFocusEffect, useRouter } from "expo-router";
+import { REFRESH_EVENT } from "@/lib/refresh";
 import { GuiltFreeChip } from "@/components/dashboard/GuiltFree";
 import { jarAmounts, parseAmount, ENVELOPE_TOLERANCE, type BudgetPlan } from "@/lib/budget/plan";
 
@@ -33,7 +35,7 @@ export type BudgetSpaceDetailPageProps = {
 type MonthTotal = { year: number; month: number; label: string; total: number };
 /** `planned`: a Calendar purchase whose day hasn't come (EventSpend) --
  * listed, but not spent yet. */
-type SpaceItem = { id: number | string; type: string; title: string; amount: number | null; currency: string | null; due_at: string | null; planned?: boolean; guilt_free?: boolean };
+type SpaceItem = { id: number | string; item_id?: number | string; space_id?: number | null; type: string; title: string; amount: number | null; currency: string | null; due_at: string | null; planned?: boolean; guilt_free?: boolean };
 
 /** "Partea {X} din necesități" -- the space name in the genitive. */
 const NAME_GENITIVE: Record<string, string> = { car: "Mașinii", home: "Casei", grocery: "Cumpărăturilor", expenses: "Cheltuielilor" };
@@ -54,6 +56,7 @@ function monthLong(m: MonthTotal): string {
  * tab is built from.
  */
 export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, onLimitSaved, plan = null, suggested = null, otherLimitsTotal = 0 }: BudgetSpaceDetailPageProps) {
+  const router = useRouter();
   const { colors, spacing, radius, typography, isDark } = useTheme();
   const kind = category.toLowerCase() as SpaceKind;
   const name = SPACE_KIND_LABEL[kind] ?? category;
@@ -74,25 +77,30 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
   // total, shown apart as "planificat".
   const [planned, setPlanned] = useState(0);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     let mounted = true;
-    (async () => {
+    let request = 0;
+    const load = async () => {
+      const current = ++request;
       try {
         const r = await api.getBudgetSpaceDetail(category);
-        if (!mounted) return;
+        if (!mounted || current !== request) return;
         setMonths(r.months || []);
         setItems(r.items || []);
         setRecurringMonthly(r.recurring_monthly || 0);
         setPlanned(r.planned || 0);
       } catch {
       } finally {
-        if (mounted) setLoading(false);
+        if (mounted && current === request) setLoading(false);
       }
-    })();
+    };
+    void load();
+    const subscription = DeviceEventEmitter.addListener(REFRESH_EVENT, load);
     return () => {
       mounted = false;
+      subscription.remove();
     };
-  }, [category]);
+  }, [category]));
 
   const thisMonth = months[months.length - 1];
   const lastMonth = months[months.length - 2];
@@ -339,6 +347,8 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
                 {selectedItems.slice(0, 30).map((it) => (
                   <Row
                     key={it.id}
+                    testID={`budget-space-item-${it.id}`}
+                    onPress={() => router.navigate(todoHref(it) as any)}
                     leading={<IconWell icon={it.type === "custom_event" ? "calendar-outline" : icon} color={color} tint={tint} />}
                     title={todoTitle(it).replace(/^Cumpărături -- /, "")}
                     subtitle={

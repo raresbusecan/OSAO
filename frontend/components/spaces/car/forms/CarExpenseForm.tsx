@@ -1,3 +1,4 @@
+import { useRecordMutation } from "@/lib/navigation/useRecordMutation";
 import React, { useState } from "react";
 import { DateField } from "@/components/ui/DateField";
 import { View, Text } from "react-native";
@@ -31,6 +32,7 @@ export default function CarExpenseForm({
   entry,
   onDelete,
 }: CarExpenseFormProps) {
+  const mutation = useRecordMutation();
   const isEditing = entry !== undefined;
 
   const { colors, spacing, radius } = useTheme();
@@ -61,7 +63,7 @@ export default function CarExpenseForm({
     setCategory(item);
   };
 
-  const handleSave = () => {
+  const handleSave = () => mutation.run(async () => {
     setError("");
 
     const amountValue = Number(
@@ -108,18 +110,18 @@ export default function CarExpenseForm({
       guiltFree,
     };
 
-    onSave(entryToSave);
-  };
+    await onSave(entryToSave);
+  });
 
-  const handleDelete = async () => {
+  const handleDelete = () => mutation.run(async () => {
     const confirmed = await confirmAction("Ștergi cheltuiala?", "Se șterge definitiv.", { confirmLabel: "Șterge", destructive: true });
-    if (confirmed) onDelete?.();
-  };
+    if (confirmed) await onDelete?.();
+  });
 
   return (
     <Sheet
       visible
-      onClose={onCancel}
+      onClose={() => { if (mutation.canClose()) onCancel(); }}
       info="car.expenseForm"
       title={isEditing ? "Editează cheltuiala" : "Cheltuială nouă"}
       subtitle="Doar suma e obligatorie"
@@ -127,8 +129,8 @@ export default function CarExpenseForm({
       tone={CAR}
       footer={
         <>
-          <Button testID="car-expense-save" label={isEditing ? "Salvează" : "Salvează cheltuiala"} tone={carColors.fill} onPress={handleSave} />
-          {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge cheltuiala" onPress={handleDelete} /> : null}
+          <Button testID="car-expense-save" label={isEditing ? "Salvează" : "Salvează cheltuiala"} tone={carColors.fill} disabled={mutation.busy} onPress={handleSave} />
+          {isEditing && onDelete ? <Button variant="ghost" icon="trash-outline" label="Șterge cheltuiala" disabled={mutation.busy} onPress={handleDelete} /> : null}
         </>
       }
     >

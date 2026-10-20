@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
@@ -24,6 +24,7 @@ export type ExpensesCreditsSectionProps = {
   credits: CreditEntry[];
   /** Reload `credits` after a create/update/delete. */
   onChanged: () => void;
+  initialEditId?: string;
 };
 
 /** "până în martie 2029" */
@@ -38,7 +39,7 @@ function untilLabel(endDate: string): string {
  * from the expenses and never summed with them: their monthly rates go
  * against Buget's 10% "Credit" jar, not any space's spend.
  */
-export function ExpensesCreditsSection({ spaceId, credits, onChanged }: ExpensesCreditsSectionProps) {
+export function ExpensesCreditsSection({ spaceId, credits, onChanged, initialEditId }: ExpensesCreditsSectionProps) {
   const { colors, spacing, isDark } = useTheme();
   const summary = useBudgetPlan();
   const exp = useSpaceColors("expenses");
@@ -46,6 +47,16 @@ export function ExpensesCreditsSection({ spaceId, credits, onChanged }: Expenses
   const [editing, setEditing] = useState<CreditEntry | "new" | null>(null);
   const [endedOpen, setEndedOpen] = useState(false);
   const [linkable, setLinkable] = useState<LinkableSpace[]>([]);
+  const openedInitialCreditRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialEditId || openedInitialCreditRef.current === initialEditId) return;
+    const credit = credits.find((c) => c.id === initialEditId);
+    if (!credit) return;
+    openedInitialCreditRef.current = initialEditId;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Open the externally requested credit once its async list has loaded.
+    setEndedOpen(!isCreditActive(credit));
+    setEditing(credit);
+  }, [initialEditId, credits]);
 
   // The car/home spaces a credit can be shown in (and labelled with).
   useEffect(() => {

@@ -58,11 +58,16 @@ export function overdueKmLabel(item: { overdue_km?: number | null }): string | n
   return item.overdue_km ? `Depășit cu ${roNumber(item.overdue_km)} km` : null;
 }
 
-/** Actionable Space records open a temporary root Stack flow using their
- * existing forms; completion returns to the unchanged origin. Personal
- * events open Calendar, and ordinary Space browsing keeps its route. */
-export function todoHref(item: { id: number | string; type: string; due_at: string; space?: { id: number | string } | null }): string {
-  if (item.space) return recordActionHref({ ...item, space: item.space });
+/** Space records open their owning section in a temporary root Stack flow;
+ * completion returns to the unchanged origin. Payment rows retain item_id
+ * separately from their synthetic occurrence id. Personal events use Calendar. */
+export function todoHref(item: { id: number | string; item_id?: number | string; type: string; due_at?: string | null; space?: { id: number | string } | null; space_id?: number | string | null }): string {
+  const spaceId = item.space_id ?? item.space?.id;
+  if (spaceId != null) return recordActionHref({ ...item, id: item.item_id ?? item.id, space: { id: spaceId } });
+  // Missing an eager-loaded relation must never turn a Space record into
+  // a Calendar event. Only personal events belong to Calendar.
+  if (item.type !== "custom_event") return "/spaces";
+  if (!item.due_at) return "/calendar";
   const due = new Date(item.due_at);
   if (Number.isNaN(due.getTime())) return "/calendar";
   return `/calendar?date=${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, "0")}-${String(due.getDate()).padStart(2, "0")}`;

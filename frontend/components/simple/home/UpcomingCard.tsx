@@ -126,6 +126,10 @@ export function UpcomingCard({ dashboard, spaces, onChanged }: { dashboard: any;
         const well = wellFor(it.space);
         const checkable = canSwipeResolve(it);
         const open = () => {
+          if (it.space_id != null || it.space?.id != null) {
+            router.navigate(todoHref(it) as any);
+            return;
+          }
           // The row opens the record's editor (the circle resolves it).
           if (canEditRecord(it.type)) openEditRecord(it.id);
           else if (!checkable || !it.space) router.push(todoHref(it) as any);
@@ -176,7 +180,7 @@ export function UpcomingCard({ dashboard, spaces, onChanged }: { dashboard: any;
           <PressableScale
             key={`list-${l.list_id}`}
             testID={`simple-home-upcoming-list-${l.list_id}`}
-            onPress={() => router.push(`/${String(l.space_id)}` as any)}
+            onPress={() => router.navigate(todoHref({ id: l.list_id, type: "grocery_list", space_id: l.space_id }) as any)}
             scaleTo={1}
             pressedStyle={{ backgroundColor: colors.surfaceTertiary }}
             accessibilityRole="button"

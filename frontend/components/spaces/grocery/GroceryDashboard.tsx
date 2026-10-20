@@ -32,6 +32,8 @@ import { PressableScale } from "@/components/ui/PressableScale";
 import { motion, useReducedMotion } from "@/lib/motion";
 import { GrocerySuggestionModal, type SupplySuggestion } from "./GrocerySuggestionModal";
 import { GroceryFinishShoppingSheet } from "./GroceryFinishShoppingSheet";
+import { Sheet } from "@/components/ui/Sheet";
+import { useRecordAction } from "@/lib/navigation/recordAction";
 import { itemToSupplyEntry, supplyEntryToItemBody } from "@/lib/spaces/home/homeItems";
 import { getSupplyRestockEstimate } from "@/lib/spaces/home/calculations/dashboard.calculations";
 import type { HomeSupplyEntry } from "@/lib/spaces/home/home.types";
@@ -40,6 +42,7 @@ export type GroceryDashboardProps = {
   space: any;
   onEdit?: () => void;
   onItemsChange?: (items: GroceryItem[]) => void;
+  initialOpenItem?: { id: string; type: string } | null;
 };
 
 /**
@@ -94,11 +97,13 @@ export default function GroceryDashboard({
   space,
   onEdit,
   onItemsChange,
+  initialOpenItem,
 }: GroceryDashboardProps) {
   const { colors, spacing, radius } = useTheme();
   const groceryFill = useSpaceColors("grocery").color;
   const { user } = useAuth();
   const router = useRouter();
+  const recordAction = useRecordAction();
   // Wider than the old 2-column wrap's 48% (~half the screen) -- a
   // longer list name like "Party shopping" was clipping down to its
   // first word at that width. ~1.7 cards fit in view instead of 2, so
@@ -144,6 +149,31 @@ export default function GroceryDashboard({
   // no longer this sheet at all (see GroceryQuickAddBar below); this is
   // edit-only now.
   const [homeEditingItem, setHomeEditingItem] = useState<GroceryItem | null>(null);
+  const [tripDetail, setTripDetail] = useState<any | null>(null);
+  const openedInitialItemRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialOpenItem || initialOpenItem.type === "grocery_trip") return;
+    const key = `${initialOpenItem.type}:${initialOpenItem.id}`;
+    if (openedInitialItemRef.current === key) return;
+    const product = initialOpenItem.type === "grocery_item" ? items.find((item) => item.id === initialOpenItem.id) : null;
+    const listId = product?.listId ?? (initialOpenItem.type === "grocery_list" ? initialOpenItem.id : null);
+    if (!listId || !lists.some((list) => list.id === listId)) return;
+    openedInitialItemRef.current = key;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Consume an external deep-link once its target list has loaded.
+    setActiveListId(listId);
+    setView("home");
+    if (product) setHomeEditingItem(product);
+  }, [initialOpenItem, items, lists]);
+  useEffect(() => {
+    if (initialOpenItem?.type !== "grocery_trip") return;
+    let alive = true;
+    api.getItem(initialOpenItem.id).then((item: any) => {
+      if (!alive || item.type !== "grocery_trip" || String(item.space_id) !== String(space.id)) return;
+      setTripDetail(item);
+      if (item.metadata?.listId) setActiveListId(String(item.metadata.listId));
+    }).catch(() => { if (alive) notifyAction("Nu am putut deschide cumpărăturile", "Înregistrarea nu este disponibilă. Încearcă din nou."); });
+    return () => { alive = false; };
+  }, [initialOpenItem?.id, initialOpenItem?.type, space.id]);
 
   // Cross-space: every Home supply the user tracks, regardless of which
   // Home space it lives in (see ItemController::index -- filtering by
@@ -326,8 +356,10 @@ export default function GroceryDashboard({
 
     try {
       await api.updateItem(id, groceryItemToItemBody(space.id, updated));
+      if (initialOpenItem?.type === "grocery_item") recordAction?.complete();
     } catch (error: any) {
       setItems((current) => current.map((item) => (item.id === id ? previous : item)));
+      if (recordAction && initialOpenItem?.type === "grocery_item") throw error;
       notifyAction("Nu am putut salva produsul", error?.message || "A apărut o eroare.");
     }
   };
@@ -351,8 +383,10 @@ export default function GroceryDashboard({
 
     try {
       await api.deleteItem(id);
+      if (initialOpenItem?.type === "grocery_item") recordAction?.complete();
     } catch (error: any) {
       setItems((current) => [removed, ...current]);
+      if (recordAction && initialOpenItem?.type === "grocery_item") throw error;
       notifyAction("Nu am putut șterge produsul", error?.message || "A apărut o eroare.");
     }
   };
@@ -777,10 +811,14 @@ export default function GroceryDashboard({
   const otherPeople = allPeople.filter((person) => person.id !== String(user?.id));
   const otherPeopleCount = otherPeople.length;
 
-  const handleHomeEditSave = (draft: { name: string; quantity?: string; category: GroceryCategory; price?: number }) => {
+  const handleHomeEditSave = async (draft: { name: string; quantity?: string; category: GroceryCategory; price?: number }) => {
     if (!homeEditingItem) return;
-    handleEdit(homeEditingItem.id, draft);
+    await handleEdit(homeEditingItem.id, draft);
     setHomeEditingItem(null);
+  };
+  const closeHomeEditor = () => {
+    setHomeEditingItem(null);
+    if (initialOpenItem?.type === "grocery_item") recordAction?.cancel();
   };
 
   const muted = colors.onSurfaceTertiary;
@@ -969,10 +1007,10 @@ export default function GroceryDashboard({
       <GroceryProductModal
         visible={!!homeEditingItem}
         item={homeEditingItem}
-        onClose={() => setHomeEditingItem(null)}
+        onClose={closeHomeEditor}
         onSave={handleHomeEditSave}
-        onDelete={() => {
-          if (homeEditingItem) handleDelete(homeEditingItem.id);
+        onDelete={async () => {
+          if (homeEditingItem) await handleDelete(homeEditingItem.id);
           setHomeEditingItem(null);
         }}
       />
@@ -1015,6 +1053,11 @@ export default function GroceryDashboard({
           onConfirm={(price, guiltFree) => handleFinishShopping(finishShoppingListId, price, guiltFree)}
         />
       ) : null}
+      <Sheet visible={!!tripDetail} onClose={() => { setTripDetail(null); recordAction?.cancel(); }} title={tripDetail?.title ?? "Cumpărături"} subtitle="Cumpărături finalizate">
+        <Text style={{ color: colors.onSurface }}>{lei(Number(tripDetail?.amount) || 0)}</Text>
+        {tripDetail?.due_at ? <Text style={{ color: colors.onSurfaceSecondary }}>{new Date(tripDetail.due_at).toLocaleDateString("ro-RO")}</Text> : null}
+        {tripDetail?.notes ? <Text style={{ color: colors.onSurfaceSecondary }}>{tripDetail.notes}</Text> : null}
+      </Sheet>
     </SwipeBackView>
   );
 }

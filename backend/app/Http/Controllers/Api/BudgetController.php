@@ -649,6 +649,7 @@ class BudgetController extends Controller
             ->get()
             ->map(fn (Item $c) => [
                 'id' => $c->id,
+                'space_id' => $c->space_id,
                 'title' => $c->title,
                 'amount' => (float) $c->amount,
                 'day_of_month' => (int) ($c->metadata['day_of_month'] ?? 0),
@@ -865,7 +866,7 @@ class BudgetController extends Controller
             ]);
 
         $home = HomeSpend::payments($user->id, $now->copy()->startOfMonth(), $now->copy()->endOfMonth(), true)
-            ->map(fn (array $p) => [...$p, 'space_id' => null, 'label' => $labelOf($p['type'])]);
+            ->map(fn (array $p) => [...$p, 'label' => $labelOf($p['type'])]);
 
         $items = collect($dated)->concat($home)->concat($recurring)->concat($events)
             ->sortByDesc(fn ($i) => $i['due_at'])
@@ -909,7 +910,7 @@ class BudgetController extends Controller
             ->whereNotNull('amount')
             ->orderByDesc('due_at')
             ->limit(100)
-            ->get(['id', 'type', 'title', 'amount', 'currency', 'due_at', 'guilt_free'])
+            ->get(['id', 'type', 'title', 'amount', 'currency', 'due_at', 'guilt_free', 'space_id'])
             ->toBase();
 
         // Casă purchases / maintenance: one row per payment, on its day,

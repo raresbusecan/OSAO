@@ -79,7 +79,7 @@ class HomeSpend
         $items = Item::where('user_id', $userId)
             ->whereIn('type', $types)
             ->when($guiltFree !== null, fn ($q) => $q->where('guilt_free', $guiltFree))
-            ->get(['id', 'type', 'title', 'amount', 'due_at', 'completed_at', 'metadata', 'guilt_free']);
+            ->get(['id', 'space_id', 'type', 'title', 'amount', 'due_at', 'completed_at', 'metadata', 'guilt_free']);
 
         foreach ($items as $item) {
             $meta = is_array($item->metadata) ? $item->metadata : [];
@@ -130,6 +130,7 @@ class HomeSpend
         return [
             'id' => $id,
             'item_id' => $item->id,
+            'space_id' => $item->space_id,
             'type' => $item->type,
             'title' => $item->title,
             'amount' => $amount,

@@ -23,6 +23,7 @@ import { GuiltFreePage } from "@/components/dashboard/GuiltFreePage";
 import { BudgetCreditPage } from "@/components/dashboard/BudgetCreditPage";
 import { DEFAULT_SPLIT, JAR_ORDER, jarFill, jarAmounts, primeBudgetPlan, unallocated, needsSpend, envelopeStatus, roundSuggested, type BudgetPlan, type BudgetPlanSummary, type BudgetSplit } from "@/lib/budget/plan";
 import { useRouter } from "expo-router";
+import { todoHref } from "@/lib/dashboard/spaceDue";
 import { severityColor, budgetSeverity } from "@/lib/statusColors";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { Sheet } from "@/components/ui/Sheet";
@@ -701,7 +702,7 @@ export default function BudgetScreen() {
                       items={recurringBills}
                       renderRow={(bill) => (
                         <SwipeItemRow key={bill.id} item={bill} onChanged={load}>
-                          <RecurringBillRow testID={`recurring-bill-${bill.id}`} item={bill} />
+                          <RecurringBillRow testID={`recurring-bill-${bill.id}`} item={bill} onPress={() => router.navigate(todoHref(bill) as any)} />
                         </SwipeItemRow>
                       )}
                     />
@@ -725,7 +726,7 @@ export default function BudgetScreen() {
                             <Row
                               key={String(c.id)}
                               testID={`recurring-credit-${c.id}`}
-                              onPress={plan && hasCredit ? () => setShowCredit(true) : undefined}
+                              onPress={c.space_id != null ? () => router.navigate(todoHref({ ...c, type: "expense_credit" }) as any) : undefined}
                               leading={<IconWell icon="card-outline" color={SPACE_IDENTITY_COLORS.expenses!} tint={spaceTextColor("expenses", isDark) ?? undefined} />}
                               title={c.title}
                               subtitle={`${spaceName ? `${spaceName} · ` : ""}socotită la Credit`}

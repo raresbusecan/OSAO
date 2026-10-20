@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { confirmAction } from "@/lib/confirm";
+import { useRecordAction } from "@/lib/navigation/recordAction";
 import { DeviceEventEmitter, ScrollView, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useTheme } from "@/lib/theme";
@@ -32,6 +33,7 @@ export type ExpensesDashboardProps = {
    * See app/(tabs)/[id].tsx's handleExpenseEntrySave. */
   onEntrySave: (entry: ExpenseEntry) => void;
   onEntryDelete: (id: string) => void;
+  initialOpenItem?: { id: string; type: string } | null;
 };
 
 function makeEntryId(): string {
@@ -45,9 +47,11 @@ export default function ExpensesDashboard({
   onEdit,
   onEntrySave,
   onEntryDelete,
+  initialOpenItem,
 }: ExpensesDashboardProps) {
   const { spacing, colors } = useTheme();
   const router = useRouter();
+  const recordAction = useRecordAction();
 
   // Credits ("Credite") live in this space but are NOT expenses: loaded
   // on their own and never mixed into `entries` or any total below.
@@ -81,6 +85,16 @@ export default function ExpensesDashboard({
   // the same bar again -- or the filter pill -- comes back to this month.
   const currentMonth = monthKey(new Date());
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const openedInitialItemRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!initialOpenItem || initialOpenItem.type !== "expense_item" || openedInitialItemRef.current === initialOpenItem.id) return;
+    const entry = expensesData.entries.find((e) => e.id === initialOpenItem.id);
+    if (!entry) return;
+    openedInitialItemRef.current = initialOpenItem.id;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- Consume a navigation request after the saved expense becomes available.
+    setSelectedMonth(monthKey(new Date(entry.date)));
+    setEditingEntry(entry);
+  }, [initialOpenItem, expensesData.entries]);
   const toggleMonth = (key: string) => setSelectedMonth((cur) => (cur === key || key === currentMonth ? null : key));
   const selectedLabel = useMemo(
     () => (selectedMonth ? lastSixMonths(entries).find((m) => m.key === selectedMonth)?.longLabel ?? null : null),
@@ -111,13 +125,13 @@ export default function ExpensesDashboard({
     });
   };
 
-  const handleEditSave = (entry: ExpenseEntry) => {
-    onEntrySave(entry);
+  const handleEditSave = async (entry: ExpenseEntry) => {
+    await onEntrySave(entry);
     setEditingEntry(null);
   };
 
-  const handleEditDelete = (id: string) => {
-    onEntryDelete(id);
+  const handleEditDelete = async (id: string) => {
+    await onEntryDelete(id);
     setEditingEntry(null);
   };
 
@@ -149,7 +163,7 @@ export default function ExpensesDashboard({
 
         <ExpenseEditModal
           entry={editingEntry}
-          onClose={() => setEditingEntry(null)}
+          onClose={() => { setEditingEntry(null); recordAction?.cancel(); }}
           onSave={handleEditSave}
           onDelete={handleEditDelete}
         />
@@ -183,7 +197,7 @@ export default function ExpensesDashboard({
 
       <ExpensesAddBar onAdd={handleAdd} />
 
-      {space?.id != null ? <ExpensesCreditsSection spaceId={space.id} credits={credits} onChanged={reloadCredits} /> : null}
+      {space?.id != null ? <ExpensesCreditsSection spaceId={space.id} credits={credits} onChanged={reloadCredits} initialEditId={initialOpenItem?.type === "expense_credit" ? initialOpenItem.id : undefined} /> : null}
 
       {selectedLabel ? (
         <View style={{ flexDirection: "row" }}>
@@ -207,7 +221,7 @@ export default function ExpensesDashboard({
 
       <ExpenseEditModal
         entry={editingEntry}
-        onClose={() => setEditingEntry(null)}
+        onClose={() => { setEditingEntry(null); recordAction?.cancel(); }}
         onSave={handleEditSave}
         onDelete={handleEditDelete}
       />
