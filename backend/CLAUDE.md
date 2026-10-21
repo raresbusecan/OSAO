@@ -325,6 +325,16 @@ routes `GET /open/{screen}`, `GET /auth/{google|facebook}/redirect|callback`. Ev
 
 ## Demo seed (`database/seeders/DemoSeeder.php`)
 
+**Create-only realistic preview:** `RealisticDemoSeeder` reuses these fixtures
+with NEW accounts `realist@orgos.test` and `realist.ana@orgos.test`. Supply a
+unique password (minimum 12 chars) in the process environment variable
+`ORGOS_DEMO_PASSWORD`, then run `php artisan db:seed --class=RealisticDemoSeeder`.
+It refuses if either account already exists; it never calls the legacy reset
+path. Creation and the 12-month budget archive share one transaction.
+Do not put the generated password in source control. Tests:
+`tests/Feature/RealisticDemoSeederTest.php` (preservation, API views, collision,
+repeat run and password handling). It is not part of the default seed.
+
 `php artisan db:seed --class=DemoSeeder` (NOT in DatabaseSeeder's default run). It logs in as
 `demo@orgos.test` / `demo1234` ("Demo"), and creates `demo2@orgos.test` / `demo1234` ("Ana") for the sharing features.
 

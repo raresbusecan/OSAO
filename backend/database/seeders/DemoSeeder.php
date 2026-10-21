@@ -43,9 +43,15 @@ class DemoSeeder extends Seeder
 
     private string $tz = 'Europe/Bucharest';
     private Carbon $now;
+    private string $primaryEmail = self::DEMO_EMAIL;
+    private string $secondaryEmail = self::DEMO2_EMAIL;
+    private string $accountPassword = self::PASSWORD;
 
     public function run(): void
     {
+        $this->primaryEmail = self::DEMO_EMAIL;
+        $this->secondaryEmail = self::DEMO2_EMAIL;
+        $this->accountPassword = self::PASSWORD;
         mt_srand(20261010); // same amounts on every run; dates follow "now"
         $this->now = Carbon::now($this->tz);
 
@@ -59,6 +65,36 @@ class DemoSeeder extends Seeder
         $this->backfillArchive(User::where('email', self::DEMO_EMAIL)->firstOrFail());
 
         $this->command?->info('Demo: ' . self::DEMO_EMAIL . ' / ' . self::PASSWORD . '  (+ ' . self::DEMO2_EMAIL . ' / ' . self::PASSWORD . ')');
+    }
+
+    /** Reuse the realistic fixtures without resetting any existing account.
+     * Failure (including an email collision) rolls back the entire new dataset. */
+    public function createFreshAccounts(string $primaryEmail, string $secondaryEmail, string $password): array
+    {
+        if ($primaryEmail === $secondaryEmail
+            || !str_ends_with($primaryEmail, '@orgos.test')
+            || !str_ends_with($secondaryEmail, '@orgos.test')
+            || strlen($password) < 12) {
+            throw new \InvalidArgumentException('Folosește două adrese demonstrative distincte @orgos.test și o parolă de minimum 12 caractere.');
+        }
+        $this->primaryEmail = $primaryEmail;
+        $this->secondaryEmail = $secondaryEmail;
+        $this->accountPassword = $password;
+        $this->now = Carbon::now($this->tz);
+        mt_srand(20261010);
+
+        return DB::transaction(function () use ($primaryEmail, $secondaryEmail) {
+            if (User::whereIn('email', [$primaryEmail, $secondaryEmail])->exists()) {
+                throw new \RuntimeException('Contul demonstrativ există deja. Nu am resetat sau modificat datele existente.');
+            }
+            $this->seed();
+            $primary = User::where('email', $primaryEmail)->firstOrFail();
+            $primary->name = 'Demo realist';
+            $primary->save();
+            $this->backfillArchive($primary);
+
+            return [$primary, User::where('email', $secondaryEmail)->firstOrFail()];
+        });
     }
 
     // ------------------------------------------------------------------
@@ -173,7 +209,7 @@ class DemoSeeder extends Seeder
         $user->forceFill([
             'name' => $name,
             'email' => $email,
-            'password' => self::PASSWORD, // 'hashed' cast
+            'password' => $this->accountPassword, // 'hashed' cast
             'has_password' => true,
             'email_verified_at' => now(),
             'timezone' => $this->tz,
@@ -230,8 +266,8 @@ class DemoSeeder extends Seeder
 
     private function seed(): void
     {
-        $demo = $this->user(self::DEMO_EMAIL, 'Demo', 400);
-        $ana = $this->user(self::DEMO2_EMAIL, 'Ana', 380);
+        $demo = $this->user($this->primaryEmail, 'Demo', 400);
+        $ana = $this->user($this->secondaryEmail, 'Ana', 380);
 
         // ---- Spaces (grid order = sort_order) ----
         $car = $this->space($demo, 'Volkswagen Golf', 'car', 'car-outline', null, 0);

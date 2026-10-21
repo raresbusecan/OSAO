@@ -123,6 +123,8 @@ drifted a day across the 25 Oct DST change; plus the known
 
 ## Found along the way (not yet fixed)
 
+- **Dev launcher can reuse another project's backend (2026-10-21):** `dev.ps1` treats any listener on port 8000 as orgOS and points the API tunnel at `127.0.0.1:8000`; another Laravel project bound to that address can receive orgOS login requests even while orgOS also listens on `0.0.0.0:8000`. Verify process/project ownership before reuse, select an available port on conflict, and restrict cleanup to processes started by this launcher (it currently stops all cloudflared/ngrok processes and the port 443 listener). The realistic demo is currently served separately on ports 8001/8081 through a temporary launcher. `[from: realistic demo seed runtime smoke]`
+
 ### Deduplicate error notices from contextual record mutations
 
 Some `[id].tsx` persistence handlers (fuel/expense/supply) notify and then
