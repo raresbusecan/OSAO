@@ -131,10 +131,18 @@ async function request<T = any>(
   });
 }
 
-  const res = await fetch(`${BASE}/api${path}`, {
-    ...init,
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}/api${path}`, {
+      ...init,
+      headers,
+    });
+  } catch (e: any) {
+    // fetch() itself rejects only when the server can't be reached ("Failed
+    // to fetch" / "Network request failed") -- every form shows e.message.
+    if (e?.name === "AbortError") throw e;
+    throw Object.assign(new Error("Nu am putut ajunge la server. Verifică internetul și încearcă din nou."), { code: "NETWORK", cause: e });
+  }
 
   const text = await res.text();
   requireCurrentSession();

@@ -621,7 +621,8 @@ export default function SpaceDetail() {
           : current.entries.filter((e) => e.id !== entry.id),
       }));
       notifyAction("Nu am putut salva cheltuiala", error?.message || "A apărut o eroare.");
-      if (recordAction) throw error;
+      // A new entry comes from ExpensesAddBar, which keeps the typed fields only if this rejects.
+      if (recordAction || !isExisting) throw error;
     }
   };
 

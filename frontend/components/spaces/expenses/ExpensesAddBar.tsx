@@ -17,7 +17,7 @@ export type ExpensesAddBarDraft = {
 };
 
 export type ExpensesAddBarProps = {
-  onAdd: (draft: ExpensesAddBarDraft) => void;
+  onAdd: (draft: ExpensesAddBarDraft) => void | Promise<unknown>;
 };
 
 function todayIso(): string {
@@ -46,8 +46,10 @@ export function ExpensesAddBar({ onAdd }: ExpensesAddBarProps) {
   const [expanded, setExpanded] = useState(false);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
 
+  const [saving, setSaving] = useState(false);
+
   const parsedPrice = parseLocaleNumber(price);
-  const canSubmit = name.trim().length > 0 && price.trim().length > 0 && !Number.isNaN(parsedPrice) && parsedPrice >= 0;
+  const canSubmit = !saving && name.trim().length > 0 && price.trim().length > 0 && !Number.isNaN(parsedPrice) && parsedPrice >= 0;
 
   const reset = () => {
     setName("");
@@ -57,10 +59,19 @@ export function ExpensesAddBar({ onAdd }: ExpensesAddBarProps) {
     setExpanded(false);
   };
 
-  const submit = () => {
+  // Cleared only once the save succeeded: a failed save (no internet) has
+  // already told the user, and must not throw away what they typed.
+  const submit = async () => {
     if (!canSubmit) return;
-    onAdd({ name: name.trim(), price: parsedPrice, date, notes: notes.trim() || undefined });
-    reset();
+    setSaving(true);
+    try {
+      await onAdd({ name: name.trim(), price: parsedPrice, date, notes: notes.trim() || undefined });
+      reset();
+    } catch {
+      // keep the fields for a retry
+    } finally {
+      setSaving(false);
+    }
   };
 
   const exp = useSpaceColors("expenses");

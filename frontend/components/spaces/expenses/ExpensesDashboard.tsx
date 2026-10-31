@@ -115,7 +115,7 @@ export default function ExpensesDashboard({
     setEditingEntry(entry);
   };
 
-  const handleAdd = (draft: ExpensesAddBarDraft) => {
+  const handleAdd = (draft: ExpensesAddBarDraft) =>
     onEntrySave({
       id: makeEntryId(),
       name: draft.name,
@@ -123,7 +123,6 @@ export default function ExpensesDashboard({
       date: draft.date,
       notes: draft.notes,
     });
-  };
 
   const handleEditSave = async (entry: ExpenseEntry) => {
     await onEntrySave(entry);
