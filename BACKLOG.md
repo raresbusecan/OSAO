@@ -123,6 +123,22 @@ drifted a day across the 25 Oct DST change; plus the known
 
 ## Found along the way (not yet fixed)
 
+### First-user black-box sweep (2026-10-30) [from: persona black-box QA, isolated lifeos_qa]
+
+Ran ~40 of the 50 personas in `.codex/blackbox-2026-10-30/profiles.json` on web (390px, ro-RO, Europe/Bucharest) against a sandbox: `backend/.env.qa` (APP_ENV=qa -> DB `lifeos_qa`, MAIL_MAILER=log) on :8001, Expo web on :8081 with `EXPO_PUBLIC_BACKEND_URL=http://127.0.0.1:8001` (don't start Metro with CI=1 -- it disables file watching). Fixed in the same pass (uncommitted, awaiting qa-lead): Romanian number input everywhere (`parseLocaleNumber`/`normalizeNumberText` in `lib/format.ts`; "124.580" km was saved as 124.58, "1.500" lei rent as 1.5, "1.250,50" rejected), monthly/weekly Casă bills losing a day per payment (`addRecurrenceInterval` used toISOString), "valabil până la Invalid Date" after a car-document renewal (`formatCarDate` + DD.MM.YYYY), event time "25:70"/"14.30" silently saved as 23:59/09:00 (`parseClockTime`), raw "Failed to fetch" errors (now Romanian in `lib/api.ts`), Cheltuieli quick-add erasing the typed expense when the save fails, `findNodeHandle` crash on web in every first-use tour. Still open:
+- **No "Închiriată" in Casă nouă** -- only Cumpărată/Moștenită; young first users mostly rent. Product decision (what a rental tracks: rent as a recurring bill?).
+- **Subscriptions need a Casă space** -- Buget says "Plățile recurente le adaugi din spațiul Casă"; a user with only Cheltuieli can't track Netflix/phone. Consider recurring payments in Cheltuieli.
+- **Settings shows "English", but nothing is translated** -- picking it leaves every screen Romanian. Hide or mark "în curând" until translations exist. Also "Mod Simplu (test) ... Doar pentru comparație" reads as an internal toggle to real users.
+- **Car "Revizie" never reminds by date** -- unlike "Schimb ulei" (auto +1 year), a revizie logged 13 months ago produced no reminder; next date is optional and empty by default.
+- **Casă simple task resolve = 3 taps** -- Rezolvă opens a second sheet that only says "Marchezi ca rezolvat." with another Rezolvă and no visible cancel; a plain task also gets no "Bifat" feedback (recurring ones do).
+- **Grocery "Termină cumpărăturile" unticks everything** -- by design (reusable lists), but after buying 2 of 5 products nothing shows which were bought. Decide: remove bought items, or mark "cumpărat ultima dată".
+- **Money/number display polish** -- amounts show "12,5 lei"/"287,9 lei" (no 2 decimals); edit forms prefill "1299.99"/"245.6" with a dot; a11y label "Luna asta: 600.3499999999999 lei" (float in `CarDashboard` label).
+- **Date pickers differ** -- car pickers have "Azi", Casă task picker only "Fără dată"; car document type has no default and its "Alege tipul documentului." error shows only at the bottom after Save.
+- **Dead `/<id>` route renders a blank page** (only the tab bar) for a missing/deleted space -- show "Spațiul nu mai există".
+- **Grocery new list requests `/items/list-<tempid>/members` -> 404** right after creation (optimistic id used before the server id lands). Silent, but a race.
+- **Car year accepted up to 2031** (no "not in the future" bound client or server).
+- Not covered this pass: P20 (Casă overdue maintenance), P28 (expired product), P39 (Calendar restanță round-trip), P45 (there is no search at all -- `search.tsx` is a dead stub), large-font accessibility on a real phone.
+
 - **Dev launcher can reuse another project's backend (2026-10-21):** `dev.ps1` treats any listener on port 8000 as orgOS and points the API tunnel at `127.0.0.1:8000`; another Laravel project bound to that address can receive orgOS login requests even while orgOS also listens on `0.0.0.0:8000`. Verify process/project ownership before reuse, select an available port on conflict, and restrict cleanup to processes started by this launcher (it currently stops all cloudflared/ngrok processes and the port 443 listener). The realistic demo is currently served separately on ports 8001/8081 through a temporary launcher. `[from: realistic demo seed runtime smoke]`
 
 ### Deduplicate error notices from contextual record mutations
