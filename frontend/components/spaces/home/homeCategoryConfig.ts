@@ -130,7 +130,7 @@ export function addRecurrenceInterval(
   if (frequency === "weekly") {
     const next = new Date(base);
     next.setDate(next.getDate() + step * 7);
-    return next.toISOString().slice(0, 10);
+    return localDay(next);
   }
 
   const day = base.getDate();
@@ -143,7 +143,14 @@ export function addRecurrenceInterval(
   const daysInTargetMonth = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
   next.setDate(Math.min(day, daysInTargetMonth));
 
-  return next.toISOString().slice(0, 10);
+  return localDay(next);
+}
+
+/** "YYYY-MM-DD" of the LOCAL calendar day. toISOString() would shift a
+ * local-midnight due date (stored as e.g. 22:00Z the day before in
+ * Romania) back one day on every resolve. */
+function localDay(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
 export type HomeCategoryKey =
@@ -190,7 +197,7 @@ function formatDate(dateString: string): string {
   return roDate(date);
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => localDay(new Date());
 
 /** A date field's value for buildEntry: the form's value when the field
  * is in `values` (an emptied field = explicitly cleared -> undefined),

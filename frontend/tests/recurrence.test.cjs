@@ -23,3 +23,18 @@ test('daily and weekly recurrence preserve local clock time across DST', () => {
     assert.equal(nextTaskOccurrence('2026-03-28T10:00:00.000Z', 'weekly'), '2026-04-04T09:00:00.000Z');
   } finally { process.env.TZ = before; }
 });
+
+test('home bills advance by the local calendar day in Romania', () => {
+  const before = process.env.TZ;
+  process.env.TZ = 'Europe/Bucharest';
+  try {
+    const { addRecurrenceInterval } = loadModule('components/spaces/home/homeCategoryConfig.ts', {
+      '@/lib/format': {}, '@/lib/spaces/home/calculations/dashboard.calculations': {},
+    });
+    // A bill due 28 Oct is stored as local midnight (27 Oct 22:00Z); paying it must land on 28 Nov.
+    assert.equal(addRecurrenceInterval('2026-10-27T22:00:00.000Z', 'monthly', 1), '2026-11-28');
+    assert.equal(addRecurrenceInterval('2026-11-28', 'monthly', 1), '2026-12-28');
+    assert.equal(addRecurrenceInterval('2026-10-29T22:00:00.000Z', 'weekly', 1), '2026-11-06');
+    assert.equal(addRecurrenceInterval('2026-01-30T22:00:00.000Z', 'monthly', 1), '2026-02-28');
+  } finally { process.env.TZ = before; }
+});
