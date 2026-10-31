@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
@@ -32,42 +32,61 @@ export const PROVIDER_LABEL: Record<SocialProvider, string> = {
 
 export type ProvidersState = { apple: boolean; google: boolean; facebook: boolean };
 
-// One fetch per app session is plenty -- the server's config only changes
-// on a backend restart. A failed fetch isn't cached (retried next mount).
-let providersCache: { apple: boolean; google: boolean; facebook: boolean } | null = null;
-
-/** Which provider buttons to show. Apple = iOS + isAvailableAsync() (and
- * not explicitly disabled by the server); Google/Facebook = only when
- * GET /auth/providers says they're configured. Everything false until known. */
+/** Recheck on mount/resume and retry failed requests while the app is active.
+ * A tunnel or backend can become available after the login screen mounts. */
 export function useSocialProviders(): ProvidersState {
   const [state, setState] = useState<ProvidersState>({ apple: false, google: false, facebook: false });
   useEffect(() => {
     let alive = true;
-    (async () => {
-      let server = providersCache;
-      if (!server) {
-        try {
-          const r = await api.authProviders();
-          server = { apple: r?.apple !== false, google: !!r?.google, facebook: !!r?.facebook };
-          providersCache = server;
-        } catch {
-          // Server unreachable / older backend: Apple still works if the
-          // device offers it (the POST will tell); the web flows need config.
-          server = { apple: true, google: false, facebook: false };
+    let loading = false;
+    let appleAvailable = false;
+    let server: ProvidersState | null = null;
+    let retryDelay = 2000;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    const active = () => AppState.currentState == null || AppState.currentState === "active";
+    const clearRetry = () => {
+      if (retryTimer !== null) clearTimeout(retryTimer);
+      retryTimer = null;
+    };
+    const publish = () => {
+      if (alive) setState({ apple: appleAvailable && server?.apple !== false, google: !!server?.google, facebook: !!server?.facebook });
+    };
+    const load = async () => {
+      clearRetry();
+      if (!alive || loading || !active()) return;
+      loading = true;
+      try {
+        const r = await api.authProviders();
+        if (!alive) return;
+        if (!r || typeof r.apple !== "boolean" || typeof r.google !== "boolean" || typeof r.facebook !== "boolean") {
+          throw new Error("Invalid authentication providers response");
         }
+        server = { apple: r?.apple !== false, google: !!r?.google, facebook: !!r?.facebook };
+        retryDelay = 2000;
+        publish();
+      } catch {
+        if (alive && active()) {
+          retryTimer = setTimeout(() => { void load(); }, retryDelay);
+          retryDelay = Math.min(retryDelay * 2, 30000);
+        }
+      } finally {
+        loading = false;
       }
-      let apple = false;
-      if (Platform.OS === "ios" && server.apple) {
-        try { apple = await AppleAuthentication.isAvailableAsync(); } catch { apple = false; }
-      }
-      // Expo Go (SDK 57) on iPhone does NOT ship the native Apple module:
-      // isAvailableAsync() is false and AppleAuthenticationButton renders
-      // "Unimplemented component" (confirmed on device 2026-10-09). Apple
-      // sign-in therefore needs an own (development) build; until then the
-      // button stays hidden here.
-      if (alive) setState({ apple, google: server.google, facebook: server.facebook });
-    })();
-    return () => { alive = false; };
+    };
+    const subscription = AppState.addEventListener("change", (next) => {
+      if (next === "active") {
+        retryDelay = 2000;
+        void load();
+      } else clearRetry();
+    });
+    if (Platform.OS === "ios") {
+      void AppleAuthentication.isAvailableAsync().then((available) => {
+        appleAvailable = available;
+        publish();
+      }).catch(() => {});
+    }
+    void load();
+    return () => { alive = false; clearRetry(); subscription.remove(); };
   }, []);
   return state;
 }
