@@ -54,9 +54,8 @@ export function canSwipeResolve(item: ActionItem): boolean {
 
 /** "Modifică informațiile": the record's own resolve step in its Space. */
 export function editRoute(item: ActionItem): string {
-  const base = todoHref(item);
+  const base = todoHref(item, "resolve");
   if (item.type === "home_maintenance") return `${base}&action=resolve`;
-  if (item.type === "car_document" || item.type === "car_maintenance") return `${base}&action=renew`;
   return base;
 }
 

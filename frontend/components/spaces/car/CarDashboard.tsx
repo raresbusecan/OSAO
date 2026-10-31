@@ -571,7 +571,7 @@ export default function CarDashboard({
     const openedInitialEntryRef = useRef<string | null>(null);
     useEffect(() => {
         if (!initialOpenEntry) return;
-        const key = `${initialOpenEntry.type}:${initialOpenEntry.id}`;
+        const key = `${initialOpenEntry.type}:${initialOpenEntry.id}:${initialOpenEntry.renew ? "renew" : "edit"}`;
         if (openedInitialEntryRef.current === key) return;
         const list = { document: carData.documentEntries, maintenance: carData.maintenanceEntries, fuel: carData.fuelEntries, expense: carData.expenseEntries }[initialOpenEntry.type];
         if (!list.some((entry) => entry.id === initialOpenEntry.id)) return;
@@ -727,6 +727,7 @@ export default function CarDashboard({
                 />
     ) : maintenanceFormVisible ? (
         <CarMaintenanceForm
+                    key={editingMaintenanceEntry ? `edit-${editingMaintenanceEntry.id}` : maintenanceRenewFrom ? `renew-${maintenanceRenewFrom.sourceId}` : "new"}
                     entry={editingMaintenanceEntry ?? undefined}
                     renewFrom={maintenanceRenewFrom ?? undefined}
                     onCancel={() => {
@@ -740,6 +741,7 @@ export default function CarDashboard({
                 />
     ) : documentFormVisible ? (
         <CarDocumentForm
+                    key={editingDocumentEntry ? `edit-${editingDocumentEntry.id}` : documentRenewFrom ? `renew-${documentRenewFrom.sourceId}` : "new"}
                     entry={editingDocumentEntry ?? undefined}
                     renewFrom={documentRenewFrom ?? undefined}
                     readOnly={documentReadOnly}

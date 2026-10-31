@@ -61,9 +61,13 @@ export function overdueKmLabel(item: { overdue_km?: number | null }): string | n
 /** Space records open their owning section in a temporary root Stack flow;
  * completion returns to the unchanged origin. Payment rows retain item_id
  * separately from their synthetic occurrence id. Personal events use Calendar. */
-export function todoHref(item: { id: number | string; item_id?: number | string; type: string; due_at?: string | null; space?: { id: number | string } | null; space_id?: number | string | null }): string {
+export function todoHref(item: { id: number | string; item_id?: number | string; type: string; due_at?: string | null; space?: { id: number | string } | null; space_id?: number | string | null }, intent: "view" | "resolve" = "view"): string {
   const spaceId = item.space_id ?? item.space?.id;
-  if (spaceId != null) return recordActionHref({ ...item, id: item.item_id ?? item.id, space: { id: spaceId } });
+  if (spaceId != null) {
+    const href = recordActionHref({ ...item, id: item.item_id ?? item.id, space: { id: spaceId } });
+    // Due car alerts create the next document/service; history keeps the saved record.
+    return intent === "resolve" && (item.type === "car_document" || item.type === "car_maintenance") ? `${href}&action=renew` : href;
+  }
   // Missing an eager-loaded relation must never turn a Space record into
   // a Calendar event. Only personal events belong to Calendar.
   if (item.type !== "custom_event") return "/spaces";

@@ -518,7 +518,7 @@ function TodoCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
             const row = (
               <Row
                 testID={`home-due-${r.key}`}
-                onPress={ctx.preview ? undefined : () => ctx.navigate(r.top ? todoHref(r.top) : `/${r.spaceId}`)}
+                onPress={ctx.preview ? undefined : () => ctx.navigate(r.top ? todoHref(r.top, "resolve") : `/${r.spaceId}`)}
                 leading={<IconWell icon={r.kind ? KIND_ICON[r.kind] ?? "apps-outline" : "sparkles-outline"} color={fill} tint={tint} />}
                 title={r.top ? todoTitle(r.top) : r.summary ?? ""}
                 subtitle={
@@ -559,7 +559,7 @@ function BillsCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
     const next = ctx.bills[0];
     const overdue = next ? new Date(next.due_at).getTime() < Date.now() : false;
     return (
-      <TapCard widget={widget} onPress={ctx.preview || !next ? undefined : () => ctx.navigate(todoHref(next))} label={title}>
+      <TapCard widget={widget} onPress={ctx.preview || !next ? undefined : () => ctx.navigate(todoHref(next, "resolve"))} label={title}>
         <CardHeading icon="repeat" text={title} color={widget.color ?? colors.onSurfaceTertiary} info={infoOf(ctx, "card.bills")} />
         {next ? (
           <>
@@ -584,7 +584,7 @@ function BillsCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
             <RecurringBillRow
               testID={`home-recurring-${bill.id}`}
               item={bill}
-              onPress={ctx.preview ? undefined : () => ctx.navigate(todoHref(bill))}
+              onPress={ctx.preview ? undefined : () => ctx.navigate(todoHref(bill, "resolve"))}
             />
           );
           return ctx.preview ? (
@@ -789,7 +789,7 @@ function CalendarCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
     const today = upcoming.filter((r) => r.days === 0);
     const tomorrow = upcoming.filter((r) => r.days === 1).length;
     return (
-      <TapCard widget={widget} onPress={!ctx.preview && today[0] ? () => ctx.navigate(todoHref(today[0])) : go} label={title}>
+      <TapCard widget={widget} onPress={!ctx.preview && today[0] ? () => ctx.navigate(todoHref(today[0], "resolve")) : go} label={title}>
         <CardHeading icon="calendar-outline" text={title} color={tint} info={infoOf(ctx, "card.calendar")} />
         <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>{today[0] ? todoTitle(today[0]) : "Nimic azi"}</Text>
         <Text style={{ fontSize: 12, color: muted }} numberOfLines={1}>
@@ -804,7 +804,7 @@ function CalendarCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
       <CardHeading icon="calendar-outline" text={title} color={tint} info={infoOf(ctx, "card.calendar")} />
       {shown.length === 0 ? <Text style={{ fontSize: 14, color: muted }}>Nimic programat.</Text> : null}
       {shown.map((r: any) => (
-        <PressableScale key={`${r.type}-${r.id}`} onPress={ctx.preview ? undefined : () => ctx.navigate(todoHref(r))} accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: 12, minHeight: 32 }}>
+        <PressableScale key={`${r.type}-${r.id}`} onPress={ctx.preview ? undefined : () => ctx.navigate(todoHref(r, "resolve"))} accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: 12, minHeight: 32 }}>
           <Text style={{ width: 64, fontSize: 13, color: r.days === 0 ? colors.warning : muted }}>{capitalize(roRelativeDays(r.days))}</Text>
           <Text style={{ flex: 1, fontSize: 15, color: colors.onSurface }} numberOfLines={1}>{todoTitle(r)}</Text>
         </PressableScale>

@@ -102,7 +102,7 @@ export function TodoCarouselSheet({ visible, onClose, overdue, today, upcoming, 
   const openCount = all.filter((r) => !resolved.has(String(r.item.id))).length;
 
   const openTarget = (item: TodoItem) => {
-    const href = todoHref(item);
+    const href = todoHref(item, "resolve");
     if (!href.startsWith("/record-action?")) onClose();
     router.navigate(href as any);
   };

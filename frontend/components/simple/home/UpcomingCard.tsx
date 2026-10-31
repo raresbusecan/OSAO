@@ -127,12 +127,12 @@ export function UpcomingCard({ dashboard, spaces, onChanged }: { dashboard: any;
         const checkable = canSwipeResolve(it);
         const open = () => {
           if (it.space_id != null || it.space?.id != null) {
-            router.navigate(todoHref(it) as any);
+            router.navigate(todoHref(it, "resolve") as any);
             return;
           }
           // The row opens the record's editor (the circle resolves it).
           if (canEditRecord(it.type)) openEditRecord(it.id);
-          else if (!checkable || !it.space) router.push(todoHref(it) as any);
+          else if (!checkable || !it.space) router.push(todoHref(it, "resolve") as any);
           else router.push(`/${String(it.space.id)}` as any);
         };
         return (
