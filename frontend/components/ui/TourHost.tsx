@@ -212,7 +212,8 @@ function TourOverlay({ active, onFinished }: { active: Active; onFinished: () =>
   // Screen readers: land on the step's header each time.
   useEffect(() => {
     const t = setTimeout(() => {
-      const node = headerRef.current ? findNodeHandle(headerRef.current) : null;
+      // findNodeHandle throws on react-native-web; screen-reader focus is native-only here.
+      const node = Platform.OS !== "web" && headerRef.current ? findNodeHandle(headerRef.current) : null;
       if (node) AccessibilityInfo.setAccessibilityFocus(node);
     }, reduced ? 50 : 300);
     return () => clearTimeout(t);
