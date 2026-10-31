@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { roDate } from "@/lib/format";
+import { roDate, parseLocaleNumber } from "@/lib/format";
 import { View, Text, TextInput, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
@@ -46,7 +46,7 @@ export function ExpensesAddBar({ onAdd }: ExpensesAddBarProps) {
   const [expanded, setExpanded] = useState(false);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
 
-  const parsedPrice = Number(price.replace(",", "."));
+  const parsedPrice = parseLocaleNumber(price);
   const canSubmit = name.trim().length > 0 && price.trim().length > 0 && !Number.isNaN(parsedPrice) && parsedPrice >= 0;
 
   const reset = () => {

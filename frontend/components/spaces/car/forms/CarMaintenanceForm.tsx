@@ -15,6 +15,7 @@ import type { CarMaintenanceEntry } from "@/lib/spaces/car/car.types";
 import { validateMaintenanceEntry } from "@/lib/spaces/car/validation/maintenance.validation";
 import { formatDateInput, isValidDateInput, parseDateInput } from "@/lib/spaces/car/utils/dateInput";
 import { NON_RECURRING_MAINTENANCE_TYPES } from "@/lib/spaces/car/calculations/dashboard.calculations";
+import { parseLocaleNumber } from "@/lib/format";
 
 type CarMaintenanceFormProps = {
   onCancel: () => void;
@@ -249,7 +250,7 @@ export default function CarMaintenanceForm({
       return;
     }
 
-    const odometerValue = odometer ? Number(odometer.replace(",", ".")) : undefined;
+    const odometerValue = odometer ? parseLocaleNumber(odometer) : undefined;
 
     if (isBatchMode) {
       if (activeServices.length === 0) {
@@ -266,12 +267,12 @@ export default function CarMaintenanceForm({
         const draft: Omit<CarMaintenanceEntry, "id" | "date"> = {
           service: line.name,
           description: description.trim(),
-          price: detail.underWarranty ? 0 : Number(detail.price.replace(",", ".")),
+          price: detail.underWarranty ? 0 : parseLocaleNumber(detail.price),
           underWarranty: detail.underWarranty,
           odometer: odometerValue,
           provider: provider.trim() || undefined,
           nextServiceOdometer: detail.nextKm
-            ? Number(detail.nextKm.replace(",", "."))
+            ? parseLocaleNumber(detail.nextKm)
             : undefined,
           nextServiceDate: nameHasAutoDate ? autoDate : detail.nextDate.trim() || undefined,
         };
@@ -301,12 +302,12 @@ export default function CarMaintenanceForm({
     const draftEntry: Omit<CarMaintenanceEntry, "id" | "date"> = {
       service: service.trim(),
       description: description.trim(),
-      price: underWarranty ? 0 : Number(price.replace(",", ".")),
+      price: underWarranty ? 0 : parseLocaleNumber(price),
       underWarranty,
       odometer: odometerValue,
       provider: provider.trim() || undefined,
       nextServiceOdometer: nextServiceOdometer
-        ? Number(nextServiceOdometer.replace(",", "."))
+        ? parseLocaleNumber(nextServiceOdometer)
         : undefined,
       nextServiceDate: hasAutoDate ? autoNextServiceDate : nextServiceDate.trim() || undefined,
     };

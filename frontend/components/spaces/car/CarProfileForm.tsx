@@ -3,7 +3,7 @@ import { View, Text } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { useAppMode } from "@/lib/appMode";
 import { api, apiErrorMessage } from "@/lib/api";
-import { roNumber } from "@/lib/format";
+import { roNumber, parseLocaleNumber } from "@/lib/format";
 import { odometerError } from "./CarOdometerSheet";
 import { notifyAction } from "@/lib/confirm";
 import { Sheet } from "@/components/ui/Sheet";
@@ -134,8 +134,8 @@ export function CarProfileForm({
       model: model.trim(),
       color: color.trim() || undefined,
       year: Number(year) || new Date().getFullYear(),
-      purchasePrice: Number(purchasePrice.replace(",", ".")) || 0,
-      tankCapacity: Number(tankCapacity.replace(",", ".")) || 0,
+      purchasePrice: parseLocaleNumber(purchasePrice) || 0,
+      tankCapacity: parseLocaleNumber(tankCapacity) || 0,
     };
 
     const derivedName = carProfileName(profile);

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { View } from "react-native";
 import { api } from "@/lib/api";
 import { notifyAction } from "@/lib/confirm";
-import { roDate } from "@/lib/format";
+import { roDate, parseClockTime } from "@/lib/format";
 import { CUSTOM_EVENT_COLOR } from "@/lib/spaces/spaceProfile";
 import { Sheet } from "@/components/ui/Sheet";
 import { DatePickerSheet } from "@/components/ui/DatePickerSheet";
@@ -62,9 +62,12 @@ export function SimpleNewEventSheet({
       setError("Scrie un titlu pentru eveniment.");
       return;
     }
-    const m = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
-    const hh = m ? Math.min(23, Number(m[1])) : 9;
-    const mm = m ? Math.min(59, Number(m[2])) : 0;
+    const clock = parseClockTime(time);
+    if (!clock) {
+      setError("Ora nu e validă. Scrie-o ca 14:30.");
+      return;
+    }
+    const { hh, mm } = clock;
     setSaving(true);
     try {
       await api.createItem({

@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { roUnit } from "@/lib/format";
+import { roUnit, parseLocaleNumber } from "@/lib/format";
 import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field } from "@/components/ui/primitives";
@@ -35,7 +35,7 @@ export function HomeSupplyRestockSheet({ entry, onCancel, onConfirm }: HomeSuppl
   const [error, setError] = useState("");
 
   const handleConfirm = () => {
-    const value = Number(quantity.replace(",", "."));
+    const value = parseLocaleNumber(quantity);
     if (!quantity.trim() || Number.isNaN(value) || value <= 0) {
       setError("Introdu o cantitate validă.");
       return;

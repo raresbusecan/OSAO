@@ -8,7 +8,7 @@ import type {
   HomeSupplyEntry,
 } from "@/lib/spaces/home/home.types";
 import type { HomeCategoryRow } from "./HomeCategorySection";
-import { roCount, roDate, roUnit } from "@/lib/format";
+import { roCount, roDate, roUnit, normalizeNumberText } from "@/lib/format";
 import {
   daysUntil,
   dueSubtitle,
@@ -105,7 +105,7 @@ const GUILT_FREE_FIELD: HomeCategoryField = {
 };
 
 export function parseLeadingNumber(raw: string): number | null {
-  const match = raw.trim().replace(",", ".").match(LEADING_NUMBER);
+  const match = normalizeNumberText(raw).match(LEADING_NUMBER);
   if (!match) return null;
   return Number(match[0]);
 }
@@ -552,7 +552,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       // type a decimal in Romanian) doesn't leave ",5 kg" behind as a
       // nonsense "unit" -- before this matched LEADING_NUMBER directly
       // against the raw string, which doesn't understand a comma.
-      unit: values.quantity.trim().replace(",", ".").replace(LEADING_NUMBER, "").trim() || existing?.unit || "pcs",
+      unit: normalizeNumberText(values.quantity).replace(LEADING_NUMBER, "").trim() || existing?.unit || "pcs",
       lastRestockedDate: existing?.lastRestockedDate,
       notes: existing?.notes,
     }),

@@ -7,7 +7,7 @@ import { Sheet } from "@/components/ui/Sheet";
 import { Button } from "@/components/ui/primitives";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { motion } from "@/lib/motion";
-import { roCount, roUnit } from "@/lib/format";
+import { roCount, roUnit, parseLocaleNumber } from "@/lib/format";
 
 export type SupplySuggestion = {
   /** The Home supply's own item id -- carried through so the added
@@ -83,7 +83,7 @@ function SuggestionRow({
   const GROC = groc.color;
 
   const handleAdd = () => {
-    const value = Number(quantity.replace(",", "."));
+    const value = parseLocaleNumber(quantity);
     onAdd(suggestion.id, suggestion.name, Number.isFinite(value) && value > 0 ? value : 1);
   };
 

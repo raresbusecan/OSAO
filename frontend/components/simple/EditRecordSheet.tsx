@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { ActivityIndicator, DeviceEventEmitter, Text, View } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
-import { roCount, roDate, roNumber } from "@/lib/format";
+import { roCount, roDate, roNumber, parseLocaleNumber } from "@/lib/format";
 import { cachedQuickSpaces } from "@/lib/quickAddCache";
 import { refreshBudgetPlan } from "@/lib/budget/plan";
 import { closeEditRecord, useSimpleSheets } from "@/lib/simpleSheets";
@@ -150,7 +150,7 @@ export function EditRecordHost() {
   return <EditRecordSheet key={editRecord.id} id={editRecord.id} />;
 }
 
-const toNum = (raw: string) => Number(raw.trim().replace(",", "."));
+const toNum = (raw: string) => parseLocaleNumber(raw);
 const localKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
 function EditRecordSheet({ id }: { id: string }) {

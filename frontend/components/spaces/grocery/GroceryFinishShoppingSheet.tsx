@@ -6,6 +6,7 @@ import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field } from "@/components/ui/primitives";
 import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
+import { parseLocaleNumber } from "@/lib/format";
 
 export type GroceryFinishShoppingSheetProps = {
   listName: string;
@@ -44,7 +45,7 @@ export function GroceryFinishShoppingSheet({
       confirmWith(undefined);
       return;
     }
-    const value = Number(price.replace(",", "."));
+    const value = parseLocaleNumber(price);
     if (Number.isNaN(value) || value < 0) {
       setError("Preț invalid.");
       return;

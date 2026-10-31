@@ -1,6 +1,6 @@
 import { useRecordMutation } from "@/lib/navigation/useRecordMutation";
 import React, { useState } from "react";
-import { roDate } from "@/lib/format";
+import { roDate, parseLocaleNumber } from "@/lib/format";
 import { confirmAction } from "@/lib/confirm";
 import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
@@ -55,7 +55,7 @@ function ExpenseEditSheet({
   const [moreOpen, setMoreOpen] = useState(!!entry.notes);
   const [error, setError] = useState("");
 
-  const parsedPrice = Number(price.replace(",", "."));
+  const parsedPrice = parseLocaleNumber(price);
   const canSubmit = name.trim().length > 0 && price.trim().length > 0 && !Number.isNaN(parsedPrice) && parsedPrice >= 0;
 
   const handleSave = () => mutation.run(async () => {

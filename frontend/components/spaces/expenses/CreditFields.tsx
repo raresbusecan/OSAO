@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { View, Text, Pressable } from "react-native";
 import { useTheme } from "@/lib/theme";
-import { capitalize, lei, roCount, roDate } from "@/lib/format";
+import { capitalize, lei, roCount, roDate, parseLocaleNumber } from "@/lib/format";
 import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { creditEndAsDate, remainingRates } from "@/lib/spaces/expenses/credits";
 import { Sheet } from "@/components/ui/Sheet";
@@ -46,7 +46,7 @@ function todayYmd(): string {
 }
 
 export function parseCreditAmount(amount: string): number {
-  return Number(amount.replace(",", "."));
+  return parseLocaleNumber(amount);
 }
 
 /** The first problem with a draft (Romanian, shown as-is), or null. A new

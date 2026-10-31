@@ -1,5 +1,5 @@
 import React, { useRef, useState } from "react";
-import { roDate } from "@/lib/format";
+import { roDate, parseLocaleNumber } from "@/lib/format";
 import { useTheme } from "@/lib/theme";
 import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
@@ -62,7 +62,7 @@ export function HomeMaintenanceResolveSheet({ entry, onCancel, onResolve }: Home
       setError("Introdu prețul plătit.");
       return;
     }
-    const value = Number(price.replace(",", "."));
+    const value = parseLocaleNumber(price);
     if (Number.isNaN(value) || value <= 0) {
       setError("Preț invalid.");
       return;

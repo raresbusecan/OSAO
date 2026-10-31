@@ -8,6 +8,7 @@ import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field } from "@/components/ui/primitives";
 import { matchIngredientCategory, useIngredientReferences } from "@/lib/spaces/grocery/ingredientLookup";
+import { normalizeNumberText } from "@/lib/format";
 
 export type GroceryProductModalProps = {
   visible: boolean;
@@ -93,7 +94,7 @@ export function GroceryProductModal({
     }
 
     const quantity = [amount.trim(), unit.trim()].filter(Boolean).join(" ") || undefined;
-    const trimmedPrice = price.trim().replace(",", ".");
+    const trimmedPrice = normalizeNumberText(price);
     const priceValue = trimmedPrice ? Number(trimmedPrice) : undefined;
     if (trimmedPrice && (Number.isNaN(priceValue) || (priceValue as number) < 0)) {
       setError("Introdu un preț valid.");

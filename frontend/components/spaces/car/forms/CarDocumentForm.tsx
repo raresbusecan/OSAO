@@ -11,6 +11,7 @@ import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 import { confirmAction } from "@/lib/confirm";
 
 import type { CarDocumentEntry } from "@/lib/spaces/car/car.types";
+import { parseLocaleNumber } from "@/lib/format";
 
 type CarDocumentFormProps = {
   onCancel: () => void;
@@ -90,7 +91,7 @@ export default function CarDocumentForm({
     setError("");
 
     const priceValue = price
-      ? Number(price.replace(",", "."))
+      ? parseLocaleNumber(price)
       : undefined;
 
     if (!documentType.trim()) {

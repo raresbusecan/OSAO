@@ -32,7 +32,7 @@ import { useTourScroll, useTourTarget } from "@/components/ui/tourTargets";
 import { useAutoTour } from "@/lib/useAutoTour";
 import { SHOW_TOUR_TEST_BUTTON, startTour, type TourCtx } from "@/lib/tours";
 import { motion } from "@/lib/motion";
-import { lei, roNumber, roDate } from "@/lib/format";
+import { lei, roNumber, roDate, parseLocaleNumber } from "@/lib/format";
 
 type BudgetLimit = { category: string; monthly_limit: number; spent: number };
 type SavingsGoal = { target_amount: number; current_amount: number; target_date: string | null } | null;
@@ -243,8 +243,8 @@ export default function BudgetScreen() {
     setSavingGoal(true);
     try {
       await api.saveSavingsGoal({
-        target_amount: Number(goalTarget.replace(",", ".")) || 0,
-        current_amount: Number((goalCurrent || "0").replace(",", ".")) || 0,
+        target_amount: parseLocaleNumber(goalTarget) || 0,
+        current_amount: parseLocaleNumber((goalCurrent || "0")) || 0,
       });
       setEditingGoal(false);
       await load();

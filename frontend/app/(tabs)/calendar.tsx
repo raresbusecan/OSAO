@@ -20,7 +20,7 @@ import { DatePickerSheet } from "@/components/ui/DatePickerSheet";
 import { MonthSwipeView, useMonthPager } from "@/components/ui/MonthSwipe";
 import { PageTitle, CircleButton, InfoButton, Group, Row, IconWell, Pill, Button, Field, FieldButton, ToggleRow, Segmented, EmptyState, Disclosure, hexToRgba } from "@/components/ui/primitives";
 import { PressableScale } from "@/components/ui/PressableScale";
-import { capitalize, daysFromToday, lei, roCount, roDate } from "@/lib/format";
+import { capitalize, daysFromToday, lei, roCount, roDate, parseLocaleNumber, parseClockTime } from "@/lib/format";
 import { SwipeItemRow } from "@/components/dashboard/SwipeItemRow";
 import { CreditReminderRow, isReminder } from "@/components/dashboard/CreditReminderRow";
 import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
@@ -955,13 +955,16 @@ function NewEventSheet({
       setError("Scrie un titlu pentru eveniment.");
       return;
     }
-    const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(time.trim());
-    const hh = timeMatch ? Math.min(23, Number(timeMatch[1])) : 9;
-    const mm = timeMatch ? Math.min(59, Number(timeMatch[2])) : 0;
+    const clock = parseClockTime(time);
+    if (!clock) {
+      setError("Ora nu e validă. Scrie-o ca 14:30.");
+      return;
+    }
+    const { hh, mm } = clock;
     // Local wall-clock time -> the right UTC instant (a naive string used
     // to be read server-side as UTC and could land on the wrong day).
     const dueAt = new Date(dy, dmo - 1, dd, hh, mm, 0).toISOString();
-    const parsedAmount = involvesPurchase ? Number(amount.replace(",", ".")) : NaN;
+    const parsedAmount = involvesPurchase ? parseLocaleNumber(amount) : NaN;
     const hasAmount = involvesPurchase && Number.isFinite(parsedAmount) && parsedAmount > 0;
 
     setSaving(true);

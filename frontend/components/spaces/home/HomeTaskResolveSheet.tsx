@@ -4,7 +4,7 @@ import { useTheme } from "@/lib/theme";
 import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field, FieldButton } from "@/components/ui/primitives";
-import { roDate } from "@/lib/format";
+import { roDate, parseLocaleNumber } from "@/lib/format";
 import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 
 import type { HomeTaskEntry } from "@/lib/spaces/home/home.types";
@@ -64,7 +64,7 @@ export function HomeTaskResolveSheet({ entry, onCancel, onResolve }: HomeTaskRes
       setError("Introdu un preț sau alege „Rezolvă fără preț”.");
       return;
     }
-    const value = Number(price.replace(",", "."));
+    const value = parseLocaleNumber(price);
     if (Number.isNaN(value) || value < 0) {
       setError("Preț invalid.");
       return;

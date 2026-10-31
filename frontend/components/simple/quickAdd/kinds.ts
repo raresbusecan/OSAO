@@ -24,6 +24,7 @@ import { validateMaintenanceEntry } from "@/lib/spaces/car/validation/maintenanc
 import { getLatestFuelEntry } from "@/lib/spaces/car/utils/fuel.utils";
 import { formatDateInput, parseDateInput } from "@/lib/spaces/car/utils/dateInput";
 import { NON_RECURRING_MAINTENANCE_TYPES } from "@/lib/spaces/car/calculations/dashboard.calculations";
+import { parseLocaleNumber } from "@/lib/format";
 
 /**
  * orgOS Simplu's "Adaugă" sheet: what each kind chip saves, and how. The
@@ -223,7 +224,7 @@ function odometerBelowCurrent(raw: string, ctx: QuickContext): string | null {
   return `Kilometrajul nu poate fi mai mic decât cel actual (${ctx.currentOdometer.toLocaleString("ro-RO")} km).`;
 }
 
-const num = (raw: string) => Number(raw.trim().replace(",", "."));
+const num = (raw: string) => parseLocaleNumber(raw);
 const optNum = (raw: string): number | undefined => {
   if (!raw.trim()) return undefined;
   const v = num(raw);

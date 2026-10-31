@@ -10,6 +10,7 @@ import { Button, Field } from "@/components/ui/primitives";
 import type { HomeSupplyEntry } from "@/lib/spaces/home/home.types";
 
 
+import { parseLocaleNumber } from "@/lib/format";
 type HomeSupplyFormProps = {
   onCancel: () => void;
   onSave: (entry: HomeSupplyEntry) => void;
@@ -40,7 +41,7 @@ export default function HomeSupplyForm({ onCancel, onSave, entry, onDelete }: Ho
       setError("Dă un nume proviziei.");
       return;
     }
-    const quantityValue = Number(quantity.replace(",", "."));
+    const quantityValue = parseLocaleNumber(quantity);
     if (!quantity.trim() || Number.isNaN(quantityValue) || quantityValue < 0) {
       setError("Introdu o cantitate validă.");
       return;

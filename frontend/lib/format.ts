@@ -15,6 +15,33 @@ export function roCount(n: number, one: string, many: string): string {
   return `${n} de ${many}`;
 }
 
+/** A number typed the Romanian way, in JS syntax: "1.250,50" -> "1250.50",
+ * "125.210" -> "125210", "1 250" -> "1250", "12,5" -> "12.5". A dot
+ * followed by exactly three digits is a thousands separator -- the app
+ * itself shows "125.210 km" -- except after a lone 0 ("0.500"). */
+export function normalizeNumberText(raw: string): string {
+  let s = (raw ?? "").trim().replace(/(\d)\s+(?=\d{3}(?:\D|$))/g, "$1");
+  if (!/^-?0\./.test(s)) s = s.replace(/(\d)\.(?=\d{3}(?:\D|$))/g, "$1");
+  return s.replace(",", ".");
+}
+
+/** A typed clock time -> {hh, mm}: "14:30", "14.30", "9" all work; "" means
+ * the 09:00 default. null for anything impossible ("25:70", "abc"), so the
+ * form can say so instead of silently saving another hour. */
+export function parseClockTime(raw: string): { hh: number; mm: number } | null {
+  const s = (raw ?? "").trim();
+  if (!s) return { hh: 9, mm: 0 };
+  const m = /^(\d{1,2})(?:[:.,h](\d{2}))?$/.exec(s);
+  if (!m) return null;
+  const hh = Number(m[1]), mm = m[2] ? Number(m[2]) : 0;
+  return hh <= 23 && mm <= 59 ? { hh, mm } : null;
+}
+
+/** Number(normalizeNumberText(raw)); "" stays 0, like Number(""). */
+export function parseLocaleNumber(raw: string): number {
+  return Number(normalizeNumberText(raw));
+}
+
 /** "1.234" */
 export function roNumber(n: number | string, maxFractionDigits = 0): string {
   return Number(n).toLocaleString("ro-RO", { maximumFractionDigits: maxFractionDigits });

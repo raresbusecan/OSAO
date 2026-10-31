@@ -17,6 +17,7 @@ import {
 } from "@/lib/spaces/spaceProfile";
 import { SpaceColorPicker, initialSpaceColor, spaceColorForApi } from "@/components/spaces/SpaceColorPicker";
 import { SpaceThemeProvider } from "@/lib/spaces/spaceTheme";
+import { parseLocaleNumber } from "@/lib/format";
 
 export type HomeProfileFormProps = {
   visible: boolean;
@@ -88,7 +89,7 @@ export function HomeProfileForm({
       county: county.trim(),
       city: city.trim(),
       ownership: bought ? "bought" : "inherited",
-      ...(bought ? { purchasePrice: Number(purchasePrice.replace(",", ".")) || 0 } : {}),
+      ...(bought ? { purchasePrice: parseLocaleNumber(purchasePrice) || 0 } : {}),
     };
 
     const derivedName = homeProfileName(profile);

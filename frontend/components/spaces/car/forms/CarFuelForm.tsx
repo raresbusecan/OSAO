@@ -21,6 +21,7 @@ import {
 } from "@/lib/spaces/car/calculations/fuel.calculations";
 import { validateFuelEntry } from "@/lib/spaces/car/validation/fuel.validation";
 import { formatDateInput, isValidDateInput, parseDateInput } from "@/lib/spaces/car/utils/dateInput";
+import { parseLocaleNumber } from "@/lib/format";
 
 type CarFuelFormProps = {
   vehicle: CarVehicle;
@@ -84,7 +85,7 @@ export default function CarFuelForm({
     const trimmed = raw.trim();
     if (!trimmed) return undefined;
 
-    const value = Number(trimmed.replace(",", "."));
+    const value = parseLocaleNumber(trimmed);
     return Number.isFinite(value) ? value : undefined;
   };
 
@@ -129,8 +130,8 @@ export default function CarFuelForm({
 
   // Preț/litru — calculat live, doar informativ.
   const pricePerLiter = useMemo(() => {
-    const litersValue = Number(liters.replace(",", "."));
-    const priceValue = Number(price.replace(",", "."));
+    const litersValue = parseLocaleNumber(liters);
+    const priceValue = parseLocaleNumber(price);
 
     if (!liters || !price || !litersValue || !priceValue) return null;
 
@@ -140,7 +141,7 @@ export default function CarFuelForm({
   // Preview de consum, calculat live pe măsură ce userul completează
   // odometrul și nivelul "before" — folosește ultimul entry salvat.
   const consumptionPreview = useMemo(() => {
-    const odometerValue = Number(odometer.replace(",", "."));
+    const odometerValue = parseLocaleNumber(odometer);
 
     if (!odometer || !odometerValue || levelBefore === null) {
       return { distance: null, litersConsumed: null, consumption: null };

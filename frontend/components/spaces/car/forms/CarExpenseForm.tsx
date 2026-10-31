@@ -12,6 +12,7 @@ import { confirmAction } from "@/lib/confirm";
 
 import type { CarExpenseEntry } from "@/lib/spaces/car/car.types";
 import { formatDateInput, isValidDateInput, parseDateInput } from "@/lib/spaces/car/utils/dateInput";
+import { parseLocaleNumber } from "@/lib/format";
 
 type CarExpenseFormProps = {
   onCancel: () => void;
@@ -66,12 +67,10 @@ export default function CarExpenseForm({
   const handleSave = () => mutation.run(async () => {
     setError("");
 
-    const amountValue = Number(
-      amount.replace(",", "."),
-    );
+    const amountValue = parseLocaleNumber(amount);
 
     const odometerValue = odometer
-      ? Number(odometer.replace(",", "."))
+      ? parseLocaleNumber(odometer)
       : undefined;
 
     if (
