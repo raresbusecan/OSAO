@@ -4,7 +4,6 @@ import {
   Animated,
   Easing,
   findNodeHandle,
-  InteractionManager,
   Modal,
   Platform,
   Pressable,
@@ -91,7 +90,7 @@ function wait(ms: number) {
 
 function afterInteractions() {
   return new Promise<void>((resolve) => {
-    InteractionManager.runAfterInteractions(() => requestAnimationFrame(() => resolve()));
+    requestIdleCallback(() => requestAnimationFrame(() => resolve()), { timeout: 500 });
   });
 }
 
@@ -125,7 +124,7 @@ function TourOverlay({ active, onFinished }: { active: Active; onFinished: () =>
   const card = useRef(new Animated.Value(reduced ? 1 : 0)).current;
   const content = useRef(new Animated.Value(1)).current;
   const ring = useRef(new Animated.Value(0)).current;
-  const headerRef = useRef<View>(null);
+  const headerRef = useRef<React.ComponentRef<typeof View>>(null);
   const closing = useRef(false);
   const busy = useRef(false);
   const openPath = useRef(pathname);

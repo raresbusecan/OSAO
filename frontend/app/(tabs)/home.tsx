@@ -90,7 +90,7 @@ function Home() {
 
   // First-use tour (lib/tours.ts "home"): what it points at, and the page's
   // scroll view so a step can bring its card into view.
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const tourScroll = useTourScroll("home", scrollRef);
   const headerTarget = useTourTarget("home.header");
   const editTarget = useTourTarget("home.edit");

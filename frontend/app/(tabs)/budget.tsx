@@ -157,7 +157,7 @@ export default function BudgetScreen() {
   // page's ScrollView so a step can scroll its target into view. "budget.top"
   // = the onboarding card without a plan, the hero with one; "budget.split"
   // = the onboarding bar + legend here, or IncomeSplitCard's income block.
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const tourScroll = useTourScroll("budget", scrollRef);
   const topTarget = useTourTarget("budget.top");
   const onboardingSplitTarget = useTourTarget("budget.split");

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useRecordAction } from "@/lib/navigation/recordAction";
-import type { ScrollView as ScrollViewType } from "react-native";
+import type { ScrollViewInstance as ScrollViewType } from "react-native";
 import { askRenewal, parseDocDate, renewalPeriod, renewedTitle, toCarDate } from "@/lib/dashboard/documentRenewal";
 import { SwipeRow } from "@/components/spaces/SwipeRow";
 import { useRouter } from "expo-router";

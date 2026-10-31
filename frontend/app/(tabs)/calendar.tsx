@@ -139,7 +139,7 @@ function CalendarScreen() {
 
   // First-use tour (lib/tours.ts "calendar"): what it points at, and the
   // page's ScrollView so a step can scroll its target into view.
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const tourScroll = useTourScroll("calendar", scrollRef);
   const navTarget = useTourTarget("calendar.nav");
   const gridTarget = useTourTarget("calendar.grid");

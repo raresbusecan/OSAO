@@ -13,9 +13,13 @@ export default function RecordActionScreen() {
   const router = useRouter();
   const originSpace = actionOriginSpaceHref(useRootNavigationState());
   const navigation = useNavigation();
-  useEffect(() => navigation.addListener("beforeRemove", () => {
-    if (originSpace) markTrailReturn(originSpace);
-  }), [navigation, originSpace]);
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("removed", () => {
+      if (originSpace) markTrailReturn(originSpace);
+    });
+    // Router emits removal after unmount; retain the listener through this commit.
+    return () => queueMicrotask(unsubscribe);
+  }, [navigation, originSpace]);
   const { colors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; itemId?: string; itemType?: string }>();
   const active = useRef(false);
@@ -29,9 +33,10 @@ export default function RecordActionScreen() {
   const cancel = useCallback(() => {
     if (!active.current || leaving.current) return;
     leaving.current = true;
+    if (originSpace) markTrailReturn(originSpace);
     if (router.canGoBack()) router.back();
     else router.replace("/(tabs)/home");
-  }, [router]);
+  }, [router, originSpace]);
 
   const complete = useCallback(() => {
     // Leaving prevents a delayed navigation, not invalidation of a real save.

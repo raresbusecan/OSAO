@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Pressable, Animated, StyleSheet, Easing } from "react-native";
+import { View, Text, Pressable, Animated, StyleSheet, Easing } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { usePathname, useSegments } from "expo-router";
+import type { BottomTabBarProps } from "expo-router/tabs";
 import { useTheme } from "@/lib/theme";
 import { TAB_ORDER, type MainTab, isTabDeep, recordTabLeave, setTabBarHeight } from "@/lib/navigation/returnTrail";
 import { useTourTarget } from "@/components/ui/tourTargets";
@@ -30,20 +31,7 @@ const PILL_HEIGHT = 62;
 const STRETCH_SCALE_X = 1.3;
 const SQUASH_SCALE_Y = 0.84;
 
-type TabRoute = { key: string; name: string };
-type TabDescriptorOptions = {
-  tabBarIcon?: (props: { focused: boolean; color: string; size: number }) => React.ReactNode;
-  tabBarLabel?: (props: { focused: boolean; color: string }) => React.ReactNode;
-};
-
-export type MainTabBarProps = {
-  state: { routes: TabRoute[]; index: number };
-  descriptors: Record<string, { options: TabDescriptorOptions }>;
-  navigation: {
-    navigate: (name: string) => void;
-    emit: (event: { type: string; target: string; canPreventDefault: true }) => { defaultPrevented: boolean };
-  };
-};
+export type MainTabBarProps = BottomTabBarProps;
 
 // Only these 4 ever show a button -- "search" and "[id]" are hidden
 // from the bar (href: null in _layout.tsx) but still exist as routes.
@@ -56,7 +44,7 @@ export function MainTabBar(props: MainTabBarProps) {
   return isSimple ? <SimpleTabBar {...props} /> : <FullTabBar {...props} />;
 }
 
-function FullTabBar({ state, descriptors, navigation }: MainTabBarProps) {
+function FullTabBar({ state, descriptors, emitter, navigateToTab }: MainTabBarProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   // Same "Spații stays lit while inside a Space" rule as _layout.tsx's
@@ -168,7 +156,7 @@ function FullTabBar({ state, descriptors, navigation }: MainTabBarProps) {
         const color = focused ? colors.onSurface : colors.onSurfaceTertiary;
 
         const onPress = () => {
-          const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
+          const event = emitter.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
           // Inside a Space the Spații cell counts as focused (pill rule
           // above), but the real route is "[id]" -- a tap there must still
           // take the user to the Spații list (tab bar actions win).
@@ -180,7 +168,7 @@ function FullTabBar({ state, descriptors, navigation }: MainTabBarProps) {
               const origin = focusedName as MainTab;
               recordTabLeave(origin, pathname, route.name as MainTab, origin === "spaces" ? inSpace : isTabDeep(origin));
             }
-            navigation.navigate(route.name);
+            navigateToTab(route.key);
           }
         };
 
@@ -202,7 +190,9 @@ function FullTabBar({ state, descriptors, navigation }: MainTabBarProps) {
             >
               {descriptor.options.tabBarIcon?.({ focused, color, size: 22 })}
             </Animated.View>
-            {descriptor.options.tabBarLabel?.({ focused, color })}
+            {typeof descriptor.options.tabBarLabel === "function"
+              ? descriptor.options.tabBarLabel({ focused, color, position: "below-icon", children: descriptor.options.title ?? route.name })
+              : <Text style={{ fontSize: 11, fontWeight: focused ? "600" : "500", color }}>{descriptor.options.tabBarLabel ?? descriptor.options.title ?? route.name}</Text>}
           </TabCell>
         );
       })}

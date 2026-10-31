@@ -1,6 +1,6 @@
 import { useRecordMutation } from "@/lib/navigation/useRecordMutation";
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, type TextInput } from "react-native";
+import { View, Text, type TextInputInstance } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { confirmAction } from "@/lib/confirm";
 import { groceryCategoryLabel, type GroceryCategory, type GroceryItem } from "@/lib/spaces/grocery/grocery.types";
@@ -50,7 +50,7 @@ export function GroceryProductModal({
   const [category, setCategory] = useState<GroceryCategory>("Other");
   const [error, setError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
-  const nameInputRef = useRef<TextInput>(null);
+  const nameInputRef = useRef<TextInputInstance>(null);
   const successTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Re-seed the form fresh every time the sheet opens (either empty for

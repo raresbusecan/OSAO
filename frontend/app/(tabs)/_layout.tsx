@@ -44,7 +44,7 @@ export default function TabsLayout() {
         // slides behind the active icon and it bounces on arrival,
         // instead of the default bar's instant color swap. See
         // MainTabBar.tsx.
-        tabBar={(props) => <MainTabBar {...(props as any)} />}
+        tabBar={(props) => <MainTabBar {...props} />}
         screenOptions={{
           headerShown: false,
           tabBarActiveTintColor: colors.onSurface,
@@ -111,7 +111,8 @@ export default function TabsLayout() {
             route file is denied in this environment, so it's emptied to a
             stub (see search.tsx) and hidden from the tab bar here instead. */}
         <Tabs.Screen name="search" options={{ href: null }} />
-        <Tabs.Screen name="[id]" options={{ href: null }} />
+        {/* The custom bar filters [id] itself. SDK 58 href:null would redirect this route to Home. */}
+        <Tabs.Screen name="[id]" />
       </Tabs>
       <TabSwipeEdges />
       {/* Simplu mode (lib/appMode.tsx): no return trail (2 tabs, nothing

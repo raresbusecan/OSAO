@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import {
   PanGestureHandler,
-  ScrollView,
+  LegacyScrollView as ScrollView,
   State,
   type PanGestureHandlerGestureEvent,
   type PanGestureHandlerStateChangeEvent,
@@ -130,7 +130,7 @@ export function ReorderList<T>({
   const lift = useRef(new Animated.Value(0)).current;
 
   const scrollRef = useRef<any>(null);
-  const viewportRef = useRef<View>(null);
+  const viewportRef = useRef<React.ComponentRef<typeof View>>(null);
   const scrollY = useRef(0);
   const viewTop = useRef(0);
   const viewH = useRef(0);

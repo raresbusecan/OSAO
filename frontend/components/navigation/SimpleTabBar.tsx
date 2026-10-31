@@ -19,7 +19,7 @@ import type { MainTabBarProps } from "./MainTabBar";
  * space screen ([id]) is reached from Acasă's chips, so Acasă stays lit
  * there. No return trail in this mode (two tabs, nothing deep).
  */
-export function SimpleTabBar({ state, navigation }: MainTabBarProps) {
+export function SimpleTabBar({ state, emitter, navigateToTab }: MainTabBarProps) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const segments = useSegments() as string[];
@@ -33,9 +33,9 @@ export function SimpleTabBar({ state, navigation }: MainTabBarProps) {
   const go = (name: "home" | "calendar") => {
     const route = state.routes.find((r) => r.name === name);
     if (!route) return;
-    const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
+    const event = emitter.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
     // From a space screen, "Acasă" still navigates (the lit cell is a hint, not the route).
-    if ((current !== name || inSpace) && !event.defaultPrevented) navigation.navigate(name);
+    if ((current !== name || inSpace) && !event.defaultPrevented) navigateToTab(route.key);
   };
 
   const cell = (name: "home" | "calendar", label: string, outline: keyof typeof Ionicons.glyphMap, filled: keyof typeof Ionicons.glyphMap) => {

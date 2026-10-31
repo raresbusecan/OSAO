@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type RefObject } from "react";
-import type { NativeScrollEvent, NativeSyntheticEvent, ScrollView } from "react-native";
+import type { NativeScrollEvent, NativeSyntheticEvent, ScrollViewInstance } from "react-native";
 
 /**
  * What a first-use tour (lib/tours.ts) points at. A screen spreads
@@ -64,7 +64,7 @@ export function measureTourTarget(id: string): Promise<{ x: number; y: number; w
 
 /* ---------------- the screen's scroll view ---------------- */
 
-type ScrollEntry = { ref: RefObject<ScrollView | null>; y: { current: number } };
+type ScrollEntry = { ref: RefObject<ScrollViewInstance | null>; y: { current: number } };
 const scrollers = new Map<string, ScrollEntry>();
 
 /**
@@ -72,7 +72,7 @@ const scrollers = new Map<string, ScrollEntry>();
  * (and back to the top when it ends). Spread the returned props on that
  * ScrollView -- they track the current offset.
  */
-export function useTourScroll(screenKey: string, scrollRef: RefObject<ScrollView | null>) {
+export function useTourScroll(screenKey: string, scrollRef: RefObject<ScrollViewInstance | null>) {
   const y = useRef(0);
   useEffect(() => {
     const entry = { ref: scrollRef, y };

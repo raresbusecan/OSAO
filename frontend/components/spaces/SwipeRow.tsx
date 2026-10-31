@@ -1,6 +1,7 @@
 import React, { useRef } from "react";
-import { Pressable, Animated, Dimensions } from "react-native";
-import { Swipeable } from "react-native-gesture-handler";
+import { Pressable, Dimensions } from "react-native";
+import Swipeable, { type SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
+import Animated, { Extrapolation, interpolate, useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
 
 /**
@@ -33,6 +34,13 @@ import { Ionicons } from "@expo/vector-icons";
 const TRIGGER_PERCENT = 0.25;
 const TRIGGER_DISTANCE = Dimensions.get("window").width * TRIGGER_PERCENT;
 
+function SwipeActionIcon({ translation, name }: { translation: SharedValue<number>; name: keyof typeof Ionicons.glyphMap }) {
+  const style = useAnimatedStyle(() => ({
+    transform: [{ scale: interpolate(Math.abs(translation.value), [0, TRIGGER_DISTANCE], [0.6, 1.15], Extrapolation.CLAMP) }],
+  }));
+  return <Animated.View style={style}><Ionicons name={name} size={20} color="#fff" /></Animated.View>;
+}
+
 export type SwipeRowProps = {
   /** Omit entirely for a row with no resolve concept (e.g. Documents,
    * Expenses) -- no left-swipe reveal is rendered at all then, same
@@ -54,7 +62,7 @@ export type SwipeRowProps = {
 };
 
 export function SwipeRow({ onResolve, onDelete, resolveIcon = "checkmark", resolveLabel = "Rezolvă", disabled, cornerRadius, colors, children }: SwipeRowProps) {
-  const ref = useRef<Swipeable>(null);
+  const ref = useRef<SwipeableMethods>(null);
 
   if (disabled || (!onResolve && !onDelete)) return <>{children}</>;
 
@@ -74,8 +82,8 @@ export function SwipeRow({ onResolve, onDelete, resolveIcon = "checkmark", resol
       // Widened well past normal jitter -- a real intentional swipe
       // moves far more than 20px before its own trigger point anyway
       // (see TRIGGER_DISTANCE below), so this costs nothing there.
-      dragOffsetFromLeftEdge={20}
-      dragOffsetFromRightEdge={20}
+      dragOffsetFromLeft={20}
+      dragOffsetFromRight={-20}
       // Overshoot OFF, now that the action panel's own width IS
       // TRIGGER_DISTANCE (see the panel width comment above) -- with
       // overshoot disabled, Swipeable clamps the drag flat at
@@ -94,12 +102,12 @@ export function SwipeRow({ onResolve, onDelete, resolveIcon = "checkmark", resol
       rightThreshold={TRIGGER_DISTANCE}
       onSwipeableOpen={(direction) => {
         ref.current?.close();
-        if (direction === "left") onResolve?.();
+        if (direction === "right") onResolve?.();
         else onDelete?.();
       }}
       renderLeftActions={
         onResolve
-          ? (_progress: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>) => (
+          ? (_progress: SharedValue<number>, dragX: SharedValue<number>) => (
               <Pressable
                 onPress={() => {
                   ref.current?.close();
@@ -116,20 +124,12 @@ export function SwipeRow({ onResolve, onDelete, resolveIcon = "checkmark", resol
                   borderBottomLeftRadius: cornerRadius,
                 }}
               >
-                <Animated.View
-                  style={{
-                    transform: [
-                      { scale: dragX.interpolate({ inputRange: [0, TRIGGER_DISTANCE], outputRange: [0.6, 1.15], extrapolate: "clamp" }) },
-                    ],
-                  }}
-                >
-                  <Ionicons name={resolveIcon} size={20} color="#fff" />
-                </Animated.View>
+                <SwipeActionIcon translation={dragX} name={resolveIcon} />
               </Pressable>
             )
           : undefined
       }
-      renderRightActions={onDelete ? (_progress: Animated.AnimatedInterpolation<number>, dragX: Animated.AnimatedInterpolation<number>) => (
+      renderRightActions={onDelete ? (_progress: SharedValue<number>, dragX: SharedValue<number>) => (
         <Pressable
           onPress={() => {
             ref.current?.close();
@@ -146,15 +146,7 @@ export function SwipeRow({ onResolve, onDelete, resolveIcon = "checkmark", resol
             borderBottomRightRadius: cornerRadius,
           }}
         >
-          <Animated.View
-            style={{
-              transform: [
-                { scale: dragX.interpolate({ inputRange: [-TRIGGER_DISTANCE, 0], outputRange: [1.15, 0.6], extrapolate: "clamp" }) },
-              ],
-            }}
-          >
-            <Ionicons name="trash" size={20} color="#fff" />
-          </Animated.View>
+          <SwipeActionIcon translation={dragX} name="trash" />
         </Pressable>
       ) : undefined}
     >

@@ -160,7 +160,8 @@ test('completion refreshes saved data even after leaving, without a delayed navi
   const active = { current: true }, leaving = { current: false };
   const refreshed = { current: false };
   const cancel = loadCallback('app/record-action.tsx', 'cancel', {
-    useCallback: (fn) => fn, active, leaving,
+    useCallback: (fn) => fn, active, leaving, originSpace: "/7",
+    markTrailReturn: (href) => { assert.equal(href, "/7"); assert.equal(backs, 0); },
     router: { canGoBack: () => true, back: () => { backs++; }, replace: () => { replacements++; } },
   });
   const complete = loadCallback('app/record-action.tsx', 'complete', {
