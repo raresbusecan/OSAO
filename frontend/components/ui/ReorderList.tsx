@@ -38,7 +38,9 @@ import { useReducedMotion } from "@/lib/motion";
  * it still has to travel to its new slot (0 for most), read by the same
  * React render that moves the rows -- so there's no frame where a row's
  * old offset applies to its new position, and no state left to reset
- * later. A new drag can start right after.
+ * later (a row with nothing left to travel also gets its 0 written to the
+ * view right after that render, see the layout effect). A new drag can
+ * start right after.
  */
 
 const EDGE = 80; // px from the viewport edge where auto-scroll kicks in
@@ -127,6 +129,8 @@ export function ReorderList<T>({
   const drag = useRef<Drag | null>(null);
   /** The order handed to onReorder, until the parent renders it. */
   const pending = useRef<string | null>(null);
+  /** A commit's fresh values that start at rest -- written to their views once rendered (see the layout effect). */
+  const resync = useRef<Animated.Value[]>([]);
   const lift = useRef(new Animated.Value(0)).current;
 
   const scrollRef = useRef<any>(null);
@@ -283,14 +287,18 @@ export function ReorderList<T>({
       ? d.heights.slice(d.from + 1, to + 1).reduce((s, h) => s + h, 0)
       : -d.heights.slice(to, d.from).reduce((s, h) => s + h, 0);
     const next = new Map<string, Animated.Value>();
+    const idle: Animated.Value[] = [];
     d.keys.forEach((k, j) => {
       const now = k === d.key ? T : current(anim(k));
       const rest = now - (k === d.key ? finalOffset : shiftFor(d, j, to));
-      const v = new Animated.Value(Math.abs(rest) < 0.5 ? 0 : rest);
+      const settle = Math.abs(rest) >= 0.5 && !reducedRef.current;
+      const v = new Animated.Value(settle ? rest : 0);
       next.set(k, v);
-      if (Math.abs(rest) >= 0.5) glide(v, 0, SETTLE_MS);
+      if (settle) glide(v, 0, SETTLE_MS);
+      else idle.push(v);
     });
     anims.current = next;
+    resync.current = idle;
     targets.current = new Map();
     pending.current = moved.map(keyExtractor).join("\u0001");
     onReorderRef.current(moved);
@@ -319,13 +327,25 @@ export function ReorderList<T>({
   useLayoutEffect(() => {
     if (pending.current === joined) {
       pending.current = null;
+      // Animated's JS driver moves a view with setNativeProps and lets
+      // React know only ~48ms after the last frame (Fabric). A neighbor
+      // dropped inside that window -- its shift done, React still holding
+      // the 0 from before -- got a fresh 0 that React saw as unchanged and
+      // never sent, so the view kept its shift: two cards overlapping and
+      // a gap further down. Now attached, the rest values are written to
+      // the views themselves.
+      resync.current.forEach((v) => v.setValue(0));
+      resync.current = [];
       return;
     }
     if (pending.current == null && !drag.current) return;
     pending.current = null;
     drag.current = null;
     stopAutoScroll();
-    anims.current = new Map();
+    // Back to rest on the values the rows are still bound to, so it reaches
+    // the views (a fresh 0 might not, see above).
+    anims.current.forEach((a) => a.setValue(0));
+    resync.current = [];
     targets.current = new Map();
     setActiveKey(null);
     lift.stopAnimation();
