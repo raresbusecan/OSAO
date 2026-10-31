@@ -92,17 +92,53 @@ try {
     Get-Process ngrok -ErrorAction SilentlyContinue | Stop-Process -Force
     Stop-PortListener 443
 
-    # 2. Backend (reuse if already listening)
-    if (Get-NetTCPConnection -State Listen -LocalPort 8000 -ErrorAction SilentlyContinue) {
-        Step 'Backend already running on :8000 - reusing it'
-    } else {
-        Step 'Starting Laravel backend on :8000'
-        $p = Start-Process php -ArgumentList 'artisan', 'serve', '--host=0.0.0.0', '--port=8000' `
-            -WorkingDirectory $backend -WindowStyle Hidden -PassThru `
-            -RedirectStandardOutput (Join-Path $logDir 'backend.log') `
-            -RedirectStandardError  (Join-Path $logDir 'backend.err.log')
-        $started += $p
+    # 2. Own the backend for this dev session. A reused process can disappear
+    # when its original launcher exits and runs its own cleanup.
+    $listeners = @(Get-NetTCPConnection -State Listen -LocalPort 8000 -ErrorAction SilentlyContinue)
+    foreach ($listener in $listeners) {
+        $existing = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)"
+        $serverScript = Join-Path $backend 'vendor\laravel\framework\src\Illuminate\Foundation\Console'
+        if (-not $existing -or $existing.Name -ne 'php.exe' -or $existing.CommandLine -notlike "*$serverScript*server.php*") {
+            throw 'Port 8000 belongs to another process; stop it or select a different port before starting orgOS.'
+        }
     }
+    foreach ($listener in $listeners) {
+        $existing = Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue
+        if (-not $existing) { continue }
+        $owner = Get-CimInstance Win32_Process -Filter "ProcessId=$($existing.ParentProcessId)" -ErrorAction SilentlyContinue
+        Step 'Restarting the existing orgOS backend under this session'
+        if ($owner -and $owner.Name -eq 'php.exe' -and $owner.CommandLine -like '*artisan serve*') {
+            Stop-Process -Id $owner.ProcessId -Force -ErrorAction SilentlyContinue
+        }
+        Stop-Process -Id $existing.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+    for ($i = 0; $i -lt 20; $i++) {
+        if (-not (Get-NetTCPConnection -State Listen -LocalPort 8000 -ErrorAction SilentlyContinue)) { break }
+        Start-Sleep -Milliseconds 250
+    }
+    if (Get-NetTCPConnection -State Listen -LocalPort 8000 -ErrorAction SilentlyContinue) { throw 'Port 8000 did not become available.' }
+    Step 'Starting Laravel backend on :8000'
+    $backendStart = @{
+        FilePath = 'php'
+        ArgumentList = @('artisan', 'serve', '--host=0.0.0.0', '--port=8000')
+        WorkingDirectory = $backend
+        WindowStyle = 'Hidden'
+        PassThru = $true
+        RedirectStandardOutput = Join-Path $logDir 'backend.log'
+        RedirectStandardError = Join-Path $logDir 'backend.err.log'
+    }
+    $p = Start-Process @backendStart
+    $started += $p
+    $backendReady = $false
+    for ($i = 0; $i -lt 20; $i++) {
+        if ($p.HasExited) { throw "Laravel stopped during startup; see $logDir\backend.err.log" }
+        try {
+            $health = Invoke-WebRequest -Uri 'http://127.0.0.1:8000/api/auth/providers' -UseBasicParsing -TimeoutSec 2
+            if ($health.StatusCode -eq 200) { $backendReady = $true; break }
+        } catch {}
+        Start-Sleep -Milliseconds 250
+    }
+    if (-not $backendReady) { throw "Laravel did not become ready; see $logDir\backend.log" }
 
     # 3. Tunnels
     Step 'Starting tunnels'
