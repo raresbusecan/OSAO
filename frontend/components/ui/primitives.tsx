@@ -401,7 +401,7 @@ export function Pill({
       {icon ? <Ionicons name={icon} size={15} color={active ? fg : colors.onSurfaceTertiary} /> : null}
       <Text style={{ fontSize: 13, fontWeight: active ? "600" : "500", color: fg }} numberOfLines={1}>{label}</Text>
       {badge && badge > 0 ? (
-        <View style={{ height: 18, minWidth: 18, paddingHorizontal: 5, borderRadius: 9, backgroundColor: colors.error, alignItems: "center", justifyContent: "center" }}>
+        <View style={{ minHeight: 18, minWidth: 18, paddingHorizontal: 5, borderRadius: 9, backgroundColor: colors.error, alignItems: "center", justifyContent: "center" }}>
           <Text style={{ fontSize: 11, fontWeight: "600", color: readableOn(colors.error) }}>{badge}</Text>
         </View>
       ) : null}
@@ -456,7 +456,7 @@ export function Segmented<K extends string>({
             {o.badge && o.badge.count > 0 ? (() => {
               const bg = o.badge.tone === "error" ? colors.error : colors.warning;
               return (
-                <View style={{ height: 16, minWidth: 16, paddingHorizontal: 4, borderRadius: 8, backgroundColor: bg, alignItems: "center", justifyContent: "center" }}>
+                <View style={{ minHeight: 16, minWidth: 16, paddingHorizontal: 4, borderRadius: 8, backgroundColor: bg, alignItems: "center", justifyContent: "center" }}>
                   <Text style={{ fontSize: 11, fontWeight: "600", color: readableOn(bg) }}>{o.badge.count}</Text>
                 </View>
               );
@@ -506,8 +506,11 @@ export function Button({
       : variant === "secondary" ? colors.surfaceTertiary
         : variant === "destructive" ? hexToRgba(colors.error, 0.12)
           : "transparent";
+  // Outline label: the theme's text colour, not `tone` -- callers pass a
+  // Space's FILL as tone, which as text on a light page fails contrast
+  // (amber 2:1). The border keeps the Space colour.
   const fg = outline
-    ? variant === "secondary" ? colors.onSurface : ink
+    ? variant === "destructive" ? colors.error : colors.onSurface
     : variant === "primary" ? (tone ? readableOn(tone) : colors.surface)
       : variant === "destructive" ? colors.error
         : variant === "ghost" ? colors.onSurfaceTertiary

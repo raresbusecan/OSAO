@@ -489,8 +489,10 @@ function Home() {
           keyExtractor={widgetKey}
           onReorder={setDraft}
           renderItem={renderEditItem}
-          // The lifted card is opaque, so the one it passes over doesn't show through.
-          liftedStyle={{ backgroundColor: colors.surface }}
+          // The lifted card is opaque, so the one it passes over doesn't show
+          // through; rounded like the cards so it isn't a hard-edged block
+          // over a coloured Aspect background.
+          liftedStyle={{ backgroundColor: colors.surface, borderRadius: radius.lg }}
           contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.lg, paddingBottom: 140 }}
           header={<View style={{ marginBottom: spacing.section, gap: spacing.sm }}>{header}<Text style={{ fontSize: 13, color: muted }}>Ține apăsat mânerul ☰ și trage ca să muți un card.</Text></View>}
           footer={

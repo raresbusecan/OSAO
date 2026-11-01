@@ -56,6 +56,20 @@ function patch(mod: { default: any }, name: "Text" | "TextInput") {
     const scale = useContext(TextScaleContext);
     return React.createElement(Original, { ...props, style: withPlex(props.style, nested, scale) });
   };
+  // Hoist the original's statics (TextInput.State, which e.g.
+  // react-native-gesture-handler's ScrollView reads on every keyboard
+  // event; Text's own) as live getters -- without them the swapped-in
+  // component threw "Cannot read property 'currentlyFocusedInput' of
+  // undefined" as soon as the keyboard opened (qa-lead, 2026-11-01).
+  // React's internals (a forwardRef object's $$typeof/render) must NOT
+  // move onto a plain function component.
+  const SKIP = new Set(["$$typeof", "render", "displayName", "length", "name", "prototype", "caller", "arguments", "__plexPatched"]);
+  for (const key of Object.getOwnPropertyNames(Original)) {
+    if (SKIP.has(key) || Object.prototype.hasOwnProperty.call(Patched, key)) continue;
+    try {
+      Object.defineProperty(Patched, key, { configurable: true, enumerable: true, get: () => Original[key] });
+    } catch {}
+  }
   Object.assign(Patched, { displayName: name, __plexPatched: true });
   // Since Expo SDK 58 the Text/TextInput modules export `default` as a
   // getter-only, NON-configurable property, so swapping it silently did
