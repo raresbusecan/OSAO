@@ -40,6 +40,12 @@ class DemoSeeder extends Seeder
     public const DEMO2_EMAIL = 'demo2@orgos.test';
     public const DEMO_EMAILS = [self::DEMO_EMAIL, self::DEMO2_EMAIL];
     public const PASSWORD = 'demo1234';
+    /** The real databases (backend/.env). Demo data never goes there: the
+     * demo logins have known passwords on a tunnel-exposed backend, and
+     * wipe() deletes rows. Use the QA sandbox (APP_ENV=qa -> lifeos_qa)
+     * or the tests' sqlite. qa-lead found demo accounts in lifeos,
+     * 2026-11-01. */
+    public const LIVE_DATABASES = ['lifeos'];
 
     private string $tz = 'Europe/Bucharest';
     private Carbon $now;
@@ -47,8 +53,17 @@ class DemoSeeder extends Seeder
     private string $secondaryEmail = self::DEMO2_EMAIL;
     private string $accountPassword = self::PASSWORD;
 
+    public static function assertNotLiveDatabase(): void
+    {
+        $database = DB::connection()->getDatabaseName();
+        if (in_array($database, self::LIVE_DATABASES, true)) {
+            throw new \RuntimeException("Datele demonstrative nu se pun în baza reală „{$database}”. Rulează cu APP_ENV=qa (lifeos_qa).");
+        }
+    }
+
     public function run(): void
     {
+        self::assertNotLiveDatabase();
         $this->primaryEmail = self::DEMO_EMAIL;
         $this->secondaryEmail = self::DEMO2_EMAIL;
         $this->accountPassword = self::PASSWORD;
@@ -71,6 +86,7 @@ class DemoSeeder extends Seeder
      * Failure (including an email collision) rolls back the entire new dataset. */
     public function createFreshAccounts(string $primaryEmail, string $secondaryEmail, string $password): array
     {
+        self::assertNotLiveDatabase();
         if ($primaryEmail === $secondaryEmail
             || !str_ends_with($primaryEmail, '@orgos.test')
             || !str_ends_with($secondaryEmail, '@orgos.test')

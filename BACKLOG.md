@@ -123,6 +123,17 @@ drifted a day across the 25 Oct DST change; plus the known
 
 ## Found along the way (not yet fixed)
 
+### qa-lead pass on codex/expo-sdk-58 + feat/themes (2026-11-01) [from: pre-main QA of the SDK 58 + appearance branches]
+
+Blocking items were fixed before merge (Plex font no-op since SDK 58 -> fixed in globalFont.native.ts on feat/themes; demo seeders now refuse the live `lifeos` DB via `DemoSeeder::assertNotLiveDatabase()`, and the 4 demo accounts that were already in `lifeos` -- demo, demo2, realist, realist.ana @orgos.test, 14 spaces, 621 items, no non-demo rows entangled -- were deleted with the user's OK). Still open, low:
+- **`lib/api.ts` logs the first 3 characters of the bearer token on every request** (`[API REQUEST]`). Drop it, or log only in `__DEV__` without any token part.
+- **`DemoSeeder::wipe()` also deletes rows any user has inside a demo space** (`orWhereIn('space_id', ...)` on items and space_members). Harmless now that it refuses `lifeos`, but scope it to demo-owned rows.
+- **`normalizeNumberText` reads "38.456" as 38 456** (a dot + exactly 3 digits = thousands). Android's decimal-pad often only offers ".", so a fuel amount like 38.456 l is saved 1000x too large; CarFuelForm has no upper bound. Also not migrated: grocery quantity -> Casă supply (`GroceryDashboard.tsx:374`, `SimpleGrocerySpace.tsx:35`) still uses `replace(",", ".")`, so "1.500 g" becomes 1.5.
+- **`TourHost.tsx:93` calls `requestIdleCallback` with no fallback** -- Safari (web) has none, so tours throw there. Native and Chrome fine.
+- **`app/_layout.tsx:89` TS2493** -- Expo Router 58's typed `useSegments()` tuple has no index 1; types only, runtime fine. The only tsc error on codex/expo-sdk-58 (feat/themes is clean).
+- **`app.json` `userInterfaceStyle: "automatic"`** -- the keyboard, native Slider and pickers follow the phone's light/dark setting, not the chosen orgOS theme.
+- **Needs a phone check:** Casă Sarcini drag-reorder (react-native-draggable-flatlist 4.0.3 on RNGH 3.3's v3 ScrollView), the Acasă/Spații reorder overlap fix (aca7f88), the record-action Sheet handoff on iOS + Android, card shadows/gradients, Plex font width vs `numberOfLines` truncation, text size stacked on the phone's own accessibility size.
+
 ### First-user black-box sweep (2026-10-30) [from: persona black-box QA, isolated lifeos_qa]
 
 Ran ~40 of the 50 personas in `.codex/blackbox-2026-10-30/profiles.json` on web (390px, ro-RO, Europe/Bucharest) against a sandbox: `backend/.env.qa` (APP_ENV=qa -> DB `lifeos_qa`, MAIL_MAILER=log) on :8001, Expo web on :8081 with `EXPO_PUBLIC_BACKEND_URL=http://127.0.0.1:8001` (don't start Metro with CI=1 -- it disables file watching). Fixed in the same pass (uncommitted, awaiting qa-lead): Romanian number input everywhere (`parseLocaleNumber`/`normalizeNumberText` in `lib/format.ts`; "124.580" km was saved as 124.58, "1.500" lei rent as 1.5, "1.250,50" rejected), monthly/weekly Casă bills losing a day per payment (`addRecurrenceInterval` used toISOString), "valabil până la Invalid Date" after a car-document renewal (`formatCarDate` + DD.MM.YYYY), event time "25:70"/"14.30" silently saved as 23:59/09:00 (`parseClockTime`), raw "Failed to fetch" errors (now Romanian in `lib/api.ts`), Cheltuieli quick-add erasing the typed expense when the save fails, `findNodeHandle` crash on web in every first-use tour. Still open:
