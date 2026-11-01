@@ -4,6 +4,39 @@ What landed on `main` (= what runs on the phone day to day), newest first.
 One entry per merge, written when `main` moves. Details live in the
 commits; open follow-ups live in `BACKLOG.md`.
 
+## 2026-11-02 — Resolving from Acasă shows only the form, over Acasă
+
+Fast-forward of `main` from `45849c6` to `feat/resolve-over-dashboard` (6
+commits, `bb78bab`..`999ce83`). QA: qa-lead, three passes — CONDITIONAL PASS
+(load-failure dead end), PASS on `418ddf8` with one non-blocking defect, then
+PASS on the one-line fix `999ce83` for the whole branch (tsc clean, frontend
+tests 132/132); gated by release-lead. A stuck-Acasă bug found by on-device
+tracing was fixed; the user confirmed it works on the iPhone.
+
+**Changes**
+- Resolve from Acasă/De făcut: `todoHref(item, "resolve")`
+  (`lib/navigation/recordAction.tsx`) adds `&overlay=1`.
+- `app/record-action.tsx` is a transparentModal with no animation
+  (`app/_layout.tsx`). It mounts the Space page invisibly so only its
+  Sheets/dialogs show, and dims the origin while it waits. It always ends one
+  of these ways: leave after the form closes; leave with a notice if the load
+  fails or takes more than 10 s; or reveal the page in place with an
+  "Înapoi" pill. Leaving waits until no Sheet or dialog is open, then 50 ms.
+  The load-failure notice runs on a plain timer so the screen's unmount
+  doesn't cancel it.
+- `lib/dialogCoordinator.ts` and `components/ui/Sheet.tsx` report open
+  dialogs/Sheets; `TodoCarouselSheet.tsx` resumes 200 ms after a blur.
+- `app/(tabs)/[id].tsx` loads once on first focus and fetches items in
+  parallel with the space.
+- `lib/dashboard/spaceDue.ts`, `frontend/CLAUDE.md` updated; new test
+  `frontend/tests/resolve-overlay.test.cjs`, three existing tests adjusted.
+- `BACKLOG.md`: new section on performance and store-build fluidity
+  (`36260e6`, docs only).
+
+**Still needs a phone check** — an offline resolve shows the notice; where
+the "Înapoi" pill sits on a revealed page; taps on Acasă are ignored for about
+1.5 s after a form that closes without calling cancel.
+
 ## 2026-11-02 — "Bani fără vină" only where spending can be guilt-free
 
 Fast-forward of `main` from `4a2401d` to `feat/guilt-free-where-it-fits` (4
