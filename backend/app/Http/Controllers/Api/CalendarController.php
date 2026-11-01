@@ -335,6 +335,9 @@ class CalendarController extends Controller
                 }
                 $odo = (float) ($odometer[$e->space_id] ?? 0);
                 $e->setAttribute('current_odometer', $odo > 0 ? (int) round($odo) : null);
+                // The visit's own date, before due_at becomes the next due day
+                // (itemActions derives the interval from it -- as on /dashboard).
+                $e->setAttribute('service_date', $e->due_at?->toJSON());
                 $e->due_at = $due->setTimezone(config('app.timezone'));
 
                 return $e;
