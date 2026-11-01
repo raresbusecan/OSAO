@@ -4,6 +4,38 @@ What landed on `main` (= what runs on the phone day to day), newest first.
 One entry per merge, written when `main` moves. Details live in the
 commits; open follow-ups live in `BACKLOG.md`.
 
+## 2026-11-02 — Car services show on Acasă from the Mașină km window
+
+Fast-forward of `main` from `30e04e5` to `feat/service-due-window` (3
+commits, `b244e7d`..`5ea21e6`). QA: qa-lead, three passes — CONDITIONAL PASS
+(findings 1–4), PASS on `2533d7e` with no findings (tsc clean, frontend tests
+135/135, backend 140 passed + 1 skipped, bundle 200, live check on user 104),
+then PASS on the one-line follow-up `5ea21e6` (backend 140 passed + 1 skipped,
+traced against the dev DB); gated by release-lead.
+
+**Changes**
+- De făcut: when the card is filtered to one Space it says so ("Doar X · N
+  lucruri în alte spații"); the filter no longer offers grocery Spaces
+  (`TodoCarouselSheet.tsx`, `LayoutSheets.tsx`, `widgetVisibility.ts`).
+- Acasă uses the Mașină Space's own km thresholds (2,000 / 1,000 / 500 km)
+  via the new shared `lib/spaces/car/maintenanceTiers.ts`. A service with
+  200 km left is no longer grey and shows in De făcut.
+  - `DashboardController::carServiceDue` returns services inside the window
+    as upcoming with `km_left`.
+  - Rows show "În X km" in the tier colour; the car card reads e.g. "Schimb
+    ulei în 200 km" (`HomeWidgets.tsx`, `UpcomingCard.tsx`, `spaceDue.ts`,
+    `dashboard.calculations.ts`).
+- Car service rows on /dashboard and /calendar (`CalendarController::
+  carServicesBetween`) carry `service_date`, so "log again"
+  (`itemActions.ts`) keeps the day interval from the visit date. It was about
+  19 days early on Acasă and dropped the next date on Calendar.
+- New tests `backend/tests/Feature/CarServiceDueTest.php`,
+  `frontend/tests/service-km-status.test.cjs`; three frontend tests adjusted;
+  `BACKLOG.md`, `frontend/CLAUDE.md` updated.
+
+**Still needs a phone check** — tier colours on device; how the compact
+"Doar X" note wraps; a Calendar car-service swipe to log again.
+
 ## 2026-11-02 — Resolving from Acasă shows only the form, over Acasă
 
 Fast-forward of `main` from `45849c6` to `feat/resolve-over-dashboard` (6
