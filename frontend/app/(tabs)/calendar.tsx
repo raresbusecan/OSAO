@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, ScrollView, Pressable, DeviceEventEmitter, ActivityIndicator, AppState, Animated, Easing } from "react-native";
-import Svg, { Line, Path } from "react-native-svg";
+import { View, Text, ScrollView, Pressable, DeviceEventEmitter, ActivityIndicator, AppState } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
@@ -12,8 +11,6 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { notifyAction, confirmAction } from "@/lib/confirm";
 import { HEAT_LEVELS, heatColor, heatLevel, type HeatLevel } from "@/lib/statusColors";
 import { MONTH_STATUS_LABEL, dayCapacity, dayEffort, dayShare, monthStatus } from "@/lib/calendar/capacity";
-import { RingProgress } from "@/components/dashboard/RingProgress";
-import { useReducedMotion } from "@/lib/motion";
 import { CUSTOM_EVENT_COLOR, spaceColors, spaceTextColor } from "@/lib/spaces/spaceProfile";
 import { Sheet } from "@/components/ui/Sheet";
 import { DatePickerSheet } from "@/components/ui/DatePickerSheet";
@@ -34,9 +31,11 @@ import { ScreenBackground } from "@/components/ui/ScreenBackground";
 /*
  * Calendar, 2026-10 redesign (design-lead spec, mockup "orgOS Calendar
  * redesign"; user decisions 2026-10-05):
- *  - "Următoarele 3 luni" (2026-10-12, mockup "Bule cu inel"): three cards,
- *    today's month + 2, each a bubble filled to the month's load against
- *    its free time (lib/calendar/capacity.ts); tap one to jump the grid.
+ *  - "Următoarele 3 luni" (2026-11-01, mockup "Calendar · 3 luni variante",
+ *    mini-calendar): three cards, today's month + 2, each the month in
+ *    small with every day in its heat shade plus the month's status word
+ *    (load against its free time, lib/calendar/capacity.ts); tap one to
+ *    jump the grid.
  *  - The month grid: each day tile filled by its heat (the day's effort
  *    over its max capacity, only today/future -- past days never heat), a lime
  *    dot for a custom event, a red dot for a past day still holding
@@ -216,11 +215,9 @@ function CalendarScreen() {
   const loadOf = (key: string, date: Date) => (key >= todayKey ? dayShare(allDays[key], date) : 0);
 
   // "Următoarele 3 luni": each month's fill = all its effort / the sum of
-  // its days' MAX capacity. The current month counts the whole month, but
-  // /calendar only returns what is still OPEN (closed items are filtered
-  // out server-side, a paid bill's projection moves past the paid date),
-  // so its resolved share is unknown -> `resolvedShare: null` hides the
-  // ring until the payload carries resolved items (see BACKLOG).
+  // its days' MAX capacity (the status word), plus every day's own heat
+  // shade -- the same `loadOf` the big grid uses, so a mini month is that
+  // grid in small (past days stay blank, like there).
   const monthLoads = useMemo(
     () =>
       [0, 1, 2].map((delta) => {
@@ -229,14 +226,17 @@ function CalendarScreen() {
         const data = cache[mk];
         let effort = 0;
         let capacity = 0;
+        const levels: HeatLevel[] = [];
         for (let day = 1; day <= new Date(yy, mm + 1, 0).getDate(); day++) {
           const date = new Date(yy, mm, day);
+          const key = ymd(date);
           capacity += dayCapacity(date).max;
-          effort += dayEffort(data?.days[ymd(date)], date);
+          effort += dayEffort(data?.days[key], date);
+          levels.push(data && key >= todayKey ? heatLevel(dayShare(data.days[key], date)) : 0);
         }
-        return { key: mk, y: yy, m: mm, loaded: !!data, fill: capacity ? effort / capacity : 0, future: delta > 0, resolvedShare: null as number | null };
+        return { key: mk, y: yy, m: mm, loaded: !!data, fill: capacity ? effort / capacity : 0, future: delta > 0, levels };
       }),
-    [cache, ty, tm],
+    [cache, ty, tm, todayKey],
   );
   const loading = !cache[monthKeyOf(y, m)];
 
@@ -415,14 +415,15 @@ function CalendarScreen() {
             </View>
             <View testID="cal-months" style={{ flexDirection: "row", gap: spacing.sm }}>
               {monthLoads.map((mo) => (
-                <MonthBubbleCard
+                <MonthMiniCard
                   key={mo.key}
                   y={mo.y}
                   m={mo.m}
                   fill={mo.fill}
                   loaded={mo.loaded}
                   future={mo.future}
-                  resolvedShare={mo.resolvedShare}
+                  levels={mo.levels}
+                  todayDay={mo.key === monthKeyOf(ty, tm) ? today.getDate() : null}
                   selected={mo.key === monthKeyOf(y, m)}
                   onPress={() => goToMonth(mo.y, mo.m)}
                 />
@@ -723,27 +724,28 @@ function CalendarScreen() {
   );
 }
 
-const BUBBLE = 40; // the liquid's circle
-const RING = 50; // the outer "resolved" ring around it (current month only)
+const MINI_GAP = 2; // between the mini month's day cells
 
 /**
- * One "Următoarele 3 luni" card (mockup "Bule cu inel", 2026-10-12): a
- * bubble filled to the month's load (effort / the sum of its days' max
- * capacity, lib/calendar/capacity.ts) with a gentle wave on top that rises
- * on first show, a dashed comfort line at 50%, a red drop when the month
- * runs over 100%, and -- for the current month, once the data exists -- an
- * outer ring with the share already resolved. Short month + status to the
- * right ("≈ " on future months: estimates). Tap = jump the grid there; the
- * displayed month gets a 2px onSurface ring. RN Animated only (no
- * reanimated worklets in this Expo Go), nothing moves on reduced motion.
+ * One "Următoarele 3 luni" card (mockup "Calendar · 3 luni variante",
+ * mini-calendar, user pick 2026-11-01): the month in small -- one cell per
+ * day, Monday first, tinted with the big grid's own heat shades (lib/
+ * statusColors heatLevel/heatColor = the day's effort / its max capacity),
+ * so you see both how full the month is and WHEN. Days with nothing (and
+ * past days) are a plain surfaceTertiary cell, today gets a thin ring.
+ * Under the grid the month's status word (effort / the sum of its days'
+ * max capacity; "≈ " on future months: estimates; error red when over).
+ * Tap = jump the big grid there; the displayed month gets a 2px onSurface
+ * border. No animation.
  */
-function MonthBubbleCard({
+function MonthMiniCard({
   y,
   m,
   fill,
   loaded,
   future,
-  resolvedShare,
+  levels,
+  todayDay,
   selected,
   onPress,
 }: {
@@ -752,71 +754,29 @@ function MonthBubbleCard({
   fill: number;
   loaded: boolean;
   future: boolean;
-  resolvedShare: number | null;
+  /** One heat level per day of the month (index 0 = the 1st). */
+  levels: HeatLevel[];
+  /** Today's day number when this is today's month, else null. */
+  todayDay: number | null;
   selected: boolean;
   onPress: () => void;
 }) {
-  const { card, colors, radius, isDark } = useTheme();
-  const reduced = useReducedMotion();
+  const { card, colors, radius, spacing, isDark } = useTheme();
   const status = monthStatus(fill);
-  const over = loaded && status === "over";
-  // The grid's own heat palette: comfortable = shade 4, full = 6, over = 8.
-  const level: HeatLevel = status === "over" ? 8 : status === "full" ? 6 : 4;
-  const liquid = heatColor(level, isDark);
-  const height = loaded ? Math.min(fill, 1) * BUBBLE : 0;
-  const ring = loaded && resolvedShare != null;
-  const box = ring ? RING : BUBBLE;
-
-  const rise = useRef(new Animated.Value(0)).current; // 0 = below the bubble, 1 = in place
-  const wave = useRef(new Animated.Value(0)).current;
-  const drip = useRef(new Animated.Value(0)).current;
-  const risen = useRef(false);
-
-  // Rise once, the first time the month's data is there.
-  useEffect(() => {
-    if (!loaded || risen.current) return;
-    risen.current = true;
-    if (reduced) {
-      rise.setValue(1);
-      return;
-    }
-    Animated.timing(rise, { toValue: 1, duration: 1300, easing: Easing.bezier(0.2, 0.7, 0.2, 1), useNativeDriver: true }).start();
-  }, [loaded, reduced, rise]);
-
-  // Reduced motion (also when it turns on later): everything at rest.
-  useEffect(() => {
-    if (!reduced) return;
-    rise.stopAnimation();
-    if (risen.current) rise.setValue(1);
-    wave.stopAnimation();
-    wave.setValue(0);
-    drip.stopAnimation();
-    drip.setValue(0);
-  }, [reduced, rise, wave, drip]);
-
-  const showLiquid = loaded && height > 0;
-  useEffect(() => {
-    if (!showLiquid || reduced) return;
-    const loop = Animated.loop(Animated.timing(wave, { toValue: 1, duration: 3000, easing: Easing.linear, useNativeDriver: true }));
-    loop.start();
-    return () => loop.stop();
-  }, [showLiquid, reduced, wave]);
-
-  useEffect(() => {
-    if (!over || reduced) return;
-    const loop = Animated.loop(Animated.timing(drip, { toValue: 1, duration: 1800, easing: Easing.in(Easing.quad), useNativeDriver: true }));
-    loop.start();
-    return () => loop.stop();
-  }, [over, reduced, drip]);
 
   const first = new Date(y, m, 1);
   const short = capitalize(first.toLocaleDateString("ro-RO", { month: "short" }).replace(".", ""));
   const long = `${capitalize(first.toLocaleDateString("ro-RO", { month: "long" }))} ${y}`;
   const label = MONTH_STATUS_LABEL[status];
   const statusText = !loaded ? "…" : future ? `≈ ${label}` : label;
-  const a11y = !loaded
-    ? `${long}: se încarcă`
-    : `${long}: ${future ? "estimare: " : ""}${label.toLowerCase()}${ring ? `, ${Math.round((resolvedShare ?? 0) * 100)}% rezolvat` : ""}`;
+  const a11y = !loaded ? `${long}: se încarcă` : `${long}: ${future ? "estimare: " : ""}${label.toLowerCase()}`;
+
+  // Monday-first weeks, padded with nulls before the 1st and after the last day.
+  const offset = (first.getDay() + 6) % 7;
+  const cells: (number | null)[] = [...Array(offset).fill(null), ...levels.map((_, i) => i + 1)];
+  while (cells.length % 7) cells.push(null);
+  const weeks: (number | null)[][] = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
 
   return (
     <PressableScale
@@ -828,83 +788,50 @@ function MonthBubbleCard({
       style={{
         flex: 1,
         minWidth: 0,
-        height: 72,
         borderRadius: radius.card,
         ...card,
         borderWidth: 2,
         borderColor: selected ? colors.onSurface : "transparent",
-        flexDirection: "row",
-        alignItems: "center",
-        gap: 6,
-        paddingHorizontal: 6,
+        paddingHorizontal: spacing.sm,
+        paddingVertical: spacing.sm,
+        gap: spacing.sm,
       }}
     >
-      <View style={{ width: box, height: box, alignItems: "center", justifyContent: "center" }}>
-        {ring ? (
-          <View style={{ position: "absolute", top: 0, left: 0 }}>
-            <RingProgress value={resolvedShare ?? 0} size={RING} strokeWidth={3} color={colors.onSurfaceSecondary} trackColor={colors.surfaceTertiary} />
+      <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }} numberOfLines={1}>
+        {short}
+      </Text>
+      <View style={{ gap: MINI_GAP }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        {weeks.map((week, w) => (
+          <View key={w} style={{ flexDirection: "row", gap: MINI_GAP }}>
+            {week.map((day, i) => {
+              const level = day != null && loaded ? levels[day - 1] : 0;
+              return (
+                <View
+                  key={i}
+                  style={{
+                    flex: 1,
+                    aspectRatio: 1,
+                    borderRadius: 3,
+                    backgroundColor: day == null ? "transparent" : level > 0 ? heatColor(level, isDark) : colors.surfaceTertiary,
+                    borderWidth: day != null && day === todayDay ? 1.5 : 0,
+                    borderColor: colors.onSurface,
+                  }}
+                />
+              );
+            })}
           </View>
-        ) : null}
-        <View style={{ width: BUBBLE, height: BUBBLE, borderRadius: BUBBLE / 2, overflow: "hidden", backgroundColor: colors.surfaceTertiary }}>
-          {showLiquid ? (
-            <Animated.View
-              style={{
-                position: "absolute",
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height,
-                transform: [{ translateY: rise.interpolate({ inputRange: [0, 1], outputRange: [height + 5, 0] }) }],
-              }}
-            >
-              <Animated.View
-                style={{
-                  position: "absolute",
-                  left: 0,
-                  top: -4,
-                  width: BUBBLE * 2,
-                  height: 5,
-                  transform: [{ translateX: wave.interpolate({ inputRange: [0, 1], outputRange: [0, -BUBBLE] }) }],
-                }}
-              >
-                <Svg width={BUBBLE * 2} height={5} viewBox="0 0 200 5" preserveAspectRatio="none">
-                  <Path d="M0 2.5 Q25 0 50 2.5 T100 2.5 T150 2.5 T200 2.5 V5 H0 Z" fill={liquid} />
-                </Svg>
-              </Animated.View>
-              <View style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: liquid }} />
-            </Animated.View>
-          ) : null}
-          {/* The comfort level: half of the month's max = its comfortable load. */}
-          <Svg width={BUBBLE} height={BUBBLE} style={{ position: "absolute", top: 0, left: 0 }}>
-            <Line x1={0} y1={BUBBLE / 2} x2={BUBBLE} y2={BUBBLE / 2} stroke={hexToRgba(colors.onSurface, 0.5)} strokeWidth={1.5} strokeDasharray="3 2" />
-          </Svg>
-        </View>
-        {over ? (
-          <Animated.View
-            style={{
-              position: "absolute",
-              right: ring ? 2 : -4,
-              top: ring ? 0 : -3,
-              opacity: reduced ? 1 : drip.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 1, 0] }),
-              transform: [{ translateY: drip.interpolate({ inputRange: [0, 1], outputRange: [0, 14] }) }],
-            }}
-          >
-            <Svg width={6} height={8} viewBox="0 0 6 8">
-              <Path d="M3 0 C3 0 6 4 6 5.2 A3 3 0 0 1 0 5.2 C0 4 3 0 3 0 Z" fill={colors.error} />
-            </Svg>
-          </Animated.View>
-        ) : null}
+        ))}
       </View>
-      <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-        <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }} numberOfLines={1}>
-          {short}
-        </Text>
-        {/* "Liniștită" is one word: on a 360dp phone it gets ~39px, so let it
-            shrink a little instead of breaking mid-word. */}
-        <Text style={{ fontSize: 12, lineHeight: 15, color: colors.onSurfaceTertiary }} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.85}>
-          {statusText}
-        </Text>
-      </View>
+      {/* "≈ Prea plină" is the longest: let it shrink a little on a 360dp
+          phone instead of being cut. */}
+      <Text
+        style={{ marginTop: "auto", fontSize: 12, lineHeight: 15, fontWeight: status === "over" && loaded ? "500" : "400", color: status === "over" && loaded ? colors.error : colors.onSurfaceTertiary }}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.8}
+      >
+        {statusText}
+      </Text>
     </PressableScale>
   );
 }

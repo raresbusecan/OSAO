@@ -151,11 +151,13 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
   split / resplit / goal sheet open.
 - `app/(tabs)/calendar.tsx` — the whole Calendar screen, one file (2026-10
   redesign, mockup "orgOS Calendar redesign"): "Următoarele 3 luni" =
-  three `MonthBubbleCard`s (2026-10-12, mockup "Bule cu inel": today's
-  month + 2, a 40px bubble filled to the month's load, wave + rise via RN
-  Animated, dashed comfort line at 50%, red drop over 100%, tap = jump the
-  grid; the current month's "resolved" ring is wired but HIDDEN -- /calendar
-  returns open items only, see BACKLOG), the month grid
+  three `MonthMiniCard`s (2026-11-01, user pick from mockup "Calendar · 3
+  luni variante"; replaced the "Bule cu inel" bubbles): today's month + 2,
+  each the month in small -- one cell per day, Monday first, in the big
+  grid's heat shade (same `heatLevel(dayShare)`, past days blank, today
+  ringed) -- plus the month's status word under it (Liniștită/Plină/Prea
+  plină, "≈" on future months, red when over); no animation; tap = jump
+  the grid), the month grid
   (always 6 rows; tiles filled by `heatLevel`/`heatColor` from
   `lib/statusColors.ts` = the day's effort / its MAX capacity, 8 shades,
   full = darkest, today/future only. The capacity model -- workday 2/4,
