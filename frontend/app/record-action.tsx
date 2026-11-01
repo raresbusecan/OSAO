@@ -75,7 +75,9 @@ export default function RecordActionScreen() {
     // No time cap: a "Rezolvat" notice may stay up until the user taps OK.
     const attempt = () => {
       if (visibleSheetCount() > 0 || isDialogOpen()) { later(attempt, 100); return; }
-      later(() => { goBack(); if (then) later(then, 400); }, OVERLAY_DISMISS_MS);
+      // `then` runs after this screen is gone, so it can't use `later` (its
+      // timers are cleared on unmount): a plain timer, over the origin.
+      later(() => { goBack(); if (then) setTimeout(then, 400); }, OVERLAY_DISMISS_MS);
     };
     attempt();
   }, [goBack, later]);
