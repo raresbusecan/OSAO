@@ -187,7 +187,7 @@ const CALENDAR: TourDef = {
       title: () => "Calendarul tău",
       body: () => "Aici vezi, zi cu zi, tot ce are o dată în spațiile tale, plus evenimentele tale.",
       points: () => [
-        { glyph: "month", text: "Săgețile schimbă luna; poți și glisa calendarul stânga-dreapta. „Azi” te aduce înapoi." },
+        { glyph: "month", text: "Săgețile de sus schimbă luna; poți și glisa calendarul stânga-dreapta. „Azi” te aduce înapoi." },
         { glyph: "tap", lead: "Următoarele 3 luni:", text: "fiecare card e luna în mic, cu zilele colorate după cât de pline sunt. Atinge o lună ca să sari la ea." },
       ],
     },

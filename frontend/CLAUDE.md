@@ -111,7 +111,7 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
   space colors + "Creează primul spațiu"), and when every other card is
   hidden only by the empty rule (`onlyEmptyDataHidesOthers`) one hint line
   under the cards.
-- **Tab header** (2026-11-01, user decision: nothing may move when switching tabs): every main tab root -- Acasă, Spații, Calendar, Buget, Simplu Acasă + Calendar -- renders inside `TabScreen` (`components/navigation/TabHeader.tsx`: safe area + ScreenBackground + the header FIXED above the scroll, never inside it -- tabs stay mounted and keep their scroll offset, so a header in the scroll sat at a different height per tab). A screen only passes `header={<TabHeader title info actions />}`: small grey line (today's date, or `label` in edit modes), title (shrinks, never wraps) + ⓘ, the tab's `actions`, then `ProfileButton` (initial + email badge -> /settings) always LAST (`profile={false}` in edit modes, which use the same TabHeader). `header` undefined = none (Buget's sub-pages). Never hand-build a tab header, put it in a ScrollView, or change its padding on one screen. Calendar's tour step "months" now targets the 3 month cards only (the header is outside the scroll).
+- **Tab header** (2026-11-01, user decision: nothing may move when switching tabs): every main tab root -- Acasă, Spații, Calendar, Buget, Simplu Acasă + Calendar -- renders inside `TabScreen` (`components/navigation/TabHeader.tsx`: safe area + ScreenBackground + the header FIXED above the scroll, never inside it -- tabs stay mounted and keep their scroll offset, so a header in the scroll sat at a different height per tab). A screen only passes `header={<TabHeader title info actions />}`: small grey line (today's date, or `label`: edit modes, "Anul 2027" on Calendar in another year), title (shrinks, never wraps) + ⓘ, the tab's `actions`, then `ProfileButton` (initial + email badge -> /settings) always LAST (`profile={false}` in edit modes, which use the same TabHeader). `header` undefined = none (Buget's sub-pages). Never hand-build a tab header, put it in a ScrollView, or change its padding on one screen; the scroll content under it starts with `paddingTop: spacing.md` (keeps the first card's shadow). Calendar's tour step "months" now targets the 3 month cards only (the header is outside the scroll).
 - `app/(tabs)/spaces.tsx` — the Spaces grid (create/rename/delete). Edit
   mode = the pencil, a long press on an EMPTY spot, or a long press on a
   card (haptic; user decision 2026-10-10 -- edit-mode rows are tappable
@@ -173,8 +173,8 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
   Everything is relative to `today`, re-read on focus / app foreground /
   midnight (the tab stays mounted for days) -- never hardcode a month.
   Supports `?date=YYYY-MM-DD` deep-link. First-use tour "calendar" (4
-  steps): targets `calendar.nav` (title + arrows + month cards, one wrapper
-  View), `calendar.grid` (a View around the PanGestureHandler -- don't put
+  steps): targets `calendar.nav` (the 3 month cards; the title + arrows are
+  in the fixed TabHeader, outside the scroll), `calendar.grid` (a View around the PanGestureHandler -- don't put
   the ref on the gesture child), `calendar.day` ("De rezolvat" block),
   `calendar.events` (the Evenimente header row with "+ Eveniment");
   useAutoTour ready = month loaded, no NewEventSheet / event sheet open.
@@ -726,7 +726,7 @@ sub-pages, sheets, dialogs, login, settings). Rules:
   on Home's month total. Everything respects `useReducedMotion()`.
 - **Building blocks** -- use these instead of hand-rolling:
   `components/ui/primitives.tsx` (TopBar, CircleButton, Identity,
-  PageTitle, SectionHeader, Card, Group + Row with inset separators,
+  PageTitle (dead since TabHeader, 2026-11-01), SectionHeader, Card, Group + Row with inset separators,
   IconWell, Chip, Pill, Segmented, Button, Field, FieldButton,
   EmptyState, ToggleRow, Disclosure for "Mai multe detalii"),
   `components/ui/Sheet.tsx` (the one bottom sheet: spring in, drag handle
@@ -764,7 +764,7 @@ sub-pages, sheets, dialogs, login, settings). Rules:
 - **"ⓘ" explanations** -- every "how does this work" text lives in
   `lib/help.ts` (one topic per card / page / form / kind of record), NOT
   as grey paragraphs under the UI. Show it with `info="topic.key"` on
-  `SectionHeader`, `Identity`, `PageTitle` or `Sheet`, or a standalone
+  `SectionHeader`, `Identity`, `TabHeader` or `Sheet`, or a standalone
   `<InfoButton topic=... />` (`circle` = 44px header button). Opens in
   `components/ui/HelpHost.tsx` (mounted at the root, only while open --
   so it lands on top of an open form on web too). New screen or form?

@@ -290,7 +290,9 @@ function CalendarScreen() {
     const d = i - firstWeekday + 1;
     return d >= 1 && d <= daysInMonth ? d : null;
   });
-  const monthName = capitalize(new Date(y, m, 1).toLocaleDateString("ro-RO", { month: "long", ...(y !== ty ? { year: "numeric" as const } : {}) }));
+  // Month only in the title (a year made it too long next to Azi + ‹ › +
+  // profile on a narrow phone); another year shows in the header's small line.
+  const monthName = capitalize(new Date(y, m, 1).toLocaleDateString("ro-RO", { month: "long" }));
 
   /* ---------------- selected day ---------------- */
 
@@ -382,6 +384,7 @@ function CalendarScreen() {
   const tabHeader = (
     <TabHeader
       title={monthName}
+      label={y !== ty ? `Anul ${y}` : undefined}
       info="calendar.page"
       profileTestID="calendar-profile"
       actions={
@@ -398,7 +401,7 @@ function CalendarScreen() {
 
   return (
     <TabScreen testID="calendar-screen" header={tabHeader}>
-      <ScrollView ref={scrollRef} {...tourScroll} contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingBottom: 140, gap: spacing.section }}>
+      <ScrollView ref={scrollRef} {...tourScroll} contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 140, gap: spacing.section }}>
         {/* Tour step 1: the 3 month cards (the header is fixed above the scroll). */}
         <View {...navTarget} style={{ gap: spacing.section }}>
 

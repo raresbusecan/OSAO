@@ -470,7 +470,7 @@ export default function Spaces() {
       {loading ? (
         <ActivityIndicator color={colors.onSurfaceTertiary} style={{ marginTop: spacing.xl }} />
       ) : spaces.length === 0 ? (
-        <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingBottom: 140, gap: spacing.section }}>
+        <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 140, gap: spacing.section }}>
           <View style={{ gap: 6 }}>
             <Text accessibilityRole="header" style={{ fontSize: 20, fontWeight: "600", letterSpacing: -0.2, color: colors.onSurface }}>
               Creează primul tău spațiu
@@ -489,7 +489,7 @@ export default function Spaces() {
           onReorder={setDraftOrder}
           renderItem={renderEditRow}
           activeScale={1.03}
-          contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingBottom: 140 }}
+          contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 140 }}
           footer={
             customColored.length > 0 ? (
               <View style={{ marginTop: spacing.lg }}>
@@ -515,7 +515,7 @@ export default function Spaces() {
             onLongPress={startEditing}
             delayLongPress={450}
             accessible={false}
-            style={{ flexGrow: 1, flexDirection: "row", flexWrap: "wrap", alignContent: "flex-start", gap: spacing.md, paddingHorizontal: spacing.gutter, paddingBottom: 140 }}
+            style={{ flexGrow: 1, flexDirection: "row", flexWrap: "wrap", alignContent: "flex-start", gap: spacing.md, paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 140 }}
           >
             {spaces.map(renderSpaceCard)}
             {/* Each of the 4 kinds has a slot (user request 2026-10-09): a

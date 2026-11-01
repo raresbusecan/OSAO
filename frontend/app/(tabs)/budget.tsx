@@ -424,7 +424,7 @@ export default function BudgetScreen() {
           onBack={() => setShowOverview(false)}
         />
       ) : (
-      <ScrollView ref={scrollRef} {...tourScroll} contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingBottom: 140, gap: spacing.section }}>
+      <ScrollView ref={scrollRef} {...tourScroll} contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 140, gap: spacing.section }}>
 
         {SHOW_TOUR_TEST_BUTTON ? (
           // TEMP for testing -- see SHOW_TOUR_TEST_BUTTON (lib/tours.ts).

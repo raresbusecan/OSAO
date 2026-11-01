@@ -437,7 +437,8 @@ export function SimpleCalendar() {
 
   const tabHeader = (
     <TabHeader
-      title={capitalize(new Date(vy, vm, 1).toLocaleDateString("ro-RO", { month: "long", year: "numeric" }))}
+      title={capitalize(new Date(vy, vm, 1).toLocaleDateString("ro-RO", { month: "long" }))}
+      label={vy !== ty ? `Anul ${vy}` : undefined}
       profileTestID="simple-cal-profile"
       actions={
         <>
@@ -461,7 +462,7 @@ export function SimpleCalendar() {
   return (
     <TabScreen testID="simple-calendar-screen" header={tabHeader}>
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingBottom: 120, gap: spacing.section }}
+        contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 120, gap: spacing.section }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onPullRefresh} tintColor={muted} colors={[muted]} />}
       >
 

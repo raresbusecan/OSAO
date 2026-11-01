@@ -477,7 +477,7 @@ function Home() {
           // through; rounded like the cards so it isn't a hard-edged block
           // over a coloured Aspect background.
           liftedStyle={{ backgroundColor: colors.surface, borderRadius: radius.lg }}
-          contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingBottom: 140 }}
+          contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 140 }}
           header={<Text style={{ fontSize: 13, color: muted, marginBottom: spacing.section }}>Ține apăsat mânerul ☰ și trage ca să muți un card.</Text>}
           footer={
             <View style={{ gap: spacing.md }}>
@@ -532,7 +532,7 @@ function Home() {
             onLongPress={startEditing}
             delayLongPress={450}
             accessible={false}
-            style={{ flexGrow: 1, paddingHorizontal: spacing.gutter, paddingBottom: 120, gap: spacing.section }}
+            style={{ flexGrow: 1, paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 120, gap: spacing.section }}
           >
             {SHOW_TOUR_TEST_BUTTON ? (
               // TEMP for testing -- see SHOW_TOUR_TEST_BUTTON (lib/tours.ts).

@@ -17,6 +17,8 @@ import { ProfileButton } from "./ProfileButton";
  * 2026-11-01). A screen only says what its header holds. `header`
  * undefined = no header (Buget's sub-pages bring their own TopBar).
  * `headerTarget` = a tour target (useTourTarget) around the header.
+ * The gap under the header belongs to the screen's scroll content
+ * (`paddingTop: spacing.md`), so the first card's shadow isn't clipped.
  */
 export function TabScreen({
   testID,
@@ -34,7 +36,7 @@ export function TabScreen({
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID={testID}>
       <ScreenBackground />
       {header ? (
-        <View {...headerTarget} style={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.lg, paddingBottom: spacing.md }}>
+        <View {...headerTarget} style={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.lg }}>
           {header}
         </View>
       ) : null}
@@ -85,7 +87,7 @@ export function TabHeader({
             accessibilityRole="header"
             numberOfLines={1}
             adjustsFontSizeToFit
-            minimumFontScale={0.75}
+            minimumFontScale={0.65}
           >
             {title}
           </Text>

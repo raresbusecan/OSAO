@@ -126,7 +126,7 @@ export function SimpleHome() {
   return (
     <TabScreen testID="simple-home-screen" header={header}>
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingBottom: 120, gap: spacing.lg }}
+        contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 120, gap: spacing.lg }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={muted} />}
       >
         <VerifyEmailBanner testID="simple-home-verify-banner" />
