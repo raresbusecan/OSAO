@@ -374,8 +374,17 @@ export function Pill({
   a11yLabel?: string;
 }) {
   const { colors, spacing, radius } = useTheme();
-  const activeFill = tone ?? colors.surfaceTertiary;
-  const fg = active && tone ? readableOn(tone) : active ? colors.onSurface : dashed ? colors.onSurfaceTertiary : colors.onSurface;
+  // Inside a Sheet (itself surfaceSecondary) an unselected pill painted
+  // surfaceSecondary had no visible fill -- step up a layer there, like
+  // Group/Row/Segmented do; a selected pill without a tone then needs the
+  // strong fill so it still differs from the unselected ones.
+  const inSheet = React.useContext(SurfaceLevelContext) === "card";
+  const activeFill = tone ?? (inSheet ? colors.onSurface : colors.surfaceTertiary);
+  const fg = active && tone
+    ? readableOn(tone)
+    : active
+      ? inSheet ? colors.surface : colors.onSurface
+      : dashed ? colors.onSurfaceTertiary : colors.onSurface;
   return (
     <PressableScale
       testID={testID}
@@ -389,7 +398,7 @@ export function Pill({
         height: 40,
         paddingHorizontal: spacing.md + 2,
         borderRadius: radius.pill,
-        backgroundColor: active ? activeFill : dashed ? "transparent" : colors.surfaceSecondary,
+        backgroundColor: active ? activeFill : dashed ? "transparent" : inSheet ? colors.surfaceTertiary : colors.surfaceSecondary,
         borderWidth: dashed ? 1.5 : 0,
         borderStyle: dashed ? "dashed" : "solid",
         borderColor: colors.borderStrong,

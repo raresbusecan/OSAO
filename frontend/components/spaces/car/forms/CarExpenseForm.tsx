@@ -82,6 +82,14 @@ export default function CarExpenseForm({
       return;
     }
 
+    // The server requires a title; picking a category fills it in. Without
+    // either, the save used to fail with a server error after the entry had
+    // already flashed into the list.
+    if (!title.trim() && !category.trim()) {
+      setError("Alege o categorie sau scrie un titlu.");
+      return;
+    }
+
     if (
       odometer &&
       (odometerValue === undefined ||
