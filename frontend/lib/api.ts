@@ -114,22 +114,11 @@ async function request<T = any>(
     ...(init.headers as Record<string, string> | undefined),
   };
 
-  if (token) {
-  headers.Authorization = `Bearer ${token}`;
+  if (token) headers.Authorization = `Bearer ${token}`;
 
-  console.log("[API REQUEST]", {
-    method: init.method ?? "GET",
-    path,
-    hasToken: true,
-    authorization: `Bearer ${token.slice(0, 3)}...`,
-  });
-} else {
-  console.log("[API REQUEST]", {
-    method: init.method ?? "GET",
-    path,
-    hasToken: false,
-  });
-}
+  // Dev-only request trace. Never log any part of the token (it used to
+  // print its first characters on every request).
+  if (__DEV__) console.log("[API REQUEST]", { method: init.method ?? "GET", path, hasToken: !!token });
 
   let res: Response;
   try {

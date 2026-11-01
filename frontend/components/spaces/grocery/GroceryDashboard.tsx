@@ -5,7 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { CircleButton, TopBar, Identity, Button, InfoButton } from "@/components/ui/primitives";
-import { lei, roCount } from "@/lib/format";
+import { lei, parseLocaleNumber, roCount } from "@/lib/format";
 import { confirmAction, notifyAction } from "@/lib/confirm";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/auth";
@@ -371,7 +371,8 @@ export default function GroceryDashboard({
     if (!quantity) return null;
     const match = quantity.match(/[\d.,]+/);
     if (!match) return null;
-    const value = Number(match[0].replace(",", "."));
+    // Romanian notation, like every number field ("1.500 g" = 1500).
+    const value = parseLocaleNumber(match[0]);
     return Number.isFinite(value) && value > 0 ? value : null;
   };
 

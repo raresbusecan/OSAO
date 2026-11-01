@@ -32,6 +32,11 @@ export function useMonthPager(): MonthPager {
   const reduced = useReducedMotion();
   const [drag] = useState(() => new Animated.Value(0));
   const width = useRef(320);
+  // True while the page is sliding OUT (before `apply` runs). A second
+  // chevron tap in that ~140ms used to interrupt this animation, whose
+  // callback still applied, and then apply again -- DatePickerSheet
+  // skipped a month, Calendar re-applied the same one. Ignore it instead.
+  const leaving = useRef(false);
 
   const slide = (dir: 1 | -1, apply: () => void) => {
     if (reduced) {
@@ -39,8 +44,11 @@ export function useMonthPager(): MonthPager {
       drag.setValue(0);
       return;
     }
+    if (leaving.current) return;
+    leaving.current = true;
     const W = width.current;
     Animated.timing(drag, { toValue: -dir * W, duration: 140, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => {
+      leaving.current = false;
       apply();
       drag.setValue(dir * W);
       Animated.timing(drag, { toValue: 0, duration: 180, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();

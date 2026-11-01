@@ -9,13 +9,15 @@ function setup({ simple = false, current = 'home', inSpace = false, prevented = 
     useRef: (current) => ({ current }), useState: (initial) => [initial, () => {}], useEffect() {},
   };
   class Value { interpolate() { return 0; } }
+  // The bars read layout tokens (spacing/radius) too since Settings > Aspect.
+  const theme = { colors: {}, spacing: { xs: 4, sm: 8, md: 12, lg: 16, gutter: 20 }, radius: { card: 16, lg: 20, pill: 999 } };
   const mocks = {
     react: React,
     'react-native': { View: 'View', Pressable: 'Pressable', Text: 'Text', Animated: { Value, View: 'Animated.View' }, StyleSheet: { hairlineWidth: 1 } },
     'react-native-safe-area-context': { useSafeAreaInsets: () => ({ bottom: 0 }) },
     'expo-router': { usePathname: () => inSpace ? '/7' : '/' + current, useSegments: () => ['(tabs)', inSpace ? '[id]' : current] },
     '@expo/vector-icons': { Ionicons: 'Ionicons' },
-    '@/lib/theme': { useTheme: () => ({ colors: {} }) },
+    '@/lib/theme': { useTheme: () => theme },
     '@/lib/motion': { motion: { scale: { control: 0.98 } } },
     '@/lib/navigation/returnTrail': { TAB_ORDER: ['home', 'spaces', 'calendar', 'budget'], isTabDeep: () => deep, recordTabLeave: (...args) => calls.push(['trail', ...args]), setTabBarHeight() {} },
     '@/lib/simpleSheets': { useSimpleSheets: () => ({ spaceAccent: null }), openQuickAdd: (id) => calls.push(['add', id]) },

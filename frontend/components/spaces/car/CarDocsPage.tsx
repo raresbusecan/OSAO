@@ -9,7 +9,14 @@ import { TopBar, Identity, Group, Row, IconWell, Chip, EmptyState } from "@/comp
 import { roCount } from "@/lib/format";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import type { CarData } from "./car.data.types";
-import { getDocumentStatus, type DocumentStatus } from "@/lib/spaces/car/calculations/dashboard.calculations";
+import {
+  getDocumentStatus,
+  getDocumentUrgencyTier,
+  isDocumentSuperseded,
+  type DocumentStatus,
+} from "@/lib/spaces/car/calculations/dashboard.calculations";
+import { urgencyTierColor } from "@/lib/statusColors";
+import type { ThemeColors } from "@/lib/theme";
 import { formatCarDate, formatCarNumber } from "./utils/carFormatters";
 
 export type CarDocsPageProps = {
@@ -34,9 +41,12 @@ function statusLabel(status: DocumentStatus, daysUntilExpiry: number | null): st
   return "Valabil";
 }
 
-function statusColor(status: DocumentStatus, colors: any): string {
-  if (status === "expired") return colors.error;
-  if (status === "expiring_soon") return colors.warning;
+/** The same 3 bands as CarDashboard's "Urmează" and Simplu's Mașină
+ * (45-31 days yellow, 30-16 orange, 15 or less / expired red; green
+ * further out), so one RCA never reads orange here and red there. */
+function statusColor(entry: CarDocumentEntry, status: DocumentStatus, colors: ThemeColors): string {
+  const tier = getDocumentUrgencyTier(entry);
+  if (tier) return urgencyTierColor(tier, colors);
   if (status === "valid") return colors.success;
   return colors.onSurfaceTertiary;
 }
@@ -64,8 +74,11 @@ export function CarDocsPage({ carData, onBack, onRecordPress, onRenew, onDelete 
   const { colors, spacing } = useTheme();
 
   const documents = useMemo(() => {
+    // Current documents only: not archived, and not already replaced by a
+    // newer one of the same type (a renewal shows ONLY the new one, as on
+    // the dashboard and in Simplu, even before auto-archive runs).
     return carData.documentEntries
-      .filter((entry) => !entry.archived)
+      .filter((entry) => !entry.archived && !isDocumentSuperseded(entry, carData.documentEntries))
       .map((entry) => ({ ...entry, ...getDocumentStatus(entry) }))
       // Soonest expiry first -- the VALIDITY dates are what matter for a
       // document, never the day it was typed into the app.
@@ -91,7 +104,7 @@ export function CarDocsPage({ carData, onBack, onRecordPress, onRenew, onDelete 
       ) : (
         <Group inset={68}>
           {documents.map((doc) => {
-            const tone = statusColor(doc.status, colors);
+            const tone = statusColor(doc, doc.status, colors);
             return (
               <SwipeRow
                 key={doc.id}

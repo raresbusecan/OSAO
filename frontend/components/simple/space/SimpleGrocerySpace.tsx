@@ -4,7 +4,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { confirmAction, notifyAction } from "@/lib/confirm";
-import { roCount } from "@/lib/format";
+import { parseLocaleNumber, roCount } from "@/lib/format";
 import { motion } from "@/lib/motion";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { GroceryItemRow } from "@/components/spaces/grocery/GroceryItemRow";
@@ -32,7 +32,7 @@ function leadingNumber(quantity?: string): number | null {
   if (!quantity) return null;
   const match = quantity.match(/[\d.,]+/);
   if (!match) return null;
-  const value = Number(match[0].replace(",", "."));
+  const value = parseLocaleNumber(match[0]); // "1.500 g" = 1500, "2,5 kg" = 2.5
   return Number.isFinite(value) && value > 0 ? value : null;
 }
 

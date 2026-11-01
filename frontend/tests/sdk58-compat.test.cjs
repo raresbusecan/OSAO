@@ -11,6 +11,8 @@ function swipeRow(props = {}) {
     'react-native-gesture-handler/ReanimatedSwipeable': { __esModule: true, default: 'Swipeable' },
     'react-native-reanimated': { __esModule: true, default: { View: 'Animated.View' }, Extrapolation: { CLAMP: 'clamp' }, useAnimatedStyle: (fn) => fn(), interpolate: (x) => 0.6 + Math.min(1, Math.max(0, x / 100)) * 0.55 },
     '@expo/vector-icons': { Ionicons: 'Ionicons' },
+    // SwipeRow keeps its row opaque over the action panels (OpaqueRows).
+    '@/components/ui/primitives': { OpaqueRows: 'OpaqueRows' },
   });
   return { calls, row: SwipeRow({ cornerRadius: 12, colors: { success: 'green', error: 'red' }, onResolve: () => calls.push('resolve'), onDelete: () => calls.push('delete'), ...props }) };
 }

@@ -1,6 +1,6 @@
 import { maintenanceLabel } from "@/lib/spaces/car/maintenanceLabels";
 import type { CarData } from "@/components/spaces/car/car.data.types";
-import { roCount, roDate, roNumber } from "@/lib/format";
+import { daysFromToday, roCount, roDate, roNumber } from "@/lib/format";
 import type { CarNextItem } from "@/components/spaces/car/car.ui.types";
 import type {
   CarDocumentEntry,
@@ -196,9 +196,9 @@ export function getDocumentStatus(
     return { status: "no_expiry", daysUntilExpiry: null };
   }
 
-  const daysUntilExpiry = Math.ceil(
-    (expiry.getTime() - referenceDate.getTime()) / MS_PER_DAY,
-  );
+  // Calendar days (lib/format's one day-difference rule), not ms / 24h --
+  // that ceil was off by one around midnight and on 23/25-hour DST days.
+  const daysUntilExpiry = daysFromToday(expiry, referenceDate);
 
   if (daysUntilExpiry < 0) {
     return { status: "expired", daysUntilExpiry };
@@ -329,7 +329,7 @@ function maintenanceDateUrgency(
   const target = parseDateString(entry.nextServiceDate);
   if (!target) return null;
 
-  const daysUntilService = Math.ceil((target.getTime() - referenceDate.getTime()) / MS_PER_DAY);
+  const daysUntilService = daysFromToday(target, referenceDate); // calendar days, as for documents
   if (daysUntilService > DOC_ALERT_DAYS) return null; // not in the alert window yet
 
   return { tier: urgencyTierFromDays(daysUntilService), overdue: daysUntilService < 0, daysUntilService };
