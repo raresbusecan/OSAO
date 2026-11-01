@@ -468,7 +468,7 @@ export default function Spaces() {
   return (
     <TabScreen testID="spaces-screen" header={tabHeader}>
       {loading ? (
-        <ActivityIndicator color={colors.onSurfaceTertiary} style={{ marginTop: spacing.xl }} />
+        <ActivityIndicator color={colors.onSurfaceTertiary} style={{ marginTop: spacing.md + spacing.xl }} />
       ) : spaces.length === 0 ? (
         <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 140, gap: spacing.section }}>
           <View style={{ gap: 6 }}>

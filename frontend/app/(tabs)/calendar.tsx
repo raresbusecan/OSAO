@@ -474,7 +474,7 @@ function CalendarScreen() {
             <View
               accessible
               accessibilityRole="adjustable"
-              accessibilityLabel={`Calendar, ${monthName}`}
+              accessibilityLabel={`Calendar, ${monthName} ${y}`}
               accessibilityActions={[{ name: "increment" }, { name: "decrement" }]}
               onAccessibilityAction={(e) => changeMonth(e.nativeEvent.actionName === "increment" ? 1 : -1)}
             >
