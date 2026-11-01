@@ -38,11 +38,14 @@ export function GuiltFreeToggle({
   onlyIfSet?: boolean;
 }) {
   const summary = useBudgetPlan();
-  // Flagged when the form opened = stays for the whole edit, so switching it
-  // off by mistake can be switched back (the form remounts per open).
-  const [setOnOpen] = useState(value);
+  // Flagged at any point while this form is open = stays for the whole
+  // edit, so switching it off by mistake can be switched back. Latched,
+  // not read once at mount: some forms (Casă "Modifică" from the dashboard)
+  // render before their record's values load.
+  const [wasSet, setWasSet] = useState(value);
+  if (value && !wasSet) setWasSet(true);
   if (!summary?.plan && !value) return null;
-  if (onlyIfSet && !value && !setOnOpen) return null;
+  if (onlyIfSet && !value && !wasSet) return null;
   const budget = summary?.guiltFree.budget;
   return (
     <ToggleRow
