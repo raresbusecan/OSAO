@@ -15,15 +15,15 @@ import { HomeWidget, type HomeCtx } from "@/components/home/HomeWidgets";
 import { CatalogSheet, TemplatesSheet, WidgetSettingsSheet } from "@/components/home/LayoutSheets";
 import { overdueKmLabel } from "@/lib/dashboard/spaceDue";
 import { PressableScale } from "@/components/ui/PressableScale";
-import { ProfileButton } from "@/components/navigation/ProfileButton";
-import { CircleButton, InfoButton, Pill } from "@/components/ui/primitives";
+import { TabHeader, TAB_HEADER_TOP } from "@/components/navigation/TabHeader";
+import { CircleButton, Pill } from "@/components/ui/primitives";
 import { VerifyEmailBanner } from "@/components/auth/VerifyEmailBanner";
 import { useAppMode } from "@/lib/appMode";
 import { SimpleHome } from "@/components/simple/SimpleHome";
 import { emailVerifiedState } from "@/components/auth/VerifiedBadge";
 import { motion } from "@/lib/motion";
 import { confirmAction, notifyAction } from "@/lib/confirm";
-import { capitalize, daysFromToday, roCount, roDate, roRelativeDays } from "@/lib/format";
+import { daysFromToday, roCount, roDate, roRelativeDays } from "@/lib/format";
 import { LAYOUT_TEMPLATES, WIDGET_META, defaultLayout, ensureSpendCard, sanitizeLayout, toRows, type Widget } from "@/lib/dashboard/layout";
 import { onlyEmptyDataHidesOthers, visibleWidgets } from "@/lib/dashboard/widgetVisibility";
 import { useTourScroll, useTourTarget } from "@/components/ui/tourTargets";
@@ -70,7 +70,7 @@ export default function HomeRoute() {
 }
 
 function Home() {
-  const { radius, colors, spacing, typography } = useTheme();
+  const { radius, colors, spacing } = useTheme();
   const { user } = useAuth();
   const router = useRouter();
 
@@ -396,17 +396,14 @@ function Home() {
     </View>
   );
 
-  const header = (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-      {editing ? (
+  const header = editing ? (
+    <TabHeader
+      label="Personalizezi Acasă"
+      title="Aranjează"
+      info="home.edit"
+      profile={false}
+      actions={
         <>
-          <View style={{ flex: 1, gap: 2 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-              <Text style={{ fontSize: 13, color: muted }}>Personalizezi Acasă</Text>
-              <InfoButton topic="home.edit" />
-            </View>
-            <Text style={{ ...typography.title, color: colors.onSurface }} numberOfLines={1}>Aranjează</Text>
-          </View>
           <Pressable
             testID="home-edit-cancel"
             onPress={() => setEditing(false)}
@@ -429,20 +426,19 @@ function Home() {
             {saving ? <ActivityIndicator color={colors.surface} /> : <Text style={{ fontSize: 15, fontWeight: "600", color: colors.surface }}>Gata</Text>}
           </PressableScale>
         </>
-      ) : (
-        <>
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ fontSize: 13, color: muted }}>{capitalize(now.toLocaleDateString("ro-RO", { weekday: "long", day: "numeric", month: "long" }))}</Text>
-            <Text style={{ ...typography.title, color: colors.onSurface }}>{greeting(user?.name)}</Text>
-          </View>
-          <InfoButton topic="home.page" circle />
-          <View {...editTarget}>
-            <CircleButton testID="home-edit-open" icon="create-outline" label="Personalizează Acasă" onPress={startEditing} />
-          </View>
-          <ProfileButton testID="home-greeting-settings-link" />
-        </>
-      )}
-    </View>
+      }
+    />
+  ) : (
+    <TabHeader
+      title={greeting(user?.name)}
+      info="home.page"
+      profileTestID="home-greeting-settings-link"
+      actions={
+        <View {...editTarget}>
+          <CircleButton testID="home-edit-open" icon="create-outline" label="Personalizează Acasă" onPress={startEditing} />
+        </View>
+      }
+    />
   );
 
   // Cards the user hid, then cards with nothing to show (lib/dashboard/
@@ -484,7 +480,7 @@ function Home() {
           // through; rounded like the cards so it isn't a hard-edged block
           // over a coloured Aspect background.
           liftedStyle={{ backgroundColor: colors.surface, borderRadius: radius.lg }}
-          contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.lg, paddingBottom: 140 }}
+          contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing[TAB_HEADER_TOP], paddingBottom: 140 }}
           header={<View style={{ marginBottom: spacing.section, gap: spacing.sm }}>{header}<Text style={{ fontSize: 13, color: muted }}>Ține apăsat mânerul ☰ și trage ca să muți un card.</Text></View>}
           footer={
             <View style={{ gap: spacing.md }}>
@@ -539,7 +535,7 @@ function Home() {
             onLongPress={startEditing}
             delayLongPress={450}
             accessible={false}
-            style={{ flexGrow: 1, paddingHorizontal: spacing.gutter, paddingTop: spacing.lg, paddingBottom: 120, gap: spacing.section }}
+            style={{ flexGrow: 1, paddingHorizontal: spacing.gutter, paddingTop: spacing[TAB_HEADER_TOP], paddingBottom: 120, gap: spacing.section }}
           >
             <View {...headerTarget}>{header}</View>
             {SHOW_TOUR_TEST_BUTTON ? (

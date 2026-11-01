@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ProfileButton } from "@/components/navigation/ProfileButton";
+import { TabHeader, TAB_HEADER_TOP } from "@/components/navigation/TabHeader";
 import { View, Text, ScrollView, ActivityIndicator, DeviceEventEmitter } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -28,7 +28,7 @@ import { todoHref } from "@/lib/dashboard/spaceDue";
 import { severityColor, budgetSeverity } from "@/lib/statusColors";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { Sheet } from "@/components/ui/Sheet";
-import { PageTitle, SectionHeader, Group, IconWell, InfoButton, Button, Field, EmptyState, Row, Pill } from "@/components/ui/primitives";
+import { SectionHeader, Group, IconWell, InfoButton, Button, Field, EmptyState, Row, Pill } from "@/components/ui/primitives";
 import { useTourScroll, useTourTarget } from "@/components/ui/tourTargets";
 import { useAutoTour } from "@/lib/useAutoTour";
 import { SHOW_TOUR_TEST_BUTTON, startTour, type TourCtx } from "@/lib/tours";
@@ -423,8 +423,8 @@ export default function BudgetScreen() {
           onBack={() => setShowOverview(false)}
         />
       ) : (
-      <ScrollView ref={scrollRef} {...tourScroll} contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 140, gap: spacing.section }}>
-        <PageTitle info="budget.page" right={<ProfileButton testID="budget-profile" />}>Buget</PageTitle>
+      <ScrollView ref={scrollRef} {...tourScroll} contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing[TAB_HEADER_TOP], paddingBottom: 140, gap: spacing.section }}>
+        <TabHeader title="Buget" info="budget.page" profileTestID="budget-profile" />
 
         {SHOW_TOUR_TEST_BUTTON ? (
           // TEMP for testing -- see SHOW_TOUR_TEST_BUTTON (lib/tours.ts).

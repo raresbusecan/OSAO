@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ProfileButton } from "@/components/navigation/ProfileButton";
+import { TabHeader, TAB_HEADER_TOP } from "@/components/navigation/TabHeader";
 import { View, Text, Pressable, ScrollView, RefreshControl, ActivityIndicator, AppState, DeviceEventEmitter } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -65,7 +65,7 @@ type MonthData = { days: Record<string, any[]>; recurring: any[] };
 type AgendaRow = { key: string; dayKey: string; date: Date; item: any };
 
 export function SimpleCalendar() {
-  const { card, colors, spacing, radius, typography, isDark } = useTheme();
+  const { card, colors, spacing, radius, isDark } = useTheme();
   const router = useRouter();
 
   /* ---------------- today (re-read on focus / foreground / midnight) ---------------- */
@@ -441,30 +441,29 @@ export function SimpleCalendar() {
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="simple-calendar-screen">
       <ScreenBackground />
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 120, gap: spacing.section }}
+        contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing[TAB_HEADER_TOP], paddingBottom: 120, gap: spacing.section }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onPullRefresh} tintColor={muted} colors={[muted]} />}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-          <View style={{ flex: 1, gap: 2 }}>
-            <Text style={{ fontSize: 13, color: muted }}>Calendar</Text>
-            <Text style={{ ...typography.title, color: colors.onSurface }} accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
-              {capitalize(new Date(vy, vm, 1).toLocaleDateString("ro-RO", { month: "long", year: "numeric" }))}
-            </Text>
-          </View>
-          <PressableScale
-            testID="simple-cal-today"
-            onPress={() => goToMonth(ty, tm, todayKey)}
-            accessibilityRole="button"
-            accessibilityLabel="Mergi la azi"
-            hitSlop={4}
-            style={{ height: 36, paddingHorizontal: 14, borderRadius: 18, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}
-          >
-            <Text style={{ fontSize: 14, fontWeight: "500", color: colors.onSurface }}>Azi</Text>
-          </PressableScale>
-          <CircleButton testID="simple-cal-prev" icon="chevron-back" label="Luna trecută" onPress={() => changeMonth(-1)} />
-          <CircleButton testID="simple-cal-next" icon="chevron-forward" label="Luna viitoare" onPress={() => changeMonth(1)} />
-          <ProfileButton testID="simple-cal-profile" />
-        </View>
+        <TabHeader
+          title={capitalize(new Date(vy, vm, 1).toLocaleDateString("ro-RO", { month: "long", year: "numeric" }))}
+          profileTestID="simple-cal-profile"
+          actions={
+            <>
+              <PressableScale
+                testID="simple-cal-today"
+                onPress={() => goToMonth(ty, tm, todayKey)}
+                accessibilityRole="button"
+                accessibilityLabel="Mergi la azi"
+                hitSlop={4}
+                style={{ height: 36, paddingHorizontal: 14, borderRadius: 18, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: "500", color: colors.onSurface }}>Azi</Text>
+              </PressableScale>
+              <CircleButton testID="simple-cal-prev" icon="chevron-back" label="Luna trecută" onPress={() => changeMonth(-1)} />
+              <CircleButton testID="simple-cal-next" icon="chevron-forward" label="Luna viitoare" onPress={() => changeMonth(1)} />
+            </>
+          }
+        />
 
         {/* THE MONTH -- swipe it left/right (the rows below swipe sideways
             themselves, so the pan lives on this card only). */}

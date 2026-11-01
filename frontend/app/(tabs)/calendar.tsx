@@ -27,7 +27,7 @@ import { useTourScroll, useTourTarget } from "@/components/ui/tourTargets";
 import { useAutoTour } from "@/lib/useAutoTour";
 import { SHOW_TOUR_TEST_BUTTON, startTour, type TourCtx } from "@/lib/tours";
 import { ScreenBackground } from "@/components/ui/ScreenBackground";
-import { ProfileButton } from "@/components/navigation/ProfileButton";
+import { TabHeader, TAB_HEADER_TOP } from "@/components/navigation/TabHeader";
 
 /*
  * Calendar, 2026-10 redesign (design-lead spec, mockup "orgOS Calendar
@@ -91,7 +91,7 @@ export default function CalendarRoute() {
 }
 
 function CalendarScreen() {
-  const { card, colors, spacing, radius, typography, isDark } = useTheme();
+  const { card, colors, spacing, radius, isDark } = useTheme();
   const router = useRouter();
   const { date: dateParam } = useLocalSearchParams<{ date?: string }>();
   // "Today" drives everything date-relative: the strip's 3 months, the
@@ -384,28 +384,23 @@ function CalendarScreen() {
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="calendar-screen">
       <ScreenBackground />
-      <ScrollView ref={scrollRef} {...tourScroll} contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 140, gap: spacing.section }}>
+      <ScrollView ref={scrollRef} {...tourScroll} contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing[TAB_HEADER_TOP], paddingBottom: 140, gap: spacing.section }}>
         {/* Tour step 1: the month title + arrows and the 3 month cards. */}
         <View {...navTarget} style={{ gap: spacing.section }}>
-          {/* Acasă's header shape (small label over a title that may shrink),
-              so the profile circle fits on the same row as Azi + ‹ ›. */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-            <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text style={{ fontSize: 13, color: muted }}>Calendar</Text>
-                <InfoButton topic="calendar.page" />
-              </View>
-              <Text style={{ ...typography.title, color: colors.onSurface }} accessibilityRole="header" numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>
-                {monthName}
-              </Text>
-            </View>
-            {selected !== todayKey ? (
-              <Pill testID="cal-today" label="Azi" onPress={() => goToMonth(ty, tm, todayKey)} />
-            ) : null}
-            <CircleButton testID="cal-prev-month" icon="chevron-back" label="Luna trecută" onPress={() => changeMonth(-1)} />
-            <CircleButton testID="cal-next-month" icon="chevron-forward" label="Luna viitoare" onPress={() => changeMonth(1)} />
-            <ProfileButton testID="calendar-profile" />
-          </View>
+          <TabHeader
+            title={monthName}
+            info="calendar.page"
+            profileTestID="calendar-profile"
+            actions={
+              <>
+                {selected !== todayKey ? (
+                  <Pill testID="cal-today" label="Azi" onPress={() => goToMonth(ty, tm, todayKey)} />
+                ) : null}
+                <CircleButton testID="cal-prev-month" icon="chevron-back" label="Luna trecută" onPress={() => changeMonth(-1)} />
+                <CircleButton testID="cal-next-month" icon="chevron-forward" label="Luna viitoare" onPress={() => changeMonth(1)} />
+              </>
+            }
+          />
 
           {SHOW_TOUR_TEST_BUTTON ? (
             // TEMP for testing -- see SHOW_TOUR_TEST_BUTTON (lib/tours.ts).

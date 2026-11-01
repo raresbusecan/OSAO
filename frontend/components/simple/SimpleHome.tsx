@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { ProfileButton } from "@/components/navigation/ProfileButton";
+import { TabHeader, TAB_HEADER_TOP } from "@/components/navigation/TabHeader";
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, DeviceEventEmitter } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -18,7 +18,7 @@ import { SpacesGrid, type GridSpace } from "@/components/simple/home/SpacesGrid"
 import { dueBySpace, type SpaceDue } from "@/lib/dashboard/spaceDue";
 import { prefetchQuickAdd } from "@/lib/quickAddCache";
 import { guardSimpleSpaceCreate } from "@/lib/simpleLimits";
-import { capitalize, roNumber } from "@/lib/format";
+import { roNumber } from "@/lib/format";
 import { ScreenBackground } from "@/components/ui/ScreenBackground";
 import {
   detectSpaceType,
@@ -49,7 +49,7 @@ type SpaceLite = GridSpace;
  * teaser.
  */
 export function SimpleHome() {
-  const { card, colors, spacing, radius, typography } = useTheme();
+  const { card, colors, spacing, radius } = useTheme();
   const { user } = useAuth();
   const router = useRouter();
 
@@ -120,25 +120,16 @@ export function SimpleHome() {
     if (created?.id != null) router.push(`/${String(created.id)}` as any);
   };
 
-  const now = new Date();
   const muted = colors.onSurfaceTertiary;
   const hasSpaces = spaces.length > 0;
 
-  const header = (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={{ fontSize: 13, color: muted }}>{capitalize(now.toLocaleDateString("ro-RO", { weekday: "long", day: "numeric", month: "long" }))}</Text>
-        <Text style={{ ...typography.title, color: colors.onSurface }}>{loading || failed || hasSpaces ? greeting(user?.name) : "Bun venit"}</Text>
-      </View>
-      <ProfileButton testID="simple-home-settings-link" />
-    </View>
-  );
+  const header = <TabHeader title={loading || failed || hasSpaces ? greeting(user?.name) : "Bun venit"} profileTestID="simple-home-settings-link" />;
 
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="simple-home-screen">
       <ScreenBackground />
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.lg, paddingBottom: 120, gap: spacing.lg }}
+        contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing[TAB_HEADER_TOP], paddingBottom: 120, gap: spacing.lg }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={muted} />}
       >
         {header}
