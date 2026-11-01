@@ -198,7 +198,7 @@ export const HELP = {
   "calendar.heat": {
     title: "Următoarele 3 luni",
     points: [
-      { text: "Fiecare card e o lună în mic: luna asta și următoarele două. Fiecare pătrățel e o zi, colorat ca în calendarul mare: cu cât e mai închis, cu atât ai mai mult de făcut în ziua aceea față de timpul liber. Atinge o lună ca să sari la ea." },
+      { text: "Fiecare card e o lună în mic: luna asta și următoarele două. Fiecare pătrățel e o zi, colorat ca în calendarul mare: cu cât culoarea e mai intensă, cu atât ai mai mult de făcut în ziua aceea față de timpul liber. O zi fără nimic are doar contur. Atinge o lună ca să sari la ea." },
       { title: "Liniștită, Plină, Prea plină", text: "Sub fiecare lună vezi cât de încărcată e toată luna: până la jumătate din timpul liber e „Liniștită”, peste jumătate e „Plină”, iar peste tot timpul liber e „Prea plină” (cu roșu)." },
       { title: "Timpul liber", text: "Socotim că lucrezi de luni până vineri, 9–17: într-o zi de lucru încap puține lucruri, în weekend și de sărbătorile legale încap de două ori mai multe." },
       { title: "Cât cântărește un lucru", text: "O factură sau o rată: puțin. O sarcină sau un eveniment: ceva mai mult. Un service, ITP-ul, reînnoirea unui document sau o vizită a unui meșter: cel mai mult, și și mai mult într-o zi de lucru, fiindcă trebuie făcute în program." },

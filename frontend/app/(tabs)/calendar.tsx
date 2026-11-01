@@ -732,7 +732,7 @@ const MINI_GAP = 2; // between the mini month's day cells
  * day, Monday first, tinted with the big grid's own heat shades (lib/
  * statusColors heatLevel/heatColor = the day's effort / its max capacity),
  * so you see both how full the month is and WHEN. Days with nothing (and
- * past days) are a plain surfaceTertiary cell, today gets a thin ring.
+ * past days) are only an outline, today gets an onSurface ring.
  * Under the grid the month's status word (effort / the sum of its days'
  * max capacity; "≈ " on future months: estimates; error red when over).
  * Tap = jump the big grid there; the displayed month gets a 2px onSurface
@@ -812,9 +812,12 @@ function MonthMiniCard({
                     flex: 1,
                     aspectRatio: 1,
                     borderRadius: 3,
-                    backgroundColor: day == null ? "transparent" : level > 0 ? heatColor(level, isDark) : colors.surfaceTertiary,
-                    borderWidth: day != null && day === todayDay ? 1.5 : 0,
-                    borderColor: colors.onSurface,
+                    // An empty day is only an outline, like the big grid's
+                    // transparent level 0: a filled grey cell read darker than
+                    // the lightest heat shades in the light themes.
+                    backgroundColor: day != null && level > 0 ? heatColor(level, isDark) : "transparent",
+                    borderWidth: day == null ? 0 : day === todayDay ? 1.5 : level > 0 ? 0 : 1,
+                    borderColor: day === todayDay ? colors.onSurface : colors.borderStrong,
                   }}
                 />
               );
