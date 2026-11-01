@@ -14,6 +14,8 @@ import { lei, roCount, roDate, roNumber, roRelativeDays, capitalize, roUnit } fr
 import { CUSTOM_EVENT_COLOR, SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, spaceColors, spaceTextColor, type SpaceColors, type SpaceKind } from "@/lib/spaces/spaceProfile";
 import { maintenanceLabel } from "@/lib/spaces/car/maintenanceLabels";
 import { todoHref, todoTitle } from "@/lib/dashboard/spaceDue";
+import { kmUrgencyTier } from "@/lib/spaces/car/maintenanceTiers";
+import { urgencyTierColor } from "@/lib/statusColors";
 import { WIDGET_META, type Widget } from "@/lib/dashboard/layout";
 import { MultiRingProgress } from "@/components/dashboard/RingProgress";
 import { BudgetSplitBar, BudgetUpcomingNote, budgetUpcomingSuffix } from "@/components/dashboard/BudgetSplitBar";
@@ -48,7 +50,7 @@ export type HomeCtx = {
     /** What else waits in that space, spelled out ("încă 10 restante · 1 azi"), or null. */
     more: string | null; rank: number }[];
   overdueCount: number;
-  statusOf: (r: any) => { label: string; tone: "error" | "warning" | "muted" };
+  statusOf: (r: any) => { label: string; tone: "error" | "warning" | "caution" | "muted" };
   monthName: string;
   daysLeft: number;
   monthly: { total: number; sources: any[] };
@@ -482,6 +484,13 @@ function TodoCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
   const reminders = only ? ctx.reminderRows.filter((r) => r.space && String(r.space.id) === only) : ctx.reminderRows;
   const spaceName = only ? ctx.spaces.find((s) => s.id === only)?.name : null;
   const title = widget.settings?.title || (spaceName ? `De făcut · ${spaceName}` : "De făcut");
+  // A card filtered to one space can read "La zi" while other spaces have
+  // things due (user report 2026-11-02): say whose card it is and what's
+  // waiting elsewhere -- the compact heading truncates the space name.
+  const elsewhere = only ? ctx.todoRows.length - items.length : 0;
+  const filterNote = spaceName
+    ? `Doar ${spaceName}${elsewhere > 0 ? ` · ${roCount(elsewhere, "lucru", "lucruri")} în alte spații` : ""}`
+    : null;
 
   if (widget.size === "compact") {
     const top = rows[0];
@@ -491,7 +500,11 @@ function TodoCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
         <Text style={{ fontSize: 22, fontWeight: "600", color: overdue > 0 ? colors.error : colors.onSurface }} numberOfLines={1}>
           {overdue > 0 ? roCount(overdue, "restantă", "restante") : items.length > 0 ? `${items.length} în 7 zile` : "La zi"}
         </Text>
-        {top ? <Text style={{ fontSize: 12, color: muted }} numberOfLines={1}>{top.top ? todoTitle(top.top) : top.summary}</Text> : null}
+        {top ? (
+          <Text style={{ fontSize: 12, color: muted }} numberOfLines={1}>{top.top ? todoTitle(top.top) : top.summary}</Text>
+        ) : filterNote ? (
+          <Text testID="home-todo-filter-note" style={{ fontSize: 12, color: muted }} numberOfLines={2}>{filterNote}</Text>
+        ) : null}
       </TapCard>
     );
   }
@@ -506,7 +519,10 @@ function TodoCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
       {rows.length === 0 && reminders.length === 0 ? (
         <Card style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.lg, ...(widget.color ? { backgroundColor: hexToRgba(widget.color, isDark ? 0.16 : 0.1) } : null) }}>
           <Ionicons name="checkmark-circle-outline" size={22} color={colors.success} />
-          <Text style={{ fontSize: 15, color: colors.onSurface }}>{ctx.spaces.length === 0 ? "Creează un spațiu din tab-ul Spații." : "Ești la zi. Nimic de făcut."}</Text>
+          <View style={{ flex: 1, gap: 2 }}>
+            <Text style={{ fontSize: 15, color: colors.onSurface }}>{ctx.spaces.length === 0 ? "Creează un spațiu din tab-ul Spații." : "Ești la zi. Nimic de făcut."}</Text>
+            {filterNote && ctx.spaces.length > 0 ? <Text style={{ fontSize: 13, color: muted }}>{filterNote}</Text> : null}
+          </View>
         </Card>
       ) : (
         <Group inset={68} style={widget.color ? { backgroundColor: hexToRgba(widget.color, isDark ? 0.16 : 0.1) } : undefined}>
@@ -515,7 +531,7 @@ function TodoCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
             const fill = widget.color ?? (r.kind ? own?.color ?? muted : CUSTOM_EVENT_COLOR);
             const tint = widget.color ?? (r.kind ? own?.tint : spaceTextColor("custom", isDark)) ?? fill;
             const status = r.top ? ctx.statusOf(r.top) : null;
-            const statusColor = status?.tone === "error" ? colors.error : status?.tone === "warning" ? colors.warning : muted;
+            const statusColor = status?.tone === "error" ? colors.error : status?.tone === "warning" ? colors.warning : status?.tone === "caution" ? colors.caution : muted;
             const row = (
               <Row
                 testID={`home-due-${r.key}`}
@@ -700,16 +716,22 @@ function CarCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
   const tint = widget.color ?? own.tint;
   const muted = colors.onSurfaceTertiary;
   const service = car.next_service;
+  // Inside the Mașină space's km window it reads "în 200 km" in that
+  // space's tier colour (maintenanceTiers.ts); further off, "la 10.400 km".
+  const serviceTier = service ? kmUrgencyTier(service.km_left) : null;
   const serviceLine = service
     ? service.km_left < 0
       ? `${maintenanceLabel(service.title)}: depășit cu ${roNumber(-service.km_left)} km`
-      : `${maintenanceLabel(service.title)} la ${roNumber(service.at_km)} km`
+      : serviceTier
+        ? `${maintenanceLabel(service.title)} în ${roNumber(service.km_left)} km`
+        : `${maintenanceLabel(service.title)} la ${roNumber(service.at_km)} km`
     : null;
+  const serviceColor = serviceTier ? urgencyTierColor(serviceTier, colors) : muted;
   return (
     <TapCard widget={widget} fallbackAccent={accent} onPress={ctx.preview ? undefined : () => ctx.navigate(`/${car.space_id}`)} label={`${car.name}, ${car.odometer ?? "?"} km`}>
       <CardHeading icon="car-outline" text={widget.settings?.title || car.name} color={tint} info={infoOf(ctx, "card.car")} />
       <Text style={{ fontSize: 22, fontWeight: "600", color: colors.onSurface }} numberOfLines={1}>{car.odometer ? `${roNumber(car.odometer)} km` : "—"}</Text>
-      {serviceLine ? <Text style={{ fontSize: 12, color: service.km_left < 0 ? colors.error : muted }} numberOfLines={1}>{serviceLine}</Text> : null}
+      {serviceLine ? <Text style={{ fontSize: 12, color: serviceColor }} numberOfLines={1}>{serviceLine}</Text> : null}
       {widget.size === "wide" && car.next_document ? (
         <Text style={{ fontSize: 12, color: muted }} numberOfLines={1}>{car.next_document.title} expiră pe {car.next_document.expiry}</Text>
       ) : null}
@@ -783,7 +805,9 @@ function CalendarCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
   const muted = colors.onSurfaceTertiary;
   const title = widget.settings?.title || (widget.size === "compact" ? "Azi" : "Următoarele 7 zile");
   // Credit reminders are "a thing on that day" too (listed, never counted as late).
-  const upcoming = [...ctx.todoRows, ...ctx.reminderRows].filter((r) => r.days >= 0).sort((a, b) => a.days - b.days);
+  // A car service due by km (km_left) has no real day -- it's in De făcut,
+  // not on a calendar.
+  const upcoming = [...ctx.todoRows, ...ctx.reminderRows].filter((r) => r.days >= 0 && r.km_left == null).sort((a, b) => a.days - b.days);
   const tint = widget.color ?? CUSTOM_EVENT_COLOR;
   const go = ctx.preview ? undefined : () => ctx.navigate("/calendar");
   if (widget.size === "compact") {

@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadModule } = require('./helpers/load-ts.cjs');
 const routes = loadModule('lib/navigation/recordActionRoute.ts');
-const { todoHref } = loadModule('lib/dashboard/spaceDue.ts', { '@/lib/format': {}, '@/lib/spaces/car/maintenanceLabels': {}, '@/lib/navigation/recordActionRoute': routes });
+const { todoHref } = loadModule('lib/dashboard/spaceDue.ts', { '@/lib/format': {}, '@/lib/spaces/car/maintenanceLabels': {}, '@/lib/spaces/car/maintenanceTiers': loadModule('lib/spaces/car/maintenanceTiers.ts'), '@/lib/navigation/recordActionRoute': routes });
 
 test('only a resolve that opens record-action shows over its origin screen', () => {
   const task = { id: 42, type: 'home_task', space: { id: 7 } };

@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadModule, loadCallback, loadEffect, loadPress } = require('./helpers/load-ts.cjs');
 const routes = loadModule('lib/navigation/recordActionRoute.ts');
-const { todoHref } = loadModule('lib/dashboard/spaceDue.ts', { '@/lib/format': {}, '@/lib/spaces/car/maintenanceLabels': {}, '@/lib/navigation/recordActionRoute': routes });
+const { todoHref } = loadModule('lib/dashboard/spaceDue.ts', { '@/lib/format': {}, '@/lib/spaces/car/maintenanceLabels': {}, '@/lib/spaces/car/maintenanceTiers': loadModule('lib/spaces/car/maintenanceTiers.ts'), '@/lib/navigation/recordActionRoute': routes });
 const source = { id: '42', title: 'RCA 2026', issueDate: '01.01.2026', expiryDate: '31.12.2026', documentType: 'RCA', issuer: 'Asigurator', price: 900, service: 'Oil Change', provider: 'Service' };
 
 for (const type of ['car_document', 'car_maintenance']) {

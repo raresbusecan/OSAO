@@ -12,7 +12,7 @@ import { isRecurringPayment } from "@/components/dashboard/RecurringBillRow";
 import { needsSpend } from "@/lib/budget/plan";
 import { HomeWidget, type HomeCtx } from "@/components/home/HomeWidgets";
 import { CatalogSheet, TemplatesSheet, WidgetSettingsSheet } from "@/components/home/LayoutSheets";
-import { overdueKmLabel } from "@/lib/dashboard/spaceDue";
+import { serviceKmStatus } from "@/lib/dashboard/spaceDue";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { TabHeader, TabScreen } from "@/components/navigation/TabHeader";
 import { CircleButton, Pill } from "@/components/ui/primitives";
@@ -48,7 +48,7 @@ function greeting(name?: string) {
  * English label (Item::SPENDING_TYPE_SPACE), not a user-given name. */
 const SOURCE_KIND: Record<string, SpaceKind> = { Car: "car", Home: "home", Grocery: "grocery", Expenses: "expenses" };
 
-type ActionableItem = { id: number | string; type: string; title: string; due_at: string; overdue_km?: number | null; space: { id: number | string; name: string; icon: string; type?: string | null; color?: string | null } | null };
+type ActionableItem = { id: number | string; type: string; title: string; due_at: string; overdue_km?: number | null; km_left?: number | null; space: { id: number | string; name: string; icon: string; type?: string | null; color?: string | null } | null };
 type SpaceCard = { id: string; name: string; kind: SpaceKind; /** spaces.color (palette key or null) -- spaceColors() resolves it. */ color?: string | null };
 type Urgency = "overdue" | "today" | "upcoming";
 type TodoRow = ActionableItem & { urgency: Urgency; days: number };
@@ -246,9 +246,9 @@ function Home() {
     return rows.sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
   }, [todoRows, spaces, spaceById, dashboard]);
 
-  const statusOf = (r: TodoRow): { label: string; tone: "error" | "warning" | "muted" } => {
-    const km = overdueKmLabel(r);
-    if (km) return { label: km, tone: "error" };
+  const statusOf = (r: TodoRow): { label: string; tone: "error" | "warning" | "caution" | "muted" } => {
+    const km = serviceKmStatus(r);
+    if (km) return { label: km.label, tone: km.tier === "critical" ? "error" : km.tier === "medium" ? "warning" : "caution" };
     // A document reads by its VALIDITY date, never when it was entered.
     if (r.type.endsWith("_document")) {
       const date = roDate(r.due_at, { short: true });

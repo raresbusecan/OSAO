@@ -407,6 +407,7 @@ stacked `<Modal>`s, just early-return branches. `closeAllForms()` /
   `api.updateCarOdometer`. Caption under the km (`getOdometerUpdatedAt`) =
   newer of the manual update and the latest entry with a reading. Help
   topic `car.odometer`.
+- **Service km window** (2026-11-02, user decision: Acasă uses the space's thresholds): `lib/spaces/car/maintenanceTiers.ts` holds 2.000 / 1.000 / 500 km (`kmUrgencyTier`), used by the Mașină screen, Acasă's Mașină card ("Schimb ulei în 200 km", tier colour) and "De făcut". The backend mirrors 2.000 as `DashboardController::SERVICE_KM_WINDOW`: a service inside it comes back in `upcoming`, dated tomorrow, with `km_left`; past its km, as before, `overdue_km` dated yesterday. Every row reads it via `serviceKmStatus()` (lib/dashboard/spaceDue.ts) -> label + tier (`urgencyTierColor`). Km-only rows stay out of Acasă's Calendar card (no real day). A date within 7 days still wins over the km window.
 - `CarDocsPage.tsx`, `CarArchivePage.tsx`, `CarHistoryPage.tsx`,
   `CarExpensesPage.tsx`, `CarProfileForm.tsx`.
 - `forms/CarFuelForm.tsx`, `CarMaintenanceForm.tsx`,

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { loadModule, loadCallback, loadFunction, loadEffect, loadFocus, loadPress } = require('./helpers/load-ts.cjs');
 const routes = loadModule('lib/navigation/recordActionRoute.ts');
 const { todoHref } = loadModule('lib/dashboard/spaceDue.ts', {
-  '@/lib/format': {}, '@/lib/spaces/car/maintenanceLabels': {}, '@/lib/navigation/recordActionRoute': routes,
+  '@/lib/format': {}, '@/lib/spaces/car/maintenanceLabels': {}, '@/lib/spaces/car/maintenanceTiers': loadModule('lib/spaces/car/maintenanceTiers.ts'), '@/lib/navigation/recordActionRoute': routes,
 });
 const bill = { id: 42, type: 'home_recurring', title: 'Internet', space_id: 7, space: { id: 7 }, due_at: '2026-10-20T12:00:00Z', amount: 80 };
 const destination = '/record-action?id=7&itemId=42&itemType=home_recurring';

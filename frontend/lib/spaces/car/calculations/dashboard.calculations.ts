@@ -1,4 +1,5 @@
 import { maintenanceLabel } from "@/lib/spaces/car/maintenanceLabels";
+import { kmUrgencyTier } from "@/lib/spaces/car/maintenanceTiers";
 import type { CarData } from "@/components/spaces/car/car.data.types";
 import { daysFromToday, roCount, roDate, roNumber } from "@/lib/format";
 import type { CarNextItem } from "@/components/spaces/car/car.ui.types";
@@ -295,15 +296,8 @@ export function isDocumentSuperseded(
    each optional and don't depend on each other. Whichever one is closer
    decides the tier, same as the actual rule mechanics/manufacturers use. */
 
-const MAINT_TIER_LIGHT_KM = 2000; // entry point, same value MAINT_ALERT_KM used to alert at alone
-const MAINT_TIER_MEDIUM_KM = 1000;
-const MAINT_TIER_CRITICAL_KM = 500;
-
-function urgencyTierFromKm(remainingKm: number): UrgencyTier {
-  if (remainingKm <= MAINT_TIER_CRITICAL_KM) return "critical";
-  if (remainingKm <= MAINT_TIER_MEDIUM_KM) return "medium";
-  return "light";
-}
+// The km window (2000 / 1000 / 500) lives in lib/spaces/car/maintenanceTiers.ts,
+// shared with Acasă's Mașină card and "De făcut".
 
 type SingleDimensionUrgency = { tier: UrgencyTier; overdue: boolean };
 
@@ -314,9 +308,10 @@ function maintenanceKmUrgency(
   if (entry.nextServiceOdometer === undefined) return null;
 
   const remainingKm = entry.nextServiceOdometer - currentOdometer;
-  if (remainingKm > MAINT_TIER_LIGHT_KM) return null; // not in the alert window yet
+  const tier = kmUrgencyTier(remainingKm);
+  if (!tier) return null; // not in the alert window yet
 
-  return { tier: urgencyTierFromKm(remainingKm), overdue: remainingKm < 0, remainingKm };
+  return { tier, overdue: remainingKm < 0, remainingKm };
 }
 
 function maintenanceDateUrgency(

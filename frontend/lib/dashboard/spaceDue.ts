@@ -1,5 +1,6 @@
 import { daysFromToday, roCount, roNumber } from "@/lib/format";
 import { maintenanceLabel } from "@/lib/spaces/car/maintenanceLabels";
+import { kmUrgencyTier, type KmUrgencyTier } from "@/lib/spaces/car/maintenanceTiers";
 import { recordActionHref } from "@/lib/navigation/recordActionRoute";
 
 /** Per-Space counts of what's due, by LOCAL calendar day. */
@@ -51,11 +52,18 @@ export function todoTitle(item: { type: string; title: string }): string {
   return item.title;
 }
 
-/** A car service past its km threshold has no real date; the server
- * dates it yesterday (so it groups as restant) and sends `overdue_km` --
- * this is the label every screen shows for it, same as Mașină's. */
-export function overdueKmLabel(item: { overdue_km?: number | null }): string | null {
-  return item.overdue_km ? `Depășit cu ${roNumber(item.overdue_km)} km` : null;
+/** A car service due by km has no real date. Past its km the server dates
+ * it yesterday (groups as restant) and sends `overdue_km`; within the
+ * Mașină space's window (lib/spaces/car/maintenanceTiers.ts) it dates it
+ * tomorrow and sends `km_left`. This is the label + tier every screen
+ * shows for it, same as Mașină's (color it with urgencyTierColor). */
+export function serviceKmStatus(item: { overdue_km?: number | null; km_left?: number | null }): { label: string; tier: KmUrgencyTier } | null {
+  if (item.overdue_km) return { label: `Depășit cu ${roNumber(item.overdue_km)} km`, tier: "critical" };
+  if (item.km_left != null) {
+    const tier = kmUrgencyTier(item.km_left);
+    if (tier) return { label: item.km_left === 0 ? "Acum" : `În ${roNumber(item.km_left)} km`, tier };
+  }
+  return null;
 }
 
 /** Space records open their owning section in a temporary root Stack flow;

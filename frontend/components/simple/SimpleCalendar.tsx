@@ -11,7 +11,7 @@ import { capitalize, lei } from "@/lib/format";
 import { CUSTOM_EVENT_COLOR, spaceColors } from "@/lib/spaces/spaceProfile";
 import { heatColor, type HeatLevel } from "@/lib/statusColors";
 import { dayCapacity, dayEffort, monthStatus } from "@/lib/calendar/capacity";
-import { overdueKmLabel, todoHref, todoTitle } from "@/lib/dashboard/spaceDue";
+import { serviceKmStatus, todoHref, todoTitle } from "@/lib/dashboard/spaceDue";
 import { isReminder } from "@/components/dashboard/CreditReminderRow";
 import { SwipeItemRow } from "@/components/dashboard/SwipeItemRow";
 import { canSwipeResolve, resolveFromSummary } from "@/lib/dashboard/itemActions";
@@ -362,7 +362,7 @@ export function SimpleCalendar() {
     const amount = it.amount != null && Number(it.amount) > 0 ? Number(it.amount) : null;
     const title = isEvent ? it.title : reminder ? it.title || "Credit" : todoTitle(it);
     const time = isEvent ? timeOf(it.due_at) : null;
-    const km = !isEvent && !reminder ? overdueKmLabel(it) : null;
+    const km = !isEvent && !reminder ? serviceKmStatus(it)?.label ?? null : null;
     const subtitle = isEvent
       ? ["Eveniment", time].filter(Boolean).join(" · ")
       : reminder

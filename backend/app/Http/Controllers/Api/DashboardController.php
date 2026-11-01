@@ -16,6 +16,9 @@ use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
+    /** Mirrors MAINT_TIER_LIGHT_KM in frontend lib/spaces/car/maintenanceTiers.ts. */
+    private const SERVICE_KM_WINDOW = 2000;
+
     public function index()
     {
         $user = Auth::user();
@@ -284,7 +287,8 @@ class DashboardController extends Controller
     // too, or a car showing "Schimb ulei · Depășit cu 500 km" reads
     // "1 de făcut" on Acasă. Only what matters for "De făcut" is mirrored:
     // overdue by km (within the same 5,000 km staleness cut-off the Car
-    // screen uses) or due by date. A km-overdue item has no real date, so
+    // screen uses), due by date, or coming up within the space's km window
+    // (`km_left`, dated tomorrow). A km-overdue item has no real date, so
     // it's dated yesterday (sorts into "Restante") and carries
     // `overdue_km` for the label.
     private function carServiceDue(User $user, Carbon $now): Collection
@@ -346,10 +350,25 @@ class DashboardController extends Controller
                     try {
                         $due = Carbon::createFromFormat('d.m.Y', $nextDate, $now->getTimezone())->startOfDay();
                     } catch (\Exception $ex) {
-                        return null;
+                        $due = null;
                     }
-                    if ($due->lte($horizon)) {
+                    if ($due && $due->lte($horizon)) {
                         $e->due_at = $due->setTimezone($appTz);
+
+                        return $e;
+                    }
+                }
+
+                // Coming up by km: the same window the Mașină space shows in
+                // "Urmează" (lib/spaces/car/maintenanceTiers.ts, 2,000 km --
+                // user decision 2026-11-02: "De făcut" uses the space's
+                // thresholds). No real date: dated tomorrow so it groups with
+                // the coming week, and `km_left` carries the label/tier.
+                if (is_numeric($nextKm) && $odo > 0) {
+                    $remaining = (float) $nextKm - $odo;
+                    if ($remaining >= 0 && $remaining <= self::SERVICE_KM_WINDOW) {
+                        $e->due_at = $now->copy()->addDay()->startOfDay()->setTimezone($appTz);
+                        $e->setAttribute('km_left', (int) round($remaining));
 
                         return $e;
                     }

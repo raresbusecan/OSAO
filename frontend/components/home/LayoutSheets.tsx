@@ -148,7 +148,10 @@ function SettingsBody({ widget, onClose, onSave, onRemove, ctx }: { widget: Widg
 
   // What this card can point at.
   const choices: { key: string; label: string }[] | null = (() => {
-    if (widget.type === "todo") return [{ key: "", label: "Toate spațiile" }, ...ctx.spaces.map((s) => ({ key: s.id, label: s.name }))];
+    // Cumpărături has nothing with a due date, so filtering "De făcut" to it
+    // only ever read "La zi" (user, 2026-11-02). A saved grocery filter is
+    // still listed so it can be switched off.
+    if (widget.type === "todo") return [{ key: "", label: "Toate spațiile" }, ...ctx.spaces.filter((s) => s.kind !== "grocery" || s.id === widget.settings?.spaceId).map((s) => ({ key: s.id, label: s.name }))];
     if (widget.type === "car") return (ctx.dashboard?.cars ?? []).map((c: any) => ({ key: String(c.space_id), label: c.name }));
     if (widget.type === "grocery") return (ctx.dashboard?.toBuyLists ?? []).map((l: any) => ({ key: String(l.list_id), label: l.title }));
     if (widget.type === "supplies") return ctx.spaces.filter((s) => s.kind === "home").map((s) => ({ key: s.id, label: s.name }));

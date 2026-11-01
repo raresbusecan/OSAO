@@ -5,14 +5,14 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useTheme, type ThemeColors } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { notifyAction } from "@/lib/confirm";
-import { severityColor } from "@/lib/statusColors";
+import { severityColor, urgencyTierColor } from "@/lib/statusColors";
 import { CUSTOM_EVENT_COLOR, spaceColors } from "@/lib/spaces/spaceProfile";
 import { Sheet } from "@/components/ui/Sheet";
 import { Group, Row, SectionHeader, EmptyState, hexToRgba } from "@/components/ui/primitives";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { motion } from "@/lib/motion";
 import { daysFromToday, roCount, roDate, roRelativeDays } from "@/lib/format";
-import { overdueKmLabel, todoHref, todoTitle } from "@/lib/dashboard/spaceDue";
+import { serviceKmStatus, todoHref, todoTitle } from "@/lib/dashboard/spaceDue";
 import { SwipeItemRow } from "@/components/dashboard/SwipeItemRow";
 import { CreditReminderRow, isReminder } from "@/components/dashboard/CreditReminderRow";
 
@@ -24,6 +24,7 @@ type TodoItem = {
   recurrence?: string | null;
   metadata?: Record<string, any> | null;
   overdue_km?: number | null;
+  km_left?: number | null;
   space: { id: number | string; name: string; icon: string; type?: string | null; color?: string | null } | null;
 };
 
@@ -168,12 +169,12 @@ export function TodoCarouselSheet({ visible, onClose, overdue, today, upcoming, 
             <Group inset={20}>
               {g.rows.map(({ item, days }) => {
                 const isDone = resolved.has(String(item.id));
-                const kmLabel = overdueKmLabel(item);
+                const km = serviceKmStatus(item);
                 const isDoc = item.type.endsWith("_document");
                 // Documents read by their validity date, not a day count.
                 const docDate = isDoc ? roDate(item.due_at, { short: true }) : "";
-                const status = kmLabel
-                  ? { label: kmLabel, color: severityColor("critical", colors) }
+                const status = km
+                  ? { label: km.label, color: urgencyTierColor(km.tier, colors) }
                   : isDoc
                     ? { label: days < 0 ? `Expirat pe ${docDate}` : `Expiră pe ${docDate}`, color: days < 0 ? severityColor("critical", colors) : days === 0 ? colors.warning : colors.onSurfaceTertiary }
                     : statusFor(days, colors);

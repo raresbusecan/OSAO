@@ -6,7 +6,8 @@ import { useTheme } from "@/lib/theme";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { IconWell } from "@/components/ui/primitives";
 import { daysFromToday, lei, roCount, roDate, roRelativeDays } from "@/lib/format";
-import { overdueKmLabel, todoHref, todoTitle } from "@/lib/dashboard/spaceDue";
+import { serviceKmStatus, todoHref, todoTitle } from "@/lib/dashboard/spaceDue";
+import { urgencyTierColor } from "@/lib/statusColors";
 import { canEditRecord } from "@/components/simple/EditRecordSheet";
 import { openEditRecord } from "@/lib/simpleSheets";
 import { canSwipeResolve, resolveFromSummary, type ActionItem } from "@/lib/dashboard/itemActions";
@@ -71,8 +72,8 @@ export function UpcomingCard({ dashboard, spaces, onChanged }: { dashboard: any;
   const shown = dated.slice(0, MAX_ROWS);
 
   const statusOf = (r: DashItem & { days: number }): { label: string; color: string } => {
-    const km = overdueKmLabel(r);
-    if (km) return { label: km, color: colors.error };
+    const km = serviceKmStatus(r);
+    if (km) return { label: km.label, color: urgencyTierColor(km.tier, colors) };
     if (r.type.endsWith("_document")) {
       const date = roDate(r.due_at, { short: true });
       if (r.days < 0) return { label: `Expirat pe ${date}`, color: colors.error };
