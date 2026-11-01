@@ -305,7 +305,7 @@ export const HELP = {
     title: "Bani fără vină",
     points: [
       { text: "O parte mică din venit pe care o cheltuiești pe ce vrei, fără să-ți strice bugetele." },
-      { title: "Cum marchezi", text: "Când editezi o cheltuială, o cumpărare, cumpărăturile terminate sau un eveniment cu cumpărare, pornește „Bani fără vină”. Apare după ce adaugi venitul. La plinuri, service-uri, documente, facturi și mentenanță nu apare (rar sunt fără vină), decât la una marcată deja, ca s-o poți demarca." },
+      { title: "Cum marchezi", text: "Când editezi o cheltuială, o cumpărare, cumpărăturile terminate sau un eveniment cu cumpărare, pornește „Bani fără vină”. Apare după ce adaugi venitul. La plinuri, service-uri, documente, facturi și mentenanță nu apare (rar sunt fără vină), decât la una marcată deja, ca s-o poți debifa." },
       { title: "Unde se socotesc", text: "Cheltuielile marcate ies din bugetul spațiului și din media lui și se scad din partea asta." },
       { title: "La final de lună", text: "Ce rămâne nefolosit se adaugă la Economii." },
     ],

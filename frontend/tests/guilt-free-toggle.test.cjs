@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { loadModule } = require('./helpers/load-ts.cjs');
 
 const load = (summary) => loadModule('components/dashboard/GuiltFree.tsx', {
-  react: { createElement: (type, props) => ({ type, props }) },
+  react: { createElement: (type, props) => ({ type, props }), useState: (initial) => [initial, () => {}] },
   'react-native': { View: 'View', Text: 'Text' },
   '@expo/vector-icons': { Ionicons: 'Ionicons' },
   '@/lib/theme': { useTheme: () => ({ colors: {}, spacing: {}, radius: {} }) },
@@ -19,4 +19,19 @@ test('guilt-free shows on fitting forms once there is a plan; elsewhere only to 
   assert.equal(Toggle({ value: true, onChange() {}, onlyIfSet: true }).type, 'ToggleRow', 'a flagged record can still be undone');
   const NoPlan = load(null);
   assert.equal(NoPlan({ value: false, onChange() {} }), null);
+});
+
+test('switching a flag off mid-edit keeps the toggle so it can be switched back', () => {
+  let kept;
+  const Toggle = loadModule('components/dashboard/GuiltFree.tsx', {
+    react: { createElement: (type, props) => ({ type, props }), useState: (initial) => [kept ??= initial, () => {}] },
+    'react-native': { View: 'View', Text: 'Text' },
+    '@expo/vector-icons': { Ionicons: 'Ionicons' },
+    '@/lib/theme': { useTheme: () => ({ colors: {}, spacing: {}, radius: {} }) },
+    '@/lib/format': { lei: String },
+    '@/lib/budget/plan': { useBudgetPlan: () => ({ plan: {}, guiltFree: { budget: 300 } }) },
+    '@/components/ui/primitives': { ToggleRow: 'ToggleRow' },
+  }).GuiltFreeToggle;
+  assert.equal(Toggle({ value: true, onChange() {}, onlyIfSet: true }).type, 'ToggleRow');
+  assert.equal(Toggle({ value: false, onChange() {}, onlyIfSet: true }).type, 'ToggleRow', 'still there after switching off');
 });

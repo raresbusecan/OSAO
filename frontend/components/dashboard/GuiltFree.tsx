@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
@@ -38,8 +38,11 @@ export function GuiltFreeToggle({
   onlyIfSet?: boolean;
 }) {
   const summary = useBudgetPlan();
+  // Flagged when the form opened = stays for the whole edit, so switching it
+  // off by mistake can be switched back (the form remounts per open).
+  const [setOnOpen] = useState(value);
   if (!summary?.plan && !value) return null;
-  if (onlyIfSet && !value) return null;
+  if (onlyIfSet && !value && !setOnOpen) return null;
   const budget = summary?.guiltFree.budget;
   return (
     <ToggleRow
