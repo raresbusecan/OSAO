@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { ProfileButton } from "@/components/navigation/ProfileButton";
 import {
   View, Text, ScrollView, ActivityIndicator, DeviceEventEmitter, Dimensions, Pressable,
 } from "react-native";
@@ -462,6 +463,7 @@ export default function Spaces() {
                   <CircleButton testID="spaces-edit-open" icon="create-outline" label="Editează spațiile" onPress={startEditing} />
                 ) : null}
                 <CircleButton testID="space-add-tile" icon="add" label="Spațiu nou" tone={colors.onSurface} onPress={() => setTemplatePickerVisible(true)} />
+                <ProfileButton testID="spaces-profile" />
               </View>
             }
           >

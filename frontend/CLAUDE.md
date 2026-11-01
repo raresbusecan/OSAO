@@ -111,6 +111,7 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
   space colors + "Creează primul spațiu"), and when every other card is
   hidden only by the empty rule (`onlyEmptyDataHidesOthers`) one hint line
   under the cards.
+- **Profile button** (2026-11-01, user decision): `components/navigation/ProfileButton.tsx` (initial + VerifiedBadge -> /settings) is the LAST item of the title row on every main tab root -- Acasă, Spații, Calendar, Buget, Simplu Acasă + Calendar; hidden in edit modes. A new tab root adds it there. Calendar's title row uses Acasă's shape (small "Calendar" label over a month title that may shrink) so it fits next to Azi + ‹ ›.
 - `app/(tabs)/spaces.tsx` — the Spaces grid (create/rename/delete). Edit
   mode = the pencil, a long press on an EMPTY spot, or a long press on a
   card (haptic; user decision 2026-10-10 -- edit-mode rows are tappable

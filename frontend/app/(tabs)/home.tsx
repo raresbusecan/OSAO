@@ -15,11 +15,12 @@ import { HomeWidget, type HomeCtx } from "@/components/home/HomeWidgets";
 import { CatalogSheet, TemplatesSheet, WidgetSettingsSheet } from "@/components/home/LayoutSheets";
 import { overdueKmLabel } from "@/lib/dashboard/spaceDue";
 import { PressableScale } from "@/components/ui/PressableScale";
+import { ProfileButton } from "@/components/navigation/ProfileButton";
 import { CircleButton, InfoButton, Pill } from "@/components/ui/primitives";
 import { VerifyEmailBanner } from "@/components/auth/VerifyEmailBanner";
 import { useAppMode } from "@/lib/appMode";
 import { SimpleHome } from "@/components/simple/SimpleHome";
-import { VerifiedBadge, emailVerifiedState } from "@/components/auth/VerifiedBadge";
+import { emailVerifiedState } from "@/components/auth/VerifiedBadge";
 import { motion } from "@/lib/motion";
 import { confirmAction, notifyAction } from "@/lib/confirm";
 import { capitalize, daysFromToday, roCount, roDate, roRelativeDays } from "@/lib/format";
@@ -438,17 +439,7 @@ function Home() {
           <View {...editTarget}>
             <CircleButton testID="home-edit-open" icon="create-outline" label="Personalizează Acasă" onPress={startEditing} />
           </View>
-          <PressableScale
-            onPress={() => router.push("/settings")}
-            testID="home-greeting-settings-link"
-            accessibilityRole="button"
-            accessibilityLabel={`Profil și setări${emailVerifiedState(user) === "unverified" ? ", email neconfirmat" : ""}`}
-            scaleTo={motion.scale.control}
-            style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}
-          >
-            <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{initial}</Text>
-            <VerifiedBadge user={user} avatarSize={44} />
-          </PressableScale>
+          <ProfileButton testID="home-greeting-settings-link" />
         </>
       )}
     </View>

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from "react";
+import { ProfileButton } from "@/components/navigation/ProfileButton";
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, DeviceEventEmitter } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
@@ -6,10 +7,7 @@ import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/providers/auth";
 import { api } from "@/lib/api";
 import { REFRESH_EVENT } from "@/lib/refresh";
-import { motion } from "@/lib/motion";
-import { PressableScale } from "@/components/ui/PressableScale";
 import { VerifyEmailBanner } from "@/components/auth/VerifyEmailBanner";
-import { VerifiedBadge, emailVerifiedState } from "@/components/auth/VerifiedBadge";
 import { EditSpaceModal } from "@/components/spaces/EditSpaceModal";
 import { CarProfileForm } from "@/components/spaces/car/CarProfileForm";
 import { HomeProfileForm } from "@/components/spaces/home/HomeProfileForm";
@@ -125,7 +123,6 @@ export function SimpleHome() {
   const now = new Date();
   const muted = colors.onSurfaceTertiary;
   const hasSpaces = spaces.length > 0;
-  const initial = (user?.name ?? "?").trim().charAt(0).toUpperCase();
 
   const header = (
     <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
@@ -133,17 +130,7 @@ export function SimpleHome() {
         <Text style={{ fontSize: 13, color: muted }}>{capitalize(now.toLocaleDateString("ro-RO", { weekday: "long", day: "numeric", month: "long" }))}</Text>
         <Text style={{ ...typography.title, color: colors.onSurface }}>{loading || failed || hasSpaces ? greeting(user?.name) : "Bun venit"}</Text>
       </View>
-      <PressableScale
-        onPress={() => router.push("/settings")}
-        testID="simple-home-settings-link"
-        accessibilityRole="button"
-        accessibilityLabel={`Profil și setări${emailVerifiedState(user) === "unverified" ? ", email neconfirmat" : ""}`}
-        scaleTo={motion.scale.control}
-        style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}
-      >
-        <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{initial}</Text>
-        <VerifiedBadge user={user} avatarSize={44} />
-      </PressableScale>
+      <ProfileButton testID="simple-home-settings-link" />
     </View>
   );
 

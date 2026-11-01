@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { ProfileButton } from "@/components/navigation/ProfileButton";
 import { View, Text, ScrollView, ActivityIndicator, DeviceEventEmitter } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -423,7 +424,7 @@ export default function BudgetScreen() {
         />
       ) : (
       <ScrollView ref={scrollRef} {...tourScroll} contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 140, gap: spacing.section }}>
-        <PageTitle info="budget.page">Buget</PageTitle>
+        <PageTitle info="budget.page" right={<ProfileButton testID="budget-profile" />}>Buget</PageTitle>
 
         {SHOW_TOUR_TEST_BUTTON ? (
           // TEMP for testing -- see SHOW_TOUR_TEST_BUTTON (lib/tours.ts).

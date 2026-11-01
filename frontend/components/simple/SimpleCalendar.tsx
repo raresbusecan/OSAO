@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ProfileButton } from "@/components/navigation/ProfileButton";
 import { View, Text, Pressable, ScrollView, RefreshControl, ActivityIndicator, AppState, DeviceEventEmitter } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -462,6 +463,7 @@ export function SimpleCalendar() {
           </PressableScale>
           <CircleButton testID="simple-cal-prev" icon="chevron-back" label="Luna trecută" onPress={() => changeMonth(-1)} />
           <CircleButton testID="simple-cal-next" icon="chevron-forward" label="Luna viitoare" onPress={() => changeMonth(1)} />
+          <ProfileButton testID="simple-cal-profile" />
         </View>
 
         {/* THE MONTH -- swipe it left/right (the rows below swipe sideways
