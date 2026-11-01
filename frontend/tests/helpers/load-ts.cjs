@@ -11,7 +11,7 @@ function evaluate(source, context = {}, mocks = {}) {
   vm.runInNewContext(code, { exports, require: (name) => {
     if (!(name in mocks)) throw new Error(`Missing test dependency: ${name}`);
     return mocks[name];
-  }, console, Date, Promise, Map, Set, ...context });
+  }, console, Date, Promise, Map, Set, __DEV__: false, ...context });
   return exports;
 }
 
