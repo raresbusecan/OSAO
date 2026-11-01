@@ -357,6 +357,7 @@ function CategoryField({
         value={value === "true"}
         onChange={(next) => onChange(next ? "true" : "false")}
         tone={HOME}
+        onlyIfSet={field.onlyIfSet}
       />
     );
   }

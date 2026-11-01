@@ -292,7 +292,7 @@ export default function CarFuelForm({
               Setează capacitatea rezervorului (Editează mașina) ca să primești litrii sugerați și consumul estimat.
             </Text>
           ) : null}
-          <GuiltFreeToggle value={guiltFree} onChange={setGuiltFree} tone={CAR} testID="car-fuel-guilt-free" />
+          <GuiltFreeToggle value={guiltFree} onChange={setGuiltFree} tone={CAR} testID="car-fuel-guilt-free" onlyIfSet />
         </View>
       ) : null}
 

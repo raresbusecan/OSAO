@@ -789,7 +789,7 @@ export default function CarMaintenanceForm({
           })
         )}
 
-        <GuiltFreeToggle value={guiltFree} onChange={setGuiltFree} tone={CAR} testID="car-maintenance-guilt-free" />
+        <GuiltFreeToggle value={guiltFree} onChange={setGuiltFree} tone={CAR} testID="car-maintenance-guilt-free" onlyIfSet />
 
         {error ? (
           <View style={{ padding: spacing.md, borderRadius: radius.control, backgroundColor: `${colors.error}14` }}>

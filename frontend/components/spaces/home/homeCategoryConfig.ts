@@ -40,6 +40,9 @@ export type HomeCategoryField = {
    * shared "Bani fără vină" GuiltFreeToggle (stores "true"/"false"; it
    * hides itself until the person has an income plan). */
   type?: "text" | "date" | "select" | "toggle" | "guiltFree";
+  /** guiltFree only: show it just while the record is flagged (see
+   * GuiltFreeToggle's `onlyIfSet`). */
+  onlyIfSet?: boolean;
   /** A date field that may not fall before another date field's value
    * (a document's expiry vs. its issue date). */
   notBefore?: string;
@@ -103,6 +106,8 @@ const GUILT_FREE_FIELD: HomeCategoryField = {
   type: "guiltFree",
   required: false,
 };
+/** Bills and maintenance are rarely guilt-free: kept only to undo a flag. */
+const GUILT_FREE_IF_SET: HomeCategoryField = { ...GUILT_FREE_FIELD, onlyIfSet: true };
 
 export function parseLeadingNumber(raw: string): number | null {
   const match = normalizeNumberText(raw).match(LEADING_NUMBER);
@@ -338,7 +343,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
         showWhen: "isRecurring",
         keyboardType: "numeric",
       },
-      GUILT_FREE_FIELD,
+      GUILT_FREE_IF_SET,
     ],
     submitLabel: "Adaugă lucrarea",
     emptyLabel: "Nicio lucrare de mentenanță încă.",
@@ -473,7 +478,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
           { value: "yearly", label: "Anual" },
         ],
       },
-      GUILT_FREE_FIELD,
+      GUILT_FREE_IF_SET,
     ],
     submitLabel: "Adaugă factura",
     emptyLabel: "Nicio factură încă.",

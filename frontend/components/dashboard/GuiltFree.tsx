@@ -12,6 +12,10 @@ import { lei } from "@/lib/format";
  * the 5% jar instead. Two shared pieces so every form and list reads the
  * same:
  *  - <GuiltFreeToggle>: the ToggleRow for EDIT forms only (not quick-add).
+ *    Only on spending that can be guilt-free (user, 2026-11-02): general
+ *    expenses, purchases, shopping, Calendar purchases. Documents, services,
+ *    fuel, bills and maintenance pass `onlyIfSet`: no toggle unless that
+ *    record is already flagged, so it can still be undone.
  *    Renders nothing until the person set an income (no plan = no jar).
  *    A record already flagged keeps its toggle visible so it can be undone.
  *  - <GuiltFreeChip>: the small "Fără vină" label on a flagged row.
@@ -23,15 +27,19 @@ export function GuiltFreeToggle({
   onChange,
   tone,
   testID = "guilt-free-toggle",
+  onlyIfSet = false,
 }: {
   value: boolean;
   onChange: (next: boolean) => void;
   /** The screen's tone (the Space color); defaults to success green. */
   tone?: string;
   testID?: string;
+  /** Show only while the record is flagged (forms where it rarely fits). */
+  onlyIfSet?: boolean;
 }) {
   const summary = useBudgetPlan();
   if (!summary?.plan && !value) return null;
+  if (onlyIfSet && !value) return null;
   const budget = summary?.guiltFree.budget;
   return (
     <ToggleRow

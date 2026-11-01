@@ -249,7 +249,7 @@ export default function CarDocumentForm({
       </View>
       <Field label="Preț (opțional)" value={price} onChangeText={setPrice} placeholder="ex. 650" keyboardType="decimal-pad" suffix="lei" tone={CAR} editable={!readOnly} />
       <Field label="Notițe (opțional)" value={notes} onChangeText={setNotes} placeholder="Orice detaliu util" multiline tone={CAR} editable={!readOnly} />
-      {!readOnly ? <GuiltFreeToggle value={guiltFree} onChange={setGuiltFree} tone={CAR} testID="car-document-guilt-free" /> : null}
+      {!readOnly ? <GuiltFreeToggle value={guiltFree} onChange={setGuiltFree} tone={CAR} testID="car-document-guilt-free" onlyIfSet /> : null}
 
       {error ? (
         <View style={{ padding: spacing.md, borderRadius: radius.control, backgroundColor: `${colors.error}14` }}>
