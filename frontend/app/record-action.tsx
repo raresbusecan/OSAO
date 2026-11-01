@@ -11,17 +11,21 @@ import { isDialogOpen, subscribeDialog, subscribeSheets, visibleSheetCount } fro
 import { useTheme } from "@/lib/theme";
 import { useReducedMotion } from "@/lib/motion";
 import { SHEET_BACKDROP } from "@/components/ui/Sheet";
+import { notifyAction } from "@/lib/confirm";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 /** How long the overlay waits after the Space has loaded for a form or
  * dialog to show before revealing the Space page instead. */
 const OVERLAY_REVEAL_MS = 1500;
-/** After the form/dialog closed: a chained one (dialog -> form) gets this
- * long to show before the overlay goes back to its origin screen. */
-const OVERLAY_CLOSE_MS = 350;
+/** After the form/dialog closed without the flow calling complete/cancel:
+ * how long a chained one (dialog -> form, a save then its retry dialog)
+ * gets to show before the overlay goes back to its origin screen. Long
+ * enough for a save started from a dialog to finish. */
+const OVERLAY_CLOSE_MS = 1500;
 /** After the last Sheet/dialog closed: time for its native window to finish
  * dismissing before this modal screen dismisses too. */
 const OVERLAY_DISMISS_MS = 50;
-/** The Space never reported its load: reveal the page anyway. */
+/** The Space never reported its load: give up and go back. */
 const OVERLAY_LOAD_TIMEOUT_MS = 10000;
 
 export default function RecordActionScreen() {
@@ -51,20 +55,30 @@ export default function RecordActionScreen() {
     else router.replace("/(tabs)/home");
   }, [router]);
 
+  // Leave timers outlive renders; cleared if the screen goes away first.
+  const leaveTimers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  const later = useCallback((fn: () => void, ms: number) => {
+    const t = setTimeout(() => { leaveTimers.current.delete(t); fn(); }, ms);
+    leaveTimers.current.add(t);
+  }, []);
+  useEffect(() => {
+    const timers = leaveTimers.current;
+    return () => { timers.forEach(clearTimeout); timers.clear(); };
+  }, []);
+
   /** Leave once the form's own native window is gone. Dismissing this
    * (transparent modal) screen in the same moment as the Sheet's Modal made
    * iOS drop one of the two dismissals: the Sheet's empty, invisible window
    * stayed up and swallowed every touch on Acasă (seen on the phone,
    * 2026-11-02). So wait for no open Sheet/dialog, then a beat more. */
-  const leaveAfterForms = useCallback(() => {
-    const started = Date.now();
+  const leaveAfterForms = useCallback((then?: () => void) => {
+    // No time cap: a "Rezolvat" notice may stay up until the user taps OK.
     const attempt = () => {
-      const busy = visibleSheetCount() > 0 || isDialogOpen();
-      if (busy && Date.now() - started < 3000) { setTimeout(attempt, 100); return; }
-      setTimeout(goBack, OVERLAY_DISMISS_MS);
+      if (visibleSheetCount() > 0 || isDialogOpen()) { later(attempt, 100); return; }
+      later(() => { goBack(); if (then) later(then, 400); }, OVERLAY_DISMISS_MS);
     };
     attempt();
-  }, [goBack]);
+  }, [goBack, later]);
 
   const cancel = useCallback(() => {
     if (!active.current || leaving.current) return;
@@ -72,7 +86,7 @@ export default function RecordActionScreen() {
     if (originSpace) markTrailReturn(originSpace);
     if (overlay) leaveAfterForms();
     else goBack();
-  }, [router, originSpace, overlay, leaveAfterForms, goBack]);
+  }, [originSpace, overlay, leaveAfterForms, goBack]);
 
   const complete = useCallback(() => {
     // Leaving prevents a delayed navigation, not invalidation of a real save.
@@ -90,10 +104,11 @@ export default function RecordActionScreen() {
    * invisible: only its Sheets and dialogs, which live in their own native
    * windows, show. Once one has shown, closing the last one = go back to
    * the origin (even if that form doesn't call cancel itself). Nothing
-   * shown OVERLAY_REVEAL_MS after the load = this flow ends on a page: the
-   * page is revealed in place (never a navigation, so cancel keeps working).
-   * The invisible modal blocks touches on the screen below, so it must
-   * always end in one of those two ways. */
+   * shown OVERLAY_REVEAL_MS after the load = this flow ends on a page (its
+   * record is gone): the page is revealed in place with an "Înapoi" pill
+   * (the dashboards' own back goes to Spații, not back here). A failed or
+   * >10 s load goes back with a notice. The invisible modal blocks touches
+   * on the screen below, so it must always end in one of those ways. */
   const [phase, setPhaseState] = useState<"waiting" | "form" | "page">("waiting");
   // Read by the sheet/dialog listeners between renders, so it's set at once.
   const phaseRef = useRef(phase);
@@ -104,12 +119,18 @@ export default function RecordActionScreen() {
   const spaceLoaded = useRef(false);
   const checkRef = useRef<() => void>(() => {});
 
-  const leaveOverlay = useCallback(() => {
+  const leaveOverlay = useCallback((then?: () => void) => {
     if (leaving.current) return;
     leaving.current = true;
     if (originSpace) markTrailReturn(originSpace);
-    leaveAfterForms();
-  }, [router, originSpace, leaveAfterForms]);
+    leaveAfterForms(then);
+  }, [originSpace, leaveAfterForms]);
+  // The Space couldn't load (offline, tunnel restarted, space gone): the
+  // revealed page would be an error view with no way out of this modal on
+  // iOS, so go back and say so over the origin screen.
+  const failAndLeave = useCallback(() => {
+    leaveOverlay(() => notifyAction("Nu am putut deschide înregistrarea", "Verifică conexiunea și încearcă din nou."));
+  }, [leaveOverlay]);
 
   useEffect(() => {
     if (!overlay) return;
@@ -130,19 +151,22 @@ export default function RecordActionScreen() {
     checkRef.current = check;
     const offSheets = subscribeSheets(check);
     const offDialogs = subscribeDialog(check);
-    const hard = setTimeout(() => { if (!spaceLoaded.current && phaseRef.current === "waiting") setPhase("page"); }, OVERLAY_LOAD_TIMEOUT_MS);
+    const hard = setTimeout(() => { if (!spaceLoaded.current && phaseRef.current === "waiting") failAndLeave(); }, OVERLAY_LOAD_TIMEOUT_MS);
     return () => {
       offSheets();
       offDialogs();
       clearTimeout(hard);
       stop();
     };
-  }, [overlay, leaveOverlay, setPhase]);
+  }, [overlay, leaveOverlay, failAndLeave, setPhase]);
 
-  const loaded = useCallback(() => {
+  const loaded = useCallback((ok: boolean) => {
+    if (!overlay) return;
     spaceLoaded.current = true;
+    if (!ok) { failAndLeave(); return; }
     checkRef.current();
-  }, []);
+  }, [overlay, failAndLeave]);
+  const insets = useSafeAreaInsets();
 
   // While the form loads, the origin screen dims at once with the Sheet's
   // own backdrop (instead of a spinner), so the tap reads as "a form is
@@ -182,7 +206,19 @@ export default function RecordActionScreen() {
           </View>
           {phase !== "page" ? (
             <Animated.View pointerEvents="none" style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, backgroundColor: SHEET_BACKDROP, opacity: dim }} />
-          ) : null}
+          ) : (
+            <View pointerEvents="box-none" style={{ position: "absolute", left: 0, right: 0, bottom: insets.bottom + 16, alignItems: "center" }}>
+              <Pressable
+                testID="record-overlay-back"
+                onPress={() => leaveOverlay()}
+                accessibilityRole="button"
+                accessibilityLabel="Înapoi la ecranul anterior"
+                style={{ minHeight: 44, paddingHorizontal: 20, borderRadius: 22, backgroundColor: colors.onSurface, alignItems: "center", justifyContent: "center" }}
+              >
+                <Text style={{ fontSize: 15, fontWeight: "600", color: colors.surface }}>Înapoi</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
       ) : valid ? <SpaceDetail /> : (
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.surface }}>

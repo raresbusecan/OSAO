@@ -900,7 +900,7 @@ export default function SpaceDetail() {
    */
 
   const load = useCallback(async () => {
-    if (!id) return;
+    if (!id) return false;
 
     // A record link names its type (car_* / home_*), so that kind's items
     // can load alongside the space instead of after it -- one round trip
@@ -997,7 +997,9 @@ export default function SpaceDetail() {
       }
     } catch (error) {
       console.error("[SPACE] failed to load:", error);
+      return false;
     }
+    return true;
   }, [id, itemType]);
 
   console.log("[SPACE DETAIL] space:", space);
@@ -1018,11 +1020,11 @@ export default function SpaceDetail() {
 
       setLoading(true);
 
-      await load();
+      const ok = await load();
 
       if (mounted) {
         setLoading(false);
-        recordAction?.loaded?.();
+        recordAction?.loaded?.(ok);
       }
     };
 
