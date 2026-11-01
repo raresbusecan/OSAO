@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { TabHeader, TAB_HEADER_TOP } from "@/components/navigation/TabHeader";
+import { TabHeader, TabScreen } from "@/components/navigation/TabHeader";
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, DeviceEventEmitter } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/providers/auth";
@@ -19,7 +18,6 @@ import { dueBySpace, type SpaceDue } from "@/lib/dashboard/spaceDue";
 import { prefetchQuickAdd } from "@/lib/quickAddCache";
 import { guardSimpleSpaceCreate } from "@/lib/simpleLimits";
 import { roNumber } from "@/lib/format";
-import { ScreenBackground } from "@/components/ui/ScreenBackground";
 import {
   detectSpaceType,
   profileFromSpace,
@@ -126,13 +124,11 @@ export function SimpleHome() {
   const header = <TabHeader title={loading || failed || hasSpaces ? greeting(user?.name) : "Bun venit"} profileTestID="simple-home-settings-link" />;
 
   return (
-    <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="simple-home-screen">
-      <ScreenBackground />
+    <TabScreen testID="simple-home-screen" header={header}>
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing[TAB_HEADER_TOP], paddingBottom: 120, gap: spacing.lg }}
+        contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingBottom: 120, gap: spacing.lg }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={muted} />}
       >
-        {header}
         <VerifyEmailBanner testID="simple-home-verify-banner" />
         {loading ? (
           <ActivityIndicator color={muted} style={{ marginTop: spacing.xl }} />
@@ -180,7 +176,7 @@ export function SimpleHome() {
         onClose={() => setNamedCreate(null)}
         onSaved={(created) => { setNamedCreate(null); onCreated(created); }}
       />
-    </SafeAreaView>
+    </TabScreen>
   );
 }
 

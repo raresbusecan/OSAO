@@ -1,7 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { TabHeader, TAB_HEADER_TOP } from "@/components/navigation/TabHeader";
+import { TabHeader, TabScreen } from "@/components/navigation/TabHeader";
 import { View, Text, ScrollView, ActivityIndicator, DeviceEventEmitter } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
@@ -34,7 +33,6 @@ import { useAutoTour } from "@/lib/useAutoTour";
 import { SHOW_TOUR_TEST_BUTTON, startTour, type TourCtx } from "@/lib/tours";
 import { motion } from "@/lib/motion";
 import { lei, roNumber, roDate, parseLocaleNumber } from "@/lib/format";
-import { ScreenBackground } from "@/components/ui/ScreenBackground";
 
 type BudgetLimit = { category: string; monthly_limit: number; spent: number };
 type SavingsGoal = { target_amount: number; current_amount: number; target_date: string | null } | null;
@@ -384,9 +382,12 @@ export default function BudgetScreen() {
     ctx: tourCtx,
   });
 
+  // Only the root page has the tab header; the sub-pages bring their own TopBar.
+  const onRootPage = !(spaceDetailFor || (showGuiltFree && plan) || (showCredit && plan && planSummary && hasCredit) || showOverview);
+  const tabHeader = onRootPage ? <TabHeader title="Buget" info="budget.page" profileTestID="budget-profile" /> : undefined;
+
   return (
-    <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="budget-screen">
-      <ScreenBackground />
+    <TabScreen testID="budget-screen" header={tabHeader}>
       {spaceDetailFor ? (
         <BudgetSpaceDetailPage
           category={spaceDetailFor.label}
@@ -423,12 +424,11 @@ export default function BudgetScreen() {
           onBack={() => setShowOverview(false)}
         />
       ) : (
-      <ScrollView ref={scrollRef} {...tourScroll} contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing[TAB_HEADER_TOP], paddingBottom: 140, gap: spacing.section }}>
-        <TabHeader title="Buget" info="budget.page" profileTestID="budget-profile" />
+      <ScrollView ref={scrollRef} {...tourScroll} contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingBottom: 140, gap: spacing.section }}>
 
         {SHOW_TOUR_TEST_BUTTON ? (
           // TEMP for testing -- see SHOW_TOUR_TEST_BUTTON (lib/tours.ts).
-          <View style={{ flexDirection: "row", marginTop: -spacing.md }}>
+          <View style={{ flexDirection: "row" }}>
             <Pill testID="budget-tour-test" icon="play-circle-outline" label="Pornește ghidul" onPress={() => startTour("budget", tourCtx)} />
           </View>
         ) : null}
@@ -810,6 +810,6 @@ export default function BudgetScreen() {
           hint="Se actualizează singur la final de lună. Schimbă suma doar dacă vrei s-o corectezi."
         />
       </Sheet>
-    </SafeAreaView>
+    </TabScreen>
   );
 }

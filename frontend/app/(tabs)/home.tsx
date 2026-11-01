@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, DeviceEventEmitter, Pressable } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { ReorderHandle, ReorderList, type ReorderRenderParams } from "@/components/ui/ReorderList";
 import { useTheme } from "@/lib/theme";
@@ -15,7 +14,7 @@ import { HomeWidget, type HomeCtx } from "@/components/home/HomeWidgets";
 import { CatalogSheet, TemplatesSheet, WidgetSettingsSheet } from "@/components/home/LayoutSheets";
 import { overdueKmLabel } from "@/lib/dashboard/spaceDue";
 import { PressableScale } from "@/components/ui/PressableScale";
-import { TabHeader, TAB_HEADER_TOP } from "@/components/navigation/TabHeader";
+import { TabHeader, TabScreen } from "@/components/navigation/TabHeader";
 import { CircleButton, Pill } from "@/components/ui/primitives";
 import { VerifyEmailBanner } from "@/components/auth/VerifyEmailBanner";
 import { useAppMode } from "@/lib/appMode";
@@ -29,7 +28,6 @@ import { onlyEmptyDataHidesOthers, visibleWidgets } from "@/lib/dashboard/widget
 import { useTourScroll, useTourTarget } from "@/components/ui/tourTargets";
 import { useAutoTour } from "@/lib/useAutoTour";
 import { SHOW_TOUR_TEST_BUTTON, startTour, type TourCtx } from "@/lib/tours";
-import { ScreenBackground } from "@/components/ui/ScreenBackground";
 import {
   detectSpaceType,
   profileFromSpace,
@@ -467,8 +465,7 @@ function Home() {
   });
 
   return (
-    <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="home-screen">
-      <ScreenBackground />
+    <TabScreen testID="home-screen" header={header} headerTarget={headerTarget}>
       {editing ? (
         <ReorderList
           testID="home-edit-list"
@@ -480,8 +477,8 @@ function Home() {
           // through; rounded like the cards so it isn't a hard-edged block
           // over a coloured Aspect background.
           liftedStyle={{ backgroundColor: colors.surface, borderRadius: radius.lg }}
-          contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing[TAB_HEADER_TOP], paddingBottom: 140 }}
-          header={<View style={{ marginBottom: spacing.section, gap: spacing.sm }}>{header}<Text style={{ fontSize: 13, color: muted }}>Ține apăsat mânerul ☰ și trage ca să muți un card.</Text></View>}
+          contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingBottom: 140 }}
+          header={<Text style={{ fontSize: 13, color: muted, marginBottom: spacing.section }}>Ține apăsat mânerul ☰ și trage ca să muți un card.</Text>}
           footer={
             <View style={{ gap: spacing.md }}>
               <PressableScale
@@ -535,12 +532,11 @@ function Home() {
             onLongPress={startEditing}
             delayLongPress={450}
             accessible={false}
-            style={{ flexGrow: 1, paddingHorizontal: spacing.gutter, paddingTop: spacing[TAB_HEADER_TOP], paddingBottom: 120, gap: spacing.section }}
+            style={{ flexGrow: 1, paddingHorizontal: spacing.gutter, paddingBottom: 120, gap: spacing.section }}
           >
-            <View {...headerTarget}>{header}</View>
             {SHOW_TOUR_TEST_BUTTON ? (
               // TEMP for testing -- see SHOW_TOUR_TEST_BUTTON (lib/tours.ts).
-              <View style={{ flexDirection: "row", marginTop: -spacing.sm }}>
+              <View style={{ flexDirection: "row" }}>
                 <Pill testID="home-tour-test" icon="play-circle-outline" label="Pornește ghidul" onPress={() => startTour("home", tourCtx)} />
               </View>
             ) : null}
@@ -631,6 +627,6 @@ function Home() {
           setTemplatesOpen(false);
         }}
       />
-    </SafeAreaView>
+    </TabScreen>
   );
 }

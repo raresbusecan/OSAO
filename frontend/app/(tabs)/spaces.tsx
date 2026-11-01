@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { TabHeader, TAB_HEADER_TOP } from "@/components/navigation/TabHeader";
+import { TabHeader, TabScreen } from "@/components/navigation/TabHeader";
 import {
   View, Text, ScrollView, ActivityIndicator, DeviceEventEmitter, Dimensions, Pressable,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { roCount, roNumber } from "@/lib/format";
 import { useRouter, useFocusEffect } from "expo-router";
@@ -23,7 +22,6 @@ import { CircleButton, IconWell, Button } from "@/components/ui/primitives";
 import { motion } from "@/lib/motion";
 import { useAppMode } from "@/lib/appMode";
 import { canCreateSpaceInSimple, guardSimpleSpaceCreate } from "@/lib/simpleLimits";
-import { ScreenBackground } from "@/components/ui/ScreenBackground";
 import {
   profileFromSpace,
   detectSpaceType,
@@ -419,59 +417,56 @@ export default function Spaces() {
     );
   };
 
-  return (
-    <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="spaces-screen">
-      <ScreenBackground />
-      <View style={{ paddingHorizontal: spacing.gutter, paddingTop: spacing[TAB_HEADER_TOP], paddingBottom: spacing.md }}>
-        {editing ? (
-          <TabHeader
-            label="Editezi spațiile"
-            title="Aranjează"
-            info="spaces.edit"
-            profile={false}
-            actions={
-              <>
-                <Pressable
-                  testID="spaces-edit-cancel"
-                  onPress={() => setEditing(false)}
-                  disabled={savingOrder}
-                  accessibilityRole="button"
-                  accessibilityLabel="Renunță la ordinea nouă"
-                  style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: spacing.xs }}
-                >
-                  <Text style={{ fontSize: 15, color: colors.onSurfaceTertiary }}>Renunță</Text>
-                </Pressable>
-                <PressableScale
-                  testID="spaces-reorder-done"
-                  onPress={finishEditing}
-                  disabled={savingOrder}
-                  scaleTo={motion.scale.control}
-                  accessibilityRole="button"
-                  accessibilityLabel="Gata, salvează ordinea"
-                  style={{ height: 44, paddingHorizontal: spacing.gutter, borderRadius: 22, backgroundColor: colors.onSurface, alignItems: "center", justifyContent: "center", opacity: savingOrder ? 0.6 : 1 }}
-                >
-                  {savingOrder ? <ActivityIndicator color={colors.surface} /> : <Text style={{ fontSize: 15, fontWeight: "600", color: colors.surface }}>Gata</Text>}
-                </PressableScale>
-              </>
-            }
-          />
-        ) : (
-          <TabHeader
-            title="Spații"
-            info="spaces.page"
-            profileTestID="spaces-profile"
-            actions={
-              <>
-                {spaces.length > 0 ? (
-                  <CircleButton testID="spaces-edit-open" icon="create-outline" label="Editează spațiile" onPress={startEditing} />
-                ) : null}
-                <CircleButton testID="space-add-tile" icon="add" label="Spațiu nou" tone={colors.onSurface} onPress={() => setTemplatePickerVisible(true)} />
-              </>
-            }
-          />
-        )}
-      </View>
+  const tabHeader = editing ? (
+    <TabHeader
+      label="Editezi spațiile"
+      title="Aranjează"
+      info="spaces.edit"
+      profile={false}
+      actions={
+        <>
+          <Pressable
+            testID="spaces-edit-cancel"
+            onPress={() => setEditing(false)}
+            disabled={savingOrder}
+            accessibilityRole="button"
+            accessibilityLabel="Renunță la ordinea nouă"
+            style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: spacing.xs }}
+          >
+            <Text style={{ fontSize: 15, color: colors.onSurfaceTertiary }}>Renunță</Text>
+          </Pressable>
+          <PressableScale
+            testID="spaces-reorder-done"
+            onPress={finishEditing}
+            disabled={savingOrder}
+            scaleTo={motion.scale.control}
+            accessibilityRole="button"
+            accessibilityLabel="Gata, salvează ordinea"
+            style={{ height: 44, paddingHorizontal: spacing.gutter, borderRadius: 22, backgroundColor: colors.onSurface, alignItems: "center", justifyContent: "center", opacity: savingOrder ? 0.6 : 1 }}
+          >
+            {savingOrder ? <ActivityIndicator color={colors.surface} /> : <Text style={{ fontSize: 15, fontWeight: "600", color: colors.surface }}>Gata</Text>}
+          </PressableScale>
+        </>
+      }
+    />
+  ) : (
+    <TabHeader
+      title="Spații"
+      info="spaces.page"
+      profileTestID="spaces-profile"
+      actions={
+        <>
+          {spaces.length > 0 ? (
+            <CircleButton testID="spaces-edit-open" icon="create-outline" label="Editează spațiile" onPress={startEditing} />
+          ) : null}
+          <CircleButton testID="space-add-tile" icon="add" label="Spațiu nou" tone={colors.onSurface} onPress={() => setTemplatePickerVisible(true)} />
+        </>
+      }
+    />
+  );
 
+  return (
+    <TabScreen testID="spaces-screen" header={tabHeader}>
       {loading ? (
         <ActivityIndicator color={colors.onSurfaceTertiary} style={{ marginTop: spacing.xl }} />
       ) : spaces.length === 0 ? (
@@ -571,7 +566,7 @@ export default function Spaces() {
         <TemplateList onPick={createFromTemplate} />
       </Sheet>
 
-    </SafeAreaView>
+    </TabScreen>
   );
 }
 

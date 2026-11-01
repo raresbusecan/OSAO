@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, ScrollView, Pressable, DeviceEventEmitter, ActivityIndicator, AppState } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
@@ -26,8 +25,7 @@ import { todoHref, todoTitle } from "@/lib/dashboard/spaceDue";
 import { useTourScroll, useTourTarget } from "@/components/ui/tourTargets";
 import { useAutoTour } from "@/lib/useAutoTour";
 import { SHOW_TOUR_TEST_BUTTON, startTour, type TourCtx } from "@/lib/tours";
-import { ScreenBackground } from "@/components/ui/ScreenBackground";
-import { TabHeader, TAB_HEADER_TOP } from "@/components/navigation/TabHeader";
+import { TabHeader, TabScreen } from "@/components/navigation/TabHeader";
 
 /*
  * Calendar, 2026-10 redesign (design-lead spec, mockup "orgOS Calendar
@@ -381,30 +379,32 @@ function CalendarScreen() {
     return it.type?.endsWith("_document") ? expiryText(d) : dueText(d);
   };
 
+  const tabHeader = (
+    <TabHeader
+      title={monthName}
+      info="calendar.page"
+      profileTestID="calendar-profile"
+      actions={
+        <>
+          {selected !== todayKey ? (
+            <Pill testID="cal-today" label="Azi" onPress={() => goToMonth(ty, tm, todayKey)} />
+          ) : null}
+          <CircleButton testID="cal-prev-month" icon="chevron-back" label="Luna trecută" onPress={() => changeMonth(-1)} />
+          <CircleButton testID="cal-next-month" icon="chevron-forward" label="Luna viitoare" onPress={() => changeMonth(1)} />
+        </>
+      }
+    />
+  );
+
   return (
-    <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="calendar-screen">
-      <ScreenBackground />
-      <ScrollView ref={scrollRef} {...tourScroll} contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing[TAB_HEADER_TOP], paddingBottom: 140, gap: spacing.section }}>
-        {/* Tour step 1: the month title + arrows and the 3 month cards. */}
+    <TabScreen testID="calendar-screen" header={tabHeader}>
+      <ScrollView ref={scrollRef} {...tourScroll} contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingBottom: 140, gap: spacing.section }}>
+        {/* Tour step 1: the 3 month cards (the header is fixed above the scroll). */}
         <View {...navTarget} style={{ gap: spacing.section }}>
-          <TabHeader
-            title={monthName}
-            info="calendar.page"
-            profileTestID="calendar-profile"
-            actions={
-              <>
-                {selected !== todayKey ? (
-                  <Pill testID="cal-today" label="Azi" onPress={() => goToMonth(ty, tm, todayKey)} />
-                ) : null}
-                <CircleButton testID="cal-prev-month" icon="chevron-back" label="Luna trecută" onPress={() => changeMonth(-1)} />
-                <CircleButton testID="cal-next-month" icon="chevron-forward" label="Luna viitoare" onPress={() => changeMonth(1)} />
-              </>
-            }
-          />
 
           {SHOW_TOUR_TEST_BUTTON ? (
             // TEMP for testing -- see SHOW_TOUR_TEST_BUTTON (lib/tours.ts).
-            <View style={{ flexDirection: "row", marginTop: -spacing.md }}>
+            <View style={{ flexDirection: "row" }}>
               <Pill testID="calendar-tour-test" icon="play-circle-outline" label="Pornește ghidul" onPress={() => startTour("calendar", tourCtx)} />
             </View>
           ) : null}
@@ -721,7 +721,7 @@ function CalendarScreen() {
           </Group>
         ) : null}
       </Sheet>
-    </SafeAreaView>
+    </TabScreen>
   );
 }
 

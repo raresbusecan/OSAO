@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { TabHeader, TAB_HEADER_TOP } from "@/components/navigation/TabHeader";
+import { TabHeader, TabScreen } from "@/components/navigation/TabHeader";
 import { View, Text, Pressable, ScrollView, RefreshControl, ActivityIndicator, AppState, DeviceEventEmitter } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
@@ -23,7 +22,6 @@ import { canEditRecord } from "@/components/simple/EditRecordSheet";
 import { openEditRecord } from "@/lib/simpleSheets";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { TeaserCard } from "@/components/simple/Teaser";
-import { ScreenBackground } from "@/components/ui/ScreenBackground";
 
 /*
  * orgOS Simplu -- Calendar (mockup "Calendar A · Lună + ziua aleasă").
@@ -437,33 +435,35 @@ export function SimpleCalendar() {
     );
   };
 
+  const tabHeader = (
+    <TabHeader
+      title={capitalize(new Date(vy, vm, 1).toLocaleDateString("ro-RO", { month: "long", year: "numeric" }))}
+      profileTestID="simple-cal-profile"
+      actions={
+        <>
+          <PressableScale
+            testID="simple-cal-today"
+            onPress={() => goToMonth(ty, tm, todayKey)}
+            accessibilityRole="button"
+            accessibilityLabel="Mergi la azi"
+            hitSlop={4}
+            style={{ height: 36, paddingHorizontal: 14, borderRadius: 18, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}
+          >
+            <Text style={{ fontSize: 14, fontWeight: "500", color: colors.onSurface }}>Azi</Text>
+          </PressableScale>
+          <CircleButton testID="simple-cal-prev" icon="chevron-back" label="Luna trecută" onPress={() => changeMonth(-1)} />
+          <CircleButton testID="simple-cal-next" icon="chevron-forward" label="Luna viitoare" onPress={() => changeMonth(1)} />
+        </>
+      }
+    />
+  );
+
   return (
-    <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="simple-calendar-screen">
-      <ScreenBackground />
+    <TabScreen testID="simple-calendar-screen" header={tabHeader}>
       <ScrollView
-        contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing[TAB_HEADER_TOP], paddingBottom: 120, gap: spacing.section }}
+        contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingBottom: 120, gap: spacing.section }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onPullRefresh} tintColor={muted} colors={[muted]} />}
       >
-        <TabHeader
-          title={capitalize(new Date(vy, vm, 1).toLocaleDateString("ro-RO", { month: "long", year: "numeric" }))}
-          profileTestID="simple-cal-profile"
-          actions={
-            <>
-              <PressableScale
-                testID="simple-cal-today"
-                onPress={() => goToMonth(ty, tm, todayKey)}
-                accessibilityRole="button"
-                accessibilityLabel="Mergi la azi"
-                hitSlop={4}
-                style={{ height: 36, paddingHorizontal: 14, borderRadius: 18, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}
-              >
-                <Text style={{ fontSize: 14, fontWeight: "500", color: colors.onSurface }}>Azi</Text>
-              </PressableScale>
-              <CircleButton testID="simple-cal-prev" icon="chevron-back" label="Luna trecută" onPress={() => changeMonth(-1)} />
-              <CircleButton testID="simple-cal-next" icon="chevron-forward" label="Luna viitoare" onPress={() => changeMonth(1)} />
-            </>
-          }
-        />
 
         {/* THE MONTH -- swipe it left/right (the rows below swipe sideways
             themselves, so the pan lives on this card only). */}
@@ -609,7 +609,7 @@ export function SimpleCalendar() {
           refreshAll();
         }}
       />
-    </SafeAreaView>
+    </TabScreen>
   );
 }
 
