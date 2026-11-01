@@ -66,7 +66,10 @@ export function todoHref(item: { id: number | string; item_id?: number | string;
   if (spaceId != null) {
     const href = recordActionHref({ ...item, id: item.item_id ?? item.id, space: { id: spaceId } });
     // Due car alerts create the next document/service; history keeps the saved record.
-    return intent === "resolve" && (item.type === "car_document" || item.type === "car_maintenance") ? `${href}&action=renew` : href;
+    const action = intent === "resolve" && (item.type === "car_document" || item.type === "car_maintenance") ? `${href}&action=renew` : href;
+    // Resolving opens just the form, over the screen it came from (user,
+    // 2026-11-01) -- see app/record-action.tsx.
+    return intent === "resolve" && action.startsWith("/record-action") ? `${action}&overlay=1` : action;
   }
   // Missing an eager-loaded relation must never turn a Space record into
   // a Calendar event. Only personal events belong to Calendar.

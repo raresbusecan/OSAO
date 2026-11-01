@@ -7,7 +7,8 @@ const source = { id: '42', title: 'RCA 2026', issueDate: '01.01.2026', expiryDat
 
 for (const type of ['car_document', 'car_maintenance']) {
   const item = { id: 42, type, title: source.title, due_at: '2026-01-01T12:00:00Z', space: { id: 7 }, overdue_km: type === 'car_maintenance' ? 1500 : null };
-  const expected = '/record-action?id=7&itemId=42&itemType=' + type + '&action=renew';
+  // A resolve opens only its form, over the origin screen (overlay=1).
+  const expected = '/record-action?id=7&itemId=42&itemType=' + type + '&action=renew&overlay=1';
   test(type + ': pending rows in Acasa open renewal from the todo sheet, dashboard card and Simple mode', () => {
     const visited = [];
     const router = { navigate: href => visited.push(href), push: href => visited.push(href) };

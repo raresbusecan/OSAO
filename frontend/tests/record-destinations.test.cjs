@@ -80,7 +80,7 @@ test('Car service history edits the existing record; only the explicit renewal a
   const editRoute = loadFunction('lib/dashboard/itemActions.ts', 'editRoute', { todoHref });
   const item = { ...bill, type: 'car_maintenance' };
   assert.ok(!todoHref(item).includes('action='));
-  assert.equal(editRoute(item), `${todoHref(item)}&action=renew`);
+  assert.equal(editRoute(item), `${todoHref(item)}&action=renew&overlay=1`);
   for (const renew of [false, true]) {
     const calls = [];
     loadEffect('components/spaces/car/CarDashboard.tsx', 'const key = `${initialOpenEntry.type}', {
@@ -132,7 +132,7 @@ for (const size of ['compact', 'wide']) {
     const ctx = { bills: [bill], navigate: (href) => visited.push(href) };
     const target = size === 'compact' ? 'TapCard' : 'RecurringBillRow';
     find(render({ widget: { size }, ctx }), target).props.onPress();
-    assert.deepEqual(visited, [destination]);
+    assert.deepEqual(visited, [`${destination}&overlay=1`]);
     assert.equal(find(render({ widget: { size }, ctx: { ...ctx, preview: true } }), target).props.onPress, undefined);
     const empty = render({ widget: { size }, ctx: { ...ctx, bills: [] } });
     assert.equal(size === 'compact' ? empty.props.onPress : empty.type, size === 'compact' ? undefined : 'Missing');

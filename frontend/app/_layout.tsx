@@ -102,7 +102,20 @@ function AuthGuard() {
     return <Redirect href="/(tabs)/home" />;
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <Stack screenOptions={{ headerShown: false }}>
+      {/* A resolve opened from another screen shows only its form, over that
+          screen (?overlay=1, see app/record-action.tsx). */}
+      <Stack.Screen
+        name="record-action"
+        options={({ route }) =>
+          (route.params as { overlay?: string } | undefined)?.overlay === "1"
+            ? { presentation: "transparentModal", animation: "fade", contentStyle: { backgroundColor: "transparent" } }
+            : {}
+        }
+      />
+    </Stack>
+  );
 }
 
 // Follows the chosen theme (Settings > Temă), not the phone's setting --

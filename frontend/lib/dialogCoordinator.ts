@@ -14,6 +14,7 @@ type Host = { priority: number; show: (request: DialogRequest | null) => void };
 const hosts = new Map<number, Host>();
 const pending: { request: DialogRequest; owner: number | null }[] = [];
 const listeners = new Set<() => void>();
+const sheetListeners = new Set<() => void>();
 let sequence = 0;
 let open = false;
 
@@ -44,6 +45,7 @@ export function registerDialogHost(priority: number, show: Host["show"]): () => 
   const id = ++sequence;
   hosts.set(id, { priority, show });
   publish();
+  sheetListeners.forEach((listener) => listener());
   return () => {
     hosts.delete(id);
     // Leaving a form must release its pending confirmations, never leave
@@ -55,6 +57,7 @@ export function registerDialogHost(priority: number, show: Host["show"]): () => 
       }
     }
     publish();
+    sheetListeners.forEach((listener) => listener());
   };
 }
 
@@ -93,4 +96,17 @@ export const isDialogOpen = () => open;
 export function subscribeDialog(listener: () => void): () => void {
   listeners.add(listener);
   return () => { listeners.delete(listener); };
+}
+
+/** How many Sheets are open right now (each visible Sheet registers a
+ * dialog host above the root, priority > 0). record-action uses it to
+ * know its form is on screen. */
+export function visibleSheetCount(): number {
+  let count = 0;
+  for (const host of hosts.values()) if (host.priority > 0) count++;
+  return count;
+}
+export function subscribeSheets(listener: () => void): () => void {
+  sheetListeners.add(listener);
+  return () => { sheetListeners.delete(listener); };
 }

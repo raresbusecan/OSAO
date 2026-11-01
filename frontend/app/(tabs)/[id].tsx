@@ -1012,6 +1012,7 @@ export default function SpaceDetail() {
 
       if (mounted) {
         setLoading(false);
+        recordAction?.loaded?.();
       }
     };
 

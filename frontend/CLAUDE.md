@@ -12,6 +12,7 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
 
 ## Routing (Expo Router, file = route)
 
+- **Resolve over the origin screen** (2026-11-01, user decision): `todoHref(item, "resolve")` adds `&overlay=1` to a record-action href. app/_layout.tsx presents that route as a transparentModal (fade); `app/record-action.tsx` mounts the Space page INVISIBLY (opacity 0, its logic owns every resolve flow) so only its Sheets/dialogs (own native windows) show over Acasă/Calendar/Buget, with a spinner until one appears. It watches `visibleSheetCount()`/`subscribeSheets()` (lib/dialogCoordinator.ts: hosts with priority > 0 = open Sheets) + `isDialogOpen()`; [id].tsx calls `recordAction.loaded()` after its first load. Nothing shown 700 ms after the load (or after the last form closed without complete/cancel) = the flow ends on a page -> `router.replace` to the same action WITHOUT overlay (normal full page). View intents never overlay. Test: tests/resolve-overlay.test.cjs.
 - **Actions opened from another screen** (2026-10-20): records in all four Spaces
   use `lib/navigation/recordActionRoute.ts` via `todoHref` to open
   `app/record-action.tsx` on the root Stack. It hosts the existing Space
