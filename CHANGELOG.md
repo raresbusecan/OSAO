@@ -4,6 +4,33 @@ What landed on `main` (= what runs on the phone day to day), newest first.
 One entry per merge, written when `main` moves. Details live in the
 commits; open follow-ups live in `BACKLOG.md`.
 
+## 2026-11-01 — Profile button and one fixed header on every tab
+
+Fast-forward of `main` from `973012b` to `feat/profile-button-tabs` (5 commits,
+`1c1927c`..`c700b95`). QA: qa-lead, three passes — PASS on `37a25b9` (tsc
+clean, frontend tests 126/126, iOS bundle 200), then PASS on the 2-line nit
+fix `c700b95` (tsc clean, 126/126); gated by release-lead. Checked by the user
+on the phone.
+
+**Changes**
+- New `components/navigation/ProfileButton.tsx`, shown last in the header of
+  every main tab.
+- New `components/navigation/TabHeader.tsx`: `TabScreen` (safe area,
+  background, header fixed above the scroll) and `TabHeader` (date line,
+  title + info, the tab's own actions, profile button). Tabs pass only their
+  buttons, so the header sits in the same place on every tab. Used by Acasă,
+  Spații, Calendar, Buget (root page only) and the Simplu Acasă and Calendar
+  screens (`home.tsx`, `spaces.tsx`, `calendar.tsx`, `budget.tsx`,
+  `SimpleHome.tsx`, `SimpleCalendar.tsx`).
+- Calendar titles drop the year; a different year shows as "Anul 2027" in the
+  small line. The grid's accessibility label still includes the year.
+- Spații loading spinner keeps its 12px gap under the fixed header.
+- Tour copy (`lib/tours.ts`) and `frontend/CLAUDE.md` updated.
+
+**Still needs a phone check** — Calendar at the "Maxim" text size on
+360–375dp phones (some long months get cut off), the first card's shadow edge
+on the Simplu screens, and the screen reader reading the new calendar label.
+
 ## 2026-11-01 — Calendar: next 3 months as mini calendars
 
 Fast-forward of `main` from `be8bee6` to `feat/month-minicalendar` (2 commits,
