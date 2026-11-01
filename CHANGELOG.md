@@ -4,6 +4,34 @@ What landed on `main` (= what runs on the phone day to day), newest first.
 One entry per merge, written when `main` moves. Details live in the
 commits; open follow-ups live in `BACKLOG.md`.
 
+## 2026-11-01 — Backlog batch 1
+
+Fast-forward of `main` from `1268195` to `fix/backlog-batch-1` (5 commits,
+`74138c0`..`9b7969c`). QA: qa-lead, two passes, final on `9b7969c` — tsc
+clean, frontend tests 126/126, iOS bundle 200, 0 require cycles (main had 2);
+gated by release-lead.
+
+**Fixes**
+- Dev request/setToken logs no longer print any part of the auth token
+  (`lib/api.ts`).
+- Car documents: days-until uses calendar-day math (fixes a DST off-by-one);
+  the documents page hides superseded/archived docs and uses the same colours
+  as the dashboard (`dashboard.calculations.ts`, `CarDocsPage.tsx`).
+- Month pager ignores a second tap during the slide-out (`MonthSwipe.tsx`).
+- Grocery quantities accept Romanian numbers via `parseLocaleNumber`
+  (`GroceryDashboard.tsx`, `SimpleGrocerySpace.tsx`).
+- Pills are visible inside Sheets (`primitives.tsx`).
+- Car expense form: inline error when there is no title or category; the
+  category is used as the title when the title is empty (`CarExpenseForm.tsx`).
+
+**Internal**
+- `REFRESH_EVENT` is imported from `lib/refresh` everywhere; Car's `RecentRow`
+  moved to `CarRecentRow.tsx` — both require cycles are gone.
+- Test harness defines `__DEV__`; test mock fixes.
+
+**Still needs a phone check** — in-sheet pills in all four themes, and how a
+double tap on the month pager feels.
+
 ## 2026-11-01 — Expo SDK 58, themes and appearance
 
 Fast-forward of `main` from `7f9c257` to `feat/themes` (44 commits:
