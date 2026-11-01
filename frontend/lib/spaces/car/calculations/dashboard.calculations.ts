@@ -12,7 +12,6 @@ import {
   calculateEstimatedLitersConsumed,
 } from "./fuel.calculations";
 
-const MS_PER_DAY = 1000 * 60 * 60 * 24;
 const DOC_ALERT_DAYS = 45;
 
 /** Every logged entry that carries an odometer reading (fuel, services,

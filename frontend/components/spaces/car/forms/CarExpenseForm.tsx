@@ -82,8 +82,8 @@ export default function CarExpenseForm({
       return;
     }
 
-    // The server requires a title; picking a category fills it in. Without
-    // either, the save used to fail with a server error after the entry had
+    // The server requires a title; the category stands in for an empty one.
+    // Without either, the save used to fail with a server error after the entry had
     // already flashed into the list.
     if (!title.trim() && !category.trim()) {
       setError("Alege o categorie sau scrie un titlu.");
@@ -109,7 +109,8 @@ export default function CarExpenseForm({
       id: entry?.id ?? `expense-${Date.now()}`,
       date: parseDateInput(date) ?? entry?.date ?? new Date().toISOString(),
       category: category.trim(),
-      title: title.trim(),
+      // A picked category with the title cleared still needs a title server-side.
+      title: title.trim() || category.trim(),
       amount: amountValue,
       odometer: odometerValue,
       provider: provider.trim() || undefined,

@@ -21,7 +21,7 @@ function queueTokenMutation(mutate: () => void | Promise<void>): Promise<boolean
 
 // Web fallback because expo-secure-store isn't supported on web preview
 export async function setToken(token: string) {
-  console.log("[AUTH] setToken called:", token ? `${token.slice(0, 3)}...` : "EMPTY");
+  if (__DEV__) console.log("[AUTH] setToken called:", { hasToken: !!token });
 
   const current = await queueTokenMutation(async () => {
     if (Platform.OS === "web") {

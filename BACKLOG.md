@@ -123,6 +123,10 @@ drifted a day across the 25 Oct DST change; plus the known
 
 ## Found along the way (not yet fixed)
 
+### qa-lead pass on fix/backlog-batch-1 (2026-11-01) [from: qa-lead verification of fix/backlog-batch-1]
+
+- ~~**`lib/api.ts:24` `setToken` still logs the first 3 characters of the bearer token** (`[AUTH] setToken called: abc...`), unconditionally (not `__DEV__`-gated) -- the batch only removed the per-request one. Drop the token part / gate it.~~ **Fixed on the same branch:** now `__DEV__`-only and logs `hasToken`.
+
 ### qa-lead pass on codex/expo-sdk-58 + feat/themes (2026-11-01) [from: pre-main QA of the SDK 58 + appearance branches]
 
 Blocking items were fixed before merge (Plex font no-op since SDK 58 -> fixed in globalFont.native.ts on feat/themes; demo seeders now refuse the live `lifeos` DB via `DemoSeeder::assertNotLiveDatabase()`, and the 4 demo accounts that were already in `lifeos` -- demo, demo2, realist, realist.ana @orgos.test, 14 spaces, 621 items, no non-demo rows entangled -- were deleted with the user's OK). Still open, low:
