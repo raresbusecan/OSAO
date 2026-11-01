@@ -10,7 +10,7 @@ import { confirmAction, notifyAction } from "@/lib/confirm";
 import { api } from "@/lib/api";
 import { useAuth } from "@/providers/auth";
 import { Avatar } from "@/components/Avatar";
-import { REFRESH_EVENT } from "@/app/(tabs)/_layout";
+import { REFRESH_EVENT } from "@/lib/refresh";
 
 import { MAX_GROCERY_LISTS, type GroceryCategory, type GroceryItem, type GroceryList, type SpaceMember } from "@/lib/spaces/grocery/grocery.types";
 import { getItemsForList, findGroceryListByName } from "@/lib/spaces/grocery/grocery.calculations";

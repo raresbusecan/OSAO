@@ -4,7 +4,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
-import { REFRESH_EVENT } from "./_layout";
+import { REFRESH_EVENT } from "@/lib/refresh";
 import { useFocusEffect } from "expo-router";
 import { useTabDepth } from "@/lib/navigation/returnTrail";
 import { notifyAction, chooseAction } from "@/lib/confirm";

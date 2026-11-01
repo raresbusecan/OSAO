@@ -184,7 +184,7 @@ Grocery concurrency follow-up: child create/move authorizes its parent before sa
 4. ~~CarExpenseForm sends `title: ""` with no category and no title → 422~~ FIXED 2026-11-01: the form asks "Alege o categorie sau scrie un titlu." (Simplu already required one.)
 5. ~~home `today()` in UTC~~ already fixed before 2026-11-01 (`localDay`).
 6. ~~unselected `Pill` invisible inside a Sheet~~ FIXED 2026-11-01: inside a Sheet (SurfaceLevelContext "card") it uses surfaceTertiary; a selected pill without a tone uses the strong onSurface fill.
-7. Import cycle: `components/simple/QuickAddSheet.tsx` imports `REFRESH_EVENT` from `app/(tabs)/_layout.tsx`, which imports it back. It works, but move `REFRESH_EVENT` into a small lib file.
+7. ~~Import cycle: `components/simple/QuickAddSheet.tsx` imports `REFRESH_EVENT` from `app/(tabs)/_layout.tsx`, which imports it back.~~ **Fixed on fix/backlog-batch-1:** all 13 importers now use `@/lib/refresh` and the layout re-export is gone. The separate CarDashboard <-> CarHistoryPage cycle is fixed too (`RecentRow` moved to `components/spaces/car/CarRecentRow.tsx`).
 8. Car profile has no plate/registration field (`CarVehicle.registration_number` is typed but never filled), and car document types are stored raw ("Rovinieta", "Tax") with no Romanian display map in the full app.
 9. Simplu vs full Acasă spend totals differ when an income plan exists: Simplu shows raw `monthlyExpenses.total`, full Acasă shows necessities only (`needsSpend`, home.tsx ~146-155). Decide which one Simplu should show.
 

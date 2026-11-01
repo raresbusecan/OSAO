@@ -23,7 +23,7 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
   `returnTrail` before removal to suppress its normal focus remount. The
   origin lookup unwraps Expo 57's generated `__root` navigator. De făcut hides
   its Sheet while blurred and resumes it with its saved scroll offset.
-  `lib/refresh.ts` owns `REFRESH_EVENT` (re-exported by the tabs layout).
+  `lib/refresh.ts` owns `REFRESH_EVENT` -- import it from there, never from the tabs layout (that made require cycles).
   All 15 Space item types resolve to their owning section/record, including
   raw `space_id` payloads and Home payment occurrences (`item_id`). Bills in
   Acasă compact/wide and Buget, credit reminders, both Calendar modes and

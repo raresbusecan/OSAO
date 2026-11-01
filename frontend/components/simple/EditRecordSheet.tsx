@@ -6,7 +6,7 @@ import { roCount, roDate, roNumber, parseLocaleNumber } from "@/lib/format";
 import { cachedQuickSpaces } from "@/lib/quickAddCache";
 import { refreshBudgetPlan } from "@/lib/budget/plan";
 import { closeEditRecord, useSimpleSheets } from "@/lib/simpleSheets";
-import { REFRESH_EVENT } from "@/app/(tabs)/_layout";
+import { REFRESH_EVENT } from "@/lib/refresh";
 import { Sheet } from "@/components/ui/Sheet";
 import { DatePickerSheet } from "@/components/ui/DatePickerSheet";
 import { Button, Field, FieldButton } from "@/components/ui/primitives";

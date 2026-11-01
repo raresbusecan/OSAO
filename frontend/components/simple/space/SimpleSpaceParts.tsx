@@ -10,7 +10,7 @@ import { readableOn } from "@/components/ui/primitives";
 import { SwipeRow } from "@/components/spaces/SwipeRow";
 import { api } from "@/lib/api";
 import { confirmAction, notifyAction } from "@/lib/confirm";
-import { REFRESH_EVENT } from "@/app/(tabs)/_layout";
+import { REFRESH_EVENT } from "@/lib/refresh";
 import { daysFromToday, roDate } from "@/lib/format";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import { spaceColors, type SpaceColors, type SpaceKind } from "@/lib/spaces/spaceProfile";

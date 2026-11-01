@@ -9,8 +9,6 @@ import { useAppMode } from "@/lib/appMode";
 import { QuickAddHost } from "@/components/simple/QuickAddSheet";
 import { EditRecordHost } from "@/components/simple/EditRecordSheet";
 
-export { REFRESH_EVENT } from "@/lib/refresh";
-
 /**
  * The tab navigator itself. Used to also host a shared "+" FAB (with a
  * per-space category fan, and a Quick Add sheet fallback) -- removed

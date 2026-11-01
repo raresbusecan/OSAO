@@ -5,7 +5,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/providers/auth";
 import { api } from "@/lib/api";
-import { REFRESH_EVENT } from "@/app/(tabs)/_layout";
+import { REFRESH_EVENT } from "@/lib/refresh";
 import { motion } from "@/lib/motion";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { VerifyEmailBanner } from "@/components/auth/VerifyEmailBanner";

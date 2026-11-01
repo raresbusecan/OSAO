@@ -5,7 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
-import { REFRESH_EVENT } from "@/app/(tabs)/_layout";
+import { REFRESH_EVENT } from "@/lib/refresh";
 import { notifyAction } from "@/lib/confirm";
 import { capitalize, lei } from "@/lib/format";
 import { CUSTOM_EVENT_COLOR, spaceColors } from "@/lib/spaces/spaceProfile";

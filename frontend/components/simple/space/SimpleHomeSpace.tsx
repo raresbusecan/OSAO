@@ -19,7 +19,7 @@ import { notifyAction } from "@/lib/confirm";
 import { HomeTaskResolveSheet } from "@/components/spaces/home/HomeTaskResolveSheet";
 import { TeaserCard } from "@/components/simple/Teaser";
 import { openEditRecord } from "@/lib/simpleSheets";
-import { REFRESH_EVENT } from "@/app/(tabs)/_layout";
+import { REFRESH_EVENT } from "@/lib/refresh";
 import type { SimpleSpaceProps } from "./SimpleSpaceScreen";
 import { CalmLine, DotLine, ShowAllLine, SimpleCard, SimpleHero, SimplePage, SpendLine, deleteRecordWithConfirm, useShowAll, useSimpleSpaceColors, useSpaceAccent, weekdayDate } from "./SimpleSpaceParts";
 

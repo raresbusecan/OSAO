@@ -6,7 +6,7 @@ import { ReorderHandle, ReorderList, type ReorderRenderParams } from "@/componen
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/providers/auth";
 import { api } from "@/lib/api";
-import { REFRESH_EVENT } from "./_layout";
+import { REFRESH_EVENT } from "@/lib/refresh";
 import { useFocusEffect, useRouter } from "expo-router";
 import { TodoCarouselSheet } from "@/components/dashboard/TodoCarouselSheet";
 import { isRecurringPayment } from "@/components/dashboard/RecurringBillRow";

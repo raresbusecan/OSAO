@@ -9,7 +9,7 @@ import { useRouter, useFocusEffect } from "expo-router";
 import { ReorderHandle, ReorderList, type ReorderRenderParams } from "@/components/ui/ReorderList";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
-import { REFRESH_EVENT } from "./_layout";
+import { REFRESH_EVENT } from "@/lib/refresh";
 import { confirmAction, notifyAction } from "@/lib/confirm";
 import { longPressFeedback } from "@/lib/haptics";
 import { dueBySpace, dueStatus, type SpaceDue } from "@/lib/dashboard/spaceDue";

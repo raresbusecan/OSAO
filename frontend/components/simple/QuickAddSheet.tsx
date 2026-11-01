@@ -7,7 +7,7 @@ import { roDate, roNumber } from "@/lib/format";
 import { refreshBudgetPlan } from "@/lib/budget/plan";
 import { useRouter } from "expo-router";
 import { closeQuickAdd, useSimpleSheets } from "@/lib/simpleSheets";
-import { REFRESH_EVENT } from "@/app/(tabs)/_layout";
+import { REFRESH_EVENT } from "@/lib/refresh";
 import { Sheet } from "@/components/ui/Sheet";
 import { DatePickerSheet } from "@/components/ui/DatePickerSheet";
 import { PressableScale } from "@/components/ui/PressableScale";

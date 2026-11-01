@@ -6,7 +6,7 @@ import { SwipeBackView } from "@/components/spaces/SwipeBackView";
 import { SwipeRow } from "@/components/spaces/SwipeRow";
 import { TopBar, Identity, Segmented, SectionHeader, Group, EmptyState } from "@/components/ui/primitives";
 import { capitalize, roCount } from "@/lib/format";
-import { RecentRow } from "./CarDashboard";
+import { RecentRow } from "./CarRecentRow";
 import { CAR_PERIOD_PRESETS } from "./CarPeriodSheet";
 import { PeriodPicker } from "@/components/ui/PeriodPicker";
 import { buildCarRecentItems } from "./utils/carEntries";

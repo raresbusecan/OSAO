@@ -25,7 +25,7 @@ import {
 import { urgencyTierColor } from "@/lib/statusColors";
 import { TeaserCard } from "@/components/simple/Teaser";
 import { openEditRecord } from "@/lib/simpleSheets";
-import { REFRESH_EVENT } from "@/app/(tabs)/_layout";
+import { REFRESH_EVENT } from "@/lib/refresh";
 import type { SimpleSpaceProps } from "./SimpleSpaceScreen";
 import {
   CalmLine,
