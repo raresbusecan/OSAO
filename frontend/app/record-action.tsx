@@ -10,11 +10,13 @@ import { refreshBudgetPlan } from "@/lib/budget/plan";
 import { isDialogOpen, subscribeDialog, subscribeSheets, visibleSheetCount } from "@/lib/dialogCoordinator";
 import { useTheme } from "@/lib/theme";
 
-/** How long the overlay waits, after the Space has loaded (or after its
- * last form closed without leaving), for a form or dialog to show before
- * falling back to the full Space page. */
-const OVERLAY_GRACE_MS = 700;
-/** The Space never reported its load: show the page anyway. */
+/** How long the overlay waits after the Space has loaded for a form or
+ * dialog to show before revealing the Space page instead. */
+const OVERLAY_REVEAL_MS = 1500;
+/** After the form/dialog closed: a chained one (dialog -> form) gets this
+ * long to show before the overlay goes back to its origin screen. */
+const OVERLAY_CLOSE_MS = 350;
+/** The Space never reported its load: reveal the page anyway. */
 const OVERLAY_LOAD_TIMEOUT_MS = 10000;
 
 export default function RecordActionScreen() {
@@ -60,47 +62,58 @@ export default function RecordActionScreen() {
    * resolve came from. The Space page still mounts -- its dashboard owns
    * every resolve flow (confirmations, renewals, the forms) -- but stays
    * invisible: only its Sheets and dialogs, which live in their own native
-   * windows, show. Nothing shown OVERLAY_GRACE_MS after the load, or after
-   * the last form closed without leaving = this flow ends on a page, so it
-   * reopens as the normal full-page action. */
+   * windows, show. Once one has shown, closing the last one = go back to
+   * the origin (even if that form doesn't call cancel itself). Nothing
+   * shown OVERLAY_REVEAL_MS after the load = this flow ends on a page: the
+   * page is revealed in place (never a navigation, so cancel keeps working).
+   * The invisible modal blocks touches on the screen below, so it must
+   * always end in one of those two ways. */
   const overlay = params.overlay === "1" && validRecordAction(params.id, params.itemId, params.itemType);
-  const [formShown, setFormShown] = useState(false);
+  const [phase, setPhaseState] = useState<"waiting" | "form" | "page">("waiting");
+  // Read by the sheet/dialog listeners between renders, so it's set at once.
+  const phaseRef = useRef(phase);
+  const setPhase = useCallback((next: "waiting" | "form" | "page") => {
+    phaseRef.current = next;
+    setPhaseState(next);
+  }, []);
   const spaceLoaded = useRef(false);
   const checkRef = useRef<() => void>(() => {});
 
-  const toPage = useCallback(() => {
-    if (!active.current || leaving.current) return;
+  const leaveOverlay = useCallback(() => {
+    if (leaving.current) return;
     leaving.current = true;
-    const action = params.action ? `&action=${encodeURIComponent(params.action)}` : "";
-    router.replace(`/record-action?id=${encodeURIComponent(params.id!)}&itemId=${encodeURIComponent(params.itemId!)}&itemType=${encodeURIComponent(params.itemType!)}${action}` as any);
-  }, [router, params.id, params.itemId, params.itemType, params.action]);
+    if (originSpace) markTrailReturn(originSpace);
+    if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)/home");
+  }, [router, originSpace]);
 
   useEffect(() => {
     if (!overlay) return;
-    let grace: ReturnType<typeof setTimeout> | undefined;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const stop = () => { if (timer) clearTimeout(timer); timer = undefined; };
+    const somethingShown = () => visibleSheetCount() > 0 || isDialogOpen();
     const check = () => {
-      if (visibleSheetCount() > 0 || isDialogOpen()) {
-        if (grace) clearTimeout(grace);
-        grace = undefined;
-        setFormShown(true);
+      if (phaseRef.current === "page" || leaving.current) return;
+      stop();
+      if (somethingShown()) {
+        setPhase("form");
+      } else if (phaseRef.current === "form") {
+        timer = setTimeout(() => { if (!somethingShown()) leaveOverlay(); }, OVERLAY_CLOSE_MS);
       } else if (spaceLoaded.current) {
-        if (grace) clearTimeout(grace);
-        grace = setTimeout(() => {
-          if (visibleSheetCount() === 0 && !isDialogOpen()) toPage();
-        }, OVERLAY_GRACE_MS);
+        timer = setTimeout(() => { if (!somethingShown() && phaseRef.current === "waiting") setPhase("page"); }, OVERLAY_REVEAL_MS);
       }
     };
     checkRef.current = check;
     const offSheets = subscribeSheets(check);
     const offDialogs = subscribeDialog(check);
-    const hard = setTimeout(() => { if (!spaceLoaded.current) toPage(); }, OVERLAY_LOAD_TIMEOUT_MS);
+    const hard = setTimeout(() => { if (!spaceLoaded.current && phaseRef.current === "waiting") setPhase("page"); }, OVERLAY_LOAD_TIMEOUT_MS);
     return () => {
       offSheets();
       offDialogs();
       clearTimeout(hard);
-      if (grace) clearTimeout(grace);
+      stop();
     };
-  }, [overlay, toPage]);
+  }, [overlay, leaveOverlay, setPhase]);
 
   const loaded = useCallback(() => {
     spaceLoaded.current = true;
@@ -117,13 +130,20 @@ export default function RecordActionScreen() {
         headerLeft: () => <Pressable onPress={cancel} accessibilityRole="button" accessibilityLabel="Înapoi la ecranul anterior" hitSlop={12}><Text style={{ color: colors.onSurface }}>Înapoi</Text></Pressable>,
       }} />
       {overlay ? (
-        <View style={{ flex: 1 }} pointerEvents="box-none">
-          {/* The page is there for its logic only; its Sheets/dialogs are
-              native windows, so they show regardless of this opacity. */}
-          <View style={{ flex: 1, opacity: 0 }} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        // ONE tree for every phase, so revealing the page never remounts it.
+        <View style={{ flex: 1, backgroundColor: phase === "page" ? colors.surface : "transparent" }} pointerEvents="box-none">
+          {/* Hidden, the page is there for its logic only; its Sheets/dialogs
+              are native windows, so they show regardless of this opacity.
+              Revealed, its own back button closes this modal. */}
+          <View
+            style={{ flex: 1, opacity: phase === "page" ? 1 : 0 }}
+            pointerEvents={phase === "page" ? "auto" : "none"}
+            accessibilityElementsHidden={phase !== "page"}
+            importantForAccessibility={phase === "page" ? "auto" : "no-hide-descendants"}
+          >
             <SpaceDetail />
           </View>
-          {!formShown ? (
+          {phase === "waiting" ? (
             <View pointerEvents="none" style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
               <ActivityIndicator color={colors.onSurfaceTertiary} />
             </View>

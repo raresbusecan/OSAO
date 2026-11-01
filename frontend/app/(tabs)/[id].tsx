@@ -901,6 +901,15 @@ export default function SpaceDetail() {
   const load = useCallback(async () => {
     if (!id) return;
 
+    // A record link names its type (car_* / home_*), so that kind's items
+    // can load alongside the space instead of after it -- one round trip
+    // less before a resolve form opens (record-action overlay).
+    const hint = itemType?.startsWith("car_") ? "car" : itemType?.startsWith("home_") ? "home" : null;
+    const earlyCar = hint === "car" ? loadCarItems(id) : null;
+    const earlyHome = hint === "home" ? loadHomeItems(id) : null;
+    earlyCar?.catch(() => {});
+    earlyHome?.catch(() => {});
+
     try {
       const result = await api.getSpace(id);
 
@@ -925,7 +934,7 @@ export default function SpaceDetail() {
       // carData on its initial mock seed.
       if (detectSpaceType(result, loadedProfile) === "car") {
         try {
-          const entries = await loadCarItems(result.id);
+          const entries = await (earlyCar ?? loadCarItems(result.id));
           // The vehicle comes from THIS space's profile (no demo values):
           // mileage = the km typed on the top card (0 if never set), so
           // getCurrentOdometer = max(that, logged readings), and the
@@ -951,7 +960,7 @@ export default function SpaceDetail() {
       // `items` table now too (see lib/spaces/home/homeItems.ts).
       if (detectSpaceType(result, loadedProfile) === "home") {
         try {
-          const entries = await loadHomeItems(result.id);
+          const entries = await (earlyHome ?? loadHomeItems(result.id));
           setHomeData((current) => ({ ...current, ...entries }));
         } catch (error) {
           console.error("[HOME ITEMS] failed to load:", error);
@@ -988,7 +997,7 @@ export default function SpaceDetail() {
     } catch (error) {
       console.error("[SPACE] failed to load:", error);
     }
-  }, [id]);
+  }, [id, itemType]);
 
   console.log("[SPACE DETAIL] space:", space);
   console.log("[SPACE DETAIL] space name:", space?.name);
