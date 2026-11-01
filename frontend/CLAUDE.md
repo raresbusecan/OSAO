@@ -138,7 +138,10 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
   -> Plăți recurente. Sheets: `IncomeSheet.tsx`, `SplitSheet.tsx`
   (−/+ steppers, Save only at 100). Pages: `GuiltFreePage.tsx`,
   `BudgetCreditPage.tsx`. `GuiltFree.tsx` = `GuiltFreeToggle` (edit forms
-  only, hidden until a plan exists) + `GuiltFreeChip`. The Economii goal
+  only, hidden until a plan exists; only where spending can be guilt-free --
+  general expenses, purchases, shopping, Calendar purchases. Fuel, services,
+  documents and Casă bills/maintenance pass `onlyIfSet`: shown only to undo
+  an existing flag, user decision 2026-11-02) + `GuiltFreeChip`. The Economii goal
   is the "Termen scurt" row (standalone card only without a plan).
   First-use tour "budget" (4 steps, copy adapts to TourCtx hasPlan /
   hasSpaces / hasBudgets / hasCredit): `budget.top` = the onboarding card
