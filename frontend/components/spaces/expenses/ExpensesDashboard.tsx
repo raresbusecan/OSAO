@@ -152,7 +152,7 @@ export default function ExpensesDashboard({
 
   if (detailPageVisible) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.surface }}>
+      <View style={{ flex: 1 }}>
         <ExpensesDetailPage
           expensesData={{ ...expensesData, entries }}
           onBack={() => setDetailPageVisible(false)}

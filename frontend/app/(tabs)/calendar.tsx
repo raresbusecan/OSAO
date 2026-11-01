@@ -29,6 +29,7 @@ import { todoHref, todoTitle } from "@/lib/dashboard/spaceDue";
 import { useTourScroll, useTourTarget } from "@/components/ui/tourTargets";
 import { useAutoTour } from "@/lib/useAutoTour";
 import { SHOW_TOUR_TEST_BUTTON, startTour, type TourCtx } from "@/lib/tours";
+import { ScreenBackground } from "@/components/ui/ScreenBackground";
 
 /*
  * Calendar, 2026-10 redesign (design-lead spec, mockup "orgOS Calendar
@@ -381,6 +382,7 @@ function CalendarScreen() {
 
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="calendar-screen">
+      <ScreenBackground />
       <ScrollView ref={scrollRef} {...tourScroll} contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 140, gap: spacing.section }}>
         {/* Tour step 1: the month title + arrows and the 3 month cards. */}
         <View {...navTarget} style={{ gap: spacing.section }}>

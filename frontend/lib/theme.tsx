@@ -220,8 +220,59 @@ function writeCardStyle(s: CardStyle) {
  * scales every `spacing` token. Both reach every screen through
  * useTheme(), since no file imports spacing/radius directly. */
 export type Density = "compact" | "normal" | "airy";
-export type Layout = { roundness: number; density: Density };
-export const DEFAULT_LAYOUT: Layout = { roundness: 0.5, density: "normal" };
+/** Behind every screen (components/ui/ScreenBackground.tsx): the plain
+ * page colour, a soft colour wash from the top, or blurred colour blobs.
+ * `backgroundStrength` 0..1 = how much colour. */
+export type Background = "plain" | "gradient" | "blobs";
+
+/** Settings > Culori: the colours of the background blobs/gradient (the
+ * only place colour is free and decorative -- UI accents stay with each
+ * Space). `space` = the current space's colour leads, the default trio
+ * elsewhere. Each palette: three colours per light/dark page; the
+ * ScreenBackground opacity cap keeps text readable on any of them.
+ * Mockup: the "orgOS teme și carduri" canvas, "Palete de culori". */
+export const BACKGROUND_PALETTES = [
+  { id: "space", label: "După Spațiu", description: "În fiecare Spațiu, culoarea lui", light: ["#7FA2FF", "#5FD0C0", "#E7A0F4"], dark: ["#3B5BDB", "#0D9488", "#9D4EDD"] },
+  { id: "ocean", label: "Ocean", description: "Albastru, turcoaz, cyan", light: ["#6FA8FF", "#4FD1C5", "#67E8F9"], dark: ["#2563EB", "#0D9488", "#0891B2"] },
+  { id: "sunset", label: "Apus", description: "Portocaliu, roz, violet", light: ["#FDBA74", "#F9A8D4", "#C4B5FD"], dark: ["#EA580C", "#DB2777", "#7C3AED"] },
+  { id: "forest", label: "Pădure", description: "Verde, mentă, lime", light: ["#86EFAC", "#6EE7B7", "#D9F99D"], dark: ["#16A34A", "#059669", "#65A30D"] },
+  { id: "lavender", label: "Lavandă", description: "Mov, roz pal, bleu", light: ["#C4B5FD", "#F5D0FE", "#BAE6FD"], dark: ["#7C3AED", "#C026D3", "#0284C7"] },
+  { id: "sand", label: "Nisip", description: "Piersică, auriu, teracotă", light: ["#FCD9B8", "#FDE68A", "#F0B8A0"], dark: ["#C2410C", "#B45309", "#9A3412"] },
+] as const satisfies readonly { id: string; label: string; description: string; light: readonly string[]; dark: readonly string[] }[];
+export type PaletteId = (typeof BACKGROUND_PALETTES)[number]["id"];
+/** Every <Text> is scaled by TEXT_SCALE in lib/globalFont.native.ts (on
+ * top of the phone's own accessibility text size); web stays at 1. */
+export type TextSize = "small" | "normal" | "large" | "xlarge";
+export const TEXT_SCALE: Record<TextSize, number> = { small: 0.9, normal: 1, large: 1.12, xlarge: 1.25 };
+/** The shared Button: corners follow `roundness` or are fully round;
+ * primary/secondary are filled or drawn as an outline. */
+export type ButtonShape = "rounded" | "pill";
+export type ButtonStyle = "filled" | "outline";
+export type Layout = {
+  roundness: number;
+  density: Density;
+  background: Background;
+  backgroundStrength: number;
+  palette: PaletteId;
+  textSize: TextSize;
+  buttonShape: ButtonShape;
+  buttonStyle: ButtonStyle;
+};
+export const DEFAULT_LAYOUT: Layout = {
+  roundness: 0.5,
+  density: "normal",
+  background: "plain",
+  backgroundStrength: 0.5,
+  palette: "space",
+  textSize: "normal",
+  buttonShape: "rounded",
+  buttonStyle: "filled",
+};
+const BACKGROUNDS: Background[] = ["plain", "gradient", "blobs"];
+const oneOf = <T,>(list: readonly T[], v: unknown, fallback: T): T => (list.includes(v as T) ? (v as T) : fallback);
+
+/** The current TEXT_SCALE factor, read by the patched Text component. */
+export const TextScaleContext = createContext(1);
 const DENSITY_SCALE: Record<Density, number> = { compact: 0.8, normal: 1, airy: 1.2 };
 
 const LAYOUT_STORAGE_KEY = "orgos_layout";
@@ -233,6 +284,12 @@ function readLayout(): Layout {
     return {
       roundness: clamp01(v?.roundness, DEFAULT_LAYOUT.roundness),
       density: v?.density in DENSITY_SCALE ? v.density : DEFAULT_LAYOUT.density,
+      background: oneOf(BACKGROUNDS, v?.background, DEFAULT_LAYOUT.background),
+      backgroundStrength: clamp01(v?.backgroundStrength, DEFAULT_LAYOUT.backgroundStrength),
+      palette: oneOf(BACKGROUND_PALETTES.map((p) => p.id), v?.palette, DEFAULT_LAYOUT.palette),
+      textSize: oneOf(Object.keys(TEXT_SCALE) as TextSize[], v?.textSize, DEFAULT_LAYOUT.textSize),
+      buttonShape: oneOf<ButtonShape>(["rounded", "pill"], v?.buttonShape, DEFAULT_LAYOUT.buttonShape),
+      buttonStyle: oneOf<ButtonStyle>(["filled", "outline"], v?.buttonStyle, DEFAULT_LAYOUT.buttonStyle),
     };
   } catch {
     return DEFAULT_LAYOUT;
@@ -277,21 +334,43 @@ export function cardSurface(colors: ThemeColors, isDark: boolean, s: CardStyle, 
   // Glass lifts a dark card toward white a little; a light one is white already.
   const glassLift = isDark ? 0.07 * l : 0;
   const [br, bg, bb] = rgbOf(base).map((c) => Math.round(c + (255 - c) * glassLift));
+  const ink = isDark ? "0,0,0" : "16,24,40";
   const shadows: string[] = [];
-  const edge = isDark ? 0.08 * b + 0.14 * l : 0.6 * b + 0.9 * l;
-  if (edge > 0) shadows.push(`inset 0 1px 0 rgba(255,255,255,${r3(Math.min(1, edge))})`);
+  // Light catching the top edge (bulge, and glass's bright rim).
+  const edge = isDark ? 0.06 + 0.16 * b + 0.25 * l : 0.6 * b + 0.9 * l;
+  if (b > 0 || l > 0) shadows.push(`inset 0 1px 0 rgba(255,255,255,${r3(Math.min(1, edge))})`);
+  // The underside turning away from the light.
+  if (b > 0) shadows.push(`inset 0 -${Math.round(1 + 2 * b)}px 0 rgba(${ink},${r3((isDark ? 0.3 : 0.06) * b)})`);
   if (l > 0) {
-    shadows.push(`inset 0 0 0 1px rgba(255,255,255,${r3(isDark ? 0.03 + 0.09 * l : 0.3 + 0.5 * l)})`);
-    shadows.push(`inset 0 -1px 0 rgba(0,0,0,${r3((isDark ? 0.3 : 0.05) * l)})`);
+    // Glass: a thick bright rim, and light glowing inside the edges.
+    shadows.push(`inset 0 0 0 1.5px rgba(255,255,255,${r3(isDark ? 0.08 + 0.2 * l : 0.45 + 0.5 * l)})`);
+    shadows.push(`inset 0 0 ${Math.round(12 + 20 * l)}px rgba(255,255,255,${r3(isDark ? 0.07 * l : 0.4 * l)})`);
   }
   if (b > 0) {
-    const ink = isDark ? "0,0,0" : "16,24,40";
-    if (!isDark) shadows.push(`0 1px 2px rgba(${ink},${r3(0.06 * b)})`);
-    shadows.push(`0 ${Math.round(2 + 10 * b)}px ${Math.round(6 + 26 * b)}px rgba(${ink},${r3(isDark ? 0.15 + 0.35 * b : 0.03 + 0.1 * b)})`);
+    // A tight contact shadow + a wide soft one: reads as lifted.
+    shadows.push(`0 1px ${Math.round(2 + 2 * b)}px rgba(${ink},${r3(isDark ? 0.25 + 0.2 * b : 0.05 + 0.07 * b)})`);
+    shadows.push(
+      `0 ${Math.round(3 + 15 * b)}px ${Math.round(10 + 34 * b)}px -4px rgba(${ink},${r3(isDark ? 0.3 + 0.45 * b : 0.06 + 0.22 * b)})`,
+    );
   }
+  // Shading painted OVER the fill (not instead of it, so a device without
+  // backgroundImage support still gets a solid card): lighter top, darker
+  // bottom = a convex surface; glass adds a glossy sheen over the top
+  // third and a faint caustic glow along the bottom.
+  const topLight = isDark ? 0.05 * b + 0.16 * l : 0.55 * l;
+  const bottomShade = (isDark ? 0.22 : 0.07) * b;
+  const caustic = (isDark ? 0.06 : 0.25) * l;
+  const shading =
+    topLight > 0 || bottomShade > 0
+      ? `linear-gradient(180deg, rgba(255,255,255,${r3(topLight)}) 0%, rgba(255,255,255,${r3(topLight * 0.35)}) 32%, rgba(255,255,255,0) 42%, rgba(${ink},0) 60%, rgba(${ink},${r3(bottomShade)}) 92%, rgba(255,255,255,${r3(caustic)}) 100%)`
+      : null;
+  // Glass is see-through: liquid takes the fill down on top of the
+  // Transparență slider (never below 25%).
+  const alpha = Math.max(0.25, s.opacity * (1 - 0.45 * l));
   return {
-    backgroundColor: `rgba(${br},${bg},${bb},${r3(s.opacity)})`,
+    backgroundColor: `rgba(${br},${bg},${bb},${r3(alpha)})`,
     ...(shadows.length ? { boxShadow: shadows.join(", ") } : null),
+    ...(shading ? { backgroundImage: shading } : null),
   };
 }
 
@@ -431,7 +510,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       typography,
     };
   }, [themeId, setThemeId, cardStyle, setCardStyle, layout, setLayout, scaled]);
-  return <ThemeCtx.Provider value={value}>{children}</ThemeCtx.Provider>;
+  return (
+    <ThemeCtx.Provider value={value}>
+      <TextScaleContext.Provider value={TEXT_SCALE[layout.textSize]}>{children}</TextScaleContext.Provider>
+    </ThemeCtx.Provider>
+  );
 }
 
 export function useTheme() {

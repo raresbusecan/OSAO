@@ -15,9 +15,30 @@ import { paletteKey, spaceColors, type SpaceColorKey, type SpaceColors } from "@
  * Outside any provider it is simply the kind default.
  */
 const SpaceThemeContext = createContext<SpaceColorKey | null>(null);
+type SpaceKind = "car" | "home" | "grocery" | "expenses";
+const SpaceKindContext = createContext<SpaceKind | null>(null);
 
-export function SpaceThemeProvider({ color, children }: { color: unknown; children: React.ReactNode }) {
-  return <SpaceThemeContext.Provider value={paletteKey(color)}>{children}</SpaceThemeContext.Provider>;
+/** `kind` (optional) lets code that doesn't know which space it's in --
+ * the screen background -- still find its colour when `color` is null
+ * (= the kind's default). */
+export function SpaceThemeProvider({ color, kind, children }: { color: unknown; kind?: string | null; children: React.ReactNode }) {
+  const k = kind === "car" || kind === "home" || kind === "grocery" || kind === "expenses" ? kind : null;
+  return (
+    <SpaceThemeContext.Provider value={paletteKey(color)}>
+      <SpaceKindContext.Provider value={k}>{children}</SpaceKindContext.Provider>
+    </SpaceThemeContext.Provider>
+  );
+}
+
+/** The current space's identity colour, or null outside any space. */
+export function useSpaceTint(): string | null {
+  const picked = useContext(SpaceThemeContext);
+  const kind = useContext(SpaceKindContext);
+  const { isDark } = useTheme();
+  return useMemo(() => {
+    const key = picked ?? kind;
+    return key ? spaceColors(key, isDark)?.color ?? null : null;
+  }, [picked, kind, isDark]);
 }
 
 export function useSpaceColors(kind: "car" | "home" | "grocery" | "expenses"): SpaceColors {

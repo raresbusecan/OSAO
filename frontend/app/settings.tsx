@@ -5,6 +5,16 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Slider from "@react-native-community/slider";
 import {
+  BUILT_IN_PRESETS,
+  MAX_SAVED_PRESETS,
+  readSavedPresets,
+  sameAppearance,
+  writeSavedPresets,
+  type Appearance,
+  type Preset,
+} from "@/lib/appearancePresets";
+import {
+  BACKGROUND_PALETTES,
   DEFAULT_CARD_STYLE,
   DEFAULT_LAYOUT,
   THEMES,
@@ -12,7 +22,11 @@ import {
   scaledRadius,
   scaledSpacing,
   useTheme,
+  type Background,
+  type ButtonShape,
+  type ButtonStyle,
   type CardStyle,
+  type TextSize,
   type Density,
   type Layout,
   type ThemeColors,
@@ -30,6 +44,7 @@ import { VerifiedBadge } from "@/components/auth/VerifiedBadge";
 import { PROVIDER_LABEL, type SocialProvider } from "@/lib/socialAuth";
 import { TOUR_LIST, clearSeenLocally, requestTour, tourExists, type TourKey } from "@/lib/tours";
 import { detectSpaceType, profileFromSpace, type SpaceKind } from "@/lib/spaces/spaceProfile";
+import { ScreenBackground } from "@/components/ui/ScreenBackground";
 
 const PROVIDER_ICON: Record<SocialProvider, keyof typeof Ionicons.glyphMap> = {
   apple: "logo-apple",
@@ -66,6 +81,7 @@ export default function Settings() {
   const [languageOpen, setLanguageOpen] = useState(false);
   const [themeOpen, setThemeOpen] = useState(false);
   const [appearanceOpen, setAppearanceOpen] = useState(false);
+  const [colorsOpen, setColorsOpen] = useState(false);
   // orgOS Simplu test switch (lib/appMode.tsx) -- local to this device.
   const { mode, setMode, source } = useAppMode();
   // lib/i18n -- this row is the first string read from the locale files.
@@ -99,7 +115,13 @@ export default function Settings() {
       value: LANGUAGES.find((l) => l.code === language)?.label,
       onPress: () => setLanguageOpen(true),
     },
-    { key: "colors", icon: "color-palette-outline", label: "Culori" },
+    {
+      key: "colors",
+      icon: "color-palette-outline",
+      label: "Culori",
+      value: BACKGROUND_PALETTES.find((p) => p.id === layout.palette)?.label,
+      onPress: () => setColorsOpen(true),
+    },
     {
       key: "theme",
       icon: "contrast-outline",
@@ -152,6 +174,7 @@ export default function Settings() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }} testID="settings-screen">
+      <ScreenBackground />
       <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <ScrollView contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: spacing.xl, gap: spacing.section }}>
           <TopBar onBack={() => router.back()} backTestID="settings-back" />
@@ -236,6 +259,8 @@ export default function Settings() {
 
       <AppearanceSheet visible={appearanceOpen} onClose={() => setAppearanceOpen(false)} />
 
+      <ColorsSheet visible={colorsOpen} onClose={() => setColorsOpen(false)} />
+
       <ToursSheet
         visible={toursOpen}
         onClose={() => setToursOpen(false)}
@@ -297,6 +322,53 @@ function ThemeSwatch({ theme }: { theme: ThemeColors }) {
   );
 }
 
+/** Settings > Culori: the background palette (lib/theme.tsx
+ * BACKGROUND_PALETTES) for Aspect's blobs/gradient. Picking one while the
+ * background is plain switches it to blobs, or the choice would show
+ * nothing. Applies right away; the screen behind the sheet shows it. */
+function ColorsSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { colors, isDark, layout, setLayout } = useTheme();
+  return (
+    <Sheet visible={visible} onClose={onClose} title="Culori" subtitle="Culorile fundalului, pe acest dispozitiv." icon="color-palette-outline" testID="settings-colors-sheet">
+      <Group inset={72}>
+        {BACKGROUND_PALETTES.map((p) => {
+          const on = p.id === layout.palette;
+          const swatch = isDark ? p.dark : p.light;
+          return (
+            <Row
+              key={p.id}
+              testID={`settings-colors-${p.id}`}
+              leading={
+                <View style={{ width: 44, flexDirection: "row", alignItems: "center" }}>
+                  {swatch.map((c, i) => (
+                    <View
+                      key={i}
+                      style={{ width: 18, height: 18, borderRadius: 9, marginLeft: i ? -6 : 0, backgroundColor: c, borderWidth: 2, borderColor: colors.surfaceTertiary }}
+                    />
+                  ))}
+                </View>
+              }
+              title={p.label}
+              subtitle={p.description}
+              onPress={() => {
+                if (!on || layout.background === "plain") {
+                  setLayout({ ...layout, palette: p.id, background: layout.background === "plain" ? "blobs" : layout.background });
+                }
+              }}
+              trailing={on ? <Ionicons name="checkmark" size={20} color={colors.onSurface} /> : null}
+            />
+          );
+        })}
+      </Group>
+      <Text style={{ fontSize: 13, lineHeight: 19, color: colors.onSurfaceTertiary, paddingHorizontal: 4 }}>
+        {layout.background === "plain"
+          ? "Fundalul e Simplu: alegerea unei palete îl trece pe Pete, ca să se vadă culorile."
+          : "Gradientul sau petele se pot schimba din Setări › Aspect › Fundal."}
+      </Text>
+    </Sheet>
+  );
+}
+
 /** Settings > Temă: every entry in lib/theme.tsx's THEMES (Hârtie by
  * default). Applies right away, remembered on this device. */
 function ThemeSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
@@ -327,7 +399,30 @@ function ThemeSheet({ visible, onClose }: { visible: boolean; onClose: () => voi
 
 const isDefaultCardStyle = (s: CardStyle) =>
   s.bulge === DEFAULT_CARD_STYLE.bulge && s.opacity === DEFAULT_CARD_STYLE.opacity && s.liquid === DEFAULT_CARD_STYLE.liquid;
-const isDefaultLayout = (l: Layout) => l.roundness === DEFAULT_LAYOUT.roundness && l.density === DEFAULT_LAYOUT.density;
+const isDefaultLayout = (l: Layout) => (Object.keys(DEFAULT_LAYOUT) as (keyof Layout)[]).every((k) => l[k] === DEFAULT_LAYOUT[k]);
+
+const TEXT_SIZE_OPTIONS: { key: TextSize; label: string }[] = [
+  { key: "small", label: "Mic" },
+  { key: "normal", label: "Normal" },
+  { key: "large", label: "Mare" },
+  { key: "xlarge", label: "Maxim" },
+];
+
+const BUTTON_SHAPE_OPTIONS: { key: ButtonShape; label: string }[] = [
+  { key: "rounded", label: "Rotunjite" },
+  { key: "pill", label: "Pastilă" },
+];
+
+const BUTTON_STYLE_OPTIONS: { key: ButtonStyle; label: string }[] = [
+  { key: "filled", label: "Pline" },
+  { key: "outline", label: "Contur" },
+];
+
+const BACKGROUND_OPTIONS: { key: Background; label: string }[] = [
+  { key: "plain", label: "Simplu" },
+  { key: "gradient", label: "Gradient" },
+  { key: "blobs", label: "Pete" },
+];
 
 const DENSITY_OPTIONS: { key: Density; label: string }[] = [
   { key: "compact", label: "Compact" },
@@ -383,10 +478,28 @@ function SliderField({
 // The slider reports floats like 0.30000000004; keep exact 5% steps.
 const snap = (v: number) => Math.round(v * 20) / 20;
 
-const CARD_SLIDERS:{ key: keyof CardStyle; label: string; hint: string; min: number }[] = [
-  { key: "bulge", label: "Bombat", hint: "Cât de ridicat pare cardul", min: 0 },
-  { key: "opacity", label: "Opac", hint: "Cât de plin e fundalul cardului", min: 0.4 },
-  { key: "liquid", label: "Liquid", hint: "Cât de mult seamănă cu sticla", min: 0 },
+const identity = (v: number) => v;
+
+/** `toSlider`/`fromSlider` map a stored value to what the bar shows:
+ * "Transparență" is the stored `opacity` (1 = solid, 0.4 = the most
+ * see-through allowed) turned around, so further right = more
+ * transparent, as people expect from the name. */
+const CARD_SLIDERS: { key: keyof CardStyle; label: string; hint: string; toSlider: (v: number) => number; fromSlider: (t: number) => number }[] = [
+  { key: "bulge", label: "Bombat", hint: "Cât de ridicat pare cardul", toSlider: identity, fromSlider: identity },
+  {
+    key: "opacity",
+    label: "Transparență",
+    hint: "Cât se vede prin card",
+    toSlider: (o) => Math.round(((1 - o) / 0.6) * 20) / 20,
+    fromSlider: (t) => Math.round((1 - 0.6 * t) * 100) / 100,
+  },
+  {
+    key: "liquid",
+    label: "Liquid",
+    hint: "Aspect de sticlă: reflexii, transparență, fundal colorat",
+    toSlider: identity,
+    fromSlider: identity,
+  },
 ];
 
 /** Settings > Aspect: how the whole app looks -- card style (lib/theme.tsx
@@ -405,6 +518,39 @@ function AppearanceSheet({ visible, onClose }: { visible: boolean; onClose: () =
     setLayoutDraft(layout);
   }
   wasVisible.current = visible;
+
+  // Settings > Aspect > Stiluri (lib/appearancePresets.ts).
+  const [saved, setSaved] = useState<Preset[]>(readSavedPresets);
+  const current: Appearance = { cardStyle: draft, layout: layoutDraft };
+  const matchesAPreset = [...BUILT_IN_PRESETS, ...saved].some((p) => sameAppearance(p.appearance, current));
+  const applyPreset = (p: Preset) => {
+    setDraft(p.appearance.cardStyle);
+    setCardStyle(p.appearance.cardStyle);
+    setLayoutDraft(p.appearance.layout);
+    setLayout(p.appearance.layout);
+  };
+  const savePreset = () => {
+    // "Stilul meu N" with the first N not already used.
+    let n = 1;
+    while (saved.some((p) => p.label === `Stilul meu ${n}`)) n++;
+    const next = [...saved, { id: `own-${Date.now()}`, label: `Stilul meu ${n}`, appearance: current }];
+    setSaved(next);
+    writeSavedPresets(next);
+  };
+  const deletePreset = async (p: Preset) => {
+    const ok = await confirmAction(`Ștergi „${p.label}”?`, "Aspectul de acum rămâne cum e.", { confirmLabel: "Șterge", destructive: true });
+    if (!ok) return;
+    const next = saved.filter((s) => s.id !== p.id);
+    setSaved(next);
+    writeSavedPresets(next);
+  };
+
+  // Choices without a slider apply at once (draft + app together).
+  const commitLayout = (patch: Partial<Layout>) => {
+    const next = { ...layoutDraft, ...patch };
+    setLayoutDraft(next);
+    setLayout(next);
+  };
 
   // The preview's corners and padding follow the drafts, not the app.
   const pr = scaledRadius(layoutDraft.roundness);
@@ -434,6 +580,34 @@ function AppearanceSheet({ visible, onClose }: { visible: boolean; onClose: () =
         />
       }
     >
+      <SectionHeader title="Stiluri" muted />
+      <Group inset={16}>
+        {[...BUILT_IN_PRESETS, ...saved].map((p) => {
+          const own = !BUILT_IN_PRESETS.includes(p);
+          const on = sameAppearance(p.appearance, current);
+          return (
+            <Row
+              key={p.id}
+              testID={`settings-appearance-preset-${p.id}`}
+              title={p.label}
+              subtitle={own ? "Salvat de tine · ține apăsat ca să-l ștergi" : p.description}
+              onPress={() => applyPreset(p)}
+              onLongPress={own ? () => deletePreset(p) : undefined}
+              trailing={on ? <Ionicons name="checkmark" size={20} color={colors.onSurface} /> : null}
+            />
+          );
+        })}
+      </Group>
+      <Button
+        testID="settings-appearance-save-preset"
+        variant="secondary"
+        compact
+        icon="bookmark-outline"
+        label={saved.length >= MAX_SAVED_PRESETS ? `Poți salva cel mult ${MAX_SAVED_PRESETS} stiluri` : "Salvează combinația actuală"}
+        disabled={saved.length >= MAX_SAVED_PRESETS || matchesAPreset}
+        onPress={savePreset}
+      />
+
       {/* The preview sits on the page colour, as cards do in the app. */}
       <View style={{ backgroundColor: colors.surface, borderRadius: pr.card, padding: ps.xl, alignItems: "stretch" }}>
         <View testID="settings-appearance-preview" style={[cardSurface(colors, isDark, draft), { borderRadius: pr.lg, padding: ps.gutter, gap: ps.sm }]}>
@@ -452,10 +626,9 @@ function AppearanceSheet({ visible, onClose }: { visible: boolean; onClose: () =
           testID={`settings-appearance-${sl.key}`}
           label={sl.label}
           hint={sl.hint}
-          min={sl.min}
-          value={draft[sl.key]}
-          onChange={(v) => setDraft((d) => ({ ...d, [sl.key]: v }))}
-          onCommit={(v) => setCardStyle({ ...draft, [sl.key]: v })}
+          value={sl.toSlider(draft[sl.key])}
+          onChange={(t) => setDraft((d) => ({ ...d, [sl.key]: sl.fromSlider(t) }))}
+          onCommit={(t) => setCardStyle({ ...draft, [sl.key]: sl.fromSlider(t) })}
         />
       ))}
 
@@ -483,6 +656,72 @@ function AppearanceSheet({ visible, onClose }: { visible: boolean; onClose: () =
             setLayout(next);
           }}
         />
+      </View>
+
+      {/* Applied right away: the screen behind the sheet shows it. */}
+      <SectionHeader title="Fundal" muted />
+      <View style={{ gap: spacing.sm }}>
+        <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, paddingHorizontal: spacing.xs }}>
+          În Spații, culoarea vine de la Spațiu. Cu Liquid pornit și fundalul Simplu, apar automat pete de culoare, ca sticla să aibă ce arăta.
+        </Text>
+        <Segmented
+          testIDPrefix="settings-appearance-background"
+          options={BACKGROUND_OPTIONS}
+          value={layoutDraft.background}
+          onChange={(b) => {
+            const next = { ...layoutDraft, background: b };
+            setLayoutDraft(next);
+            setLayout(next);
+          }}
+        />
+      </View>
+      {layoutDraft.background !== "plain" ? (
+        <SliderField
+          testID="settings-appearance-background-strength"
+          label="Intensitate"
+          hint="Câtă culoare are fundalul"
+          value={layoutDraft.backgroundStrength}
+          onChange={(v) => setLayoutDraft((l) => ({ ...l, backgroundStrength: v }))}
+          onCommit={(v) => setLayout({ ...layoutDraft, backgroundStrength: v })}
+        />
+      ) : null}
+
+      <SectionHeader title="Text" muted />
+      <View style={{ gap: spacing.sm }}>
+        <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, paddingHorizontal: spacing.xs }}>
+          Mărimea textului din toată aplicația, peste cea aleasă în telefon.
+        </Text>
+        <Segmented
+          testIDPrefix="settings-appearance-text"
+          options={TEXT_SIZE_OPTIONS}
+          value={layoutDraft.textSize}
+          onChange={(t) => commitLayout({ textSize: t })}
+        />
+      </View>
+
+      <SectionHeader title="Butoane" muted />
+      <View style={{ gap: spacing.sm }}>
+        <Segmented
+          testIDPrefix="settings-appearance-button-shape"
+          options={BUTTON_SHAPE_OPTIONS}
+          value={layoutDraft.buttonShape}
+          onChange={(s) => commitLayout({ buttonShape: s })}
+        />
+        <Segmented
+          testIDPrefix="settings-appearance-button-style"
+          options={BUTTON_STYLE_OPTIONS}
+          value={layoutDraft.buttonStyle}
+          onChange={(s) => commitLayout({ buttonStyle: s })}
+        />
+        {/* Live sample: these two apply right away. */}
+        <View style={{ flexDirection: "row", gap: spacing.sm }}>
+          <View style={{ flex: 1 }}>
+            <Button testID="settings-appearance-sample-primary" label="Salvează" onPress={() => {}} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Button testID="settings-appearance-sample-secondary" variant="secondary" label="Anulează" onPress={() => {}} />
+          </View>
+        </View>
       </View>
     </Sheet>
   );

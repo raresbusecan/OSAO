@@ -588,6 +588,53 @@ sub-pages, sheets, dialogs, login, settings). Rules:
   as padding), TourHost (spotlights use measured pixels) and the tab
   bars' item spacing. A new option = a token in lib/theme.tsx + one
   control in AppearanceSheet, never a per-screen change.
+- **Rest of Aspect** (2026-11-01), all in `layout`:
+  * `background` plain/gradient/blobs + `backgroundStrength`, drawn by
+    `components/ui/ScreenBackground.tsx` (SVG, tinted by the current
+    space via `useSpaceTint()`; SpaceThemeProvider takes `kind` for that).
+    It's the first child of every screen root and of `SwipeBackView`
+    (= every sub-page). A new screen root adds `<ScreenBackground />`;
+    nothing above it may paint `colors.surface` or it hides the colour.
+    Blob opacity is capped so onSurfaceTertiary stays readable on it.
+  * `palette` (Settings > Culori, `ColorsSheet`): BACKGROUND_PALETTES in
+    lib/theme.tsx -- După Spațiu (default: the space's colour leads),
+    Ocean, Apus, Pădure, Lavandă, Nisip; three colours per light/dark.
+    It colours ONLY the background; UI accents stay per Space. Picking a
+    palette while Fundal = Simplu switches Fundal to Pete. A new palette
+    = one entry there.
+  * `textSize` scales every Plex <Text>/<TextInput> through
+    lib/globalFont.native.ts (TextScaleContext); icon fonts and nested
+    spans without their own size are skipped. Web doesn't scale. Fixed
+    heights around text clip at "Maxim" -- prefer minHeight.
+    That patch was a silent NO-OP from Expo SDK 58 until 2026-11-01 (no
+    Plex font, no scaling on phones): Text.js's `default` became a
+    non-configurable getter. It now redefines react-native's index
+    getters instead (app code reads `_reactNative.Text` live).
+  * Water/wave touch effect: REMOVED on purpose (user, 2026-11-01) --
+    first app-wide (made the app feel heavy), then also from the Liquid
+    bar ("nu-l mai vreau deloc"). Don't bring it back. Dead, not deleted
+    (deletion is denied here): `components/ui/WaterRipples.tsx`,
+    `WaterSurface.tsx`, `WaterSurface.native.tsx`, `waterShader.ts`;
+    `@shopify/react-native-skia` was installed only for them. What it was: a per-pixel Skia runtime shader
+    (components/ui/waterShader.ts, drawn by WaterSurface.native.tsx;
+    web renders nothing): impact crater that rebounds + damped radial
+    ring wave with dispersion and a wobbled front, summed over up to 12
+    drops, lit from the surface normal (lit side, shadow side, glint).
+    Driven by a rAF clock only while a drop lives (no reanimated).
+    Earlier SVG ring versions all read as "a radius growing / a radar"
+    (user, 2026-11-01). Tune it offline: the scratchpad contact-sheet
+    script compiles WATER_SKSL with node_modules/canvaskit-wasm and
+    renders it over the real page colours. Observes touches only, never blocks: it sees them
+    through onStartShouldSetResponderCapture/onMoveShouldSetResponderCapture
+    (always returning false) -- bubbling onTouchStart alone never fired
+    on the user's iPhone; both are kept, deduped.
+  * `buttonShape`/`buttonStyle` restyle the shared `Button` (96 uses);
+    ~25 hand-made button-like Pressables don't follow them yet.
+- **Styles** (lib/appearancePresets.ts): built-in presets (Clasic,
+  Sticlă, Compact, Confort, Minimal) set cardStyle + layout in one tap,
+  never the theme; up to 5 user-saved ones per device
+  (`orgos_appearance_presets`). A new Layout field needs no preset edits
+  (`look()` fills defaults), but say so in a preset if it matters there.
 - **Card style** (2026-11-01): `cardStyle` {bulge, opacity, liquid} from
   `useTheme()`, set by Settings > Aspect's sliders (`AppearanceSheet`),
   stored as `orgos_card_style`. `useTheme().card` = the ready style (fill

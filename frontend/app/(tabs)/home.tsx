@@ -28,6 +28,7 @@ import { onlyEmptyDataHidesOthers, visibleWidgets } from "@/lib/dashboard/widget
 import { useTourScroll, useTourTarget } from "@/components/ui/tourTargets";
 import { useAutoTour } from "@/lib/useAutoTour";
 import { SHOW_TOUR_TEST_BUTTON, startTour, type TourCtx } from "@/lib/tours";
+import { ScreenBackground } from "@/components/ui/ScreenBackground";
 import {
   detectSpaceType,
   profileFromSpace,
@@ -480,6 +481,7 @@ function Home() {
 
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="home-screen">
+      <ScreenBackground />
       {editing ? (
         <ReorderList
           testID="home-edit-list"

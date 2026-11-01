@@ -33,6 +33,7 @@ import { useAutoTour } from "@/lib/useAutoTour";
 import { SHOW_TOUR_TEST_BUTTON, startTour, type TourCtx } from "@/lib/tours";
 import { motion } from "@/lib/motion";
 import { lei, roNumber, roDate, parseLocaleNumber } from "@/lib/format";
+import { ScreenBackground } from "@/components/ui/ScreenBackground";
 
 type BudgetLimit = { category: string; monthly_limit: number; spent: number };
 type SavingsGoal = { target_amount: number; current_amount: number; target_date: string | null } | null;
@@ -384,6 +385,7 @@ export default function BudgetScreen() {
 
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="budget-screen">
+      <ScreenBackground />
       {spaceDetailFor ? (
         <BudgetSpaceDetailPage
           category={spaceDetailFor.label}

@@ -366,7 +366,6 @@ export function GroceryRecipesPage({
     <>
     <SwipeBackView onBack={onBack} style={{ backgroundColor: colors.surface }}>
     <ScrollView
-      style={{ backgroundColor: colors.surface }}
       showsVerticalScrollIndicator={false}
       contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 150, gap: spacing.section }}
     >

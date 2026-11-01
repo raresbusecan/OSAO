@@ -21,6 +21,7 @@ import { dueBySpace, type SpaceDue } from "@/lib/dashboard/spaceDue";
 import { prefetchQuickAdd } from "@/lib/quickAddCache";
 import { guardSimpleSpaceCreate } from "@/lib/simpleLimits";
 import { capitalize, roNumber } from "@/lib/format";
+import { ScreenBackground } from "@/components/ui/ScreenBackground";
 import {
   detectSpaceType,
   profileFromSpace,
@@ -148,6 +149,7 @@ export function SimpleHome() {
 
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="simple-home-screen">
+      <ScreenBackground />
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.lg, paddingBottom: 120, gap: spacing.lg }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={muted} />}

@@ -18,8 +18,7 @@ import {
   IBMPlexSans_600SemiBold,
 } from "@expo-google-fonts/ibm-plex-sans";
 
-import { ThemeProvider, useTheme } from "@/lib/theme";
-import { ConfirmHost } from "@/lib/confirmHost";
+import { ThemeProvider, useTheme } from "@/lib/theme";import { ConfirmHost } from "@/lib/confirmHost";
 import { HelpHost } from "@/components/ui/HelpHost";
 import { TourHost } from "@/components/ui/TourHost";
 import { AuthProvider, useAuth } from "@/providers/auth";

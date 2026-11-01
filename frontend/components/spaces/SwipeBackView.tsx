@@ -1,6 +1,7 @@
 import React, { useRef } from "react";
 import { Animated, Dimensions, StyleProp, View, ViewStyle } from "react-native";
 import { PanGestureHandler, State } from "react-native-gesture-handler";
+import { ScreenBackground } from "@/components/ui/ScreenBackground";
 
 /**
  * Piloted on Home's Tasks page first, per explicit user request -- the
@@ -106,6 +107,9 @@ export function SwipeBackView({ onBack, children, style }: SwipeBackViewProps) {
       <Animated.View
         style={[{ flex: 1 }, style, { transform: [{ translateX: clampedTranslateX }] }]}
       >
+        {/* Every sub-page's page layer (Settings > Aspect > Fundal); it
+            also keeps the sliding page opaque over the one beneath. */}
+        <ScreenBackground />
         {children}
       </Animated.View>
       {/* On top of (not inside) the animated content, so it keeps

@@ -22,6 +22,7 @@ import { canEditRecord } from "@/components/simple/EditRecordSheet";
 import { openEditRecord } from "@/lib/simpleSheets";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { TeaserCard } from "@/components/simple/Teaser";
+import { ScreenBackground } from "@/components/ui/ScreenBackground";
 
 /*
  * orgOS Simplu -- Calendar (mockup "Calendar A · Lună + ziua aleasă").
@@ -437,6 +438,7 @@ export function SimpleCalendar() {
 
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="simple-calendar-screen">
+      <ScreenBackground />
       <ScrollView
         contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 120, gap: spacing.section }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onPullRefresh} tintColor={muted} colors={[muted]} />}

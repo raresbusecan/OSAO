@@ -495,14 +495,20 @@ export function Button({
   /** Screen-reader label when the visible one isn't enough ("Înainte, pasul 2 din 4"). */
   a11yLabel?: string;
 }) {
-  const { colors, radius, spacing } = useTheme();
-  const fill =
-    variant === "primary" ? tone ?? colors.onSurface
+  const { colors, radius, spacing, layout } = useTheme();
+  // Settings > Aspect > Butoane: "outline" draws the same colour as a
+  // border + label on no fill (ghost stays as is).
+  const outline = layout.buttonStyle === "outline" && variant !== "ghost";
+  const ink = variant === "primary" ? tone ?? colors.onSurface : variant === "destructive" ? colors.error : colors.borderStrong;
+  const fill = outline
+    ? "transparent"
+    : variant === "primary" ? tone ?? colors.onSurface
       : variant === "secondary" ? colors.surfaceTertiary
         : variant === "destructive" ? hexToRgba(colors.error, 0.12)
           : "transparent";
-  const fg =
-    variant === "primary" ? (tone ? readableOn(tone) : colors.surface)
+  const fg = outline
+    ? variant === "secondary" ? colors.onSurface : ink
+    : variant === "primary" ? (tone ? readableOn(tone) : colors.surface)
       : variant === "destructive" ? colors.error
         : variant === "ghost" ? colors.onSurfaceTertiary
           : colors.onSurface;
@@ -515,9 +521,11 @@ export function Button({
       accessibilityLabel={a11yLabel ?? label}
       accessibilityState={{ disabled: !!disabled, busy: !!loading }}
       style={{
-        height: compact ? 44 : 52,
-        borderRadius: radius.control,
+        // min, not fixed: a larger Settings text size can grow the label.
+        minHeight: compact ? 44 : 52,
+        borderRadius: layout.buttonShape === "pill" ? radius.pill : radius.control,
         backgroundColor: fill,
+        ...(outline ? { borderWidth: 1.5, borderColor: ink } : null),
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",

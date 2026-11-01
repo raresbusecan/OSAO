@@ -68,6 +68,7 @@ import { HomeProfileForm } from "@/components/spaces/home/HomeProfileForm";
 import { SpaceThemeProvider } from "@/lib/spaces/spaceTheme";
 import { useAppMode } from "@/lib/appMode";
 import { SimpleSpaceScreen } from "@/components/simple/space/SimpleSpaceScreen";
+import { ScreenBackground } from "@/components/ui/ScreenBackground";
 import {
   profileFromSpace,
   detectSpaceType,
@@ -1277,7 +1278,7 @@ export default function SpaceDetail() {
   if (isSimple && !itemId && !section) {
     return (
       <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="space-detail-screen">
-        <SpaceThemeProvider color={space.color}>
+        <SpaceThemeProvider color={space.color} kind={detectedKind}><ScreenBackground />
           <SimpleSpaceScreen
             key={`${space.id}-${visitId}`}
             space={space}
@@ -1316,7 +1317,7 @@ export default function SpaceDetail() {
         }}
         testID="space-detail-screen"
       >
-        <SpaceThemeProvider color={space.color}>
+        <SpaceThemeProvider color={space.color} kind={detectedKind}><ScreenBackground />
         <CarDashboard
           key={`${space.id}-${visitId}`}
           space={space}
@@ -1387,7 +1388,7 @@ export default function SpaceDetail() {
         }}
         testID="space-detail-screen"
       >
-        <SpaceThemeProvider color={space.color}>
+        <SpaceThemeProvider color={space.color} kind={detectedKind}><ScreenBackground />
         <HomeDashboard
           key={`${space.id}-${visitId}`}
           space={space}
@@ -1454,7 +1455,7 @@ export default function SpaceDetail() {
             Grocery space's data while switching), but does nothing when
             re-entering the SAME space, since space.id never changes
             then. visitId covers that case too, for all 4 dashboards. */}
-        <SpaceThemeProvider color={space.color}>
+        <SpaceThemeProvider color={space.color} kind={detectedKind}><ScreenBackground />
         <GroceryDashboard
           key={`${space.id}-${visitId}`}
           space={space}
@@ -1489,7 +1490,7 @@ export default function SpaceDetail() {
         }}
         testID="space-detail-screen"
       >
-        <SpaceThemeProvider color={space.color}>
+        <SpaceThemeProvider color={space.color} kind={detectedKind}><ScreenBackground />
         <ExpensesDashboard
           key={`${space.id}-${visitId}`}
           space={space}

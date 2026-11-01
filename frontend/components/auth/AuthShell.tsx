@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { SPACE_IDENTITY_COLORS } from "@/lib/spaces/spaceProfile";
 import { CircleButton, Field } from "@/components/ui/primitives";
+import { ScreenBackground } from "@/components/ui/ScreenBackground";
 
 /**
  * The frame every signed-out screen shares (login, register, password
@@ -29,6 +30,7 @@ export function AuthShell({
   const marks = [SPACE_IDENTITY_COLORS.car, SPACE_IDENTITY_COLORS.home, SPACE_IDENTITY_COLORS.grocery, SPACE_IDENTITY_COLORS.expenses];
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }} testID={testID}>
+      <ScreenBackground />
       <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
           <ScrollView

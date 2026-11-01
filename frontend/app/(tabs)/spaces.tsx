@@ -22,6 +22,7 @@ import { PageTitle, CircleButton, IconWell, InfoButton, Button } from "@/compone
 import { motion } from "@/lib/motion";
 import { useAppMode } from "@/lib/appMode";
 import { canCreateSpaceInSimple, guardSimpleSpaceCreate } from "@/lib/simpleLimits";
+import { ScreenBackground } from "@/components/ui/ScreenBackground";
 import {
   profileFromSpace,
   detectSpaceType,
@@ -419,6 +420,7 @@ export default function Spaces() {
 
   return (
     <SafeAreaView edges={["top"]} style={{ flex: 1, backgroundColor: colors.surface }} testID="spaces-screen">
+      <ScreenBackground />
       <View style={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.lg, paddingBottom: spacing.md }}>
         {editing ? (
           <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 44 }}>

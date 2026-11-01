@@ -82,7 +82,7 @@ export function SimplePage({
     <SwipeBackView onBack={onBack} style={{ backgroundColor: colors.surface }}>
       <ScrollView
         testID={testID}
-        style={{ flex: 1, backgroundColor: colors.surface }}
+        style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
         // A button tap works with the keyboard up (Cumpărături's "+" next to
         // its field used to need a first tap just to close the keyboard);

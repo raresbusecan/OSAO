@@ -80,18 +80,19 @@ export type HomeCtx = {
   preview?: boolean;
 };
 
-/** The card's own surface: the layer color, or a tint of the color the
- * user picked for it. */
+/** The card's own surface: Settings > Aspect's card style (`card`: fill,
+ * rim, shadow), its fill swapped for a tint of the colour the user picked
+ * for the card, if any. Spread `surface` into the card's style. */
 function useCardLook(widget: Widget, fallbackAccent?: string) {
-  const { colors, isDark } = useTheme();
+  const { colors, isDark, card } = useTheme();
   const accent = widget.color ?? fallbackAccent ?? colors.onSurfaceTertiary;
-  const background = widget.color ? hexToRgba(widget.color, isDark ? 0.16 : 0.1) : colors.surfaceSecondary;
-  return { accent, background };
+  const surface = widget.color ? { ...card, backgroundColor: hexToRgba(widget.color, isDark ? 0.16 : 0.1) } : card;
+  return { accent, surface };
 }
 
 function TapCard({ widget, onPress, label, fallbackAccent, children, style }: { widget: Widget; onPress?: () => void; label: string; fallbackAccent?: string; children: React.ReactNode; style?: any }) {
   const { radius, spacing } = useTheme();
-  const { background } = useCardLook(widget, fallbackAccent);
+  const { surface } = useCardLook(widget, fallbackAccent);
   return (
     <PressableScale
       testID={`home-card-${widget.type}-${widget.id}`}
@@ -100,7 +101,7 @@ function TapCard({ widget, onPress, label, fallbackAccent, children, style }: { 
       accessibilityRole="button"
       accessibilityLabel={label}
       scaleTo={motion.scale.card}
-      style={[{ backgroundColor: background, borderRadius: radius.lg, padding: widget.size === "compact" ? spacing.lg : spacing.gutter, gap: spacing.sm }, style]}
+      style={[{ ...surface, borderRadius: radius.lg, padding: widget.size === "compact" ? spacing.lg : spacing.gutter, gap: spacing.sm }, style]}
     >
       {children}
     </PressableScale>
@@ -244,11 +245,11 @@ function SpendCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
  * ghid" canvas, empty state. */
 function EmptySpendCard({ widget, ctx, title }: { widget: Widget; ctx: HomeCtx; title: string }) {
   const { colors, typography, spacing, radius } = useTheme();
-  const { background } = useCardLook(widget);
+  const { surface } = useCardLook(widget);
   const muted = colors.onSurfaceTertiary;
   const create = ctx.preview ? undefined : () => ctx.navigate("/spaces");
   const compact = widget.size === "compact";
-  const look = { backgroundColor: background, borderRadius: radius.lg, padding: compact ? spacing.lg : spacing.gutter };
+  const look = { ...surface, borderRadius: radius.lg, padding: compact ? spacing.lg : spacing.gutter };
 
   if (compact) {
     return (
@@ -503,7 +504,7 @@ function TodoCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
         action={!ctx.preview && items.length > 0 ? { label: "Vezi tot", onPress: ctx.openTodoSheet, testID: "home-widget-todo" } : undefined}
       />
       {rows.length === 0 && reminders.length === 0 ? (
-        <Card style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.lg, backgroundColor: widget.color ? hexToRgba(widget.color, isDark ? 0.16 : 0.1) : colors.surfaceSecondary }}>
+        <Card style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.lg, ...(widget.color ? { backgroundColor: hexToRgba(widget.color, isDark ? 0.16 : 0.1) } : null) }}>
           <Ionicons name="checkmark-circle-outline" size={22} color={colors.success} />
           <Text style={{ fontSize: 15, color: colors.onSurface }}>{ctx.spaces.length === 0 ? "Creează un spațiu din tab-ul Spații." : "Ești la zi. Nimic de făcut."}</Text>
         </Card>
@@ -778,7 +779,7 @@ function SuppliesCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
 
 function CalendarCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
   const { colors, spacing, radius } = useTheme();
-  const { background } = useCardLook(widget);
+  const { surface } = useCardLook(widget);
   const muted = colors.onSurfaceTertiary;
   const title = widget.settings?.title || (widget.size === "compact" ? "Azi" : "Următoarele 7 zile");
   // Credit reminders are "a thing on that day" too (listed, never counted as late).
@@ -800,7 +801,7 @@ function CalendarCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
   }
   const shown = limitRows(upcoming, widget.settings?.rows, 5);
   return (
-    <View testID={`home-card-${widget.type}-${widget.id}`} style={{ backgroundColor: background, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.sm }}>
+    <View testID={`home-card-${widget.type}-${widget.id}`} style={{ ...surface, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.sm }}>
       <CardHeading icon="calendar-outline" text={title} color={tint} info={infoOf(ctx, "card.calendar")} />
       {shown.length === 0 ? <Text style={{ fontSize: 14, color: muted }}>Nimic programat.</Text> : null}
       {shown.map((r: any) => (
