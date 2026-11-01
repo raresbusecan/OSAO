@@ -335,6 +335,10 @@ class DashboardController extends Controller
                 // Lets Acasă log "the same service again, today" without
                 // opening the Car form (lib/dashboard/itemActions.ts).
                 $e->setAttribute('current_odometer', $odo > 0 ? (int) round($odo) : null);
+                // due_at is replaced below by when the service is DUE; the
+                // visit's own date stays here (itemActions derives the day
+                // interval to the next service from it).
+                $e->setAttribute('service_date', $e->due_at?->toJSON());
                 if (is_numeric($nextKm) && $odo > 0) {
                     $remaining = (float) $nextKm - $odo;
                     if ($remaining < 0 && $remaining >= -5000) {
@@ -364,7 +368,8 @@ class DashboardController extends Controller
                 // user decision 2026-11-02: "De făcut" uses the space's
                 // thresholds). No real date: dated tomorrow so it groups with
                 // the coming week, and `km_left` carries the label/tier.
-                if (is_numeric($nextKm) && $odo > 0) {
+                // (No km logged at all counts as 0 km, as on the Mașină screen.)
+                if (is_numeric($nextKm)) {
                     $remaining = (float) $nextKm - $odo;
                     if ($remaining >= 0 && $remaining <= self::SERVICE_KM_WINDOW) {
                         $e->due_at = $now->copy()->addDay()->startOfDay()->setTimezone($appTz);

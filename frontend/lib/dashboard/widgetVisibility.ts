@@ -83,9 +83,10 @@ export function widgetHasContent(widget: Widget, ctx: VisibilityCtx): boolean {
       return ctx.spaces.some((sp) => sp.kind === "home");
 
     // Something dated today or in the next 7 days (to-dos + credit
-    // reminders) -- the window /dashboard returns.
+    // reminders) -- the window /dashboard returns. A car service due by km
+    // (km_left) has no real day, so the card leaves it out: so does this.
     case "calendar":
-      return [...ctx.todoRows, ...ctx.reminderRows].some((r) => r.days >= 0);
+      return [...ctx.todoRows, ...ctx.reminderRows].some((r: any) => r.days >= 0 && r.km_left == null);
 
     // A Cheltuieli space exists ("0 lei în octombrie" is a real answer).
     case "expenses":

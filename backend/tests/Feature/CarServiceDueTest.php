@@ -52,6 +52,9 @@ class CarServiceDueTest extends TestCase
         $rows = $this->services();
         $this->assertCount(1, $rows);
         $this->assertSame(200, $rows[0]['km_left']);
+        // due_at is the next due day; the visit's own date travels alongside
+        // (Acasă's "log again" derives the day interval from it).
+        $this->assertSame(Item::where('type', 'car_maintenance')->first()->due_at->toJSON(), $rows[0]['service_date']);
         $this->assertArrayNotHasKey('overdue_km', $rows[0]);
         $upcoming = collect($this->getJson('/api/dashboard')->json('upcoming'))->pluck('type');
         $this->assertContains('car_maintenance', $upcoming, 'groups with the coming week, not as restant');
@@ -73,6 +76,20 @@ class CarServiceDueTest extends TestCase
         $rows = $this->services();
         $this->assertSame(500, $rows[0]['overdue_km']);
         $this->assertArrayNotHasKey('km_left', $rows[0]);
+    }
+
+    public function test_no_km_logged_counts_as_zero_like_the_masina_screen(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+        $space = Space::factory()->create(['user_id' => $user->id, 'type' => 'car']);
+        Item::create([
+            'user_id' => $user->id, 'space_id' => $space->id, 'type' => 'car_maintenance',
+            'title' => 'Oil Change', 'amount' => 300, 'status' => 'pending', 'due_at' => now()->subMonth(),
+            'metadata' => ['odometer' => null, 'nextServiceOdometer' => 1500],
+        ]);
+
+        $this->assertSame(1500, $this->services()[0]['km_left']);
     }
 
     public function test_a_date_within_the_week_still_wins_over_the_km_window(): void

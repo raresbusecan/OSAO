@@ -20,6 +20,9 @@ export type ActionItem = {
   space?: { id: number | string } | null;
   space_id?: number | string | null;
   overdue_km?: number | null;
+  /** Car services from /dashboard: the visit's own date (due_at there is
+   * when the next one is due). */
+  service_date?: string | null;
   current_odometer?: number | null;
 };
 
@@ -214,8 +217,12 @@ async function logCarServiceAgain(item: ActionItem) {
   const odo = item.current_odometer ?? null;
   const kmInterval = meta.odometer != null && meta.nextServiceOdometer != null ? Number(meta.nextServiceOdometer) - Number(meta.odometer) : null;
   let nextServiceDate: string | null = null;
-  if (typeof meta.nextServiceDate === "string" && isValidDateInput(meta.nextServiceDate) && item.due_at) {
-    const days = Math.round((new Date(parseDateInput(meta.nextServiceDate)!).getTime() - new Date(item.due_at).getTime()) / 86400000);
+  // The interval runs from the visit itself: /dashboard rows carry it as
+  // service_date (their due_at is the next due day); Simplu passes the
+  // visit date as due_at.
+  const visitDate = item.service_date ?? item.due_at;
+  if (typeof meta.nextServiceDate === "string" && isValidDateInput(meta.nextServiceDate) && visitDate) {
+    const days = Math.round((new Date(parseDateInput(meta.nextServiceDate)!).getTime() - new Date(visitDate).getTime()) / 86400000);
     if (days > 0) nextServiceDate = formatDateInput(new Date(Date.now() + days * 86400000));
   }
   const amount = amountOf(item);

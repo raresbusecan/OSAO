@@ -123,6 +123,10 @@ drifted a day across the 25 Oct DST change; plus the known
 
 ## Found along the way (not yet fixed)
 
+### Car service overdue by under 0.5 km reads as a dated restant, not "Depășit" (2026-11-02) [from: qa-lead on feat/service-due-window]
+
+`DashboardController::carServiceDue` rounds the overdue distance: odometer 10.200,4 with next service at 10.200 gives `overdue_km: 0`. `serviceKmStatus` (and the old `overdueKmLabel`) treat 0 as "no km status", so the row falls back to its synthetic date (yesterday): "Restant 1 zi". Only with fractional odometer readings. Fix: `ceil` instead of `round`, or treat `overdue_km != null` as set.
+
 ### calendar.tsx: 2 pre-existing `react-hooks/set-state-in-effect` lint errors (2026-11-01) [from: qa-lead on feat/month-minicalendar]
 
 `npx eslint "app/(tabs)/calendar.tsx"` reports setState called synchronously inside an effect in the fetch-missing-months effect (~line 184) and the `?date=` deep-link effect (~line 281). Both are outside the mini-calendar change. Works today; tidy when touching those effects (derive in render or move into an event/callback).

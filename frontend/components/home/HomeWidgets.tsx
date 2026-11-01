@@ -500,10 +500,12 @@ function TodoCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
         <Text style={{ fontSize: 22, fontWeight: "600", color: overdue > 0 ? colors.error : colors.onSurface }} numberOfLines={1}>
           {overdue > 0 ? roCount(overdue, "restantă", "restante") : items.length > 0 ? `${items.length} în 7 zile` : "La zi"}
         </Text>
-        {top ? (
-          <Text style={{ fontSize: 12, color: muted }} numberOfLines={1}>{top.top ? todoTitle(top.top) : top.summary}</Text>
-        ) : filterNote ? (
+        {items.length === 0 && filterNote ? (
+          // Nothing dated in that space (a list's "to buy" row may still be
+          // the top row): say whose card it is instead.
           <Text testID="home-todo-filter-note" style={{ fontSize: 12, color: muted }} numberOfLines={2}>{filterNote}</Text>
+        ) : top ? (
+          <Text style={{ fontSize: 12, color: muted }} numberOfLines={1}>{top.top ? todoTitle(top.top) : top.summary}</Text>
         ) : null}
       </TapCard>
     );
@@ -516,6 +518,9 @@ function TodoCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
         title={`${title}${overdue > 0 ? ` · ${roCount(overdue, "restantă", "restante")}` : ""}`}
         action={!ctx.preview && items.length > 0 ? { label: "Vezi tot", onPress: ctx.openTodoSheet, testID: "home-widget-todo" } : undefined}
       />
+      {items.length === 0 && filterNote && rows.length > 0 ? (
+        <Text testID="home-todo-filter-note" style={{ fontSize: 13, color: muted, marginTop: -4 }}>{filterNote}</Text>
+      ) : null}
       {rows.length === 0 && reminders.length === 0 ? (
         <Card style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: spacing.lg, ...(widget.color ? { backgroundColor: hexToRgba(widget.color, isDark ? 0.16 : 0.1) } : null) }}>
           <Ionicons name="checkmark-circle-outline" size={22} color={colors.success} />
@@ -723,7 +728,9 @@ function CarCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
     ? service.km_left < 0
       ? `${maintenanceLabel(service.title)}: depășit cu ${roNumber(-service.km_left)} km`
       : serviceTier
-        ? `${maintenanceLabel(service.title)} în ${roNumber(service.km_left)} km`
+        ? service.km_left === 0
+          ? `${maintenanceLabel(service.title)}: acum`
+          : `${maintenanceLabel(service.title)} în ${roNumber(service.km_left)} km`
         : `${maintenanceLabel(service.title)} la ${roNumber(service.at_km)} km`
     : null;
   const serviceColor = serviceTier ? urgencyTierColor(serviceTier, colors) : muted;
