@@ -4,6 +4,32 @@ What landed on `main` (= what runs on the phone day to day), newest first.
 One entry per merge, written when `main` moves. Details live in the
 commits; open follow-ups live in `BACKLOG.md`.
 
+## 2026-11-02 — "Bani fără vină" only where spending can be guilt-free
+
+Fast-forward of `main` from `4a2401d` to `feat/guilt-free-where-it-fits` (4
+commits, `7323814`..`8587d0b`). QA: qa-lead, three passes, final PASS on
+`8587d0b` for the whole branch (tsc clean, frontend tests 129/129, iOS bundle
+200); gated by release-lead. Scope decided by the user.
+
+**Changes**
+- `GuiltFreeToggle` (`components/dashboard/GuiltFree.tsx`) takes a new
+  `onlyIfSet` prop: the toggle shows only for a record that is already
+  flagged, so the flag can still be undone. Once shown in a form it stays for
+  the rest of that edit (latched, so a flag that loads after the first render
+  still counts).
+- Kept as before on general/car expenses, purchases, finished shopping and
+  Calendar purchases.
+- `onlyIfSet` on car fuel, services and documents (`CarFuelForm.tsx`,
+  `CarMaintenanceForm.tsx`, `CarDocumentForm.tsx`) and on Casă bills and
+  maintenance (`homeCategoryConfig.ts` `GUILT_FREE_IF_SET`, passed through
+  by `HomeCategoryPage.tsx`).
+- Help text (`lib/help.ts`) lists where the toggle shows and says it can be
+  unticked on an already flagged record; `frontend/CLAUDE.md` updated.
+- New test `frontend/tests/guilt-free-toggle.test.cjs`.
+
+**Still needs a phone check** — switching the flag off and back on in an
+`onlyIfSet` form, and a small fold/unfold edge in `CarFuelForm`.
+
 ## 2026-11-01 — Profile button and one fixed header on every tab
 
 Fast-forward of `main` from `973012b` to `feat/profile-button-tabs` (5 commits,
