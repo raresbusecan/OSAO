@@ -1111,6 +1111,56 @@ purchase?) before touching the data model.
 
 **Found:** `[from: Home feedback follow-up, 2026-09-26]`.
 
+## Performance + store build (fluidity) -- 2026-11-02 [from: resolve-over-Acasă speed work, user request "pentru buildul de magazin"]
+
+User goal: the App Store / Play builds should feel fast and fluid. Nothing here is started. Rule 0 first, then roughly by payoff.
+
+**0. Measure in a release build before optimizing.** Everything so far was felt in Expo Go dev mode (dev JS, no bytecode, dev warnings, tunnels). That is several times slower than a release build. Make an internal release build (EAS `preview` profile, or `npx expo run:ios --configuration Release`) and time the same paths: app start, tab switch, open a Space, resolve from Acasă. Optimize what is still slow there.
+
+### Build setup
+- **eas.json with development / preview / production profiles.** None exists yet. Needed for store builds anyway (see CLAUDE.md "Release workflow"; EAS Update channels are a deliberate later step).
+- **A development build (dev client) instead of Expo Go.**
+  - It unlocks reanimated worklets, which run on the UI thread. The redesign notes say they are broken in Expo Go, so Sheet, ReorderList, MonthSwipe, SwipeBackView and PressableScale all animate on the JS thread with RN Animated today.
+  - Moving the drag/spring animations to reanimated is the biggest fluidity win for gestures. `react-native-reanimated` 4.7 is already installed; SwipeRow already uses ReanimatedSwipeable.
+- **Strip console logging from production.**
+  - 15 `console.log` calls remain.
+  - `app/(tabs)/[id].tsx` dumps the whole space object several times on EVERY load (`[SPACE DATA]`, `[SPACE DETAIL] ...` on every render).
+  - Use `babel-plugin-transform-remove-console` for production, or gate them with `__DEV__`.
+- **Drop `@shopify/react-native-skia`.** Only the dead water-effect files use it (uncommitted in package.json). It adds native binary size and startup cost.
+- **Fonts at launch.** `app/_layout.tsx` renders nothing until `useFonts` has loaded 3 IBM Plex weights. Embed them at build time with the `expo-font` config plugin so they exist before the first frame.
+- **Sentry performance sampling in production.** `tracesSampleRate: 0` today. A small sample would show which screens are actually slow on real phones.
+
+### Data: load less, earlier, once
+- **Prefetch + cache Space data (stale-while-revalidate).**
+  - When Acasă or the "De făcut" sheet shows, warm `/spaces/{id}` + `/items?space_id=` for the spaces listed.
+  - `[id].tsx` / record-action render from the cache at once and revalidate in the background, so the resolve form opens with no network wait. Today it is about 1 s (backend log, 2026-11-02).
+  - Consider one app-wide query cache (TanStack Query) persisted to fast storage (MMKV) for an instant warm start, instead of more hand-rolled module caches (`quickAddCache`, `budget/plan`).
+- **Refresh fan-out.**
+  - One `REFRESH_EVENT` makes every mounted tab reload. Tabs are `lazy:false`, so that is all of them.
+  - The backend log shows waves of 6–10 requests per save: dashboard, spaces, budget, layout, and `/calendar` ×4.
+  - Coalesce them (debounce), reload only the focused tab, and mark the others stale so they reload on focus.
+- **Calendar asks for 4 months in 4 requests.** Add one range endpoint, `/calendar?from=&to=`.
+- **`/api/items?space_id=` returns every item of a space, unpaginated.** History grows forever. Fetch open/recent items for the dashboard and page the history.
+- **HTTP.** ETag/304 on the read endpoints; check gzip in production. The first request after idle took ~500 ms server-side (cold) — make sure OPcache is on in production.
+
+### Rendering
+- **Resolve without mounting a whole dashboard.**
+  - The overlay (feat/resolve-over-dashboard) mounts the entire Space page invisibly, because every resolve flow lives inside the dashboards (CarDashboard ~1.2k lines).
+  - Long-term: extract the resolve flows (renew document/service, resolve task, pay bill, restock) into standalone components the overlay mounts alone.
+- **`visitId` remounts the whole Space dashboard on every focus** (`[id].tsx`). It is meant only to reset sub-view state. Reset that state instead of remounting, which costs a full dashboard render on each return.
+- **Background tabs.**
+  - With `lazy:false`, all 4 tabs mount at startup and keep re-rendering on refreshes.
+  - Try `freezeOnBlur` (react-native-screens) so hidden tabs don't render until focused.
+  - Measure startup with and without `lazy:false`; it was set for the Buget sub-page state, which could live in a store instead.
+- **Long lists.** Lists are mostly `ScrollView` + `.map` (only 4 virtualized lists in the app). Use FlashList where lists grow: Istoric, Cheltuieli, grocery items, Calendar "De rezolvat".
+- **Cost of the Aspect look.**
+  - Every mounted screen draws its own SVG `ScreenBackground`, and cards use layered `boxShadow` (lib/theme.tsx `cardSurface`).
+  - Check frame times on a low-end Android. If heavy, draw the background once at layout level and cache the card shadow styles.
+- **React Compiler** is already on (`experiments.reactCompiler`). Keep components compiler-friendly: no mutation during render. Its ESLint rule already flags 2 effects in calendar.tsx (see "Found along the way").
+
+### Startup
+- **Keep the splash until auth + Acasă's first data are ready, and prefetch Acasă's data during the splash.** Today the app renders null until fonts load, then shows spinners.
+
 ## Bigger ideas (need a design pass before scoping into tasks)
 
 ### A. Learned restock patterns per product (Grocery)
