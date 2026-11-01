@@ -68,16 +68,30 @@ function canQuickResolve(item: TodoItem): boolean {
  * with "Anulează" right after in case of a mis-tap.
  * (Name kept from the earlier carousel version -- Home imports it.)
  */
+/** After a blur, how long the sheet waits to reappear (see its focus effect). */
+const SHEET_RESUME_MS = 200;
+
 export function TodoCarouselSheet({ visible, onClose, overdue, today, upcoming, onChanged }: TodoCarouselSheetProps) {
   const { colors, spacing, radius } = useTheme();
   const router = useRouter();
   const [focused, setFocused] = useState(true);
   const scrollOffset = useRef(0);
   const [resumeOffset, setResumeOffset] = useState(0);
+  const blurredOnce = useRef(false);
   useFocusEffect(useCallback(() => {
     setResumeOffset(scrollOffset.current);
-    setFocused(true);
-    return () => setFocused(false);
+    // Coming back, the screen we left is often still dismissing (a
+    // record-action modal over Acasă). Presenting this Sheet's Modal in that
+    // moment made iOS drop it: an empty, invisible window stayed over Acasă
+    // and swallowed every touch until a tab switch (phone, 2026-11-02).
+    // So the resume waits for that dismissal; the first show doesn't.
+    const timer = blurredOnce.current ? setTimeout(() => setFocused(true), SHEET_RESUME_MS) : undefined;
+    if (!timer) setFocused(true);
+    return () => {
+      if (timer) clearTimeout(timer);
+      blurredOnce.current = true;
+      setFocused(false);
+    };
   }, []));
   useEffect(() => { if (!visible) scrollOffset.current = 0; }, [visible]);
   const [resolvingId, setResolvingId] = useState<string | number | null>(null);

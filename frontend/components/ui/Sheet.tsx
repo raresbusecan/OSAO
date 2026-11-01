@@ -52,6 +52,9 @@ export type SheetProps = {
  * Remounts its body on every open (keyed by an open counter) so a sheet
  * dragged away last time never reopens stuck half-way down.
  */
+/** The dim behind every Sheet (record-action's overlay borrows it while its form loads). */
+export const SHEET_BACKDROP = "rgba(5,7,10,0.62)";
+
 export function Sheet(props: SheetProps) {
   const dialogDepth = React.useContext(DialogLayerContext) + 1;
   const openCount = useRef(0);
@@ -112,7 +115,7 @@ function SheetBody({ onClose, title, subtitle, icon, tone, footer, children, hid
       <AnimatedPressable
         onPress={close}
         accessibilityLabel="Închide"
-        style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundColor: "rgba(5,7,10,0.62)", opacity: backdrop }}
+        style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0, backgroundColor: SHEET_BACKDROP, opacity: backdrop }}
       />
       <Animated.View
         testID={testID}

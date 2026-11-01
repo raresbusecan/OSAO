@@ -110,7 +110,7 @@ function AuthGuard() {
         name="record-action"
         options={({ route }) =>
           (route.params as { overlay?: string } | undefined)?.overlay === "1"
-            ? { presentation: "transparentModal", animation: "fade", contentStyle: { backgroundColor: "transparent" } }
+            ? { presentation: "transparentModal", animation: "none", contentStyle: { backgroundColor: "transparent" } }
             : {}
         }
       />

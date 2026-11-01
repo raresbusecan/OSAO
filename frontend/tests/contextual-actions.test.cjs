@@ -159,10 +159,11 @@ test('completion refreshes saved data even after leaving, without a delayed navi
   let backs = 0, replacements = 0, refreshes = 0;
   const active = { current: true }, leaving = { current: false };
   const refreshed = { current: false };
+  const router = { canGoBack: () => true, back: () => { backs++; }, replace: () => { replacements++; } };
   const cancel = loadCallback('app/record-action.tsx', 'cancel', {
-    useCallback: (fn) => fn, active, leaving, originSpace: "/7",
+    useCallback: (fn) => fn, active, leaving, originSpace: "/7", overlay: false,
     markTrailReturn: (href) => { assert.equal(href, "/7"); assert.equal(backs, 0); },
-    router: { canGoBack: () => true, back: () => { backs++; }, replace: () => { replacements++; } },
+    router, goBack: () => router.back(), leaveAfterForms: () => { throw Error('a full-page action leaves at once'); },
   });
   const complete = loadCallback('app/record-action.tsx', 'complete', {
     useCallback: (fn) => fn, active, leaving, refreshed, cancel,
@@ -176,6 +177,17 @@ test('completion refreshes saved data even after leaving, without a delayed navi
   complete();
   assert.equal(backs, 1);
   assert.equal(refreshes, 2);
+});
+
+test('an overlay leaves only after its form window is gone', () => {
+  let leftAfterForms = 0, backs = 0;
+  const cancel = loadCallback('app/record-action.tsx', 'cancel', {
+    useCallback: (fn) => fn, active: { current: true }, leaving: { current: false }, originSpace: null, overlay: true,
+    markTrailReturn() {}, router: { canGoBack: () => true }, goBack: () => { backs++; }, leaveAfterForms: () => { leftAfterForms++; },
+  });
+  cancel(); cancel();
+  assert.equal(leftAfterForms, 1);
+  assert.equal(backs, 0, 'never dismissed in the same moment as the Sheet');
 });
 
 for (const retryAfterFailure of [true, false]) {

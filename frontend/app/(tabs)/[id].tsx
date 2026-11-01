@@ -1,6 +1,7 @@
 import React, {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 import { consumeTrailReturn } from "@/lib/navigation/returnTrail";
@@ -1046,9 +1047,13 @@ export default function SpaceDetail() {
    * ==========================================================
    */
 
+  // The first focus comes right with the mount, whose effect above already
+  // loads: loading again then only doubled the requests and a render.
+  const focusedOnce = useRef(false);
   useFocusEffect(
     useCallback(() => {
-      load();
+      if (focusedOnce.current) load();
+      focusedOnce.current = true;
       // See visitId's own declaration above -- forces every Dashboard
       // below to remount on each fresh visit to this screen. Skipped when
       // coming back along the tab-bar return trail (lib/navigation/

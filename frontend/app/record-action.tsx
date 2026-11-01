@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View, DeviceEventEmitter } from "react-native";
+import { Animated, Pressable, Text, View, DeviceEventEmitter } from "react-native";
 import { Stack, useFocusEffect, useLocalSearchParams, useNavigation, useRootNavigationState, useRouter } from "expo-router";
 import SpaceDetail from "./(tabs)/[id]";
 import { RecordActionContext } from "@/lib/navigation/recordAction";
@@ -9,6 +9,8 @@ import { REFRESH_EVENT } from "@/lib/refresh";
 import { refreshBudgetPlan } from "@/lib/budget/plan";
 import { isDialogOpen, subscribeDialog, subscribeSheets, visibleSheetCount } from "@/lib/dialogCoordinator";
 import { useTheme } from "@/lib/theme";
+import { useReducedMotion } from "@/lib/motion";
+import { SHEET_BACKDROP } from "@/components/ui/Sheet";
 
 /** How long the overlay waits after the Space has loaded for a form or
  * dialog to show before revealing the Space page instead. */
@@ -16,6 +18,9 @@ const OVERLAY_REVEAL_MS = 1500;
 /** After the form/dialog closed: a chained one (dialog -> form) gets this
  * long to show before the overlay goes back to its origin screen. */
 const OVERLAY_CLOSE_MS = 350;
+/** After the last Sheet/dialog closed: time for its native window to finish
+ * dismissing before this modal screen dismisses too. */
+const OVERLAY_DISMISS_MS = 50;
 /** The Space never reported its load: reveal the page anyway. */
 const OVERLAY_LOAD_TIMEOUT_MS = 10000;
 
@@ -32,6 +37,7 @@ export default function RecordActionScreen() {
   }, [navigation, originSpace]);
   const { colors } = useTheme();
   const params = useLocalSearchParams<{ id?: string; itemId?: string; itemType?: string; action?: string; overlay?: string }>();
+  const overlay = params.overlay === "1" && validRecordAction(params.id, params.itemId, params.itemType);
   const active = useRef(false);
   const leaving = useRef(false);
   const refreshed = useRef(false);
@@ -40,13 +46,33 @@ export default function RecordActionScreen() {
     return () => { active.current = false; };
   }, []));
 
+  const goBack = useCallback(() => {
+    if (router.canGoBack()) router.back();
+    else router.replace("/(tabs)/home");
+  }, [router]);
+
+  /** Leave once the form's own native window is gone. Dismissing this
+   * (transparent modal) screen in the same moment as the Sheet's Modal made
+   * iOS drop one of the two dismissals: the Sheet's empty, invisible window
+   * stayed up and swallowed every touch on Acasă (seen on the phone,
+   * 2026-11-02). So wait for no open Sheet/dialog, then a beat more. */
+  const leaveAfterForms = useCallback(() => {
+    const started = Date.now();
+    const attempt = () => {
+      const busy = visibleSheetCount() > 0 || isDialogOpen();
+      if (busy && Date.now() - started < 3000) { setTimeout(attempt, 100); return; }
+      setTimeout(goBack, OVERLAY_DISMISS_MS);
+    };
+    attempt();
+  }, [goBack]);
+
   const cancel = useCallback(() => {
     if (!active.current || leaving.current) return;
     leaving.current = true;
     if (originSpace) markTrailReturn(originSpace);
-    if (router.canGoBack()) router.back();
-    else router.replace("/(tabs)/home");
-  }, [router, originSpace]);
+    if (overlay) leaveAfterForms();
+    else goBack();
+  }, [router, originSpace, overlay, leaveAfterForms, goBack]);
 
   const complete = useCallback(() => {
     // Leaving prevents a delayed navigation, not invalidation of a real save.
@@ -68,7 +94,6 @@ export default function RecordActionScreen() {
    * page is revealed in place (never a navigation, so cancel keeps working).
    * The invisible modal blocks touches on the screen below, so it must
    * always end in one of those two ways. */
-  const overlay = params.overlay === "1" && validRecordAction(params.id, params.itemId, params.itemType);
   const [phase, setPhaseState] = useState<"waiting" | "form" | "page">("waiting");
   // Read by the sheet/dialog listeners between renders, so it's set at once.
   const phaseRef = useRef(phase);
@@ -83,9 +108,8 @@ export default function RecordActionScreen() {
     if (leaving.current) return;
     leaving.current = true;
     if (originSpace) markTrailReturn(originSpace);
-    if (router.canGoBack()) router.back();
-    else router.replace("/(tabs)/home");
-  }, [router, originSpace]);
+    leaveAfterForms();
+  }, [router, originSpace, leaveAfterForms]);
 
   useEffect(() => {
     if (!overlay) return;
@@ -120,6 +144,19 @@ export default function RecordActionScreen() {
     checkRef.current();
   }, []);
 
+  // While the form loads, the origin screen dims at once with the Sheet's
+  // own backdrop (instead of a spinner), so the tap reads as "a form is
+  // opening". When the form shows, this dim fades out as the Sheet's fades
+  // in, so the screen never flashes light in between.
+  const reduced = useReducedMotion();
+  const [dim] = useState(() => new Animated.Value(0));
+  useEffect(() => {
+    if (!overlay) return;
+    const to = phase === "waiting" ? 1 : 0;
+    if (reduced) dim.setValue(to);
+    else Animated.timing(dim, { toValue: to, duration: phase === "waiting" ? 120 : 260, useNativeDriver: true }).start();
+  }, [overlay, phase, reduced, dim]);
+
   const valid = validRecordAction(params.id, params.itemId, params.itemType);
 
   return (
@@ -143,10 +180,8 @@ export default function RecordActionScreen() {
           >
             <SpaceDetail />
           </View>
-          {phase === "waiting" ? (
-            <View pointerEvents="none" style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, alignItems: "center", justifyContent: "center" }}>
-              <ActivityIndicator color={colors.onSurfaceTertiary} />
-            </View>
+          {phase !== "page" ? (
+            <Animated.View pointerEvents="none" style={{ position: "absolute", left: 0, top: 0, right: 0, bottom: 0, backgroundColor: SHEET_BACKDROP, opacity: dim }} />
           ) : null}
         </View>
       ) : valid ? <SpaceDetail /> : (
