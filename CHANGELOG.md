@@ -4,6 +4,24 @@ What landed on `main` (= what runs on the phone day to day), newest first.
 One entry per merge, written when `main` moves. Details live in the
 commits; open follow-ups live in `BACKLOG.md`.
 
+## 2026-11-01 — Calendar: next 3 months as mini calendars
+
+Fast-forward of `main` from `be8bee6` to `feat/month-minicalendar` (2 commits,
+`5c58598`..`0c60093`). QA: qa-lead, two passes, final on `0c60093` — tsc
+clean, frontend tests 126/126, iOS bundle 200; gated by release-lead. Design
+picked by the user from a mockup and checked on the phone.
+
+**Changes**
+- Calendar's "Următoarele 3 luni" cards are mini calendars instead of the
+  animated liquid bubbles: one cell per day in the big grid's heat shade,
+  empty days drawn as outlines, today ringed, the month's status word under
+  the grid (`app/(tabs)/calendar.tsx`).
+- Help and tour copy updated to match (`lib/help.ts`, `lib/tours.ts`);
+  `frontend/CLAUDE.md` and `BACKLOG.md` updated.
+
+**Still needs a phone check** — level-1 days in the dark themes (Grafit,
+Miez de noapte), and the status text at the largest text size.
+
 ## 2026-11-01 — Backlog batch 1
 
 Fast-forward of `main` from `1268195` to `fix/backlog-batch-1` (5 commits,
