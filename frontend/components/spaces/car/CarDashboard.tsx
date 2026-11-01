@@ -123,7 +123,7 @@ export default function CarDashboard({
     initialOpenEntry,
     tourBlocked = false,
 }: CarDashboardProps) {
-    const { colors, spacing, radius, typography } = useTheme();
+    const { card, colors, spacing, radius, typography } = useTheme();
     const carColors = useSpaceColors("car");
     const router = useRouter();
     const recordAction = useRecordAction();
@@ -907,7 +907,7 @@ export default function CarDashboard({
                         {/* HERO -- odometer as the headline number; this month's
                             spend (tap -> Expenses page, the one place for "what
                             this car has cost") and average consumption under it. */}
-                        <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.lg }}>
+                        <View style={{ ...card, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.lg }}>
                             {/* Tap / long-press (shortcut, haptic) the km or its
                                 pencil -> "Actualizează kilometrajul". */}
                             <PressableScale

@@ -83,7 +83,7 @@ export function SpacesGrid({
 }
 
 function SpaceTile({ space, due, toBuy, onOpen }: { space: GridSpace; due: SpaceDue | undefined; toBuy: number; onOpen: (id: string) => void }) {
-  const { colors, radius, isDark } = useTheme();
+  const { spacing, card, colors, radius, isDark } = useTheme();
   const muted = colors.onSurfaceTertiary;
   const c = spaceColors(space, isDark);
   const status = dueStatus(due);
@@ -107,9 +107,9 @@ function SpaceTile({ space, due, toBuy, onOpen }: { space: GridSpace; due: Space
       scaleTo={motion.scale.tile}
       accessibilityRole="button"
       accessibilityLabel={`Deschide ${space.name}, ${statusText}, ${detail}`}
-      style={{ flex: 1, minHeight: TILE_HEIGHT, padding: 14, gap: 10, borderRadius: radius.card, backgroundColor: colors.surfaceSecondary, justifyContent: "space-between" }}
+      style={{ flex: 1, minHeight: TILE_HEIGHT, padding: 14, gap: 10, borderRadius: radius.card, ...card, justifyContent: "space-between" }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm }}>
         <IconWell icon={(space.icon || "folder-outline") as any} color={c?.color ?? muted} tint={c?.tint ?? colors.onSurface} size={40} />
         <Text
           style={{ flexShrink: 1, fontSize: 13, fontWeight: status ? "500" : "400", color: status ? (status.tone === "error" ? colors.error : colors.warning) : muted }}
@@ -129,7 +129,7 @@ function SpaceTile({ space, due, toBuy, onOpen }: { space: GridSpace; due: Space
 /** A kind without a space yet: dashed identity border + "Adaugă" pill. The
  * whole tile is ONE pressable; the pill is visual only. */
 function AddTile({ t, onAdd }: { t: StartTemplate; onAdd: (t: StartTemplate) => void }) {
-  const { colors, radius, isDark } = useTheme();
+  const { spacing, colors, radius, isDark } = useTheme();
   const kind = t.kind as SpaceKind;
   const ink = SPACE_ON_FILL[kind] ?? "#FFFFFF";
   return (
@@ -152,7 +152,7 @@ function AddTile({ t, onAdd }: { t: StartTemplate; onAdd: (t: StartTemplate) => 
         borderColor: hexToRgba(t.color, isDark ? 0.55 : 0.5),
       }}
     >
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm }}>
         <Ionicons name={t.icon as any} size={24} color={spaceTextColor(kind, isDark) ?? t.color} />
         <View style={{ height: 28, paddingLeft: 6, paddingRight: 10, borderRadius: 14, flexDirection: "row", alignItems: "center", gap: 2, backgroundColor: SPACE_BUTTON_FILL[kind] ?? t.color }}>
           <Ionicons name="add" size={16} color={ink} />

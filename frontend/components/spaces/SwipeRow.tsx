@@ -3,6 +3,7 @@ import { Pressable, Dimensions } from "react-native";
 import Swipeable, { type SwipeableMethods } from "react-native-gesture-handler/ReanimatedSwipeable";
 import Animated, { Extrapolation, interpolate, useAnimatedStyle, type SharedValue } from "react-native-reanimated";
 import { Ionicons } from "@expo/vector-icons";
+import { OpaqueRows } from "@/components/ui/primitives";
 
 /**
  * Shared across every Space's row lists (piloted on Home's Tasks list
@@ -150,7 +151,8 @@ export function SwipeRow({ onResolve, onDelete, resolveIcon = "checkmark", resol
         </Pressable>
       ) : undefined}
     >
-      {children}
+      {/* The action panels sit under the row: it must stay opaque. */}
+      <OpaqueRows>{children}</OpaqueRows>
     </Swipeable>
   );
 }

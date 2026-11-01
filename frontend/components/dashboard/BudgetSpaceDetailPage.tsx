@@ -57,7 +57,7 @@ function monthLong(m: MonthTotal): string {
  */
 export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, onLimitSaved, plan = null, suggested = null, otherLimitsTotal = 0 }: BudgetSpaceDetailPageProps) {
   const router = useRouter();
-  const { colors, spacing, radius, typography, isDark } = useTheme();
+  const { card, colors, spacing, radius, typography, isDark } = useTheme();
   const kind = category.toLowerCase() as SpaceKind;
   const name = SPACE_KIND_LABEL[kind] ?? category;
   const color = SPACE_IDENTITY_COLORS[kind] ?? colors.onSurface;
@@ -210,7 +210,7 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
         <ActivityIndicator color={colors.onSurfaceTertiary} />
       ) : (
         <>
-          <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>
+          <View style={{ ...card, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>
             <View style={{ gap: 2 }}>
               <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>
                 {selected && selectedMonth ? monthLong(selectedMonth) : "Luna asta"}
@@ -267,7 +267,7 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
                       accessibilityLabel={`${monthLong(m)}, ${lei(recordedOf(m))}`}
                       style={{ flex: 1, height: "100%", justifyContent: "flex-end", alignItems: "center", gap: 6 }}
                     >
-                      <View style={{ width: "100%", height: Math.max(4, (recordedOf(m) / maxTotal) * 78), borderRadius: 6, backgroundColor: isSelected ? color : colors.surfaceTertiary }} />
+                      <View style={{ width: "100%", height: Math.max(4, (recordedOf(m) / maxTotal) * 78), borderRadius: radius.sm, backgroundColor: isSelected ? color : colors.surfaceTertiary }} />
                       <Text style={{ fontSize: 12, fontWeight: isSelected ? "600" : "400", color: isSelected ? colors.onSurface : colors.onSurfaceTertiary }}>{monthShort(m)}</Text>
                     </Pressable>
                   );
@@ -313,12 +313,12 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
               </PressableScale>
             ) : null}
             {!plan ? (
-              <Text style={{ fontSize: 13, lineHeight: 18, color: colors.onSurfaceTertiary, paddingHorizontal: 4 }}>
+              <Text style={{ fontSize: 13, lineHeight: 18, color: colors.onSurfaceTertiary, paddingHorizontal: spacing.xs }}>
                 {budgetBaseLabel ? `Pornind de la ${budgetBaseLabel}: ${lei(Math.round(budgetBase))}. ` : ""}Adaugă venitul în Buget și primești o sumă sugerată.
               </Text>
             ) : null}
             {overEnvelope > 0 ? (
-              <Text testID="budget-over-envelope" accessibilityLiveRegion="polite" style={{ fontSize: 13, lineHeight: 18, color: colors.warning, paddingHorizontal: 4 }}>
+              <Text testID="budget-over-envelope" accessibilityLiveRegion="polite" style={{ fontSize: 13, lineHeight: 18, color: colors.warning, paddingHorizontal: spacing.xs }}>
                 Cu {lei(Math.round(typed))}, spațiile trec de necesități cu {lei(overEnvelope)}. Ia din alt spațiu sau mărește procentul.
               </Text>
             ) : null}
@@ -339,7 +339,7 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
           <View style={{ gap: spacing.sm }}>
             <SectionHeader title={selected && selectedMonth ? `Înregistrări din ${monthLong(selectedMonth).toLowerCase()}` : "Recente"} />
             {selectedItems.length === 0 ? (
-              <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card }}>
+              <View style={{ ...card, borderRadius: radius.card }}>
                 <EmptyState icon={icon} message="Nimic înregistrat aici." />
               </View>
             ) : (
@@ -357,7 +357,7 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
                         : null
                     }
                     trailing={
-                      <View style={{ alignItems: "flex-end", gap: 4 }}>
+                      <View style={{ alignItems: "flex-end", gap: spacing.xs }}>
                         <Text style={{ fontSize: 15, fontWeight: it.planned ? "400" : "600", color: it.planned || it.guilt_free ? colors.onSurfaceTertiary : colors.onSurface }}>{lei(it.amount ?? 0)}</Text>
                         {it.guilt_free ? <GuiltFreeChip /> : null}
                       </View>

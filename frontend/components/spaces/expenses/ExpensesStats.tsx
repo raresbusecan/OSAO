@@ -73,7 +73,7 @@ const CHART_H = 84;
  * follows); tapping it again goes back to "Luna asta" and every expense.
  */
 export function ExpensesStats({ entries, allTimeTotal, thisMonthTotal, plannedThisMonth = 0, onTotalPress, selectedMonth, onMonthPress }: ExpensesStatsProps) {
-  const { colors, spacing, radius, typography } = useTheme();
+  const { card, colors, spacing, radius, typography } = useTheme();
   const months = useMemo(() => lastSixMonths(entries), [entries]);
   const top = niceCeil(Math.max(...months.map((m) => m.total)));
   const ticks = [top, top / 2, 0];
@@ -89,7 +89,7 @@ export function ExpensesStats({ entries, allTimeTotal, thisMonthTotal, plannedTh
       scaleTo={motion.scale.card}
       accessibilityRole="button"
       accessibilityLabel={`${headlineLabel} ${lei(headlineValue)}. Total ${lei(allTimeTotal)}. Vezi detalii`}
-      style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}
+      style={{ ...card, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}
     >
       <View style={{ gap: 2 }}>
         <Text style={{ fontSize: 13, color: muted }}>{headlineLabel}</Text>

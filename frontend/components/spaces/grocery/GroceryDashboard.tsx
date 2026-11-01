@@ -99,7 +99,7 @@ export default function GroceryDashboard({
   onItemsChange,
   initialOpenItem,
 }: GroceryDashboardProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { card, colors, spacing, radius } = useTheme();
   const groceryFill = useSpaceColors("grocery").color;
   const { user } = useAuth();
   const router = useRouter();
@@ -894,7 +894,7 @@ export default function GroceryDashboard({
                 borderColor: colors.borderStrong,
                 flexDirection: "row",
                 alignItems: "center",
-                gap: 4,
+                gap: spacing.xs,
               }}
             >
               <Ionicons name="add" size={16} color={muted} />
@@ -934,7 +934,7 @@ export default function GroceryDashboard({
             {/* THE LIST -- progress header, bar, then the items on the
                 same card. Checking an item keeps it in place (crossed
                 off, like paper) rather than moving it to another section. */}
-            <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, overflow: "hidden" }}>
+            <View style={{ ...card, borderRadius: radius.lg, overflow: "hidden" }}>
               <View style={{ padding: spacing.lg, gap: spacing.md }}>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                   <View>
@@ -955,7 +955,7 @@ export default function GroceryDashboard({
                       onPress={() => handleClearCart(effectiveActiveListId)}
                       accessibilityRole="button"
                       accessibilityLabel="Debifează tot"
-                      style={{ flexDirection: "row", alignItems: "center", gap: 4, minHeight: 44, paddingLeft: spacing.md }}
+                      style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs, minHeight: 44, paddingLeft: spacing.md }}
                     >
                       <Ionicons name="arrow-undo-outline" size={15} color={muted} />
                       <Text style={{ fontSize: 13, color: muted }}>Debifează tot</Text>
@@ -970,7 +970,7 @@ export default function GroceryDashboard({
               </View>
 
               {activeListItems.length === 0 ? (
-                <View style={{ alignItems: "center", paddingBottom: spacing.xl, paddingHorizontal: spacing.lg, gap: 4 }}>
+                <View style={{ alignItems: "center", paddingBottom: spacing.xl, paddingHorizontal: spacing.lg, gap: spacing.xs }}>
                   <Ionicons name="cart-outline" size={26} color={groceryFill} />
                   <Text style={{ fontSize: 14, color: muted, textAlign: "center" }}>Adaugă primul produs mai sus.</Text>
                 </View>

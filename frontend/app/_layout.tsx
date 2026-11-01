@@ -18,7 +18,7 @@ import {
   IBMPlexSans_600SemiBold,
 } from "@expo-google-fonts/ibm-plex-sans";
 
-import { ThemeProvider } from "@/lib/theme";
+import { ThemeProvider, useTheme } from "@/lib/theme";
 import { ConfirmHost } from "@/lib/confirmHost";
 import { HelpHost } from "@/components/ui/HelpHost";
 import { TourHost } from "@/components/ui/TourHost";
@@ -106,6 +106,13 @@ function AuthGuard() {
   return <Stack screenOptions={{ headerShown: false }} />;
 }
 
+// Follows the chosen theme (Settings > Temă), not the phone's setting --
+// "auto" would put dark icons on Grafit when the phone is in light mode.
+function ThemedStatusBar() {
+  const { isDark } = useTheme();
+  return <StatusBar style={isDark ? "light" : "dark"} />;
+}
+
 function RootLayout() {
   // Every themed text style names one of these files (see lib/theme.tsx's
   // fw()), so hold the first render until they're registered -- the
@@ -126,7 +133,7 @@ function RootLayout() {
             {/* Simplu / full app mode (lib/appMode.tsx). */}
             <AppModeProvider>
             <BottomSheetModalProvider>
-              <StatusBar style="auto" />
+              <ThemedStatusBar />
               <AuthGuard />
               <HelpHost />
               {/* First-use tours (lib/tours.ts); renders nothing unless one runs. */}

@@ -130,7 +130,7 @@ export function GroceryRecipesPage({
   onDeleteList,
   canManageList,
 }: GroceryRecipesPageProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { card, colors, spacing, radius } = useTheme();
   const recipes = useRecipes();
   const ingredientReferences = useIngredientReferences();
 
@@ -507,7 +507,7 @@ export function GroceryRecipesPage({
                     width: "47.8%",
                     borderRadius: radius.card,
                     overflow: "hidden",
-                    backgroundColor: colors.surfaceSecondary,
+                    ...card,
                     borderWidth: 2,
                     borderColor: checked ? GROC : "transparent",
                   }}
@@ -515,7 +515,7 @@ export function GroceryRecipesPage({
                   <View style={{ height: 96, backgroundColor: `${visual.block}40`, alignItems: "center", justifyContent: "center" }}>
                     <Ionicons name={(recipe.imageKey as any) ?? "restaurant-outline"} size={30} color={visual.block} />
                     {cuisine ? (
-                      <View style={{ position: "absolute", top: 8, left: 8, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, backgroundColor: colors.surfaceSecondary }}>
+                      <View style={{ position: "absolute", top: 8, left: 8, paddingHorizontal: spacing.sm, paddingVertical: 2, borderRadius: radius.sm, backgroundColor: colors.surfaceSecondary }}>
                         <Text style={{ fontSize: 11, fontWeight: "500", color: colors.onSurface }}>{CUISINE_LABEL[cuisine]}</Text>
                       </View>
                     ) : null}
@@ -547,7 +547,7 @@ export function GroceryRecipesPage({
                     </Pressable>
                   </View>
 
-                  <View style={{ padding: spacing.md, gap: 4 }}>
+                  <View style={{ padding: spacing.md, gap: spacing.xs }}>
                     <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={2}>{recipe.title}</Text>
                     {meta ? <Text style={{ fontSize: 13, color: muted }}>{meta}</Text> : null}
                     <Text style={{ fontSize: 12, fontWeight: "500", color: complete ? colors.success : muted }}>

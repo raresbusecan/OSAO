@@ -45,7 +45,7 @@ export function MainTabBar(props: MainTabBarProps) {
 }
 
 function FullTabBar({ state, descriptors, emitter, navigateToTab }: MainTabBarProps) {
-  const { colors } = useTheme();
+  const { radius, colors } = useTheme();
   const insets = useSafeAreaInsets();
   // Same "Spații stays lit while inside a Space" rule as _layout.tsx's
   // own icon()/label() closures (forceOn) -- state.index actually points
@@ -140,7 +140,7 @@ function FullTabBar({ state, descriptors, emitter, navigateToTab }: MainTabBarPr
             top: 2,
             width: pillWidth,
             height: PILL_HEIGHT,
-            borderRadius: 16,
+            borderRadius: radius.card,
             backgroundColor: colors.surfaceTertiary,
             // translateX first, then scale -- the stretch/squash applies
             // around the pill's OWN (already-moved) center, not its

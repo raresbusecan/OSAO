@@ -92,7 +92,7 @@ export function SimplePage({
         contentContainerStyle={{ paddingHorizontal: spacing.gutter, paddingTop: spacing.sm, paddingBottom: 120, gap: 14 }}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} tintColor={colors.onSurfaceTertiary} />}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginLeft: -10 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs, marginLeft: -10 }}>
           <PressableScale
             testID="simple-space-back"
             onPress={onBack}
@@ -174,7 +174,7 @@ export function SimpleHero({
         {urgency ? (
           <View
             testID={testID ? `${testID}-urgency` : undefined}
-            style={{ flexDirection: "row", alignItems: "center", gap: 4, height: 26, paddingHorizontal: 10, borderRadius: 13, backgroundColor: urgency.color }}
+            style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs, height: 26, paddingHorizontal: 10, borderRadius: 13, backgroundColor: urgency.color }}
           >
             {urgency.overdue ? <Ionicons name="alert-circle" size={14} color={readableOn(urgency.color)} /> : null}
             <Text style={{ fontSize: 13, fontWeight: "600", color: readableOn(urgency.color) }} numberOfLines={1}>{urgency.label}</Text>
@@ -229,10 +229,10 @@ export function SimpleCard({
   children: React.ReactNode;
   testID?: string;
 }) {
-  const { colors, radius } = useTheme();
+  const { spacing, card, colors, radius } = useTheme();
   const roomy = !!badge || !!onEdit;
   return (
-    <View testID={testID} style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, paddingTop: roomy ? 10 : 14, paddingBottom: 4, overflow: "hidden" }}>
+    <View testID={testID} style={{ ...card, borderRadius: radius.lg, paddingTop: roomy ? 10 : 14, paddingBottom: spacing.xs, overflow: "hidden" }}>
       <View style={{ flexDirection: "row", alignItems: roomy ? "center" : "baseline", marginLeft: 16, marginRight: roomy ? 10 : 16, marginBottom: roomy ? 2 : 4, gap: 10, minHeight: roomy ? 44 : undefined }}>
         <Text style={{ flex: 1, fontSize: 16, fontWeight: "600", color: colors.onSurface }} numberOfLines={1}>
           {title}
@@ -428,7 +428,7 @@ export function useShowAll<T>(rows: T[], limit: number, resetKey?: string | numb
 }
 
 export function ShowAllLine({ more, testID }: { more: { total: number; hidden: number; expanded: boolean; toggle: () => void } | null; testID?: string }) {
-  const { colors } = useTheme();
+  const { spacing, colors } = useTheme();
   if (!more) return null;
   return (
     <PressableScale
@@ -438,7 +438,7 @@ export function ShowAllLine({ more, testID }: { more: { total: number; hidden: n
       pressedStyle={{ backgroundColor: colors.surfaceTertiary }}
       accessibilityRole="button"
       accessibilityState={{ expanded: more.expanded }}
-      style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 44, paddingHorizontal: 16 }}
+      style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: 44, paddingHorizontal: spacing.lg }}
     >
       <Text style={{ fontSize: 14, fontWeight: "500", color: colors.onSurfaceSecondary }}>
         {more.expanded ? "Arată mai puține" : `Vezi încă ${more.hidden}`}
@@ -450,7 +450,7 @@ export function ShowAllLine({ more, testID }: { more: { total: number; hidden: n
 
 /** A status dot + name + right text (Documente / Urmează rows). */
 export function DotLine({ dot, name, right, rightColor, onPress }: { dot: string; name: string; right?: string | null; rightColor?: string; onPress?: () => void }) {
-  const { colors } = useTheme();
+  const { spacing, colors } = useTheme();
   return (
     <PressableScale
       disabled={!onPress}
@@ -459,7 +459,7 @@ export function DotLine({ dot, name, right, rightColor, onPress }: { dot: string
       pressedStyle={{ backgroundColor: colors.surfaceTertiary }}
       accessibilityRole={onPress ? "button" : undefined}
       accessibilityLabel={onPress ? `Editează: ${name}` : undefined}
-      style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10, paddingHorizontal: 16, minHeight: 44 }}
+      style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: 10, paddingHorizontal: spacing.lg, minHeight: 44 }}
     >
       <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: dot }} />
       <Text style={{ flex: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>
@@ -472,7 +472,7 @@ export function DotLine({ dot, name, right, rightColor, onPress }: { dot: string
 
 /** what · when · amount (Luna asta rows). */
 export function SpendLine({ what, when, amount, onPress, onDelete }: { what: string; when: string; amount: string; onPress?: () => void; onDelete?: () => void }) {
-  const { colors } = useTheme();
+  const { spacing, colors } = useTheme();
   // Swipe left = delete (the app's rule for logs), when the screen allows it.
   return (
     <SwipeRow onDelete={onDelete} cornerRadius={0} colors={colors}>
@@ -486,7 +486,7 @@ export function SpendLine({ what, when, amount, onPress, onDelete }: { what: str
       accessibilityActions={onDelete ? [{ name: "delete", label: "Șterge" }] : undefined}
       onAccessibilityAction={onDelete ? (e) => e.nativeEvent.actionName === "delete" && onDelete() : undefined}
       // Opaque, so the red delete panel shows only while swiping.
-      style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 9, paddingHorizontal: 16, minHeight: 44, backgroundColor: colors.surfaceSecondary }}
+      style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingVertical: 9, paddingHorizontal: spacing.lg, minHeight: 44, backgroundColor: colors.surfaceSecondary }}
     >
       <Text style={{ flex: 1, fontSize: 15, color: colors.onSurface }} numberOfLines={1}>
         {what}
@@ -519,8 +519,8 @@ export async function deleteRecordWithConfirm(itemId: string, name: string, onDo
 
 /** The one calm line an empty section shows. */
 export function CalmLine({ text = "Adaugă cu + de jos." }: { text?: string }) {
-  const { colors } = useTheme();
-  return <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, paddingHorizontal: 16, paddingTop: 4, paddingBottom: 12 }}>{text}</Text>;
+  const { spacing, colors } = useTheme();
+  return <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, paddingHorizontal: spacing.lg, paddingTop: spacing.xs, paddingBottom: spacing.md }}>{text}</Text>;
 }
 
 /** "Marți, 21 octombrie" (+ year when not this year); today / tomorrow

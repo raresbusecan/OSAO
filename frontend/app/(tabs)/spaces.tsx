@@ -67,7 +67,7 @@ const TEMPLATES = [
 const idKey = (id: string) => id;
 
 export default function Spaces() {
-  const { colors, spacing, radius, isDark } = useTheme();
+  const { card, colors, spacing, radius, isDark } = useTheme();
   const router = useRouter();
   // Two cards per row, minus the page's side padding and the gap.
   const cardWidth = (Dimensions.get("window").width - spacing.gutter * 2 - spacing.md) / 2;
@@ -320,7 +320,7 @@ export default function Spaces() {
             width: cardWidth,
             // Same footprint as the "Creează" tiles beside it in the grid.
             minHeight: 176,
-            backgroundColor: colors.surfaceSecondary,
+            ...card,
             borderRadius: radius.card,
             padding: spacing.lg,
             gap: spacing.md,
@@ -337,7 +337,7 @@ export default function Spaces() {
               <View testID={`space-card-metric-${s.id}`} style={{ flex: 1, minWidth: 0, minHeight: 44, justifyContent: "center" }}>
                 {/* Small kind icon before the number (user request
                     2026-10-10); it never shrinks, the text does. */}
-                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: 4 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "flex-end", gap: spacing.xs }}>
                   <Ionicons name={metric.icon} size={14} color={colors.onSurfaceTertiary} style={{ flexShrink: 0 }} />
                   <Text
                     style={{ flexShrink: 1, textAlign: "right", fontSize: 15, fontWeight: "600", color: colors.onSurface, fontVariant: ["tabular-nums"] }}
@@ -435,7 +435,7 @@ export default function Spaces() {
               disabled={savingOrder}
               accessibilityRole="button"
               accessibilityLabel="Renunță la ordinea nouă"
-              style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 4 }}
+              style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: spacing.xs }}
             >
               <Text style={{ fontSize: 15, color: colors.onSurfaceTertiary }}>Renunță</Text>
             </Pressable>
@@ -446,7 +446,7 @@ export default function Spaces() {
               scaleTo={motion.scale.control}
               accessibilityRole="button"
               accessibilityLabel="Gata, salvează ordinea"
-              style={{ height: 44, paddingHorizontal: 20, borderRadius: 22, backgroundColor: colors.onSurface, alignItems: "center", justifyContent: "center", opacity: savingOrder ? 0.6 : 1 }}
+              style={{ height: 44, paddingHorizontal: spacing.gutter, borderRadius: 22, backgroundColor: colors.onSurface, alignItems: "center", justifyContent: "center", opacity: savingOrder ? 0.6 : 1 }}
             >
               {savingOrder ? <ActivityIndicator color={colors.surface} /> : <Text style={{ fontSize: 15, fontWeight: "600", color: colors.surface }}>Gata</Text>}
             </PressableScale>

@@ -39,7 +39,7 @@ export type GroceryItemRowProps = {
  * is one big target instead of three small ones side by side.
  */
 export function GroceryItemRow({ item, onToggle, onOpenMenu, onDelete, trailing }: GroceryItemRowProps) {
-  const { colors, spacing } = useTheme();
+  const { radius, colors, spacing } = useTheme();
   const reduced = useReducedMotion();
   const groc = useSpaceColors("grocery");
   const fill = groc.color;
@@ -112,7 +112,7 @@ export function GroceryItemRow({ item, onToggle, onOpenMenu, onDelete, trailing 
           style={{
             width: 26,
             height: 26,
-            borderRadius: 8,
+            borderRadius: radius.inner,
             alignItems: "center",
             justifyContent: "center",
             // Amber fill with a fixed dark check: a white check on amber

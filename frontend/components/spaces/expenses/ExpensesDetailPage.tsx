@@ -46,7 +46,7 @@ const PERIOD_PRESETS: PeriodPreset<ExpensesPeriod>[] = [
  * here -- period is the only axis.
  */
 export function ExpensesDetailPage({ expensesData, onBack, onEntryPress, onEntryDelete }: ExpensesDetailPageProps) {
-  const { colors, spacing, radius, typography } = useTheme();
+  const { card, colors, spacing, radius, typography } = useTheme();
   const TEAL = useSpaceColors("expenses").color;
 
   const [period, setPeriod] = useState<ExpensesPeriod>({ kind: "all" });
@@ -74,7 +74,7 @@ export function ExpensesDetailPage({ expensesData, onBack, onEntryPress, onEntry
 
       <PeriodPicker value={period} onChange={setPeriod} presets={PERIOD_PRESETS} testIDPrefix="expenses-detail" />
 
-      <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: 2 }}>
+      <View style={{ ...card, borderRadius: radius.lg, padding: spacing.gutter, gap: 2 }}>
         <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{formatExpensesPeriodLabel(period)}</Text>
         <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
           <AnimatedNumber value={filteredTotal} style={{ ...typography.display, color: colors.onSurface }} />

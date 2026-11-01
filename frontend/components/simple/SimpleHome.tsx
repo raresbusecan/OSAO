@@ -50,7 +50,7 @@ type SpaceLite = GridSpace;
  * teaser.
  */
 export function SimpleHome() {
-  const { colors, spacing, radius, typography } = useTheme();
+  const { card, colors, spacing, radius, typography } = useTheme();
   const { user } = useAuth();
   const router = useRouter();
 
@@ -157,7 +157,7 @@ export function SimpleHome() {
         {loading ? (
           <ActivityIndicator color={muted} style={{ marginTop: spacing.xl }} />
         ) : failed && !hasSpaces ? (
-          <View testID="simple-home-load-error" style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.lg }}>
+          <View testID="simple-home-load-error" style={{ ...card, borderRadius: radius.lg, padding: spacing.lg }}>
             <Text style={{ fontSize: 14, lineHeight: 20, color: colors.onSurfaceSecondary }}>Nu am putut încărca datele. Trage în jos ca să încerci din nou.</Text>
           </View>
         ) : !hasSpaces ? (
@@ -221,7 +221,7 @@ type MonthlySpend = {
  * paid bills, car, Cheltuieli), split by KIND, then the bills still to pay.
  * Same records Complet reads -- nothing to move when switching modes. */
 function SpendCard({ monthly }: { monthly?: MonthlySpend }) {
-  const { colors, spacing, radius } = useTheme();
+  const { card, colors, spacing, radius } = useTheme();
   const muted = colors.onSurfaceTertiary;
   const now = new Date();
   const billsPaid = Number(monthly?.billsPaid ?? 0) || 0;
@@ -240,7 +240,7 @@ function SpendCard({ monthly }: { monthly?: MonthlySpend }) {
     .filter((s) => s.amount > 0)
     .sort((a, b) => b.amount - a.amount);
   return (
-    <View testID="simple-home-spend" style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md }}>
+    <View testID="simple-home-spend" style={{ ...card, borderRadius: radius.lg, padding: spacing.lg, gap: spacing.md }}>
       {total > 0 ? (
         <View style={{ flexDirection: "row", alignItems: "baseline", gap: spacing.sm }}>
           <Text style={{ flex: 1, fontSize: 13, color: muted }}>Cheltuit în {monthName}</Text>

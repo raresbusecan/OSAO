@@ -15,7 +15,7 @@ import { lei, roCount } from "@/lib/format";
  *  - several:  "2 credite · 1.700 lei pe lună"
  */
 export function LinkedCreditsLine({ spaceId }: { spaceId: string }) {
-  const { colors } = useTheme();
+  const { spacing, colors } = useTheme();
   const summary = useBudgetPlan();
   const credits = (summary?.credit.items ?? []).filter(
     (c) => c.linked_space_id != null && String(c.linked_space_id) === String(spaceId),
@@ -32,7 +32,7 @@ export function LinkedCreditsLine({ spaceId }: { spaceId: string }) {
     <View
       testID="linked-credits-line"
       accessibilityLabel={label}
-      style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 4 }}
+      style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.xs }}
     >
       <Ionicons name="card-outline" size={14} color={colors.onSurfaceTertiary} />
       <Text style={{ flex: 1, fontSize: 13, color: colors.onSurfaceTertiary }} numberOfLines={1}>

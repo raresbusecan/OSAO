@@ -92,7 +92,7 @@ export function useResendVerification() {
  * without the field at all (an older backend -- never nag on missing
  * data), or after the X was tapped this session. */
 export function VerifyEmailBanner({ testID = "verify-email-banner" }: { testID?: string }) {
-  const { colors, spacing, radius } = useTheme();
+  const { card, colors, spacing, radius } = useTheme();
   const { user } = useAuth();
   const { dismissed } = useSyncExternalStore(subscribe, snapshot, snapshot);
   const { resend, busy, note, secondsLeft } = useResendVerification();
@@ -100,10 +100,10 @@ export function VerifyEmailBanner({ testID = "verify-email-banner" }: { testID?:
   if (!user || user.email_verified_at !== null || dismissed) return null;
 
   return (
-    <View testID={testID} style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card, padding: spacing.lg, gap: spacing.md }}>
+    <View testID={testID} style={{ ...card, borderRadius: radius.card, padding: spacing.lg, gap: spacing.md }}>
       <View style={{ flexDirection: "row", gap: spacing.md }}>
         <Ionicons name="mail-unread-outline" size={22} color={colors.warning} style={{ marginTop: 1 }} />
-        <View style={{ flex: 1, gap: 4 }}>
+        <View style={{ flex: 1, gap: spacing.xs }}>
           <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>Confirmă-ți adresa de email</Text>
           <Text style={{ fontSize: 14, lineHeight: 20, color: colors.onSurfaceTertiary }}>
             Ți-am trimis un link la {user.email}. Până îl deschizi, contul funcționează normal.

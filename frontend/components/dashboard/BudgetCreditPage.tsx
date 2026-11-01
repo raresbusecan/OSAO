@@ -40,7 +40,7 @@ export function BudgetCreditPage({
   onOpenExpenses: (() => void) | null;
   onBack: () => void;
 }) {
-  const { colors, spacing, radius, typography, isDark } = useTheme();
+  const { card, colors, spacing, radius, typography, isDark } = useTheme();
   const router = useRouter();
   const over = rates > budget;
   const scale = Math.max(budget, rates, 1);
@@ -56,7 +56,7 @@ export function BudgetCreditPage({
       <TopBar onBack={onBack} backTestID="budget-credit-back" />
       <Identity kicker={`Buget · ${percent}% din venit`} title="Credit" info="budget.credit" />
 
-      <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>
+      <View style={{ ...card, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>
         <View>
           <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Rate pe lună</Text>
           <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
@@ -103,7 +103,7 @@ export function BudgetCreditPage({
                     : "Ultima rată a trecut"
                 }
                 trailing={
-                  <View style={{ alignItems: "flex-end", gap: 4 }}>
+                  <View style={{ alignItems: "flex-end", gap: spacing.xs }}>
                     <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{lei(c.amount)}</Text>
                     {kind && linkColor ? <Chip label={spaceNameById[String(c.linked_space_id)] || (SPACE_KIND_LABEL[kind] ?? "")} color={linkColor} /> : null}
                   </View>

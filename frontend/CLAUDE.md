@@ -570,6 +570,37 @@ fills" rules. Approved mockup: the "orgOS redesign" canvas artifact
 (Acasă, Mașină, Cumpărături, Spații, Casă, Cheltuieli, Calendar, Buget,
 sub-pages, sheets, dialogs, login, settings). Rules:
 
+- **Themes** (2026-11-01): `THEMES` in lib/theme.tsx (Grafit, Hârtie,
+  Miez de noapte, Nisip); a new theme = one entry with its `ThemeColors`
+  and `isDark`. Settings > Temă (`ThemeSheet` in app/settings.tsx) picks
+  one; default `DEFAULT_THEME` = Hârtie. The app does NOT follow the
+  phone's light/dark setting (no "Automat", removed on purpose). Stored
+  per device under `orgos_theme`, read synchronously. Code must read `colors.*`/`isDark`
+  from `useTheme()`, never `useColorScheme()` or hard-coded surface hexes.
+- **Appearance is user-set -- never hard-code a visual value.** Settings >
+  Aspect (`AppearanceSheet`) holds every look option. `layout`
+  {roundness 0..1, density compact/normal/airy} scales the `radius` and
+  `spacing` that `useTheme()` returns (`scaledRadius`/`scaledSpacing`), so
+  a literal `borderRadius: 12` or `padding: 16` silently ignores the
+  user's choice: use the tokens. Every literal that equalled a token was
+  converted 2026-11-01 (110 in 43 live files); what's left on purpose:
+  circles (borderRadius = half the size), off-scale values (10, 14, 18...
+  as padding), TourHost (spotlights use measured pixels) and the tab
+  bars' item spacing. A new option = a token in lib/theme.tsx + one
+  control in AppearanceSheet, never a per-screen change.
+- **Card style** (2026-11-01): `cardStyle` {bulge, opacity, liquid} from
+  `useTheme()`, set by Settings > Aspect's sliders (`AppearanceSheet`),
+  stored as `orgos_card_style`. `useTheme().card` = the ready style (fill
+  + boxShadow, no border, so layout never shifts): a card container on
+  the page writes `style={{ ...card, borderRadius: ... }}`, never
+  `backgroundColor: colors.surfaceSecondary`. `Card`, page-level `Group`
+  and 45 hand-built cards use it. A `Row` inside a page `Group` is
+  transparent (the group paints) -- EXCEPT under `SwipeRow`, which wraps
+  its row in `OpaqueRows` so the green/red panels underneath don't show
+  through (bug seen on Acasă's "De făcut", 2026-11-01). Anything else
+  that slides over a hidden layer needs `OpaqueRows` too. Still opaque on purpose: rows that
+  paint their own fill because they swipe (HomeCategorySection, Budget,
+  CarDashboard, Grocery item rows...), sheets, tab bars, pills, inputs.
 - **Three surface layers**: `colors.surface` (page) -> `surfaceSecondary`
   (cards, list groups) -> `surfaceTertiary` (inputs, chips, icon wells,
   pressed rows). Cards are FILLED; no outlines as the only depth cue.

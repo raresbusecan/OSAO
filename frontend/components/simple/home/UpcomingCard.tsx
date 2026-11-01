@@ -44,7 +44,7 @@ type SpaceLite = { id: string; name: string; color?: string | null; type?: strin
  * own record instead.
  */
 export function UpcomingCard({ dashboard, spaces, onChanged }: { dashboard: any; spaces: SpaceLite[]; onChanged: () => void }) {
-  const { colors, spacing, radius, isDark } = useTheme();
+  const { card, colors, spacing, radius, isDark } = useTheme();
   const router = useRouter();
   const [busyId, setBusyId] = useState<string | null>(null);
   const muted = colors.onSurfaceTertiary;
@@ -107,7 +107,7 @@ export function UpcomingCard({ dashboard, spaces, onChanged }: { dashboard: any;
   const total = dated.length;
 
   return (
-    <View testID="simple-home-upcoming" style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, paddingTop: spacing.lg, paddingBottom: 6 }}>
+    <View testID="simple-home-upcoming" style={{ ...card, borderRadius: radius.lg, paddingTop: spacing.lg, paddingBottom: 6 }}>
       <View style={{ flexDirection: "row", alignItems: "baseline", paddingHorizontal: spacing.lg, paddingBottom: 6 }}>
         <Text style={{ flex: 1, fontSize: 17, fontWeight: "600", color: colors.onSurface }}>Urmează</Text>
         {total > 0 ? <Text style={{ fontSize: 13, color: muted }}>{total} de făcut</Text> : null}
@@ -202,7 +202,7 @@ export function UpcomingCard({ dashboard, spaces, onChanged }: { dashboard: any;
         onPress={() => router.navigate("/(tabs)/calendar" as any)}
         accessibilityRole="link"
         accessibilityLabel="Vezi tot în Calendar"
-        style={{ minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4 }}
+        style={{ minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.xs }}
       >
         <Text style={{ fontSize: 14, fontWeight: "500", color: colors.onSurfaceSecondary }}>Vezi tot în Calendar</Text>
         <Ionicons name="chevron-forward" size={16} color={colors.onSurfaceSecondary} />

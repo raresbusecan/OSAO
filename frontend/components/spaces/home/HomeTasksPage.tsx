@@ -68,7 +68,7 @@ function TaskChip({ row }: { row: HomeTaskRow }) {
  * "Gata"), so a long press always means "actions" in Casă.
  */
 export function HomeTasksPage({ homeData, onBack, onAdd, onPreview, onActions, onCheckboxPress, onDelete, onReorder }: HomeTasksPageProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { card, colors, spacing, radius } = useTheme();
   const homeColors = useSpaceColors("home");
   const HOME = homeColors.color;
   const [reordering, setReordering] = useState(false);
@@ -77,7 +77,7 @@ export function HomeTasksPage({ homeData, onBack, onAdd, onPreview, onActions, o
   const findEntry = (id: string) => homeData.taskEntries.find((t) => t.id === id)!;
   const openCount = dueSoon.length + upcoming.length;
 
-  const groupStyle = { backgroundColor: colors.surfaceSecondary, borderRadius: radius.card, overflow: "hidden" as const };
+  const groupStyle = { ...card, borderRadius: radius.card, overflow: "hidden" as const };
 
   return (
     <SwipeBackView onBack={onBack} style={{ backgroundColor: colors.surface }}>

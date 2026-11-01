@@ -84,18 +84,18 @@ export function HomeCategorySection({
   onRowResolve,
   onRowRenew,
 }: HomeCategorySectionProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { card, colors, spacing, radius } = useTheme();
   const inset = onRowResolve ? 54 : 16;
 
   return (
     <View style={{ gap: spacing.sm }}>
       <SectionHeader title={title} />
       {rows.length === 0 ? (
-        <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card, padding: spacing.lg }}>
+        <View style={{ ...card, borderRadius: radius.card, padding: spacing.lg }}>
           <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>{emptyLabel}</Text>
         </View>
       ) : (
-        <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card, overflow: "hidden" }}>
+        <View style={{ ...card, borderRadius: radius.card, overflow: "hidden" }}>
           {rows.map((row, index) => {
             const tone = row.urgencyTier ? resolveUrgencyColor(row.urgencyTier, colors) : null;
             const rowContent = (

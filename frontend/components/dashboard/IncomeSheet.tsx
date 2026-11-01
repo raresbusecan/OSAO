@@ -56,7 +56,7 @@ function IncomeBody({ initialIncome, split, saving, onSave }: { initialIncome: n
       />
 
       <View style={{ gap: spacing.sm }}>
-        <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, paddingHorizontal: 4 }}>Cum îl împărțim</Text>
+        <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, paddingHorizontal: spacing.xs }}>Cum îl împărțim</Text>
         <Group inset={34}>
           {JAR_ORDER.map((k) => (
             <View key={k} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: spacing.lg, minHeight: 48 }}>
@@ -69,7 +69,7 @@ function IncomeBody({ initialIncome, split, saving, onSave }: { initialIncome: n
         </Group>
       </View>
 
-      <Text style={{ fontSize: 13, lineHeight: 18, color: colors.onSurfaceTertiary, paddingHorizontal: 4 }}>
+      <Text style={{ fontSize: 13, lineHeight: 18, color: colors.onSurfaceTertiary, paddingHorizontal: spacing.xs }}>
         Ai un credit? Adaugă-l în spațiul Cheltuieli, la Credite. Cei {split.third}% îl urmăresc singuri.
       </Text>
 

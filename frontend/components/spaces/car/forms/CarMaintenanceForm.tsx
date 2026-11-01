@@ -689,7 +689,7 @@ export default function CarMaintenanceForm({
                           fontSize: 15,
                           fontWeight: "600",
                           color: colors.onSurface,
-                          paddingVertical: 4,
+                          paddingVertical: spacing.xs,
                           borderBottomWidth: 1,
                           borderBottomColor: colors.border,
                         },

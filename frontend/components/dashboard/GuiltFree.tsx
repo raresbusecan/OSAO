@@ -47,7 +47,7 @@ export function GuiltFreeToggle({
 }
 
 export function GuiltFreeChip({ testID }: { testID?: string }) {
-  const { colors, isDark } = useTheme();
+  const { spacing, radius, colors, isDark } = useTheme();
   const ink = isDark ? "#B9C0CD" : "#3D4553";
   return (
     <View
@@ -56,10 +56,10 @@ export function GuiltFreeChip({ testID }: { testID?: string }) {
       style={{
         flexDirection: "row",
         alignItems: "center",
-        gap: 4,
-        paddingHorizontal: 8,
+        gap: spacing.xs,
+        paddingHorizontal: spacing.sm,
         paddingVertical: 3,
-        borderRadius: 6,
+        borderRadius: radius.sm,
         backgroundColor: hexToRgba(colors.onSurfaceTertiary.length === 7 ? colors.onSurfaceTertiary : "#5B6474", isDark ? 0.16 : 0.12),
         alignSelf: "flex-start",
       }}

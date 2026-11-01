@@ -1,5 +1,6 @@
-import React, { createContext, useContext, useMemo } from "react";
-import { useColorScheme } from "react-native";
+import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
+import { Platform, type ViewStyle } from "react-native";
+import * as SecureStore from "expo-secure-store";
 
 export type ThemeColors = {
   /** Page background -- the lowest of the 3 surface layers. */
@@ -97,6 +98,203 @@ const dark: ThemeColors = {
   segmentActive: "#262C38",
 };
 
+/* "Miez de noapte": pure black for OLED screens, same semantics as dark. */
+const midnight: ThemeColors = {
+  ...dark,
+  surface: "#000000",
+  onSurface: "#F2F2F5",
+  surfaceSecondary: "#0E0E12",
+  onSurfaceSecondary: "#B8B8C2",
+  surfaceTertiary: "#1A1A20",
+  onSurfaceTertiary: "#8E8E99",
+  surfaceInverse: "#F2F2F5",
+  onSurfaceInverse: "#000000",
+  brandPrimary: "#F2F2F5",
+  onBrandPrimary: "#000000",
+  brandSecondary: "#8E8E99",
+  brandTertiary: "#1A1A20",
+  info: "#8E8E99",
+  border: "#1C1C22",
+  borderStrong: "#2A2A32",
+  control: "#64646F",
+  segmentTrack: "#0E0E12",
+  segmentActive: "#222229",
+};
+
+/* "Nisip": a warm light theme. onSurfaceTertiary is one step deeper than
+ * the obvious taupe so it still clears 4.5:1 on surfaceTertiary. */
+const sand: ThemeColors = {
+  ...light,
+  surface: "#F4EFE6",
+  onSurface: "#2A2117",
+  surfaceSecondary: "#FFFDF8",
+  onSurfaceSecondary: "#4A3F31",
+  surfaceTertiary: "#EAE2D3",
+  onSurfaceTertiary: "#645847",
+  surfaceInverse: "#2A2117",
+  onSurfaceInverse: "#FFFDF8",
+  brandPrimary: "#2A2117",
+  onBrandPrimary: "#FFFDF8",
+  brandSecondary: "#645847",
+  brandTertiary: "#EAE2D3",
+  info: "#645847",
+  border: "#E6DDCC",
+  borderStrong: "#D3C7B1",
+  control: "#8E816D",
+  segmentTrack: "#EAE2D3",
+  segmentActive: "#FFFDF8",
+};
+
+/** Every selectable theme (Settings > Temă). A new theme = one entry
+ * here; `isDark` decides the Space colour variants and the status bar. */
+export const THEMES = [
+  { id: "graphite", label: "Grafit", description: "Întunecat", isDark: true, colors: dark },
+  { id: "paper", label: "Hârtie", description: "Deschis, tema implicită", isDark: false, colors: light },
+  { id: "midnight", label: "Miez de noapte", description: "Negru pur, pentru ecrane OLED", isDark: true, colors: midnight },
+  { id: "sand", label: "Nisip", description: "Deschis și cald", isDark: false, colors: sand },
+] as const satisfies readonly { id: string; label: string; description: string; isDark: boolean; colors: ThemeColors }[];
+
+export type ThemeId = (typeof THEMES)[number]["id"];
+/** Hârtie unless the user picked another one. The app does NOT follow the
+ * phone's light/dark setting (the old "Automat" option was removed). */
+export const DEFAULT_THEME: ThemeId = "paper";
+
+const STORAGE_KEY = "orgos_theme";
+
+function isThemeId(v: unknown): v is ThemeId {
+  return THEMES.some((t) => t.id === v);
+}
+
+// Read synchronously (like lib/i18n's language) so the first frame is
+// already in the chosen theme. A stored "auto" from before falls back here.
+function readStored(): ThemeId {
+  try {
+    const raw = Platform.OS === "web" ? globalThis.localStorage?.getItem(STORAGE_KEY) : SecureStore.getItem(STORAGE_KEY);
+    return isThemeId(raw) ? raw : DEFAULT_THEME;
+  } catch {
+    return DEFAULT_THEME;
+  }
+}
+
+function writeStored(pref: ThemeId) {
+  try {
+    if (Platform.OS === "web") globalThis.localStorage?.setItem(STORAGE_KEY, pref);
+    else SecureStore.setItemAsync(STORAGE_KEY, pref).catch(() => {});
+  } catch {}
+}
+
+/** How cards look, set with three sliders in Settings > Carduri. Each 0..1:
+ * `bulge` = light edge on top + soft drop shadow (the card looks raised),
+ * `opacity` = how solid the card fill is (1 = fully opaque),
+ * `liquid` = glass look: a bright rim, a lighter tint, a dark lower edge. */
+export type CardStyle = { bulge: number; opacity: number; liquid: number };
+export const DEFAULT_CARD_STYLE: CardStyle = { bulge: 0.5, opacity: 1, liquid: 0 };
+
+const CARD_STORAGE_KEY = "orgos_card_style";
+const clamp01 = (n: unknown, fallback: number) => (typeof n === "number" && isFinite(n) ? Math.min(1, Math.max(0, n)) : fallback);
+
+function readCardStyle(): CardStyle {
+  try {
+    const raw = Platform.OS === "web" ? globalThis.localStorage?.getItem(CARD_STORAGE_KEY) : SecureStore.getItem(CARD_STORAGE_KEY);
+    const v = raw ? JSON.parse(raw) : null;
+    return {
+      bulge: clamp01(v?.bulge, DEFAULT_CARD_STYLE.bulge),
+      opacity: Math.max(0.4, clamp01(v?.opacity, DEFAULT_CARD_STYLE.opacity)),
+      liquid: clamp01(v?.liquid, DEFAULT_CARD_STYLE.liquid),
+    };
+  } catch {
+    return DEFAULT_CARD_STYLE;
+  }
+}
+
+function writeCardStyle(s: CardStyle) {
+  try {
+    const raw = JSON.stringify(s);
+    if (Platform.OS === "web") globalThis.localStorage?.setItem(CARD_STORAGE_KEY, raw);
+    else SecureStore.setItemAsync(CARD_STORAGE_KEY, raw).catch(() => {});
+  } catch {}
+}
+
+/** Shape of the whole app, set in Settings > Aspect. `roundness` 0..1
+ * scales every `radius` token (0.5 = the designed values); `density`
+ * scales every `spacing` token. Both reach every screen through
+ * useTheme(), since no file imports spacing/radius directly. */
+export type Density = "compact" | "normal" | "airy";
+export type Layout = { roundness: number; density: Density };
+export const DEFAULT_LAYOUT: Layout = { roundness: 0.5, density: "normal" };
+const DENSITY_SCALE: Record<Density, number> = { compact: 0.8, normal: 1, airy: 1.2 };
+
+const LAYOUT_STORAGE_KEY = "orgos_layout";
+
+function readLayout(): Layout {
+  try {
+    const raw = Platform.OS === "web" ? globalThis.localStorage?.getItem(LAYOUT_STORAGE_KEY) : SecureStore.getItem(LAYOUT_STORAGE_KEY);
+    const v = raw ? JSON.parse(raw) : null;
+    return {
+      roundness: clamp01(v?.roundness, DEFAULT_LAYOUT.roundness),
+      density: v?.density in DENSITY_SCALE ? v.density : DEFAULT_LAYOUT.density,
+    };
+  } catch {
+    return DEFAULT_LAYOUT;
+  }
+}
+
+function writeLayout(l: Layout) {
+  try {
+    const raw = JSON.stringify(l);
+    if (Platform.OS === "web") globalThis.localStorage?.setItem(LAYOUT_STORAGE_KEY, raw);
+    else SecureStore.setItemAsync(LAYOUT_STORAGE_KEY, raw).catch(() => {});
+  } catch {}
+}
+
+/** 0 -> a quarter of each designed radius, 0.5 -> as designed, 1 -> 1.75x.
+ * `pill` stays fully round. */
+export function scaledRadius(roundness: number): typeof radius {
+  const f = 0.25 + 1.5 * roundness;
+  const out = { ...radius };
+  for (const k of Object.keys(radius) as (keyof typeof radius)[]) if (k !== "pill") out[k] = Math.round(radius[k] * f);
+  return out;
+}
+
+export function scaledSpacing(density: Density): typeof spacing {
+  const f = DENSITY_SCALE[density];
+  const out = { ...spacing };
+  for (const k of Object.keys(spacing) as (keyof typeof spacing)[]) out[k] = Math.round(spacing[k] * f);
+  return out;
+}
+
+const rgbOf = (hex: string) => {
+  const h = hex.replace("#", "");
+  return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+};
+const r3 = (n: number) => Math.round(n * 1000) / 1000;
+
+/** The fill, rim and shadows of one card for a CardStyle. No border and
+ * no padding -- everything is drawn with boxShadow (inset for the rim and
+ * the light edge), so moving a slider never shifts a card's layout. */
+export function cardSurface(colors: ThemeColors, isDark: boolean, s: CardStyle, base: string = colors.surfaceSecondary): ViewStyle {
+  const { bulge: b, liquid: l } = s;
+  // Glass lifts a dark card toward white a little; a light one is white already.
+  const glassLift = isDark ? 0.07 * l : 0;
+  const [br, bg, bb] = rgbOf(base).map((c) => Math.round(c + (255 - c) * glassLift));
+  const shadows: string[] = [];
+  const edge = isDark ? 0.08 * b + 0.14 * l : 0.6 * b + 0.9 * l;
+  if (edge > 0) shadows.push(`inset 0 1px 0 rgba(255,255,255,${r3(Math.min(1, edge))})`);
+  if (l > 0) {
+    shadows.push(`inset 0 0 0 1px rgba(255,255,255,${r3(isDark ? 0.03 + 0.09 * l : 0.3 + 0.5 * l)})`);
+    shadows.push(`inset 0 -1px 0 rgba(0,0,0,${r3((isDark ? 0.3 : 0.05) * l)})`);
+  }
+  if (b > 0) {
+    const ink = isDark ? "0,0,0" : "16,24,40";
+    if (!isDark) shadows.push(`0 1px 2px rgba(${ink},${r3(0.06 * b)})`);
+    shadows.push(`0 ${Math.round(2 + 10 * b)}px ${Math.round(6 + 26 * b)}px rgba(${ink},${r3(isDark ? 0.15 + 0.35 * b : 0.03 + 0.1 * b)})`);
+  }
+  return {
+    backgroundColor: `rgba(${br},${bg},${bb},${r3(s.opacity)})`,
+    ...(shadows.length ? { boxShadow: shadows.join(", ") } : null),
+  };
+}
+
 /** `gutter` = page side padding, `section` = gap between a page's
  * sections (the redesign's two layout constants). */
 export const spacing = { xs: 4, sm: 8, md: 12, lg: 16, gutter: 20, section: 20, xl: 24, "2xl": 32, "3xl": 48 };
@@ -162,16 +360,77 @@ export const typography = {
   micro: { fontSize: 11, fontWeight: "500" as const },
 };
 
-type Ctx = { colors: ThemeColors; isDark: boolean; spacing: typeof spacing; radius: typeof radius; typography: typeof typography };
-const ThemeCtx = createContext<Ctx>({ colors: light, isDark: false, spacing, radius, typography });
+type Ctx = {
+  colors: ThemeColors;
+  isDark: boolean;
+  themeId: ThemeId;
+  setThemeId: (id: ThemeId) => void;
+  cardStyle: CardStyle;
+  setCardStyle: (s: CardStyle) => void;
+  /** cardSurface() for the current theme + cardStyle: spread it into any
+   * card container on the page (`style={{ ...card, borderRadius: ... }}`)
+   * instead of `backgroundColor: colors.surfaceSecondary`. */
+  card: ViewStyle;
+  layout: Layout;
+  setLayout: (l: Layout) => void;
+  /** Already scaled by `layout.density`. */
+  spacing: typeof spacing;
+  /** Already scaled by `layout.roundness`. */
+  radius: typeof radius;
+  typography: typeof typography;
+};
+const ThemeCtx = createContext<Ctx>({
+  colors: light,
+  isDark: false,
+  themeId: DEFAULT_THEME,
+  setThemeId: () => {},
+  cardStyle: DEFAULT_CARD_STYLE,
+  setCardStyle: () => {},
+  card: { backgroundColor: light.surfaceSecondary },
+  layout: DEFAULT_LAYOUT,
+  setLayout: () => {},
+  spacing,
+  radius,
+  typography,
+});
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const scheme = useColorScheme();
-  const isDark = scheme === "dark";
-  const value = useMemo<Ctx>(
-    () => ({ colors: isDark ? dark : light, isDark, spacing, radius, typography }),
-    [isDark],
+  const [themeId, setThemeIdState] = useState<ThemeId>(readStored);
+  const setThemeId = useCallback((id: ThemeId) => {
+    setThemeIdState(id);
+    writeStored(id);
+  }, []);
+  const [cardStyle, setCardStyleState] = useState<CardStyle>(readCardStyle);
+  const setCardStyle = useCallback((s: CardStyle) => {
+    setCardStyleState(s);
+    writeCardStyle(s);
+  }, []);
+  const [layout, setLayoutState] = useState<Layout>(readLayout);
+  const setLayout = useCallback((l: Layout) => {
+    setLayoutState(l);
+    writeLayout(l);
+  }, []);
+  const scaled = useMemo(
+    () => ({ spacing: scaledSpacing(layout.density), radius: scaledRadius(layout.roundness) }),
+    [layout.density, layout.roundness],
   );
+  const value = useMemo<Ctx>(() => {
+    const theme = THEMES.find((t) => t.id === themeId) ?? THEMES[1];
+    return {
+      colors: theme.colors,
+      isDark: theme.isDark,
+      themeId,
+      setThemeId,
+      cardStyle,
+      setCardStyle,
+      card: cardSurface(theme.colors, theme.isDark, cardStyle),
+      layout,
+      setLayout,
+      spacing: scaled.spacing,
+      radius: scaled.radius,
+      typography,
+    };
+  }, [themeId, setThemeId, cardStyle, setCardStyle, layout, setLayout, scaled]);
   return <ThemeCtx.Provider value={value}>{children}</ThemeCtx.Provider>;
 }
 

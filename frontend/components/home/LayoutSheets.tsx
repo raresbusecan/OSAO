@@ -307,7 +307,7 @@ export function TemplatesSheet({ visible, onClose, onPick, onReset }: {
 }
 
 function TemplatePreview({ templateKey }: { templateKey: string }) {
-  const { colors } = useTheme();
+  const { spacing, colors } = useTheme();
   const green = "rgba(46,189,133,0.35)";
   const amber = "rgba(245,158,11,0.35)";
   const blocks: { h: number; c: string; half?: boolean }[][] =
@@ -317,7 +317,7 @@ function TemplatePreview({ templateKey }: { templateKey: string }) {
         ? [[{ h: 30, c: colors.borderStrong }], [{ h: 18, c: "rgba(59,130,246,0.35)", half: true }, { h: 18, c: colors.borderStrong, half: true }], [{ h: 16, c: amber }]]
         : [[{ h: 24, c: colors.borderStrong }], [{ h: 28, c: colors.borderStrong }], [{ h: 16, c: colors.borderStrong }], [{ h: 10, c: colors.borderStrong }]];
   return (
-    <View style={{ height: 104, borderRadius: 10, backgroundColor: colors.surface, padding: 8, gap: 5, overflow: "hidden" }}>
+    <View style={{ height: 104, borderRadius: 10, backgroundColor: colors.surface, padding: spacing.sm, gap: 5, overflow: "hidden" }}>
       {blocks.map((row, i) => (
         <View key={i} style={{ flexDirection: "row", gap: 5 }}>
           {row.map((b, j) => <View key={j} style={{ flex: 1, height: b.h, borderRadius: 4, backgroundColor: b.c }} />)}

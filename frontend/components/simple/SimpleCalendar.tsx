@@ -63,7 +63,7 @@ type MonthData = { days: Record<string, any[]>; recurring: any[] };
 type AgendaRow = { key: string; dayKey: string; date: Date; item: any };
 
 export function SimpleCalendar() {
-  const { colors, spacing, radius, typography, isDark } = useTheme();
+  const { card, colors, spacing, radius, typography, isDark } = useTheme();
   const router = useRouter();
 
   /* ---------------- today (re-read on focus / foreground / midnight) ---------------- */
@@ -382,7 +382,7 @@ export function SimpleCalendar() {
         style={{
           flexDirection: "row",
           alignItems: "center",
-          gap: 12,
+          gap: spacing.md,
           minHeight: 56,
           paddingVertical: 9,
           paddingLeft: spacing.lg,
@@ -467,7 +467,7 @@ export function SimpleCalendar() {
         <MonthSwipeView
           pager={pager}
           onSwipe={changeMonth}
-          style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, paddingTop: 14, paddingBottom: 10, paddingHorizontal: 10 }}
+          style={{ ...card, borderRadius: radius.lg, paddingTop: 14, paddingBottom: 10, paddingHorizontal: 10 }}
           after={
             legend.length > 0 ? (
               <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: 14, rowGap: 6, marginTop: 6, paddingTop: 10, paddingHorizontal: 6, borderTopWidth: 1, borderTopColor: colors.border }}>
@@ -560,13 +560,13 @@ export function SimpleCalendar() {
                   accessibilityRole="button"
                   accessibilityLabel="Eveniment nou"
                   hitSlop={4}
-                  style={{ height: 36, paddingLeft: 10, paddingRight: 14, borderRadius: 18, flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: colors.onSurface }}
+                  style={{ height: 36, paddingLeft: 10, paddingRight: 14, borderRadius: 18, flexDirection: "row", alignItems: "center", gap: spacing.xs, backgroundColor: colors.onSurface }}
                 >
                   <Ionicons name="add" size={18} color={colors.surface} />
                   <Text style={{ fontSize: 14, fontWeight: "600", color: colors.surface }}>Eveniment</Text>
                 </PressableScale>
               </View>
-              <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, overflow: "hidden", paddingVertical: 4 }}>
+              <View style={{ ...card, borderRadius: radius.lg, overflow: "hidden", paddingVertical: spacing.xs }}>
                 {dayRows.length === 0 ? (
                   <Text testID="simple-cal-day-empty" style={{ fontSize: 14, lineHeight: 20, color: colors.onSurfaceSecondary, paddingVertical: 14, paddingHorizontal: spacing.lg }}>
                     {failed ? "Nu am putut încărca calendarul. Trage în jos ca să încerci din nou." : "Nimic în ziua asta."}
@@ -582,7 +582,7 @@ export function SimpleCalendar() {
                 <Text style={{ marginHorizontal: 4, fontSize: 13, fontWeight: "600", color: colors.error }} accessibilityRole="header">
                   Restante
                 </Text>
-                <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, overflow: "hidden", paddingVertical: 4 }}>
+                <View style={{ ...card, borderRadius: radius.lg, overflow: "hidden", paddingVertical: spacing.xs }}>
                   {overdue.map((r) => renderRow(r, true, true))}
                 </View>
               </View>
@@ -625,11 +625,11 @@ const MINI = 22;
  * with nothing in 3 months a fixed decorative trio, as in the mockup) so the teaser reads as "bubbles", not blanks.
  */
 function MiniBubbles({ fills, loaded }: { fills: number[]; loaded: boolean }) {
-  const { colors, isDark } = useTheme();
+  const { spacing, colors, isDark } = useTheme();
   const anything = loaded && fills.some((f) => f > 0);
   const shown = anything ? fills : [0.65, 0.4, 1];
   return (
-    <View style={{ flexDirection: "row", gap: 4 }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+    <View style={{ flexDirection: "row", gap: spacing.xs }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
       {shown.map((f, i) => {
         const status = monthStatus(f);
         const level: HeatLevel = anything ? (status === "over" ? 8 : status === "full" ? 6 : 4) : ([6, 4, 8][i] as HeatLevel);

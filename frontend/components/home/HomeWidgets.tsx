@@ -108,9 +108,9 @@ function TapCard({ widget, onPress, label, fallbackAccent, children, style }: { 
 }
 
 function CardHeading({ icon, text, color, info }: { icon: IconName; text: string; color: string; info?: HelpKey }) {
-  const { colors } = useTheme();
+  const { spacing, colors } = useTheme();
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
       <Ionicons name={icon} size={16} color={color} />
       <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, flexShrink: 1 }} numberOfLines={1}>{text}</Text>
       {info ? <InfoButton topic={info} /> : null}
@@ -630,7 +630,7 @@ function SavingsCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
 const LIMIT_KIND: Record<string, SpaceKind> = { Car: "car", Home: "home", Grocery: "grocery", Expenses: "expenses" };
 
 function BudgetCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
-  const { colors } = useTheme();
+  const { spacing, colors } = useTheme();
   const muted = colors.onSurfaceTertiary;
   const title = widget.settings?.title || "Buget pe spații";
   const limits: any[] = ctx.budget?.limits ?? [];
@@ -658,7 +658,7 @@ function BudgetCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
     );
   }
   return (
-    <TapCard widget={widget} onPress={go} label={title} style={{ gap: 12 }}>
+    <TapCard widget={widget} onPress={go} label={title} style={{ gap: spacing.md }}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
         <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{title}</Text>
         {!ctx.preview ? <InfoButton topic="card.budget" /> : null}
@@ -719,7 +719,7 @@ function CarCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
 /* ---------------- Listă de cumpărături ---------------- */
 
 function GroceryCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
-  const { colors, isDark } = useTheme();
+  const { spacing, radius, colors, isDark } = useTheme();
   const lists: any[] = ctx.dashboard?.toBuyLists ?? [];
   const list = lists.find((l) => String(l.list_id) === widget.settings?.listId) ?? (widget.settings?.listId ? null : lists[0]);
   if (!list) return <Missing widget={widget} text="Lista e goală sau a fost ștearsă." />;
@@ -740,13 +740,13 @@ function GroceryCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
   const rest = list.count - shown.length;
   return (
     <TapCard widget={widget} onPress={go} label={`${title}: ${list.count} de cumpărat`}>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.sm }}>
         <CardHeading icon="cart-outline" text={title} color={tint} info={infoOf(ctx, "card.grocery")} />
         <Text style={{ fontSize: 13, color: muted }}>{roCount(list.count, "produs", "produse")}</Text>
       </View>
       {shown.map((it: any, i: number) => (
-        <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 12, minHeight: 32 }}>
-          <View style={{ width: 20, height: 20, borderRadius: 6, borderWidth: 2, borderColor: colors.borderStrong }} />
+        <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 32 }}>
+          <View style={{ width: 20, height: 20, borderRadius: radius.sm, borderWidth: 2, borderColor: colors.borderStrong }} />
           <Text style={{ flex: 1, fontSize: 15, color: colors.onSurface }} numberOfLines={1}>{it.title}</Text>
           {it.quantity ? <Text style={{ fontSize: 13, color: muted }}>{/^\d+([.,]\d+)?$/.test(String(it.quantity)) ? `${it.quantity} ${roUnit("pcs")}` : it.quantity}</Text> : null}
         </View>
@@ -804,7 +804,7 @@ function CalendarCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
       <CardHeading icon="calendar-outline" text={title} color={tint} info={infoOf(ctx, "card.calendar")} />
       {shown.length === 0 ? <Text style={{ fontSize: 14, color: muted }}>Nimic programat.</Text> : null}
       {shown.map((r: any) => (
-        <PressableScale key={`${r.type}-${r.id}`} onPress={ctx.preview ? undefined : () => ctx.navigate(todoHref(r, "resolve"))} accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: 12, minHeight: 32 }}>
+        <PressableScale key={`${r.type}-${r.id}`} onPress={ctx.preview ? undefined : () => ctx.navigate(todoHref(r, "resolve"))} accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 32 }}>
           <Text style={{ width: 64, fontSize: 13, color: r.days === 0 ? colors.warning : muted }}>{capitalize(roRelativeDays(r.days))}</Text>
           <Text style={{ flex: 1, fontSize: 15, color: colors.onSurface }} numberOfLines={1}>{todoTitle(r)}</Text>
         </PressableScale>

@@ -43,7 +43,7 @@ export function HomeOverviewCard({
   /** This Casă space -- shows the credits linked to it under the card. */
   spaceId?: string;
 }) {
-  const { colors, spacing, radius, typography } = useTheme();
+  const { card, colors, spacing, radius, typography } = useTheme();
   const muted = colors.onSurfaceTertiary;
   const stat = (label: string, value: number, onPress: () => void, testID: string, align: "flex-start" | "flex-end") => (
     <PressableScale testID={testID} onPress={onPress} accessibilityRole="button" accessibilityLabel={`${label}: ${lei(Math.round(value))}`} style={{ gap: 2, alignItems: align }}>
@@ -59,7 +59,7 @@ export function HomeOverviewCard({
 
   return (
     <View style={{ gap: spacing.sm }}>
-      <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.lg, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+      <View style={{ ...card, borderRadius: radius.lg, padding: spacing.lg, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         {stat("Cheltuit luna asta", spent, onSpendPress, "home-stat-spend", "flex-start")}
         <View style={{ width: 1, alignSelf: "stretch", backgroundColor: colors.borderStrong }} />
         {stat("Facturi pe lună", monthlyBills, onBillsPress, "home-stat-bills", "flex-end")}
@@ -173,7 +173,7 @@ export function HomeDueSection({
   onResolve: (row: HomeDueRow) => void;
   onDelete: (row: HomeDueRow) => void;
 }) {
-  const { colors, spacing } = useTheme();
+  const { radius, card, colors, spacing } = useTheme();
   // "Toate ..." unfolds the tab in place (user, 2026-10-05) -- folded again
   // whenever another tab is picked.
   const [expandedTab, setExpandedTab] = useState<DueTabKind | null>(null);
@@ -224,7 +224,7 @@ export function HomeDueSection({
         }}
       />
       {shownRows.length === 0 ? (
-        <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: 16, paddingVertical: 18, paddingHorizontal: 16, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 }}>
+        <View style={{ ...card, borderRadius: radius.card, paddingVertical: 18, paddingHorizontal: spacing.lg, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: spacing.sm }}>
           <Ionicons name="checkmark-circle-outline" size={18} color={colors.success} />
           <Text style={{ flexShrink: 1, fontSize: 14, color: colors.onSurfaceSecondary }}>{tabMeta.empty}</Text>
         </View>
@@ -244,7 +244,7 @@ export function HomeDueSection({
           accessibilityRole="button"
           accessibilityState={{ expanded }}
           accessibilityLabel={expanded ? "Arată mai puțin" : `${tabMeta.all}, încă ${hiddenCount} ascunse`}
-          style={{ minHeight: 52, borderRadius: 16, paddingHorizontal: spacing.lg, backgroundColor: colors.surfaceSecondary, flexDirection: "row", alignItems: "center", gap: spacing.sm }}
+          style={{ minHeight: 52, borderRadius: radius.card, paddingHorizontal: spacing.lg, ...card, flexDirection: "row", alignItems: "center", gap: spacing.sm }}
         >
           <Text style={{ flex: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface }}>{expanded ? "Arată mai puțin" : tabMeta.all}</Text>
           {!expanded ? <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>+{hiddenCount}</Text> : null}

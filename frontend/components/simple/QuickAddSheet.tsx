@@ -774,7 +774,7 @@ function QuickAddSheet({ preselect }: { preselect: string | null }) {
           ) : null}
 
           {justAdded ? (
-            <View testID="quick-add-added" style={{ flexDirection: "row", alignItems: "center", gap: 8, padding: spacing.md, borderRadius: radius.control, backgroundColor: `${colors.success}18` }}>
+            <View testID="quick-add-added" style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, padding: spacing.md, borderRadius: radius.control, backgroundColor: `${colors.success}18` }}>
               <Ionicons name="checkmark-circle" size={18} color={colors.success} />
               <Text style={{ flex: 1, fontSize: 14, color: colors.onSurface }} numberOfLines={2}>
                 „{justAdded}” e pe listă. Scrie următorul produs sau închide.

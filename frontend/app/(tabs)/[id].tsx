@@ -96,7 +96,7 @@ import {
 export default function SpaceDetail() {
   const { id, itemId, itemType, action, section } = useLocalSearchParams<{ id: string; itemId?: string; itemType?: string; action?: string; section?: string }>();
 
-  const { colors } = useTheme();
+  const { spacing, colors } = useTheme();
   const router = useRouter();
   const { isSimple } = useAppMode();
   const recordAction = useRecordAction();
@@ -1535,8 +1535,8 @@ export default function SpaceDetail() {
       <View
         style={{
           flex: 1,
-          paddingHorizontal: 24,
-          paddingTop: 20,
+          paddingHorizontal: spacing.xl,
+          paddingTop: spacing.gutter,
         }}
       >
         <View

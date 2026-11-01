@@ -29,7 +29,7 @@ function signedLei(n: number): string {
  */
 export function GuiltFreePage({ percent, onBack }: { percent: number; onBack: () => void }) {
   const router = useRouter();
-  const { colors, spacing, radius, typography, isDark } = useTheme();
+  const { card, colors, spacing, radius, typography, isDark } = useTheme();
   const [data, setData] = useState<GuiltFreeData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -75,7 +75,7 @@ export function GuiltFreePage({ percent, onBack }: { percent: number; onBack: ()
         <ActivityIndicator color={colors.onSurfaceTertiary} />
       ) : (
         <>
-          <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>
+          <View style={{ ...card, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>
             <View>
               <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Luna asta</Text>
               <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
@@ -101,7 +101,7 @@ export function GuiltFreePage({ percent, onBack }: { percent: number; onBack: ()
           <View style={{ gap: spacing.sm }}>
             <SectionHeader title="Marcate luna asta" />
             {(data?.items ?? []).length === 0 ? (
-              <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card }}>
+              <View style={{ ...card, borderRadius: radius.card }}>
                 <EmptyState icon="heart-outline" message="Nimic marcat încă. Pornește „Bani fără vină” când editezi o cheltuială." />
               </View>
             ) : (

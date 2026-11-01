@@ -58,7 +58,7 @@ export function IncomeSplitCard({
 
   const pct = (k: SplitKey) => <Text style={{ fontWeight: "400", color: colors.onSurfaceTertiary }}>{` · ${split[k]}%`}</Text>;
 
-  const rowStyle = { paddingHorizontal: spacing.lg, paddingVertical: 14, gap: 8, backgroundColor: colors.surfaceSecondary };
+  const rowStyle = { paddingHorizontal: spacing.lg, paddingVertical: 14, gap: spacing.sm, backgroundColor: colors.surfaceSecondary };
   const head = (icon: IconName, iconColor: string, k: SplitKey, right: React.ReactNode, sub?: string, chevron = true, iconTint?: string) => (
     <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
       <IconWell icon={icon} color={iconColor} tint={iconTint} size={34} />
@@ -207,7 +207,7 @@ export function IncomeSplitCard({
         )}
 
         {/* Termen scurt = Economii */}
-        <PressableScale testID="jar-short-term" onPress={onOpenGoal} scaleTo={1} pressedStyle={{ backgroundColor: colors.surfaceTertiary }} accessibilityRole="button" accessibilityLabel="Obiective pe termen scurt, editează obiectivul de economii" style={{ ...rowStyle, paddingTop: 12 }}>
+        <PressableScale testID="jar-short-term" onPress={onOpenGoal} scaleTo={1} pressedStyle={{ backgroundColor: colors.surfaceTertiary }} accessibilityRole="button" accessibilityLabel="Obiective pe termen scurt, editează obiectivul de economii" style={{ ...rowStyle, paddingTop: spacing.md }}>
           {head(
             "flag-outline",
             colors.success,

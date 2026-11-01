@@ -218,7 +218,7 @@ function MonthPickerSheet({
   onSelect: (year: number, month: number) => void;
   onClose: () => void;
 }) {
-  const { colors, radius } = useTheme();
+  const { spacing, colors, radius } = useTheme();
   const now = new Date();
   const minYear = allowPast ? Math.min(now.getFullYear(), value?.getFullYear() ?? now.getFullYear()) - 5 : now.getFullYear();
   const maxYear = now.getFullYear() + 40;
@@ -240,13 +240,13 @@ function MonthPickerSheet({
         <CircleButton icon="chevron-forward" label="Anul următor" onPress={() => page(1)} disabled={!canNext} />
       </View>
       <MonthSwipeView pager={pager} onSwipe={page} canPrev={canPrev} canNext={canNext}>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: 8 }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: spacing.sm }}>
           {Array.from({ length: 12 }, (_, m) => {
             const disabled = !allowPast && (year < now.getFullYear() || (year === now.getFullYear() && m < now.getMonth()));
             const on = !!value && value.getFullYear() === year && value.getMonth() === m;
             const label = capitalize(new Date(year, m, 1).toLocaleDateString("ro-RO", { month: "short" }).replace(".", ""));
             return (
-              <View key={m} style={{ width: "33.333%", paddingHorizontal: 4 }}>
+              <View key={m} style={{ width: "33.333%", paddingHorizontal: spacing.xs }}>
                 <Pressable
                   testID={`${testIDPrefix}-end-month-${m + 1}`}
                   disabled={disabled}

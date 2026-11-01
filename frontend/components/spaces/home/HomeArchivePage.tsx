@@ -64,7 +64,7 @@ function formatResolvedAt(dateString: string): string {
  * same calculation functions rather than re-deriving the data.
  */
 export function HomeArchivePage({ homeData, onBack }: HomeArchivePageProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { card, colors, spacing, radius } = useTheme();
   const [tab, setTab] = useState<ArchiveKind | "all">("all");
 
   const { rows, spentThisMonth } = useMemo(() => {
@@ -95,7 +95,7 @@ export function HomeArchivePage({ homeData, onBack }: HomeArchivePageProps) {
         <Identity color={HOME} kicker="Casă" title="Istoric" subtitle="Tot ce ai rezolvat, cel mai recent primul." info="home.archive" />
 
         {spentThisMonth > 0 ? (
-          <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: 2 }}>
+          <View style={{ ...card, borderRadius: radius.lg, padding: spacing.gutter, gap: 2 }}>
             <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Cheltuit din rezolvate, luna asta</Text>
             <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
               <Text style={{ fontSize: 28, fontWeight: "600", letterSpacing: -0.6, color: colors.onSurface }}>

@@ -78,7 +78,7 @@ const CATEGORY_ORDER: CarExpenseCategory[] = [
  * that combination -- not just one filter applied at a time.
  */
 export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: CarExpensesPageProps) {
-  const { colors, spacing, radius, typography } = useTheme();
+  const { card, colors, spacing, radius, typography } = useTheme();
 
   // "Introdus" -- purchasePrice is always a number on a saved profile
   // (CarProfileForm defaults it to 0 rather than leaving it undefined),
@@ -227,7 +227,7 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
               subtitle={[record.categoryLabel, formatCarDate(record.date), record.subtitle, record.archived ? "arhivat" : null].filter(Boolean).join(", ")}
               dim={record.archived}
               trailing={
-                <View style={{ alignItems: "flex-end", gap: 4 }}>
+                <View style={{ alignItems: "flex-end", gap: spacing.xs }}>
                   <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{formatCarNumber(record.amount)} lei</Text>
                   {/* Row's title is a plain string, so the chip sits under the amount
                       (wrapped: the chip itself aligns flex-start). */}
@@ -263,7 +263,7 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
         />
       </PeriodPicker>
 
-      <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>
+      <View style={{ ...card, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>
         <View style={{ gap: 2 }}>
           <Text style={{ fontSize: 13, color: muted }}>
             Total cheltuit{activeCategories.size > 0 ? `, ${categoryLabelsSelected.toLowerCase()}` : ""}

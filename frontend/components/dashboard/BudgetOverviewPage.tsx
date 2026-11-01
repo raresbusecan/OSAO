@@ -78,7 +78,7 @@ function ArchiveCategoryLine({ c, meta, showDiff = true }: { c: ArchiveMonth["ca
  * ranked by spend, and one archived snapshot per completed month.
  */
 export function BudgetOverviewPage({ limits, spending, spaceKinds, recurring = {}, planned = {}, envelope = null, onBack }: BudgetOverviewPageProps) {
-  const { colors, spacing, radius, typography } = useTheme();
+  const { card, colors, spacing, radius, typography } = useTheme();
 
   const [archive, setArchive] = useState<ArchiveMonth[]>([]);
   const [archiveLoading, setArchiveLoading] = useState(true);
@@ -167,12 +167,12 @@ export function BudgetOverviewPage({ limits, spending, spaceKinds, recurring = {
       <Identity title="Luna asta" subtitle="Unde s-au dus banii, pe spații" info="budget.overview" />
 
       {rows.length === 0 ? (
-        <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card }}>
+        <View style={{ ...card, borderRadius: radius.card }}>
           <EmptyState icon="pie-chart-outline" message="Niciun spațiu cu buget sau cheltuieli încă." />
         </View>
       ) : (
         <>
-          <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.lg }}>
+          <View style={{ ...card, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.lg }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
               <MultiRingProgress segments={segments} size={96} trackColor={colors.surfaceTertiary} />
               <View style={{ flex: 1, gap: 2 }}>
@@ -213,7 +213,7 @@ export function BudgetOverviewPage({ limits, spending, spaceKinds, recurring = {
                 // A 0 limit is still a set limit (anything spent is over it).
                 const hasBudget = row.budget != null;
                 return (
-                  <View key={row.kind} style={{ paddingHorizontal: spacing.lg, paddingVertical: 14, gap: 8 }}>
+                  <View key={row.kind} style={{ paddingHorizontal: spacing.lg, paddingVertical: 14, gap: spacing.sm }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
                       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: row.color }} />
                       <Text style={{ flex: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface }}>{row.name}</Text>
@@ -253,7 +253,7 @@ export function BudgetOverviewPage({ limits, spending, spaceKinds, recurring = {
             {archiveLoading ? (
               <ActivityIndicator color={colors.onSurfaceTertiary} />
             ) : archive.length === 0 ? (
-              <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card }}>
+              <View style={{ ...card, borderRadius: radius.card }}>
                 <EmptyState icon="archive-outline" message="La finalul fiecărei luni, bilanțul ei apare aici." />
               </View>
             ) : (
@@ -287,12 +287,12 @@ export function BudgetOverviewPage({ limits, spending, spaceKinds, recurring = {
                       </PressableScale>
 
                       {isExpanded ? (
-                        <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md, gap: 8 }}>
+                        <View style={{ paddingHorizontal: spacing.lg, paddingBottom: spacing.md, gap: spacing.sm }}>
                           {m.categories.filter((c) => !OUTSIDE_SPACES.includes(c.category)).map((c) => (
                             <ArchiveCategoryLine key={c.category} c={c} meta={categoryMeta(c.category)} />
                           ))}
                           {m.categories.some((c) => OUTSIDE_SPACES.includes(c.category)) ? (
-                            <View testID={`archive-outside-${m.month}`} style={{ gap: 8, marginTop: 4, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.surfaceTertiary }}>
+                            <View testID={`archive-outside-${m.month}`} style={{ gap: spacing.sm, marginTop: 4, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.surfaceTertiary }}>
                               <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>În afara spațiilor · nu intră în totalul lunii</Text>
                               {m.categories.filter((c) => OUTSIDE_SPACES.includes(c.category)).map((c) => (
                                 // Credit rates are fixed instalments, not overspend:

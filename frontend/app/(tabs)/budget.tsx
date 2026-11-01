@@ -94,7 +94,7 @@ function paceDelta(ratio: number): number | null {
 }
 
 export default function BudgetScreen() {
-  const { colors, spacing, radius, typography, isDark } = useTheme();
+  const { card, colors, spacing, radius, typography, isDark } = useTheme();
 
   const [limits, setLimits] = useState<BudgetLimit[]>([]);
   // Real spend per space label, this month + last month + a 3-month
@@ -437,11 +437,11 @@ export default function BudgetScreen() {
             {/* The whole month at a glance -- opens the overview page
                 (composition ring + ranked spend list). */}
             {!plan ? (
-              <View testID="income-onboarding" {...topTarget} style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: 14 }}>
-                <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}>
+              <View testID="income-onboarding" {...topTarget} style={{ ...card, borderRadius: radius.lg, padding: spacing.gutter, gap: 14 }}>
+                <View style={{ width: 40, height: 40, borderRadius: radius.md, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}>
                   <Ionicons name="wallet-outline" size={20} color={colors.onSurface} />
                 </View>
-                <View style={{ gap: 4 }}>
+                <View style={{ gap: spacing.xs }}>
                   <Text style={{ fontSize: 17, fontWeight: "600", color: colors.onSurface }}>Pornește de la venitul tău</Text>
                   <Text style={{ fontSize: 14, lineHeight: 20, color: colors.onSurfaceTertiary }}>
                     Spune-ne cât câștigi net pe lună. Îl împărțim în cinci și fiecare spațiu își primește bugetul din necesități.
@@ -454,7 +454,7 @@ export default function BudgetScreen() {
                       <View key={k} style={{ flex: DEFAULT_SPLIT[k], borderRadius: 5, backgroundColor: jarFill(k, colors, isDark), opacity: k === "needs" ? 0.85 : 1 }} />
                     ))}
                   </View>
-                  <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: 4 }}>
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: spacing.xs }}>
                     {ONBOARDING_LEGEND.map(([p, t]) => (
                       <Text key={t} style={{ width: "50%", fontSize: 13, color: colors.onSurfaceTertiary }}>
                         <Text style={{ fontWeight: "600", color: colors.onSurface }}>{p}</Text> {t}
@@ -475,7 +475,7 @@ export default function BudgetScreen() {
                 scaleTo={motion.scale.card}
                 accessibilityRole="button"
                 accessibilityLabel={`${heroLabel}: ${lei(heroSpent)} din ${lei(heroBudget)}. Vezi detalii`}
-                style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, flexDirection: "row", alignItems: "center", gap: 18 }}
+                style={{ ...card, borderRadius: radius.lg, padding: spacing.gutter, flexDirection: "row", alignItems: "center", gap: 18 }}
               >
                 <RingProgress
                   value={heroRatio}
@@ -527,7 +527,7 @@ export default function BudgetScreen() {
                 action={plan && spaceKinds.length > 0 ? { label: "Reîmparte", onPress: () => setResplitOpen(true), testID: "resplit-open", tone: colors.onSurface } : undefined}
               />
               {spaceKinds.length === 0 ? (
-                <View {...spacesTarget} style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card }}>
+                <View {...spacesTarget} style={{ ...card, borderRadius: radius.card }}>
                   <EmptyState icon="wallet-outline" message="Creează un spațiu Mașină, Casă, Cumpărături sau Cheltuieli ca să-i poți pune un buget." />
                 </View>
               ) : (
@@ -584,7 +584,7 @@ export default function BudgetScreen() {
                         pressedStyle={{ backgroundColor: colors.surfaceTertiary }}
                         accessibilityRole="button"
                         accessibilityLabel={limit ? `${name}: ${lei(recorded)} cheltuiți din ${lei(limit.monthly_limit)}${up > 0 ? `, ${upcomingWords(rec, plannedAmt, lei)}` : ""}` : `Setează un buget pentru ${name}`}
-                        style={{ paddingHorizontal: spacing.lg, paddingVertical: 14, gap: 8, backgroundColor: colors.surfaceSecondary }}
+                        style={{ paddingHorizontal: spacing.lg, paddingVertical: 14, gap: spacing.sm, backgroundColor: colors.surfaceSecondary }}
                       >
                         <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
                           <IconWell icon={meta.icon} color={color} tint={tint} size={34} />
@@ -656,7 +656,7 @@ export default function BudgetScreen() {
               scaleTo={motion.scale.card}
               accessibilityRole="button"
               accessibilityLabel="Editează obiectivul de economii"
-              style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, paddingHorizontal: 18, paddingVertical: spacing.lg, gap: spacing.md }}
+              style={{ ...card, borderRadius: radius.lg, paddingHorizontal: 18, paddingVertical: spacing.lg, gap: spacing.md }}
             >
               <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
                 <IconWell icon="wallet-outline" color={goalIsNegative ? colors.error : colors.success} size={34} />
@@ -692,7 +692,7 @@ export default function BudgetScreen() {
                 <SectionHeader title="Plăți recurente" info="budget.recurring" />
               </View>
               {recurringBills.length === 0 && creditItems.length === 0 ? (
-                <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card }}>
+                <View style={{ ...card, borderRadius: radius.card }}>
                   <EmptyState icon="repeat" message="Nicio plată recurentă. Le adaugi din spațiul Casă, la Plăți recurente." />
                 </View>
               ) : (

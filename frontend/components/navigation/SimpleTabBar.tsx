@@ -20,7 +20,7 @@ import type { MainTabBarProps } from "./MainTabBar";
  * there. No return trail in this mode (two tabs, nothing deep).
  */
 export function SimpleTabBar({ state, emitter, navigateToTab }: MainTabBarProps) {
-  const { colors } = useTheme();
+  const { spacing, colors } = useTheme();
   const insets = useSafeAreaInsets();
   const segments = useSegments() as string[];
   const inSpace = segments[1] === "[id]";
@@ -65,7 +65,7 @@ export function SimpleTabBar({ state, emitter, navigateToTab }: MainTabBarProps)
         backgroundColor: colors.surfaceSecondary,
         borderTopWidth: StyleSheet.hairlineWidth,
         borderTopColor: colors.border,
-        paddingTop: 8,
+        paddingTop: spacing.sm,
         paddingBottom: insets.bottom > 0 ? insets.bottom : 10,
       }}
       onLayout={(e) => setTabBarHeight(e.nativeEvent.layout.height)}

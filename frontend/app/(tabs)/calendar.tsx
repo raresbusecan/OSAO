@@ -90,7 +90,7 @@ export default function CalendarRoute() {
 }
 
 function CalendarScreen() {
-  const { colors, spacing, radius, isDark } = useTheme();
+  const { card, colors, spacing, radius, isDark } = useTheme();
   const router = useRouter();
   const { date: dateParam } = useLocalSearchParams<{ date?: string }>();
   // "Today" drives everything date-relative: the strip's 3 months, the
@@ -406,12 +406,12 @@ function CalendarScreen() {
             </View>
           ) : null}
 
-          <View style={{ gap: 8 }}>
+          <View style={{ gap: spacing.sm }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
               <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }}>Următoarele 3 luni</Text>
               <InfoButton topic="calendar.heat" />
             </View>
-            <View testID="cal-months" style={{ flexDirection: "row", gap: 8 }}>
+            <View testID="cal-months" style={{ flexDirection: "row", gap: spacing.sm }}>
               {monthLoads.map((mo) => (
                 <MonthBubbleCard
                   key={mo.key}
@@ -435,14 +435,14 @@ function CalendarScreen() {
           <MonthSwipeView
             pager={pager}
             onSwipe={changeMonth}
-            style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card, paddingVertical: 12, paddingHorizontal: 10 }}
+            style={{ ...card, borderRadius: radius.card, paddingVertical: spacing.md, paddingHorizontal: 10 }}
             after={
               <>
                 {/* Legend -- one row on a phone (user, 2026-10-05): strictly the
                     8 shades (no "Liber" label, no empty swatch), tight (2px
                     apart, 10px); it only wraps on a very narrow screen. */}
-                <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", rowGap: 6, paddingTop: 10, paddingHorizontal: 4 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", rowGap: 6, paddingTop: 10, paddingHorizontal: spacing.xs }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
                       {HEAT_LEVELS.filter((l) => l > 0).map((l) => (
                         <View key={l} style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: heatColor(l, isDark) }} />
@@ -450,12 +450,12 @@ function CalendarScreen() {
                     </View>
                     <Text style={{ fontSize: 12, color: muted }}>Aglomerat</Text>
                   </View>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
                       <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: eventDot }} />
                       <Text style={{ fontSize: 12, color: muted }}>Eveniment</Text>
                     </View>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.xs }}>
                       <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: colors.error }} />
                       <Text style={{ fontSize: 12, color: muted }}>Restant</Text>
                     </View>
@@ -557,7 +557,7 @@ function CalendarScreen() {
                   hitSlop={6}
                   accessibilityRole="button"
                   accessibilityLabel={`Eveniment: ${ev.title}, ${timeLabel(ev.due_at)}`}
-                  style={{ height: 32, paddingHorizontal: 12, borderRadius: 16, backgroundColor: hexToRgba(CUSTOM_EVENT_COLOR, 0.16), flexDirection: "row", alignItems: "center", gap: 6 }}
+                  style={{ height: 32, paddingHorizontal: spacing.md, borderRadius: 16, backgroundColor: hexToRgba(CUSTOM_EVENT_COLOR, 0.16), flexDirection: "row", alignItems: "center", gap: 6 }}
                 >
                   <Ionicons name="sparkles-outline" size={15} color={spaceTextColor("custom", isDark) ?? CUSTOM_EVENT_COLOR} />
                   <Text style={{ fontSize: 13, fontWeight: "500", color: spaceTextColor("custom", isDark) ?? CUSTOM_EVENT_COLOR }} numberOfLines={1}>
@@ -571,7 +571,7 @@ function CalendarScreen() {
           {loading ? (
             <ActivityIndicator color={muted} />
           ) : dayRecords.length === 0 ? (
-            <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card, paddingVertical: 18, paddingHorizontal: 16, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}>
+            <View style={{ ...card, borderRadius: radius.card, paddingVertical: 18, paddingHorizontal: spacing.lg, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm }}>
               <Ionicons name="checkmark-circle-outline" size={18} color={colors.success} />
               <Text style={{ flexShrink: 1, fontSize: 14, color: colors.onSurfaceSecondary }}>
                 {selected === todayKey ? "Nimic de rezolvat azi." : "Nimic de rezolvat în ziua asta."}
@@ -640,7 +640,7 @@ function CalendarScreen() {
           </View>
 
           {upcomingEvents.length === 0 ? (
-            <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card }}>
+            <View style={{ ...card, borderRadius: radius.card }}>
               <EmptyState icon="sparkles-outline" message="Niciun eveniment în următoarele 3 luni." />
             </View>
           ) : (
@@ -676,7 +676,7 @@ function CalendarScreen() {
               pressedStyle={{ backgroundColor: colors.surfaceTertiary }}
               accessibilityRole="button"
               accessibilityState={{ expanded: eventsExpanded }}
-              style={{ minHeight: 52, borderRadius: 16, paddingHorizontal: spacing.lg, backgroundColor: colors.surfaceSecondary, flexDirection: "row", alignItems: "center", gap: spacing.sm }}
+              style={{ minHeight: 52, borderRadius: radius.card, paddingHorizontal: spacing.lg, ...card, flexDirection: "row", alignItems: "center", gap: spacing.sm }}
             >
               <Text style={{ flex: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface }}>{eventsExpanded ? "Arată mai puțin" : "Toate evenimentele"}</Text>
               {!eventsExpanded ? <Text style={{ fontSize: 14, color: muted }}>+{upcomingEvents.length - 5}</Text> : null}
@@ -754,7 +754,7 @@ function MonthBubbleCard({
   selected: boolean;
   onPress: () => void;
 }) {
-  const { colors, radius, isDark } = useTheme();
+  const { card, colors, radius, isDark } = useTheme();
   const reduced = useReducedMotion();
   const status = monthStatus(fill);
   const over = loaded && status === "over";
@@ -828,7 +828,7 @@ function MonthBubbleCard({
         minWidth: 0,
         height: 72,
         borderRadius: radius.card,
-        backgroundColor: colors.surfaceSecondary,
+        ...card,
         borderWidth: 2,
         borderColor: selected ? colors.onSurface : "transparent",
         flexDirection: "row",

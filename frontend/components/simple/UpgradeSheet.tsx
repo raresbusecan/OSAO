@@ -82,7 +82,7 @@ function UpgradeSheet({ visible, onClose }: { visible: boolean; onClose: () => v
       onClose={onClose}
       testID="upgrade-sheet"
       footer={
-        <View style={{ gap: 4 }}>
+        <View style={{ gap: spacing.xs }}>
           <Button testID="upgrade-try-full" label="Vezi în Complet" onPress={tryFull} />
           <Pressable
             testID="upgrade-not-now"

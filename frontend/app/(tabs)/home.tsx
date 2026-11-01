@@ -68,7 +68,7 @@ export default function HomeRoute() {
 }
 
 function Home() {
-  const { colors, spacing, typography } = useTheme();
+  const { radius, colors, spacing, typography } = useTheme();
   const { user } = useAuth();
   const router = useRouter();
 
@@ -411,7 +411,7 @@ function Home() {
             disabled={saving}
             accessibilityRole="button"
             accessibilityLabel="Renunță la modificări"
-            style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 4 }}
+            style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: spacing.xs }}
           >
             <Text style={{ fontSize: 15, color: muted }}>Renunță</Text>
           </Pressable>
@@ -422,7 +422,7 @@ function Home() {
             scaleTo={motion.scale.control}
             accessibilityRole="button"
             accessibilityLabel="Gata, salvează aranjamentul"
-            style={{ height: 44, paddingHorizontal: 20, borderRadius: 22, backgroundColor: colors.onSurface, alignItems: "center", justifyContent: "center", opacity: saving ? 0.6 : 1 }}
+            style={{ height: 44, paddingHorizontal: spacing.gutter, borderRadius: 22, backgroundColor: colors.onSurface, alignItems: "center", justifyContent: "center", opacity: saving ? 0.6 : 1 }}
           >
             {saving ? <ActivityIndicator color={colors.surface} /> : <Text style={{ fontSize: 15, fontWeight: "600", color: colors.surface }}>Gata</Text>}
           </PressableScale>
@@ -499,7 +499,7 @@ function Home() {
                 scaleTo={motion.scale.card}
                 accessibilityRole="button"
                 accessibilityLabel="Adaugă card"
-                style={{ height: 56, borderRadius: 16, borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.borderStrong, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}
+                style={{ height: 56, borderRadius: radius.card, borderWidth: 1.5, borderStyle: "dashed", borderColor: colors.borderStrong, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm }}
               >
                 <Ionicons name="add" size={20} color={colors.onSurface} />
                 <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }}>Adaugă card</Text>
@@ -510,7 +510,7 @@ function Home() {
                 scaleTo={motion.scale.card}
                 accessibilityRole="button"
                 accessibilityLabel="Șabloane"
-                style={{ height: 48, borderRadius: 14, backgroundColor: colors.surfaceSecondary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}
+                style={{ height: 48, borderRadius: radius.control, backgroundColor: colors.surfaceSecondary, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm }}
               >
                 <Ionicons name="albums-outline" size={18} color={muted} />
                 <Text style={{ fontSize: 14, color: colors.onSurface }}>Pornește de la un șablon</Text>
@@ -521,7 +521,7 @@ function Home() {
                 disabled={saving}
                 accessibilityRole="button"
                 accessibilityLabel="Resetează Acasă la organizarea inițială"
-                style={{ minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}
+                style={{ minHeight: 44, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: spacing.sm }}
               >
                 <Ionicons name="refresh" size={16} color={colors.error} />
                 <Text style={{ fontSize: 14, color: colors.error }}>Resetează Acasă la organizarea inițială</Text>

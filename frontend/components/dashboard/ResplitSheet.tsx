@@ -86,7 +86,7 @@ function ResplitBody({ envelope, suggested, spaces, onClose, onSaved }: { envelo
           const tint = spaceTextColor(s.kind, isDark) ?? color;
           const i = spaces.indexOf(s);
           return (
-            <View key={s.label} style={{ paddingHorizontal: spacing.lg, paddingVertical: invalid[i] ? 8 : 0, gap: 4 }}>
+            <View key={s.label} style={{ paddingHorizontal: spacing.lg, paddingVertical: invalid[i] ? 8 : 0, gap: spacing.xs }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, minHeight: 60 }}>
               <IconWell icon={s.icon} color={color} tint={tint} size={34} />
               <Text style={{ flex: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>{SPACE_KIND_LABEL[s.kind] ?? s.label}</Text>
@@ -112,7 +112,7 @@ function ResplitBody({ envelope, suggested, spaces, onClose, onSaved }: { envelo
         })}
       </Group>
 
-      <View accessibilityLiveRegion="polite" style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: 4 }}>
+      <View accessibilityLiveRegion="polite" style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.xs }}>
         <Ionicons name={status === "exact" ? "checkmark" : status === "under" ? "ellipse-outline" : "alert-circle-outline"} size={16} color={status === "exact" ? colors.success : status === "under" ? colors.onSurfaceTertiary : colors.warning} />
         <Text style={{ flex: 1, fontSize: 13, color: status === "over" ? colors.warning : colors.onSurfaceTertiary }}>
           {status === "exact"

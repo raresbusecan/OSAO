@@ -26,6 +26,17 @@ type IconName = keyof typeof Ionicons.glyphMap;
 export type SurfaceLevel = "page" | "card" | "raised";
 export const SurfaceLevelContext = React.createContext<SurfaceLevel>("page");
 
+/** True inside a page-level Group: the group already paints the card, so
+ * a Row in it stays transparent instead of repainting surfaceSecondary. */
+const PaintedCardContext = React.createContext(false);
+
+/** Rows under this paint their own fill again even inside a page Group --
+ * for a row that slides over something (SwipeRow's resolve/delete
+ * panels sit underneath it and would show through a transparent row). */
+export function OpaqueRows({ children }: { children: React.ReactNode }) {
+  return <PaintedCardContext.Provider value={false}>{children}</PaintedCardContext.Provider>;
+}
+
 const hexToRgba = (hex: string, alpha: number) => {
   const h = hex.replace("#", "");
   const r = parseInt(h.slice(0, 2), 16);
@@ -191,9 +202,9 @@ export function SectionHeader({
 
 /** A card on the card layer. `group` = rows divided by hairlines. */
 export function Card({ children, style, padded = true }: { children: React.ReactNode; style?: StyleProp<ViewStyle>; padded?: boolean }) {
-  const { colors, radius, spacing } = useTheme();
+  const { card, radius, spacing } = useTheme();
   return (
-    <View style={[{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: padded ? spacing.gutter : 0 }, style]}>
+    <View style={[card, { borderRadius: radius.lg, padding: padded ? spacing.gutter : 0 }, style]}>
       {children}
     </View>
   );
@@ -203,18 +214,22 @@ export function Card({ children, style, padded = true }: { children: React.React
  * text starts (iOS grouped-list style). `inset` = that offset: 16 for a
  * text-only row, 68 after a 40px icon well, 54 after a checkbox. */
 export function Group({ children, style, inset = 16 }: { children: React.ReactNode; style?: StyleProp<ViewStyle>; inset?: number }) {
-  const { colors, radius } = useTheme();
+  const { colors, card, radius } = useTheme();
   const level = React.useContext(SurfaceLevelContext);
   const items = React.Children.toArray(children).filter(Boolean);
+  // Settings > Aspect styles groups on the page; inside a sheet they stay flat.
+  const surface = level === "card" ? { backgroundColor: colors.surfaceTertiary } : card;
   return (
-    <View style={[{ backgroundColor: level === "card" ? colors.surfaceTertiary : colors.surfaceSecondary, borderRadius: radius.card, overflow: "hidden" }, style]}>
-      {items.map((child, i) => (
-        <View key={i}>
-          {/* Inside a sheet the group is surfaceTertiary, where `border` vanishes. */}
-          {i > 0 ? <View style={{ height: 1, marginLeft: inset, backgroundColor: level === "card" ? colors.borderStrong : colors.border }} /> : null}
-          {child}
-        </View>
-      ))}
+    <View style={[surface, { borderRadius: radius.card, overflow: "hidden" }, style]}>
+      <PaintedCardContext.Provider value={level !== "card"}>
+        {items.map((child, i) => (
+          <View key={i}>
+            {/* Inside a sheet the group is surfaceTertiary, where `border` vanishes. */}
+            {i > 0 ? <View style={{ height: 1, marginLeft: inset, backgroundColor: level === "card" ? colors.borderStrong : colors.border }} /> : null}
+            {child}
+          </View>
+        ))}
+      </PaintedCardContext.Provider>
     </View>
   );
 }
@@ -261,6 +276,11 @@ export function Row({
 }) {
   const { colors, spacing } = useTheme();
   const onCard = React.useContext(SurfaceLevelContext) === "card";
+  // In a page Group the group paints the card (fill, rim, shadow); an
+  // opaque row would hide its rim and defeat Settings > Aspect's opacity.
+  // (`!onCard`: a Sheet opened from inside such a Group still inherits the
+  // context, but its rows sit on the sheet's own layer.)
+  const painted = React.useContext(PaintedCardContext) && !onCard;
   const content = (
     <>
       {leading}
@@ -287,7 +307,7 @@ export function Row({
     gap: spacing.md,
     paddingHorizontal: spacing.lg,
     minHeight: 58,
-    backgroundColor: onCard ? colors.surfaceTertiary : colors.surfaceSecondary,
+    backgroundColor: painted ? "transparent" : onCard ? colors.surfaceTertiary : colors.surfaceSecondary,
   };
   if (!onPress && !onLongPress) return <View testID={testID} style={style}>{content}</View>;
   return (
@@ -309,6 +329,7 @@ export function Row({
 
 /** Small tinted label -- urgency (Restant/Azi), status, counts. */
 export function Chip({ label, color, filled = true, icon }: { label: string; color: string; filled?: boolean; icon?: IconName }) {
+  const { radius } = useTheme();
   return (
     <View
       style={{
@@ -317,7 +338,7 @@ export function Chip({ label, color, filled = true, icon }: { label: string; col
         gap: 4,
         paddingHorizontal: filled ? 8 : 0,
         paddingVertical: 4,
-        borderRadius: 6,
+        borderRadius: radius.sm,
         backgroundColor: filled ? hexToRgba(color, 0.08) : "transparent",
       }}
     >
@@ -474,7 +495,7 @@ export function Button({
   /** Screen-reader label when the visible one isn't enough ("Înainte, pasul 2 din 4"). */
   a11yLabel?: string;
 }) {
-  const { colors, radius } = useTheme();
+  const { colors, radius, spacing } = useTheme();
   const fill =
     variant === "primary" ? tone ?? colors.onSurface
       : variant === "secondary" ? colors.surfaceTertiary
@@ -500,8 +521,8 @@ export function Button({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "center",
-        gap: 8,
-        paddingHorizontal: 16,
+        gap: spacing.sm,
+        paddingHorizontal: spacing.lg,
         opacity: disabled ? 0.4 : 1,
       }}
     >

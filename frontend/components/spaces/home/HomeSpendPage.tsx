@@ -69,7 +69,7 @@ function formatDate(dateString: string): string {
  * returns.
  */
 export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: HomeSpendPageProps) {
-  const { colors, spacing, radius, typography } = useTheme();
+  const { card, colors, spacing, radius, typography } = useTheme();
 
   // "Introdus" -- purchasePrice is always a number on a saved profile
   // (HomeProfileForm defaults it to 0 rather than leaving it undefined),
@@ -155,7 +155,7 @@ export function HomeSpendPage({ homeData, profile, onBack, onRecordPress }: Home
       <PeriodPicker value={period} onChange={setPeriod} presets={PERIOD_PRESETS} testIDPrefix="home-spend" />
 
       {/* Total for the period (+ the category chips that filter it). */}
-      <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>
+      <View style={{ ...card, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>
         <View style={{ gap: 2 }}>
           <Text style={{ fontSize: 13, color: muted }}>
             Total cheltuit, {formatSpendPeriodLabel(period).toLowerCase()}

@@ -32,7 +32,7 @@ export function AuthShell({
       <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
           <ScrollView
-            contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingHorizontal: 24, paddingVertical: spacing.xl, gap: 28 }}
+            contentContainerStyle={{ flexGrow: 1, justifyContent: "center", paddingHorizontal: spacing.xl, paddingVertical: spacing.xl, gap: 28 }}
             keyboardShouldPersistTaps="handled"
           >
             {onBack ? (
@@ -96,11 +96,11 @@ export function AuthSwitch({ prompt, action, onPress, testID }: { prompt: string
 
 /** A filled message card for a finished/failed step ("Verifică emailul"). */
 export function AuthNotice({ icon, tone, title, message, testID }: { icon: keyof typeof Ionicons.glyphMap; tone: string; title: string; message: string; testID?: string }) {
-  const { colors, spacing, radius } = useTheme();
+  const { card, colors, spacing, radius } = useTheme();
   return (
-    <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card, padding: spacing.lg, flexDirection: "row", gap: spacing.md }}>
+    <View style={{ ...card, borderRadius: radius.card, padding: spacing.lg, flexDirection: "row", gap: spacing.md }}>
       <Ionicons name={icon} size={22} color={tone} style={{ marginTop: 1 }} />
-      <View style={{ flex: 1, gap: 4 }}>
+      <View style={{ flex: 1, gap: spacing.xs }}>
         <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{title}</Text>
         <Text testID={testID} style={{ fontSize: 14, lineHeight: 20, color: colors.onSurfaceTertiary }}>{message}</Text>
       </View>

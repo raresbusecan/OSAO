@@ -154,7 +154,7 @@ const toNum = (raw: string) => parseLocaleNumber(raw);
 const localKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
 function EditRecordSheet({ id }: { id: string }) {
-  const { colors, spacing, isDark } = useTheme();
+  const { radius, colors, spacing, isDark } = useTheme();
   const [item, setItem] = useState<any | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
 
@@ -376,7 +376,7 @@ function EditRecordSheet({ id }: { id: string }) {
         item && spec ? (
           confirmDelete ? (
             <View style={{ gap: spacing.sm }} testID="edit-record-confirm-delete">
-              <Text style={{ fontSize: 15, lineHeight: 21, color: colors.onSurface, textAlign: "center", paddingBottom: 4 }}>
+              <Text style={{ fontSize: 15, lineHeight: 21, color: colors.onSurface, textAlign: "center", paddingBottom: spacing.xs }}>
                 Ștergi definitiv „{recordName}”?
                 {item.type === "grocery_list" && listProductIds.length > 0 ? ` Se șterg și cele ${roCount(listProductIds.length, "produs", "produse")} de pe ea.` : ""} Nu se poate anula.
               </Text>
@@ -474,7 +474,7 @@ function EditRecordSheet({ id }: { id: string }) {
           ) : null}
 
           {error ? (
-            <View style={{ padding: spacing.md, borderRadius: 12, backgroundColor: `${colors.error}14` }}>
+            <View style={{ padding: spacing.md, borderRadius: radius.md, backgroundColor: `${colors.error}14` }}>
               <Text style={{ fontSize: 14, color: colors.error }}>{error}</Text>
             </View>
           ) : null}

@@ -34,7 +34,7 @@ export function TitleChipRow({
     <>
       {leading}
       <View style={{ flex: 1, paddingVertical: spacing.sm + 2, opacity: dim ? 0.5 : 1 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, flexWrap: "wrap" }}>
           <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface, flexShrink: 1 }} numberOfLines={2}>
             {title}
           </Text>

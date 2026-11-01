@@ -36,12 +36,12 @@ export function SpaceColorPicker({
   onChange: (key: SpaceColorKey) => void;
   testID?: string;
 }) {
-  const { colors } = useTheme();
+  const { spacing, colors } = useTheme();
   const kindDefault = KIND_DEFAULT_COLOR[kind];
   return (
     <View style={{ gap: 6 }}>
       <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Culoarea spațiului</Text>
-      <View accessibilityRole="radiogroup" accessibilityLabel="Culoarea spațiului" style={{ flexDirection: "row", flexWrap: "wrap", gap: 4, marginHorizontal: -4 }}>
+      <View accessibilityRole="radiogroup" accessibilityLabel="Culoarea spațiului" style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.xs, marginHorizontal: -4 }}>
         {SPACE_PALETTE.map((sw) => {
           const selected = sw.key === value;
           return (

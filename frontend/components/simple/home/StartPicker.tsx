@@ -22,12 +22,12 @@ export type StartTemplate = (typeof START_TEMPLATES)[number];
 /** Acasă before the first space: "Ce vrei să ții în ordine?" + 2x2 kind
  * tiles + two quiet lines about what the app does. */
 export function StartPicker({ onPick }: { onPick: (t: StartTemplate) => void }) {
-  const { colors, spacing, radius } = useTheme();
+  const { card, colors, spacing, radius } = useTheme();
   const rows = [START_TEMPLATES.slice(0, 2), START_TEMPLATES.slice(2, 4)];
   return (
     <View style={{ gap: spacing.section }}>
-      <View testID="simple-home-start" style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.lg, paddingTop: spacing.section, paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.lg }}>
-        <View style={{ gap: 4 }}>
+      <View testID="simple-home-start" style={{ ...card, borderRadius: radius.lg, paddingTop: spacing.section, paddingHorizontal: spacing.lg, paddingBottom: spacing.lg, gap: spacing.lg }}>
+        <View style={{ gap: spacing.xs }}>
           <Text style={{ fontSize: 20, fontWeight: "600", color: colors.onSurface }}>Ce vrei să ții în ordine?</Text>
           <Text style={{ fontSize: 14, lineHeight: 20, color: colors.onSurfaceTertiary }}>Alege unul ca să începi. Pe celelalte le adaugi oricând.</Text>
         </View>
@@ -42,7 +42,7 @@ export function StartPicker({ onPick }: { onPick: (t: StartTemplate) => void }) 
         </View>
       </View>
 
-      <View style={{ gap: spacing.md, paddingHorizontal: 4 }}>
+      <View style={{ gap: spacing.md, paddingHorizontal: spacing.xs }}>
         <InfoLine icon="notifications-outline" text="Îți amintim la timp de ITP, RCA, facturi și ce ai de făcut prin casă." />
         <InfoLine icon="card-outline" text="Vezi dintr-o privire cât ai cheltuit luna asta." />
       </View>
@@ -70,9 +70,9 @@ function StartTile({ t, onPick }: { t: StartTemplate; onPick: (t: StartTemplate)
 }
 
 function InfoLine({ icon, text }: { icon: React.ComponentProps<typeof Ionicons>["name"]; text: string }) {
-  const { colors } = useTheme();
+  const { spacing, colors } = useTheme();
   return (
-    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
+    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: spacing.md }}>
       <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}>
         <Ionicons name={icon} size={18} color={colors.onSurfaceSecondary} />
       </View>

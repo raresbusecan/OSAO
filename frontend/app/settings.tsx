@@ -3,11 +3,24 @@ import { View, Text, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "@/lib/theme";
+import Slider from "@react-native-community/slider";
+import {
+  DEFAULT_CARD_STYLE,
+  DEFAULT_LAYOUT,
+  THEMES,
+  cardSurface,
+  scaledRadius,
+  scaledSpacing,
+  useTheme,
+  type CardStyle,
+  type Density,
+  type Layout,
+  type ThemeColors,
+} from "@/lib/theme";
 import { useAuth } from "@/providers/auth";
 import { api, apiErrorMessage } from "@/lib/api";
 import { confirmAction, notifyAction } from "@/lib/confirm";
-import { TopBar, SectionHeader, Group, Row, IconWell, Button, Field, ToggleRow } from "@/components/ui/primitives";
+import { TopBar, SectionHeader, Group, Row, IconWell, Button, Field, ToggleRow, Segmented } from "@/components/ui/primitives";
 import { useAppMode } from "@/lib/appMode";
 import { LANGUAGES, useLanguage } from "@/lib/i18n";
 import { Sheet } from "@/components/ui/Sheet";
@@ -42,7 +55,7 @@ type SettingsRow = {
  * actually lands, don't get ahead of the current one.
  */
 export default function Settings() {
-  const { colors, spacing } = useTheme();
+  const { colors, spacing, themeId, cardStyle, layout } = useTheme();
   const router = useRouter();
   const { user, updateUser, signOut } = useAuth();
   const [editingName, setEditingName] = useState(false);
@@ -51,6 +64,8 @@ export default function Settings() {
   const [settingPassword, setSettingPassword] = useState(false);
   const [toursOpen, setToursOpen] = useState(false);
   const [languageOpen, setLanguageOpen] = useState(false);
+  const [themeOpen, setThemeOpen] = useState(false);
+  const [appearanceOpen, setAppearanceOpen] = useState(false);
   // orgOS Simplu test switch (lib/appMode.tsx) -- local to this device.
   const { mode, setMode, source } = useAppMode();
   // lib/i18n -- this row is the first string read from the locale files.
@@ -85,7 +100,20 @@ export default function Settings() {
       onPress: () => setLanguageOpen(true),
     },
     { key: "colors", icon: "color-palette-outline", label: "Culori" },
-    { key: "theme", icon: "contrast-outline", label: "Temă", value: "Automat" },
+    {
+      key: "theme",
+      icon: "contrast-outline",
+      label: "Temă",
+      value: THEMES.find((th) => th.id === themeId)?.label,
+      onPress: () => setThemeOpen(true),
+    },
+    {
+      key: "appearance",
+      icon: "options-outline",
+      label: "Aspect",
+      value: isDefaultCardStyle(cardStyle) && isDefaultLayout(layout) ? "Implicit" : "Personalizat",
+      onPress: () => setAppearanceOpen(true),
+    },
     // Simplu screens run no tours, so a replay request would sit pending
     // until the user switched back to full mode.
     ...(mode === "simple" ? [] : [{ key: "tours", icon: "map-outline", label: "Revezi ghidurile", onPress: () => setToursOpen(true) } as SettingsRow]),
@@ -204,6 +232,10 @@ export default function Settings() {
 
       <LanguageSheet visible={languageOpen} onClose={() => setLanguageOpen(false)} />
 
+      <ThemeSheet visible={themeOpen} onClose={() => setThemeOpen(false)} />
+
+      <AppearanceSheet visible={appearanceOpen} onClose={() => setAppearanceOpen(false)} />
+
       <ToursSheet
         visible={toursOpen}
         onClose={() => setToursOpen(false)}
@@ -247,6 +279,211 @@ function LanguageSheet({ visible, onClose }: { visible: boolean; onClose: () => 
       {language !== "ro" ? (
         <Text style={{ fontSize: 13, lineHeight: 19, color: colors.onSurfaceTertiary, paddingHorizontal: spacing.xs }}>{t("settings.language.inProgress")}</Text>
       ) : null}
+    </Sheet>
+  );
+}
+
+/** A tiny picture of a theme: its page colour with a card and two text
+ * lines on it, so the list shows what each theme looks like. */
+function ThemeSwatch({ theme }: { theme: ThemeColors }) {
+  const { spacing, colors } = useTheme();
+  return (
+    <View style={{ width: 44, height: 34, borderRadius: 10, backgroundColor: theme.surface, borderWidth: 1, borderColor: colors.borderStrong, padding: 5, justifyContent: "flex-end" }}>
+      <View style={{ height: 16, borderRadius: 5, backgroundColor: theme.surfaceSecondary, paddingHorizontal: spacing.xs, justifyContent: "center", gap: 2 }}>
+        <View style={{ width: 18, height: 3, borderRadius: 1.5, backgroundColor: theme.onSurface }} />
+        <View style={{ width: 12, height: 3, borderRadius: 1.5, backgroundColor: theme.onSurfaceTertiary }} />
+      </View>
+    </View>
+  );
+}
+
+/** Settings > Temă: every entry in lib/theme.tsx's THEMES (Hârtie by
+ * default). Applies right away, remembered on this device. */
+function ThemeSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { colors, themeId, setThemeId } = useTheme();
+  return (
+    <Sheet visible={visible} onClose={onClose} title="Temă" subtitle="Se aplică imediat, pe acest dispozitiv." icon="contrast-outline" testID="settings-theme-sheet">
+      <Group inset={72}>
+        {THEMES.map((th) => {
+          const on = th.id === themeId;
+          return (
+            <Row
+              key={th.id}
+              testID={`settings-theme-${th.id}`}
+              leading={<ThemeSwatch theme={th.colors} />}
+              title={th.label}
+              subtitle={th.description}
+              onPress={() => {
+                if (!on) setThemeId(th.id);
+              }}
+              trailing={on ? <Ionicons name="checkmark" size={20} color={colors.onSurface} /> : null}
+            />
+          );
+        })}
+      </Group>
+    </Sheet>
+  );
+}
+
+const isDefaultCardStyle = (s: CardStyle) =>
+  s.bulge === DEFAULT_CARD_STYLE.bulge && s.opacity === DEFAULT_CARD_STYLE.opacity && s.liquid === DEFAULT_CARD_STYLE.liquid;
+const isDefaultLayout = (l: Layout) => l.roundness === DEFAULT_LAYOUT.roundness && l.density === DEFAULT_LAYOUT.density;
+
+const DENSITY_OPTIONS: { key: Density; label: string }[] = [
+  { key: "compact", label: "Compact" },
+  { key: "normal", label: "Normal" },
+  { key: "airy", label: "Aerisit" },
+];
+
+function SliderField({
+  testID,
+  label,
+  hint,
+  value,
+  min = 0,
+  onChange,
+  onCommit,
+}: {
+  testID: string;
+  label: string;
+  hint: string;
+  value: number;
+  min?: number;
+  onChange: (v: number) => void;
+  onCommit: (v: number) => void;
+}) {
+  const { colors, spacing } = useTheme();
+  return (
+    <View style={{ gap: 2 }}>
+      <View style={{ flexDirection: "row", alignItems: "baseline", paddingHorizontal: spacing.xs }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }}>{label}</Text>
+          <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{hint}</Text>
+        </View>
+        <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurfaceSecondary, fontVariant: ["tabular-nums"] }}>{Math.round(value * 100)}%</Text>
+      </View>
+      <Slider
+        testID={testID}
+        style={{ height: 44 }}
+        minimumValue={min}
+        maximumValue={1}
+        step={0.05}
+        value={value}
+        onValueChange={(v) => onChange(snap(v))}
+        onSlidingComplete={(v) => onCommit(snap(v))}
+        minimumTrackTintColor={colors.onSurface}
+        maximumTrackTintColor={colors.control}
+        thumbTintColor={colors.onSurface}
+        accessibilityLabel={label}
+      />
+    </View>
+  );
+}
+
+// The slider reports floats like 0.30000000004; keep exact 5% steps.
+const snap = (v: number) => Math.round(v * 20) / 20;
+
+const CARD_SLIDERS:{ key: keyof CardStyle; label: string; hint: string; min: number }[] = [
+  { key: "bulge", label: "Bombat", hint: "Cât de ridicat pare cardul", min: 0 },
+  { key: "opacity", label: "Opac", hint: "Cât de plin e fundalul cardului", min: 0.4 },
+  { key: "liquid", label: "Liquid", hint: "Cât de mult seamănă cu sticla", min: 0 },
+];
+
+/** Settings > Aspect: how the whole app looks -- card style (lib/theme.tsx
+ * CardStyle) and shape (Layout: corner roundness, density). The preview
+ * follows the drag; the app only updates on release, so dragging doesn't
+ * re-render every screen behind the sheet. A new appearance option = one
+ * more control here plus its token in lib/theme.tsx. */
+function AppearanceSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { colors, isDark, cardStyle, setCardStyle, layout, setLayout, spacing } = useTheme();
+  const [draft, setDraft] = useState<CardStyle>(cardStyle);
+  const [layoutDraft, setLayoutDraft] = useState<Layout>(layout);
+
+  const wasVisible = React.useRef(visible);
+  if (visible && !wasVisible.current) {
+    setDraft(cardStyle);
+    setLayoutDraft(layout);
+  }
+  wasVisible.current = visible;
+
+  // The preview's corners and padding follow the drafts, not the app.
+  const pr = scaledRadius(layoutDraft.roundness);
+  const ps = scaledSpacing(layoutDraft.density);
+  const isDefault = isDefaultCardStyle(draft) && isDefaultLayout(layoutDraft);
+
+  return (
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title="Aspect"
+      subtitle="Trage de bare ca să alegi cum arată aplicația."
+      icon="options-outline"
+      testID="settings-appearance-sheet"
+      footer={
+        <Button
+          testID="settings-appearance-reset"
+          variant="secondary"
+          label="Revino la implicit"
+          disabled={isDefault}
+          onPress={() => {
+            setDraft(DEFAULT_CARD_STYLE);
+            setCardStyle(DEFAULT_CARD_STYLE);
+            setLayoutDraft(DEFAULT_LAYOUT);
+            setLayout(DEFAULT_LAYOUT);
+          }}
+        />
+      }
+    >
+      {/* The preview sits on the page colour, as cards do in the app. */}
+      <View style={{ backgroundColor: colors.surface, borderRadius: pr.card, padding: ps.xl, alignItems: "stretch" }}>
+        <View testID="settings-appearance-preview" style={[cardSurface(colors, isDark, draft), { borderRadius: pr.lg, padding: ps.gutter, gap: ps.sm }]}>
+          <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Cheltuit în noiembrie</Text>
+          <Text style={{ fontSize: 28, fontWeight: "600", letterSpacing: -0.5, color: colors.onSurface }}>1.240 lei</Text>
+          <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.surfaceTertiary, overflow: "hidden" }}>
+            <View style={{ width: "39%", height: 8, borderRadius: 4, backgroundColor: colors.onSurface }} />
+          </View>
+        </View>
+      </View>
+
+      <SectionHeader title="Carduri" muted />
+      {CARD_SLIDERS.map((sl) => (
+        <SliderField
+          key={sl.key}
+          testID={`settings-appearance-${sl.key}`}
+          label={sl.label}
+          hint={sl.hint}
+          min={sl.min}
+          value={draft[sl.key]}
+          onChange={(v) => setDraft((d) => ({ ...d, [sl.key]: v }))}
+          onCommit={(v) => setCardStyle({ ...draft, [sl.key]: v })}
+        />
+      ))}
+
+      <SectionHeader title="Formă" muted />
+      <SliderField
+        testID="settings-appearance-roundness"
+        label="Colțuri"
+        hint="De la colțuri drepte la foarte rotunde"
+        value={layoutDraft.roundness}
+        onChange={(v) => setLayoutDraft((l) => ({ ...l, roundness: v }))}
+        onCommit={(v) => setLayout({ ...layoutDraft, roundness: v })}
+      />
+      <View style={{ gap: spacing.sm }}>
+        <View style={{ paddingHorizontal: spacing.xs }}>
+          <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }}>Densitate</Text>
+          <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Cât spațiu e între elemente</Text>
+        </View>
+        <Segmented
+          testIDPrefix="settings-appearance-density"
+          options={DENSITY_OPTIONS}
+          value={layoutDraft.density}
+          onChange={(d) => {
+            const next = { ...layoutDraft, density: d };
+            setLayoutDraft(next);
+            setLayout(next);
+          }}
+        />
+      </View>
     </Sheet>
   );
 }

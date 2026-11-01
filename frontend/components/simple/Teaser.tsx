@@ -72,7 +72,7 @@ export function TeaserCard({
 }
 
 export function TeaserRow({ text, onPress = openUpgradeSheet, testID }: { text: string; onPress?: () => void; testID?: string }) {
-  const { colors, spacing } = useTheme();
+  const { radius, colors, spacing } = useTheme();
   if (!SHOW_TEASERS) return null;
   return (
     <PressableScale
@@ -88,13 +88,13 @@ export function TeaserRow({ text, onPress = openUpgradeSheet, testID }: { text: 
         minHeight: 44,
         paddingVertical: 10,
         paddingHorizontal: spacing.md,
-        borderRadius: 12,
+        borderRadius: radius.md,
         backgroundColor: colors.surfaceTertiary,
       }}
     >
       <Ionicons name="sparkles-outline" size={18} color={colors.onSurfaceSecondary} />
       <Text style={{ flex: 1, fontSize: 13.5, lineHeight: 18, color: colors.onSurfaceSecondary }}>{text}</Text>
-      <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 }}>
+      <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: 999, paddingHorizontal: spacing.sm, paddingVertical: 3 }}>
         <Text style={{ fontSize: 12, fontWeight: "600", color: colors.onSurface }}>Complet</Text>
       </View>
     </PressableScale>

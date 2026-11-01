@@ -108,7 +108,7 @@ function SplitBody({
         </Pressable>
       ) : null}
 
-      <View accessibilityLiveRegion="polite" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 4 }}>
+      <View accessibilityLiveRegion="polite" style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: spacing.xs }}>
         <Text style={{ fontSize: 14, fontWeight: "500", color: total === 100 ? colors.success : colors.warning }}>
           {total === 100 ? "Gata, adună 100%" : total < 100 ? `Mai ai ${100 - total}% de împărțit` : `Ai ${total - 100}% în plus`}
         </Text>

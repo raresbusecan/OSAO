@@ -74,7 +74,7 @@ export function Sheet(props: SheetProps) {
 }
 
 function SheetBody({ onClose, title, subtitle, icon, tone, footer, children, hideClose, centered, info, onBack, testID, initialScrollOffset, onScrollOffsetChange }: SheetProps) {
-  const { colors, spacing } = useTheme();
+  const { radius, colors, spacing } = useTheme();
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
   const translateY = useRef(new Animated.Value(reduced ? 0 : SCREEN_H)).current;
@@ -146,7 +146,7 @@ function SheetBody({ onClose, title, subtitle, icon, tone, footer, children, hid
                 <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
                   {onBack ? <CircleButton icon="chevron-back" label="Înapoi" onPress={onBack} /> : null}
                   {icon ? (
-                    <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: tone ?? colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}>
+                    <View style={{ width: 40, height: 40, borderRadius: radius.md, backgroundColor: tone ?? colors.surfaceTertiary, alignItems: "center", justifyContent: "center" }}>
                       <Ionicons name={icon} size={19} color={tone ? readableOn(tone) : colors.onSurface} />
                     </View>
                   ) : null}

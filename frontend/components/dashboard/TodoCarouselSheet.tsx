@@ -192,7 +192,7 @@ export function TodoCarouselSheet({ visible, onClose, overdue, today, upcoming, 
                           disabled={busy}
                           accessibilityRole="button"
                           accessibilityLabel={`Anulează rezolvarea: ${item.title}`}
-                          style={{ minHeight: 44, paddingHorizontal: 4, justifyContent: "center" }}
+                          style={{ minHeight: 44, paddingHorizontal: spacing.xs, justifyContent: "center" }}
                         >
                           {busy ? <ActivityIndicator size="small" color={colors.onSurfaceTertiary} /> : <Text style={{ fontSize: 14, color: colors.onSurface }}>Anulează</Text>}
                         </Pressable>

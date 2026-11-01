@@ -104,7 +104,7 @@ export function GroceryQuickAddBar({ onAdd, placeholder, closeKeyboardOnAdd }: G
       </View>
 
       {canSubmit && matchedCategory ? (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 4 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: spacing.xs }}>
           <Ionicons name="pricetag-outline" size={13} color={colors.onSurfaceTertiary} />
           <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>
             Recunoscut ca <Text style={{ fontWeight: "600", color: colors.onSurface }}>{groceryCategoryLabel(matchedCategory)}</Text>

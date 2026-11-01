@@ -46,7 +46,7 @@ function statusFor(entry: HomeSupplyEntry, colors: ThemeColors) {
  * which Grocery's shopping list reads cross-space to suggest supplies
  * that are probably running low while the user is actively shopping. */
 export function HomeSuppliesPage({ homeData, onBack, onAdd, onPreview, onActions, onRestock, onDelete }: HomeSuppliesPageProps) {
-  const { colors, spacing, radius } = useTheme();
+  const { card, colors, spacing, radius } = useTheme();
   const entries = homeData.supplyEntries;
   const HOME = useSpaceColors("home").color;
 
@@ -64,7 +64,7 @@ export function HomeSuppliesPage({ homeData, onBack, onAdd, onPreview, onActions
 
         {entries.length > 0 ? (
           <View style={{ gap: spacing.sm }}>
-            <View style={{ backgroundColor: colors.surfaceSecondary, borderRadius: radius.card, overflow: "hidden" }}>
+            <View style={{ ...card, borderRadius: radius.card, overflow: "hidden" }}>
               {entries.map((entry, index) => {
                 const status = statusFor(entry, colors);
                 return (

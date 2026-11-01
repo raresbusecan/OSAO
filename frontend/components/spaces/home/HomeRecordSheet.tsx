@@ -121,7 +121,7 @@ export function HomeRecordSheet({
         </Group>
       ) : null}
       {record.longFields.map((f) => (
-        <View key={f.label} style={{ gap: 4 }}>
+        <View key={f.label} style={{ gap: spacing.xs }}>
           <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{f.label}</Text>
           <Text style={{ fontSize: 15, lineHeight: 21, color: colors.onSurface }}>{f.value}</Text>
         </View>
