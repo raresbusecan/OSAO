@@ -209,23 +209,26 @@ defaults to `en-us`: send an empty Accept-Language for "no preference").
 - `BudgetController.php` — per-category spend/limits, savings goal,
   monthly archive/rollover. Reads `Item::SPENDING_TYPES`/
   `SPENDING_TYPE_SPACE`/`RECURRING_TYPE_SPACE`. Also `user_id`-only
-  scoped (same gap as Dashboard). **Buget din venit (2026-10):** the
-  user's fixed monthly net income split into 5 jars (`needs` = the
-  Necesități envelope for the per-space limits, `guilt_free`, `third` =
-  Credit/Investiții, `short_term` = Economii, `long_term`).
-  `PUT /budget/plan` saves it (sum ≠ 100 → 422; first save stamps
-  `budget_plan_set_at` and creates a target-0 SavingsGoal);
-  `PUT /budget/limits` bulk-saves limits in one transaction;
-  `GET /budget/guilt-free` = jar vs spent (3 past months + current) +
-  this month's flagged records. `GET /budget` adds `plan`, `necessities`,
-  `guiltFree`, `credit`, `suggested` (envelope split by
-  max(avg3, recurring), recurring as floors -- `suggestSplit`).
-  Every per-space figure (spent, limits, avg, biggest, archive, savings)
-  excludes `guilt_free` items; Dashboard's month total does not.
-  Archive gets `GuiltFree`/`Credit` rows per month (month totals stay
-  over the space rows). `applyMonthlySavings` uses the new formula
-  (Σ(limit − spent) + (guilt-free jar − flagged spent) + short-term jar)
-  for months on/after `budget_plan_set_at`, the old one before. Known perf: ~30+ separate queries per
+  scoped (same gap as Dashboard). **Buget simplu (2026-11-02, replaced
+  the 5 jars + per-space limits):** Venit (`users.monthly_income`) →
+  Pui deoparte (`users.monthly_set_aside`) → De cheltuit = income −
+  set aside. `PUT /budget/plan` takes `{monthly_income, set_aside}`
+  (set_aside > income → 422; an old client's `split` falls back to
+  income × short_term %; first save stamps `budget_plan_set_at`).
+  `GET /budget` returns `plan {monthly_income, set_aside, spendable}`,
+  `necessities.envelope` (= spendable), `credit {rates, count, items}`,
+  `spending`, `recurring`, `planned`, `recurringBills`, `savingsGoal`,
+  `pace` (daily spend per label for Ritmul lunii). `/budget/limits*`
+  and `/budget/guilt-free` are gone; `budget_split`, `budget_categories`
+  rows and `items.guilt_free` stay in the DB but are read by nothing.
+  Every spend sum counts ALL records (no guilt-free filter). Archive
+  gets a `Spendable` row per month (on/after the plan start) -- its
+  header totals come from it. `applyMonthlySavings` (lazy, per closed
+  month on/after `budget_plan_set_at`): Economii += income − (everything
+  spent + credit rates), i.e. set aside + what was left of De cheltuit;
+  credit rates CAN lower Economii (user decision 2026-11-02). Before the
+  `monthly_set_aside` migration runs: set_aside reads 0, savePlan 503s,
+  archiving waits. Known perf: ~30+ separate queries per
   request (not classic N+1, but scales linearly-ish with label count ×
   months) — fine for now, revisit if it gets slow.
 - `RecipeController.php`, `IngredientReferenceController.php` —
@@ -261,18 +264,16 @@ defaults to `en-us`: send an empty Accept-Language for "no preference").
   only; no history -> completed_at/due_at snapshot), mirroring the
   frontend's `getHomeSpendRecords`. Every SQL spend sum excludes
   `HomeSpend::TYPES` and adds `HomeSpend::total/payments` (Dashboard
-  `monthlyExpenses`, Budget's monthly sums, biggest, guilt-free, space
-  detail). Dashboard's `monthlyExpenses` also returns `billsPaid` (bill
+  `monthlyExpenses`, Budget's monthly sums, biggest, space detail). Dashboard's `monthlyExpenses` also returns `billsPaid` (bill
   spendHistory events this month) and `billsDue` (unpaid occurrences from
   each bill's stored due_at to month end) -- outside `total`, read only by
   Simplu's Acasă. Test: `tests/Feature/HomeSpendTest.php`.
 - `SPENDING_TYPE_SPACE` / `RECURRING_TYPE_SPACE` — which Space label/
   icon a type rolls up under, for Budget/Dashboard grouped totals.
-- `items.guilt_free` (bool, "Bani fără vină"): only allowed on
-  `Item::guiltFreeTypes()` = SPENDING_TYPES ∪ keys(RECURRING_TYPE_SPACE)
-  (ItemController 422s otherwise). A flagged record leaves its space's
-  budget and counts against the guilt-free jar. `EventSpend::occurrences/
-  totals` take a `?bool $guiltFree` filter (null = all).
+- `items.guilt_free` (bool, the old "Bani fără vină"): IGNORED since
+  2026-11-02 (Buget simplu) -- ItemBudgetRules drops it on write (still
+  `sometimes|boolean`, so old clients get no 422), no sum filters on it.
+  The column and old values stay.
 - `Item::CREDIT_TYPE` = `expense_credit` — a loan, one row per credit in
   the Expenses space: `amount` = monthly rate, `recurrence` forced
   `monthly`, `due_at` server-computed (next due day, user's zone),
@@ -368,8 +369,10 @@ Then it recreates them. Every date is relative to now in Europe/Bucharest, so a 
 ## Schema notes
 
 MySQL (`DB_DATABASE=lifeos`). `users` has `monthly_income`
-DECIMAL(12,2), `budget_split` JSON, `budget_plan_set_at` (all null = no
-plan) and `items` has `guilt_free` (migrations `2026_10_08_*`).
+DECIMAL(12,2), `monthly_set_aside` DECIMAL(12,2) (`2026_11_02_000001`,
+backfilled = income × old short_term %), `budget_plan_set_at` (income
+null = no plan); `budget_split` JSON and `items.guilt_free`
+(`2026_10_08_*`) are legacy, unread.
 `social_accounts` (`2026_10_08_000005`, `email_verified` in `_000006`,
 `created_account` in `2026_10_09_000001`, backfilled = link created within
 5s of its user) and
