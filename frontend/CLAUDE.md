@@ -107,16 +107,26 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
   Edit mode's reorder is `components/ui/ReorderList.tsx` (+ `ReorderHandle`
   on the ☰), NOT react-native-draggable-flatlist (2026-10-12: rapid drags
   left cards overlapping / gaps -- see the file's header for why).
+  **Hold menu** (2026-11-02, variant A): the normal page is a `HoldGroup`
+  (`components/ui/Hold.tsx`). Hold a card = its menu (Setările cardului,
+  Fă-l lat/compact, Aranjează tot Acasă, Ascunde), saved AT ONCE
+  (`saveLayoutNow`, put back on error); its settings sheet opened from
+  there saves at once too (removing asks first). Hold + drag = move the
+  card in place -> `arranging` (the same page ordered from `draft`,
+  Renunță / Gata header); hidden cards keep their slots (`reorderSubset`).
+  Hold an empty spot = full edit mode, as before.
   A brand-new account (no space, no plan, 0 spent/planned) gets the
   EMPTY spend card (`EmptySpendCard` in HomeWidgets: legend of the 4
   space colors + "Creează primul spațiu"), and when every other card is
   hidden only by the empty rule (`onlyEmptyDataHidesOthers`) one hint line
   under the cards.
 - **Tab header** (2026-11-01, user decision: nothing may move when switching tabs): every main tab root -- Acasă, Spații, Calendar, Buget, Simplu Acasă + Calendar -- renders inside `TabScreen` (`components/navigation/TabHeader.tsx`: safe area + ScreenBackground + the header FIXED above the scroll, never inside it -- tabs stay mounted and keep their scroll offset, so a header in the scroll sat at a different height per tab). A screen only passes `header={<TabHeader title info actions />}`: small grey line (today's date, or `label`: edit modes, "Anul 2027" on Calendar in another year), title (shrinks, never wraps) + ⓘ, the tab's `actions`, then `ProfileButton` (initial + email badge -> /settings) always LAST (`profile={false}` in edit modes, which use the same TabHeader). `header` undefined = none (Buget's sub-pages). Never hand-build a tab header, put it in a ScrollView, or change its padding on one screen; the scroll content under it starts with `paddingTop: spacing.md` (keeps the first card's shadow). Calendar's tour step "months" now targets the 3 month cards only (the header is outside the scroll).
-- `app/(tabs)/spaces.tsx` — the Spaces grid (create/rename/delete). Edit
-  mode = the pencil, a long press on an EMPTY spot, or a long press on a
-  card (haptic; user decision 2026-10-10 -- edit-mode rows are tappable
-  to edit that space): a ONE-column
+- `app/(tabs)/spaces.tsx` — the Spaces grid (create/rename/delete). Hold
+  a card = its menu (Editează / Aranjează spațiile / Șterge); hold + drag
+  = move it IN the grid (`arranging`, Renunță / Gata saves draftOrder) --
+  user request 2026-11-02, replacing "hold a card = edit mode". Edit
+  mode = the pencil, a hold on an EMPTY spot, or "Aranjează spațiile"
+  (edit-mode rows are tappable to edit that space): a ONE-column
   `ReorderList` (☰ handle drags, edit, delete), order saved on
   "Gata". One column only -- it stacks rows by height. Creating: `TemplateList`
   (same file) = a 2x2 grid of "create" cards, shown in the empty state
@@ -739,6 +749,17 @@ sub-pages, sheets, dialogs, login, settings). Rules:
   `SurfaceLevelContext`), `components/ui/DatePickerSheet.tsx` (the one
   date picker, Monday-first, range past/future/any; month grid swipes) +
   `DateField.tsx` (picked "ZZ.LL.AAAA" for Car forms),
+  `components/ui/Hold.tsx` + `HoldMenuHost.tsx` + `lib/holdMenu.ts` /
+  `holdGeometry.ts` (THE hold gesture, reuse it anywhere: `useHoldGroup`
+  + `<HoldGroup>` around a screen's items, `<HoldItem id actions>` per
+  item. Hold ~0.4 s lifts it; release = a menu of its `actions` under it
+  over the dimmed app (drawn once at the root, NOT a Modal -- actions open
+  Sheets right away, see the iOS two-Modal bug); drag = it moves, any
+  layout (list, grid, paired cards: positions are measured), new order to
+  `onReorder` on drop. ONE PanGestureHandler on the group, never per item
+  (items move in the hierarchy mid-drag). An item with no actions that
+  can't move ignores holds. Acasă + Spații use it; rows inside Spaces
+  still have their own long-press quick actions, see BACKLOG),
   `components/ui/ReorderList.tsx` (drag-to-reorder list: `ReorderList` +
   `ReorderHandle`, classic PanGestureHandler + RN Animated, slots from row
   heights, fresh offsets on each commit; Acasă + Spații edit modes -- Casă

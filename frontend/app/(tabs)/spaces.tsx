@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { TabHeader, TabScreen } from "@/components/navigation/TabHeader";
 import {
   View, Text, ScrollView, ActivityIndicator, DeviceEventEmitter, Dimensions, Pressable,
@@ -7,11 +7,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { roCount, roNumber } from "@/lib/format";
 import { useRouter, useFocusEffect } from "expo-router";
 import { ReorderHandle, ReorderList, type ReorderRenderParams } from "@/components/ui/ReorderList";
+import { HoldGroup, HoldItem, useHoldGroup } from "@/components/ui/Hold";
+import type { HoldAction } from "@/lib/holdMenu";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { REFRESH_EVENT } from "@/lib/refresh";
 import { confirmAction, notifyAction } from "@/lib/confirm";
-import { longPressFeedback } from "@/lib/haptics";
 import { dueBySpace, dueStatus, type SpaceDue } from "@/lib/dashboard/spaceDue";
 import { EditSpaceModal } from "@/components/spaces/EditSpaceModal";
 import { CarProfileForm } from "@/components/spaces/car/CarProfileForm";
@@ -79,18 +80,27 @@ export default function Spaces() {
   // -- the tile's one status line.
   const [dueMap, setDueMap] = useState<Map<string, SpaceDue>>(new Map());
   const [toBuy, setToBuy] = useState<Record<string, number>>({});
-  // Edit mode (the pencil, or a long press on an EMPTY spot of the page --
-  // a press on a card opens the card): a one-column list with a ☰ handle,
+  // Edit mode (the pencil, a hold on an EMPTY spot of the page, or
+  // "Aranjează spațiile" in a card's hold menu): a one-column list with a ☰ handle,
   // edit and delete per space. The order is a draft of ids, saved on
   // "Gata" (ReorderList; never a multi-column grid). It used to be a 2-column DraggableFlatList, which that library
   // doesn't support (it measures rows as one column), so cards jumped to
   // the wrong place mid-drag.
   const [editing, setEditing] = useState(false);
+  // A card was dragged in the grid itself (components/ui/Hold.tsx): the
+  // grid stays, ordered from draftOrder, with Renunță / Gata in the header.
+  const [arranging, setArranging] = useState(false);
   const [draftOrder, setDraftOrder] = useState<string[]>([]);
   const [savingOrder, setSavingOrder] = useState(false);
   const startEditing = () => {
-    setDraftOrder(spaces.map((x) => String(x.id)));
+    // Coming from a drag in the grid: keep what was moved.
+    if (!arranging) setDraftOrder(spaces.map((x) => String(x.id)));
+    setArranging(false);
     setEditing(true);
+  };
+  const cancelEditing = () => {
+    setEditing(false);
+    setArranging(false);
   };
 
   type CarFormState = { visible: boolean; mode: "create" | "edit"; space: any | null; profile: CarProfile | null };
@@ -249,14 +259,14 @@ export default function Spaces() {
     const current = spaces.map((x) => String(x.id));
     const order = draftOrder.filter((id) => current.includes(id));
     if (order.join(",") === current.join(",")) {
-      setEditing(false);
+      cancelEditing();
       return;
     }
     setSavingOrder(true);
     try {
       await api.reorderSpaces(order);
       await load();
-      setEditing(false);
+      cancelEditing();
     } catch (error: any) {
       notifyAction("Nu am putut salva ordinea", error?.message || "A apărut o eroare.");
     } finally {
@@ -305,15 +315,19 @@ export default function Spaces() {
               ? { text: roCount(Number(s.expense_records), "înregistrare", "înregistrări"), icon: "receipt-outline" }
               : null;
 
+    // Hold a card = its menu (user request 2026-11-02, replacing "hold =
+    // edit mode for all spaces"); hold + drag = move it in the grid.
+    const actions: HoldAction[] = [
+      { key: "edit", label: "Editează", icon: "create-outline", onPress: () => openEditForSpace(s) },
+      { key: "arrange", label: "Aranjează spațiile", icon: "reorder-three-outline", onPress: startEditing },
+      { key: "delete", label: "Șterge", icon: "trash-outline", destructive: true, onPress: () => confirmDeleteSpace(s) },
+    ];
+
     return (
+      <HoldItem key={s.id} id={String(s.id)} actions={actions} radius={radius.card}>
         <PressableScale
-          key={s.id}
           testID={`space-card-${s.id}`}
           onPress={() => router.push(`/${s.id}` as any)}
-          // Long press on a card = the pencil: arrange/edit mode for all
-          // spaces (user decision 2026-10-10), where each row is editable.
-          onLongPress={() => { longPressFeedback(); startEditing(); }}
-          delayLongPress={400}
           accessibilityRole="button"
           accessibilityLabel={`${s.name}, ${metric ? `${metric.text}${metric.caption ? ` ${metric.caption}` : ""}, ` : ""}${status}`}
           style={{
@@ -362,6 +376,7 @@ export default function Spaces() {
             <Text style={{ fontSize: 13, color: due ? (due.tone === "error" ? colors.error : colors.warning) : colors.onSurfaceTertiary, marginTop: 4 }} numberOfLines={1}>{status}</Text>
           </View>
         </PressableScale>
+      </HoldItem>
     );
   };
 
@@ -417,7 +432,27 @@ export default function Spaces() {
     );
   };
 
-  const tabHeader = editing ? (
+  // The grid, in the dragged order while arranging.
+  const gridSpaces = arranging
+    ? (draftOrder.map((id) => spaces.find((x) => String(x.id) === id)).filter(Boolean) as any[])
+    : spaces;
+  const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const hold = useHoldGroup({
+    order: gridSpaces.map((x) => String(x.id)),
+    onReorder: setDraftOrder,
+    onDragStart: () => {
+      if (arranging) return;
+      setDraftOrder(spaces.map((x) => String(x.id)));
+      setArranging(true);
+    },
+    onEmptyHold: () => {
+      if (spaces.length > 0) startEditing();
+    },
+    scrollRef,
+    enabled: !loading && !editing,
+  });
+
+  const tabHeader = editing || arranging ? (
     <TabHeader
       label="Editezi spațiile"
       title="Aranjează"
@@ -427,7 +462,7 @@ export default function Spaces() {
         <>
           <Pressable
             testID="spaces-edit-cancel"
-            onPress={() => setEditing(false)}
+            onPress={cancelEditing}
             disabled={savingOrder}
             accessibilityRole="button"
             accessibilityLabel="Renunță la ordinea nouă"
@@ -506,26 +541,27 @@ export default function Spaces() {
           }
         />
       ) : (
-        <ScrollView testID="space-card-list" contentContainerStyle={{ flexGrow: 1 }}>
-          {/* The page itself is long-pressable: a press on a card opens
-              that card (it's the inner responder); one on an empty spot
-              opens edit mode -- same as Acasă. */}
-          <Pressable
+        <ScrollView ref={scrollRef} testID="space-card-list" contentContainerStyle={{ flexGrow: 1 }} {...hold.scrollProps}>
+          {/* The page itself is holdable (HoldGroup): a hold on a card =
+              its menu / drag; on an empty spot = edit mode -- same as
+              Acasă. A tap still opens the card. */}
+          <HoldGroup
+            hold={hold}
             testID="spaces-empty-longpress"
-            onLongPress={startEditing}
-            delayLongPress={450}
-            accessible={false}
             style={{ flexGrow: 1, flexDirection: "row", flexWrap: "wrap", alignContent: "flex-start", gap: spacing.md, paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 140 }}
           >
-            {spaces.map(renderSpaceCard)}
+            {hold.sort(gridSpaces, (s: any) => String(s.id)).map(renderSpaceCard)}
             {/* Each of the 4 kinds has a slot (user request 2026-10-09): a
                 kind the user already has shows its space card(s) above; a
                 missing kind keeps its "Creează" tile here, in the same grid.
                 A second car/home is created from the "+" sheet. */}
             {TEMPLATES.filter((t) => !existingKinds.has(t.kind as SpaceKind)).map((t) => (
-              <TemplateTile key={t.kind} t={t} onPick={createFromTemplate} width={cardWidth} />
+              // Held: nothing (no menu, stays last) -- not "an empty spot".
+              <HoldItem key={t.kind} id={`template-${t.kind}`} actions={[]} reorderable={false}>
+                <TemplateTile t={t} onPick={createFromTemplate} width={cardWidth} />
+              </HoldItem>
             ))}
-          </Pressable>
+          </HoldGroup>
         </ScrollView>
       )}
 

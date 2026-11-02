@@ -19,6 +19,7 @@ import {
 } from "@expo-google-fonts/ibm-plex-sans";
 
 import { ThemeProvider, useTheme } from "@/lib/theme";import { ConfirmHost } from "@/lib/confirmHost";
+import { HoldMenuHost } from "@/components/ui/HoldMenuHost";
 import { HelpHost } from "@/components/ui/HelpHost";
 import { TourHost } from "@/components/ui/TourHost";
 import { AuthProvider, useAuth } from "@/providers/auth";
@@ -152,6 +153,8 @@ function RootLayout() {
               <TourHost />
               {/* orgOS Complet upgrade sheet (Simplu mode teasers). */}
               <UpgradeSheetHost />
+              {/* The hold menu / drag ghost of components/ui/Hold.tsx, over every screen. */}
+              <HoldMenuHost />
               <ConfirmHost />
             </BottomSheetModalProvider>
             </AppModeProvider>

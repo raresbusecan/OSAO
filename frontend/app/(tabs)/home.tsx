@@ -2,6 +2,9 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, DeviceEventEmitter, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ReorderHandle, ReorderList, type ReorderRenderParams } from "@/components/ui/ReorderList";
+import { HoldGroup, HoldItem, useHoldGroup } from "@/components/ui/Hold";
+import { reorderSubset } from "@/lib/holdGeometry";
+import type { HoldAction } from "@/lib/holdMenu";
 import { useTheme } from "@/lib/theme";
 import { useAuth } from "@/providers/auth";
 import { api } from "@/lib/api";
@@ -57,9 +60,11 @@ type TodoRow = ActionableItem & { urgency: Urgency; days: number };
  * Acasă -- a list of cards the user arranges (lib/dashboard/layout.ts):
  * which cards, order, wide/compact, color, per-card settings. Saved per
  * user on the server, default = the original fixed Acasă. Edit mode
- * comes from the pencil next to the avatar OR a long press on any empty
- * spot between/below the cards (the press lands on the screen, not on a
- * card -- a card keeps its own tap). Mockup: "orgOS Acasă personalizabil".
+ * comes from the pencil next to the avatar OR a hold on any empty spot
+ * between/below the cards. A hold ON a card (components/ui/Hold.tsx) =
+ * its menu, saved right away; hold + drag = move it, then Renunță / Gata
+ * ("arranging": the same cards, ordered from the draft). Mockups: "orgOS
+ * Acasă personalizabil", "Meniu la apăsare lungă" (variant A).
  */
 export default function HomeRoute() {
   // orgOS Simplu (lib/appMode.tsx) has its own Acasă; "full" = unchanged.
@@ -82,6 +87,9 @@ function Home() {
 
   // Edit mode works on a draft; "Gata" saves it.
   const [editing, setEditing] = useState(false);
+  // A card was dragged in place: the page stays as it is, ordered from the
+  // draft, with Renunță / Gata in the header until saved.
+  const [arranging, setArranging] = useState(false);
   const [draft, setDraft] = useState<Widget[]>([]);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
@@ -309,8 +317,15 @@ function Home() {
   /* ---------------- edit mode ---------------- */
 
   const startEditing = () => {
-    setDraft(layout.map((w) => ({ ...w })));
+    // Coming from a drag in place: keep what was moved.
+    if (!arranging) setDraft(layout.map((w) => ({ ...w })));
+    setArranging(false);
     setEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setEditing(false);
+    setArranging(false);
   };
 
   const finishEditing = async () => {
@@ -319,6 +334,7 @@ function Home() {
       await api.saveDashboardLayout(draft);
       setLayout(draft);
       setEditing(false);
+      setArranging(false);
     } catch (error: any) {
       notifyAction("Nu am putut salva aranjamentul", error?.message || "A apărut o eroare.");
     } finally {
@@ -348,6 +364,34 @@ function Home() {
   };
 
   const updateDraft = (id: string, patch: Partial<Widget>) => setDraft((d) => d.map((w) => (w.id === id ? { ...w, ...patch } : w)));
+
+  // Outside edit mode a card's menu (or its settings opened from it) saves
+  // at once; put back if the server refuses.
+  const inDraft = editing || arranging;
+  const saveLayoutNow = async (next: Widget[]) => {
+    const before = layout;
+    setLayout(next);
+    try {
+      await api.saveDashboardLayout(next);
+    } catch (error: any) {
+      setLayout(before);
+      notifyAction("Nu am putut salva cardul", error?.message || "A apărut o eroare.");
+    }
+  };
+  const changeCard = (id: string, patch: Partial<Widget>) =>
+    inDraft ? updateDraft(id, patch) : saveLayoutNow(layout.map((w) => (w.id === id ? { ...w, ...patch } : w)));
+
+  const cardActions = (w: Widget): HoldAction[] => [
+    { key: "settings", label: "Setările cardului", icon: "options-outline", onPress: () => setSettingsFor(w) },
+    w.size === "compact"
+      ? { key: "size", label: "Fă-l lat", icon: "tablet-landscape-outline", onPress: () => changeCard(w.id, { size: "wide" }) }
+      : { key: "size", label: "Fă-l compact", icon: "grid-outline", onPress: () => changeCard(w.id, { size: "compact" }) },
+    { key: "arrange", label: "Aranjează tot Acasă", icon: "create-outline", onPress: startEditing },
+    // The spend card is mandatory -- no hide (ensureSpendCard).
+    ...(w.type !== "spend"
+      ? [{ key: "hide", label: "Ascunde cardul", icon: "eye-off-outline" as const, destructive: true, onPress: () => changeCard(w.id, { hidden: true }) }]
+      : []),
+  ];
 
   const firstListId = dashboard?.toBuyLists?.[0]?.list_id ? String(dashboard.toBuyLists[0].list_id) : undefined;
   const firstCarId = dashboard?.cars?.[0]?.space_id != null ? String(dashboard.cars[0].space_id) : undefined;
@@ -394,7 +438,7 @@ function Home() {
     </View>
   );
 
-  const header = editing ? (
+  const header = editing || arranging ? (
     <TabHeader
       label="Personalizezi Acasă"
       title="Aranjează"
@@ -404,7 +448,7 @@ function Home() {
         <>
           <Pressable
             testID="home-edit-cancel"
-            onPress={() => setEditing(false)}
+            onPress={cancelEditing}
             disabled={saving}
             accessibilityRole="button"
             accessibilityLabel="Renunță la modificări"
@@ -444,9 +488,30 @@ function Home() {
   // gap. Edit mode renders `draft` instead, every card included. No
   // flash: until the first load lands the spinner shows, and later
   // reloads swap all the data in one batched render.
-  const userVisible = layout.filter((w) => !w.hidden);
-  const visible = visibleWidgets(layout, ctx);
-  const showEmptyHint = onlyEmptyDataHidesOthers(layout, ctx);
+  const shown = arranging ? draft : layout;
+  const userVisible = shown.filter((w) => !w.hidden);
+  const visible = visibleWidgets(shown, ctx);
+  const showEmptyHint = onlyEmptyDataHidesOthers(shown, ctx);
+
+  // Hold a card = its menu; hold + drag = move it among the visible ones
+  // (hidden / empty cards keep their slots, reorderSubset).
+  const hold = useHoldGroup({
+    order: visible.map(widgetKey),
+    onReorder: (keys) => setDraft((d) => reorderSubset(d, widgetKey, keys)),
+    onDragStart: () => {
+      if (arranging) return;
+      setDraft(layout.map((w) => ({ ...w })));
+      setArranging(true);
+    },
+    onEmptyHold: startEditing,
+    scrollRef,
+    enabled: !loading && !editing,
+  });
+  const holdCard = (w: Widget, style?: { flex: number; minWidth: number }) => (
+    <HoldItem key={w.id} id={w.id} actions={cardActions(w)} preview={<HomeWidget widget={w} ctx={ctx} />} style={style}>
+      {spendWrap(w, <HomeWidget widget={w} ctx={ctx} />)}
+    </HoldItem>
+  );
   // The tour's step 2 points at the first spend card on the page.
   const firstSpend = visible.find((w) => w.type === "spend");
   const spendWrap = (w: Widget, node: React.ReactNode) =>
@@ -460,7 +525,7 @@ function Home() {
     initial,
   };
   useAutoTour("home", {
-    ready: !loading && !editing && !todoSheetVisible && !catalogOpen && !templatesOpen && !settingsFor,
+    ready: !loading && !editing && !arranging && !todoSheetVisible && !catalogOpen && !templatesOpen && !settingsFor,
     ctx: tourCtx,
   });
 
@@ -520,18 +585,20 @@ function Home() {
       ) : (
         <ScrollView
           ref={scrollRef}
-          {...tourScroll}
+          {...hold.scrollProps}
+          onScroll={(e) => {
+            tourScroll.onScroll(e);
+            hold.scrollProps.onScroll(e);
+          }}
           contentContainerStyle={{ flexGrow: 1 }}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={muted} />}
         >
-          {/* The whole page is long-pressable: a press that lands on a
-              card goes to that card (it's the inner responder); one on
-              an empty spot between or below the cards opens edit mode. */}
-          <Pressable
+          {/* The whole page is holdable (HoldGroup): a hold on a card =
+              that card's menu / drag; on an empty spot between or below
+              the cards = edit mode. A tap still goes to the card. */}
+          <HoldGroup
+            hold={hold}
             testID="home-empty-longpress"
-            onLongPress={startEditing}
-            delayLongPress={450}
-            accessible={false}
             style={{ flexGrow: 1, paddingHorizontal: spacing.gutter, paddingTop: spacing.md, paddingBottom: 120, gap: spacing.section }}
           >
             {SHOW_TOUR_TEST_BUTTON ? (
@@ -550,20 +617,18 @@ function Home() {
                   : "Nimic de arătat încă. Cardurile apar aici pe măsură ce adaugi înregistrări."}
               </Text>
             ) : (
-              toRows(visible).map((row) =>
+              toRows(hold.sort(visible, widgetKey)).map((row) =>
                 row.length === 2 ? (
                   <View key={row[0].id} style={{ flexDirection: "row", gap: spacing.md }}>
-                    {row.map((w) => (
-                      <View key={w.id} style={{ flex: 1, minWidth: 0 }}>{spendWrap(w, <HomeWidget widget={w} ctx={ctx} />)}</View>
-                    ))}
+                    {row.map((w) => holdCard(w, { flex: 1, minWidth: 0 }))}
                   </View>
                 ) : row[0].size === "compact" ? (
                   <View key={row[0].id} style={{ flexDirection: "row", gap: spacing.md }}>
-                    <View style={{ flex: 1, minWidth: 0 }}>{spendWrap(row[0], <HomeWidget widget={row[0]} ctx={ctx} />)}</View>
+                    {holdCard(row[0], { flex: 1, minWidth: 0 })}
                     <View style={{ flex: 1 }} />
                   </View>
                 ) : (
-                  <React.Fragment key={row[0].id}>{spendWrap(row[0], <HomeWidget widget={row[0]} ctx={ctx} />)}</React.Fragment>
+                  holdCard(row[0])
                 ),
               )
             )}
@@ -572,7 +637,7 @@ function Home() {
                 De făcut, Plăți recurente și Economii apar aici pe măsură ce adaugi date.
               </Text>
             ) : null}
-          </Pressable>
+          </HoldGroup>
         </ScrollView>
       )}
 
@@ -605,12 +670,22 @@ function Home() {
         ctx={ctx}
         onClose={() => setSettingsFor(null)}
         onSave={(w) => {
-          updateDraft(w.id, w);
           setSettingsFor(null);
+          if (inDraft) updateDraft(w.id, w);
+          else saveLayoutNow(layout.map((x) => (x.id === w.id ? w : x)));
         }}
-        onRemove={(id) => {
-          setDraft((d) => d.filter((w) => w.id !== id || w.type === "spend"));
+        onRemove={async (id) => {
           setSettingsFor(null);
+          if (inDraft) {
+            setDraft((d) => d.filter((w) => w.id !== id || w.type === "spend"));
+            return;
+          }
+          // Opened from the card's menu: saved at once, so ask first.
+          const ok = await confirmAction("Scoți cardul de pe Acasă?", "Setările lui se pierd. Îl poți adăuga din nou din Personalizează Acasă.", {
+            confirmLabel: "Scoate",
+            destructive: true,
+          });
+          if (ok) saveLayoutNow(layout.filter((w) => w.id !== id || w.type === "spend"));
         }}
       />
 

@@ -34,7 +34,7 @@ export const HELP = {
     intro: "Rezumatul tuturor spațiilor tale, pe un singur ecran.",
     points: [
       { title: "Carduri", text: "Fiecare card arată o parte din aplicație: banii lunii, ce ai de făcut, plățile, mașina, listele. Atinge un card ca să deschizi locul de unde vine." },
-      { title: "Personalizare", text: "Atinge creionul sau ține apăsat pe un spațiu gol dintre carduri. Poți adăuga, scoate, muta, colora și micșora cardurile." },
+      { title: "Personalizare", text: "Ține apăsat pe un card: apare meniul lui (setări, mărime, ascunde). Ține și trage ca să-l muți direct. Creionul sau un loc gol ținut apăsat deschid aranjarea completă." },
       SWIPE,
     ],
   },
@@ -170,7 +170,7 @@ export const HELP = {
       { title: "Cumpărături", text: "Liste de cumpărături, partajabile, și rețete." },
       { title: "Cheltuieli", text: "Orice altă cheltuială: nume, sumă, dată. Tot aici sunt creditele (rate la bancă sau leasing)." },
       { title: "Starea de pe fiecare spațiu", text: "„3 restante” sau „1 azi” arată cel mai urgent lucru din el." },
-      { title: "Editează", text: "Creionul de sus sau ține apăsat pe un loc gol din pagină. Acolo muți spațiile, le redenumești sau le ștergi. „+” creează unul nou." },
+      { title: "Editează", text: "Ține apăsat pe un spațiu: Editează, Aranjează sau Șterge. Ține și trage ca să-l muți în grilă. Creionul de sus deschide lista completă. „+” creează unul nou." },
     ],
   },
 

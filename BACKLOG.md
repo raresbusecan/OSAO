@@ -123,6 +123,10 @@ drifted a day across the 25 Oct DST change; plus the known
 
 ## Found along the way (not yet fixed)
 
+### Rows inside Spaces: move their long-press quick actions onto the hold menu (2026-11-02) [from: feat/hold-menu]
+
+Acasă and Spații cards now use the shared hold gesture (`components/ui/Hold.tsx`: hold = menu over the dimmed app, hold + drag = move). The rows inside the Spaces (Mașină, Casă lists, Cumpărături products, Cheltuieli) still have their own older long-press "acțiuni rapide" (help.ts "Gesturi" lines). Next pass, per the user's "reuse it everywhere": give those rows `<HoldItem actions>` so every hold in the app looks and works the same. Casă Sarcini's NestableDraggableFlatList could then move to it too.
+
 ### Calendar: "log this service again" drops the next service date (2026-11-02) [from: qa-lead re-check of feat/service-due-window]
 
 **FIXED on feat/service-due-window (2026-11-02): carServicesBetween now sends `service_date` too.** `CalendarController::carServicesBetween` replaces a car service's `due_at` with its `nextServiceDate` and sends no `service_date` (Dashboard's `carServiceDue` now does). Swiping that row in Calendar / Simplu Calendar -> `logCarServiceAgain` computes `nextServiceDate - due_at` = 0 days, so the new record gets NO next service date. Fix: send `service_date` from carServicesBetween too.
