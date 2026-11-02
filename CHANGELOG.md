@@ -4,6 +4,43 @@ What landed on `main` (= what runs on the phone day to day), newest first.
 One entry per merge, written when `main` moves. Details live in the
 commits; open follow-ups live in `BACKLOG.md`.
 
+## 2026-11-02 — Buget: "Ritmul lunii", Buget simplu, savings goal pace
+
+Fast-forward of `main` from `13dfbd9` to `feat/budget-pace` (10 commits,
+`281078e`..`248001a`, plus this entry). QA: qa-lead, two passes — PASS on
+`281078e`..`59ef48d` (backend 164 passed + 1 skipped, frontend 159/159, tsc
+clean, iOS bundle 200); PASS on `248001a` (backend 165 passed + 1 skipped,
+frontend 163/163, tsc clean, iOS bundle 200). Its one low finding (a target
+date of today showed "overdue") is fixed in `248001a` and covered by
+`tests/budget-goal.test.cjs`. The skip is the leftover untracked
+`TmpCarDocReplayTest.php`, unrelated. User approved; gated by release-lead.
+
+**Changes**
+- Buget redesign "Ritmul lunii": a pace card and space rows sorted by pace,
+  backed by pace data on GET /budget (`BudgetController.php`,
+  `BudgetPaceCard.tsx`, `lib/budget/pace.ts`, `app/(tabs)/budget.tsx`).
+- Buget simplu: Venit -> Pui deoparte -> De cheltuit. Jars, per-space limits
+  and Bani fără vină are removed; Economii rollover = income − spent − credit
+  rates (`BudgetController.php`, `ItemBudgetRules.php`, `IncomeSheet.tsx`,
+  `BudgetOverviewPage.tsx`, `BudgetSpaceDetailPage.tsx`, `lib/budget/plan.ts`,
+  `HomeWidgets.tsx`). Acasă keeps its plan lines when everything is put aside;
+  no-plan bills exclude credit rates. Retired components stay in the tree,
+  marked "DEAD since 2026-11-02" (list in `frontend/CLAUDE.md`).
+- Savings goal with name, target date and a per day / week / month pace;
+  Economii hint; "De cheltuit" chart label moved (`lib/budget/goal.ts`,
+  `SavingsGoal.php`).
+- Grocery: the invite button only shows when a list exists
+  (`GroceryDashboard.tsx`).
+- New tests `backend/tests/Feature/BudgetPaceTest.php`,
+  `BudgetSimplePlanTest.php`, `frontend/tests/budget-pace.test.cjs`,
+  `budget-simple.test.cjs`, `budget-goal.test.cjs`; `BACKLOG.md`,
+  `backend/CLAUDE.md`, `frontend/CLAUDE.md` updated.
+
+**Deploy (live `lifeos`)** — two migrations:
+- `2026_11_02_000001` (users.monthly_set_aside) — already run on live.
+- `2026_11_02_000002` (savings_goals.name) — still pending, waits for the
+  user's OK. Until it runs, the code drops `name` on save.
+
 ## 2026-11-02 — Hold a card for its menu, hold + drag to move it
 
 Fast-forward of `main` from `b9069ae` to `feat/hold-menu` (5 commits,
