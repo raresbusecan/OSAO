@@ -152,6 +152,68 @@ class BudgetController extends Controller
         return in_array('custom_event', $types, true) ? EventSpend::totals($userId, $now, $now, false)['planned'] : 0.0;
     }
 
+    // "Ritmul lunii" (Buget, 2026-11): this month's RECORDED spend for one
+    // label, day by day in the user's zone, plus every Calendar purchase
+    // occurrence. Counts exactly what monthlySumForLabel counts minus the
+    // flat recurring bills and the planned purchases, so
+    //   Σ daily == this_month − recurring − planned   (BudgetPaceTest).
+    // Buckets in PHP via setTimezone -- never SQL DATE()/CONVERT_TZ (no tz
+    // tables guaranteed; the UTC/local bug class Calendar already hit).
+    // A recorded row dated later this month (an expense_item typed with a
+    // future date, a payment dated ahead) is already in this_month as spent,
+    // so it lands on TODAY: the line never runs ahead of today and its end
+    // still equals "Cheltuit".
+    private function paceForLabel(int $userId, array $types, Carbon $now): array
+    {
+        $tz = $now->getTimezone();
+        $daysInMonth = $now->daysInMonth;
+        $today = $now->day;
+        $monthStart = $now->copy()->startOfMonth();
+        $monthEnd = $now->copy()->endOfMonth();
+        $daily = array_fill(0, $daysInMonth, 0.0);
+        $add = function ($at, float $amount) use (&$daily, $tz, $today) {
+            $day = min(Carbon::parse($at)->setTimezone($tz)->day, $today);
+            $daily[$day - 1] += $amount;
+        };
+
+        [$startUtc, $endUtc] = $this->monthWindowUtc($now);
+        $datedTypes = array_values(array_diff($types, ['custom_event'], HomeSpend::TYPES));
+        if ($datedTypes) {
+            Item::where('user_id', $userId)
+                ->whereIn('type', $datedTypes)
+                ->where('guilt_free', false)
+                ->whereBetween('due_at', [$startUtc, $endUtc])
+                ->get(['due_at', 'amount'])
+                ->each(fn (Item $row) => $add($row->due_at, (float) $row->amount));
+        }
+        if (array_intersect($types, HomeSpend::TYPES)) {
+            foreach (HomeSpend::payments($userId, $monthStart, $monthEnd, false) as $payment) {
+                $add($payment['due_at'], (float) $payment['amount']);
+            }
+        }
+
+        $events = [];
+        if (in_array('custom_event', $types, true)) {
+            foreach (EventSpend::occurrences($userId, $monthStart, $monthEnd, $now, false) as $occurrence) {
+                if (!$occurrence['planned']) {
+                    $add($occurrence['due_at'], (float) $occurrence['amount']);
+                }
+                $events[] = [
+                    'day' => Carbon::parse($occurrence['due_at'])->setTimezone($tz)->day,
+                    'amount' => round((float) $occurrence['amount'], 2),
+                    'planned' => (bool) $occurrence['planned'],
+                    'title' => $occurrence['title'],
+                ];
+            }
+            usort($events, fn ($a, $b) => $a['day'] <=> $b['day']);
+        }
+
+        return [
+            'daily' => array_map(fn ($v) => round($v, 2), $daily),
+            'events' => $events,
+        ];
+    }
+
     // The single largest line item of a month -- a dated record, or a
     // Calendar purchase whose day has come (a planned one isn't spent).
     private function biggestInMonth(int $userId, array $types, Carbon $month): ?array
@@ -552,6 +614,7 @@ class BudgetController extends Controller
         $biggest = [];
         $recurring = [];
         $planned = [];
+        $paceLabels = [];
 
         foreach ($labels as $label) {
             $types = $this->typesForLabel($label);
@@ -594,6 +657,7 @@ class BudgetController extends Controller
             // itself here vs. in the total it's part of).
             $recurring[$label] = $this->recurringMonthlyForLabel($user->id, $label);
             $planned[$label] = $this->plannedForLabel($user->id, $types, $now);
+            $paceLabels[$label] = $this->paceForLabel($user->id, $types, $now);
         }
 
         $limits = BudgetCategory::where('user_id', $user->id)
@@ -694,6 +758,14 @@ class BudgetController extends Controller
             'planned' => $planned,
             'recurringBills' => $recurringBills,
             'savingsGoal' => $savingsGoal,
+            // "Ritmul lunii": recorded spend per local day + this month's
+            // Calendar purchases, per label (paceForLabel). User's zone.
+            'pace' => [
+                'month' => $now->format('Y-m'),
+                'today' => $now->day,
+                'days_in_month' => $now->daysInMonth,
+                'labels' => $paceLabels,
+            ],
         ]);
     }
 
