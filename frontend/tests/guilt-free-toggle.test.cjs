@@ -1,53 +1,50 @@
+/* global __dirname */
+// "Buget simplu" (2026-11-02, user decision): the guilt_free flag is ignored
+// everywhere, so the "Bani fără vină" toggle and chip are gone from every
+// live screen. This used to test GuiltFreeToggle's visibility rules; it now
+// guards that no live file mounts it again. components/dashboard/GuiltFree.tsx
+// (and GuiltFreePage.tsx) stay on disk as dead files -- deletion is denied.
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { loadModule } = require('./helpers/load-ts.cjs');
+const fs = require('node:fs');
+const path = require('node:path');
 
-const load = (summary) => loadModule('components/dashboard/GuiltFree.tsx', {
-  react: { createElement: (type, props) => ({ type, props }), useState: (initial) => [initial, () => {}] },
-  'react-native': { View: 'View', Text: 'Text' },
-  '@expo/vector-icons': { Ionicons: 'Ionicons' },
-  '@/lib/theme': { useTheme: () => ({ colors: {}, spacing: {}, radius: {} }) },
-  '@/lib/format': { lei: String },
-  '@/lib/budget/plan': { useBudgetPlan: () => summary },
-  '@/components/ui/primitives': { ToggleRow: 'ToggleRow' },
-}).GuiltFreeToggle;
+const root = path.resolve(__dirname, '..');
+const DEAD = new Set([
+  'components/dashboard/GuiltFree.tsx',
+  'components/dashboard/GuiltFreePage.tsx',
+  'components/dashboard/IncomeSplitCard.tsx',
+  'components/dashboard/SplitSheet.tsx',
+  'components/dashboard/BudgetCreditPage.tsx',
+]);
 
-test('guilt-free shows on fitting forms once there is a plan; elsewhere only to undo a flag', () => {
-  const Toggle = load({ plan: {}, guiltFree: { budget: 300 } });
-  assert.equal(Toggle({ value: false, onChange() {} }).type, 'ToggleRow');
-  assert.equal(Toggle({ value: false, onChange() {}, onlyIfSet: true }), null, 'fuel/services/documents/bills: hidden');
-  assert.equal(Toggle({ value: true, onChange() {}, onlyIfSet: true }).type, 'ToggleRow', 'a flagged record can still be undone');
-  const NoPlan = load(null);
-  assert.equal(NoPlan({ value: false, onChange() {} }), null);
+function walk(dir, out = []) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) walk(full, out);
+    else if (/\.(tsx?|jsx?)$/.test(entry.name)) out.push(full);
+  }
+  return out;
+}
+
+test('no live file imports the guilt-free toggle/chip or the dead Buget pages', () => {
+  const offenders = [];
+  for (const dir of ['app', 'components', 'lib']) {
+    for (const file of walk(path.join(root, dir))) {
+      const rel = path.relative(root, file).split(path.sep).join('/');
+      if (DEAD.has(rel)) continue;
+      const src = fs.readFileSync(file, 'utf8');
+      if (/from\s+["']@\/components\/dashboard\/(GuiltFree|GuiltFreePage|IncomeSplitCard|SplitSheet|BudgetCreditPage)["']/.test(src)) offenders.push(rel);
+      if (/<GuiltFree(Toggle|Chip)\b/.test(src)) offenders.push(rel);
+    }
+  }
+  assert.deepEqual(offenders, []);
 });
 
-test('switching a flag off mid-edit keeps the toggle so it can be switched back', () => {
-  let kept;
-  const Toggle = loadModule('components/dashboard/GuiltFree.tsx', {
-    react: { createElement: (type, props) => ({ type, props }), useState: (initial) => [kept ??= initial, () => {}] },
-    'react-native': { View: 'View', Text: 'Text' },
-    '@expo/vector-icons': { Ionicons: 'Ionicons' },
-    '@/lib/theme': { useTheme: () => ({ colors: {}, spacing: {}, radius: {} }) },
-    '@/lib/format': { lei: String },
-    '@/lib/budget/plan': { useBudgetPlan: () => ({ plan: {}, guiltFree: { budget: 300 } }) },
-    '@/components/ui/primitives': { ToggleRow: 'ToggleRow' },
-  }).GuiltFreeToggle;
-  assert.equal(Toggle({ value: true, onChange() {}, onlyIfSet: true }).type, 'ToggleRow');
-  assert.equal(Toggle({ value: false, onChange() {}, onlyIfSet: true }).type, 'ToggleRow', 'still there after switching off');
-});
-
-test('a form whose values load after its first render still latches the flag', () => {
-  let state;
-  const Toggle = loadModule('components/dashboard/GuiltFree.tsx', {
-    react: { createElement: (type, props) => ({ type, props }), useState: (initial) => { if (state === undefined) state = initial; return [state, (next) => { state = next; }]; } },
-    'react-native': { View: 'View', Text: 'Text' },
-    '@expo/vector-icons': { Ionicons: 'Ionicons' },
-    '@/lib/theme': { useTheme: () => ({ colors: {}, spacing: {}, radius: {} }) },
-    '@/lib/format': { lei: String },
-    '@/lib/budget/plan': { useBudgetPlan: () => ({ plan: {}, guiltFree: { budget: 300 } }) },
-    '@/components/ui/primitives': { ToggleRow: 'ToggleRow' },
-  }).GuiltFreeToggle;
-  assert.equal(Toggle({ value: false, onChange() {}, onlyIfSet: true }), null, 'first render, values not loaded yet');
-  assert.equal(Toggle({ value: true, onChange() {}, onlyIfSet: true }).type, 'ToggleRow', 'the record loads flagged');
-  assert.equal(Toggle({ value: false, onChange() {}, onlyIfSet: true }).type, 'ToggleRow', 'switched off: can be switched back');
+test('no live request body sends guilt_free any more (the server strips it)', () => {
+  for (const rel of ['app/(tabs)/calendar.tsx', 'components/spaces/grocery/GroceryFinishShoppingSheet.tsx', 'components/spaces/home/HomeTaskResolveSheet.tsx']) {
+    const src = fs.readFileSync(path.join(root, rel), 'utf8');
+    assert.ok(!/guilt_free\s*:/.test(src), `${rel} still sends guilt_free`);
+  }
 });

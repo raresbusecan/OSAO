@@ -12,7 +12,6 @@ import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { TopBar, CircleButton, Identity, Field, FieldButton, Segmented, Button, ToggleRow } from "@/components/ui/primitives";
 import { roCount, roDate } from "@/lib/format";
-import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 import type { HomeIcon } from "./home.ui.types";
 
 
@@ -349,18 +348,6 @@ function CategoryField({
   const HOME = useSpaceColors("home").color;
   const optional = field.required === false;
   const label = optional && field.type !== "toggle" ? `${field.label} (opțional)` : field.label;
-
-  if (field.type === "guiltFree") {
-    return (
-      <GuiltFreeToggle
-        testID={`category-field-${field.key}`}
-        value={value === "true"}
-        onChange={(next) => onChange(next ? "true" : "false")}
-        tone={HOME}
-        onlyIfSet={field.onlyIfSet}
-      />
-    );
-  }
 
   if (field.type === "toggle") {
     return (

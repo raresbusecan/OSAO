@@ -534,7 +534,7 @@ export default function GroceryDashboard({
   // an optional total price becomes a grocery_trip expense for the
   // monthly budget, and the cart clears the same way handleClearCart
   // already does.
-  const handleFinishShopping = async (listId: string, price: number | undefined, guiltFree = false) => {
+  const handleFinishShopping = async (listId: string, price: number | undefined) => {
     const boughtItems = getItemsForList(items, listId).filter((item) => item.inCart);
 
     // Awaited (not fire-and-forget) so the restock writes are actually
@@ -555,7 +555,7 @@ export default function GroceryDashboard({
       const list = lists.find((l) => l.id === listId);
       try {
         await api.createItem(
-          groceryTripToItemBody(space.id, { listId, listName: list?.name ?? "Cumpărături", price, guiltFree }),
+          groceryTripToItemBody(space.id, { listId, listName: list?.name ?? "Cumpărături", price }),
         );
       } catch (error: any) {
         notifyAction("Nu am putut salva cheltuiala", error?.message || "A apărut o eroare.");
@@ -1051,7 +1051,7 @@ export default function GroceryDashboard({
             getItemsForList(items, finishShoppingListId).filter((item) => item.inCart && item.linkedSupplyId).length
           }
           onCancel={() => setFinishShoppingListId(null)}
-          onConfirm={(price, guiltFree) => handleFinishShopping(finishShoppingListId, price, guiltFree)}
+          onConfirm={(price) => handleFinishShopping(finishShoppingListId, price)}
         />
       ) : null}
       <Sheet visible={!!tripDetail} onClose={() => { setTripDetail(null); recordAction?.cancel(); }} title={tripDetail?.title ?? "Cumpărături"} subtitle="Cumpărături finalizate">

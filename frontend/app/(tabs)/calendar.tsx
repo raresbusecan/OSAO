@@ -19,7 +19,6 @@ import { PressableScale } from "@/components/ui/PressableScale";
 import { capitalize, daysFromToday, lei, roCount, roDate, parseLocaleNumber, parseClockTime } from "@/lib/format";
 import { SwipeItemRow } from "@/components/dashboard/SwipeItemRow";
 import { CreditReminderRow, isReminder } from "@/components/dashboard/CreditReminderRow";
-import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 import { dueText, expiryText } from "@/components/spaces/home/homeRecordPreview";
 import { todoHref, todoTitle } from "@/lib/dashboard/spaceDue";
 import { useTourScroll, useTourTarget } from "@/components/ui/tourTargets";
@@ -719,7 +718,6 @@ function CalendarScreen() {
           <Group>
             {openEvent.recurrence ? <Row title="Se repetă" trailing={<Text style={{ fontSize: 15, color: muted }}>{FREQUENCY_LABEL[openEvent.recurrence] ?? openEvent.recurrence}</Text>} /> : null}
             {openEvent.amount != null && Number(openEvent.amount) > 0 ? <Row title="Sumă" trailing={<Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{lei(Number(openEvent.amount))}</Text>} /> : null}
-            {openEvent.guilt_free ? <Row title="Bani fără vină" trailing={<Ionicons name="heart-outline" size={18} color={muted} />} /> : null}
             <Row title="Notă" subtitle={openEvent.notes || "Fără notă"} />
           </Group>
         ) : null}
@@ -865,8 +863,6 @@ function NewEventSheet({
   // Expenses spend (Item::SPENDING_TYPES' custom_event entry).
   const [involvesPurchase, setInvolvesPurchase] = useState(false);
   const [amount, setAmount] = useState("");
-  // "Bani fără vină" (items.guilt_free) -- only meaningful with a purchase.
-  const [guiltFree, setGuiltFree] = useState(false);
   const [isRecurring, setIsRecurring] = useState(false);
   const [recurrence, setRecurrence] = useState<"weekly" | "monthly" | "yearly">("yearly");
   const [notes, setNotes] = useState("");
@@ -878,7 +874,7 @@ function NewEventSheet({
   if (visible !== seenOpen) {
     setSeenOpen(visible);
     if (visible) {
-      setTitle(""); setDate(day); setDatePickerVisible(false); setTime("09:00"); setMoreOpen(false); setInvolvesPurchase(false); setAmount(""); setGuiltFree(false);
+      setTitle(""); setDate(day); setDatePickerVisible(false); setTime("09:00"); setMoreOpen(false); setInvolvesPurchase(false); setAmount("");
       setIsRecurring(false); setRecurrence("yearly"); setNotes(""); setError(null);
     }
   }
@@ -913,7 +909,6 @@ function NewEventSheet({
         amount: hasAmount ? parsedAmount : undefined,
         currency: hasAmount ? "RON" : undefined,
         recurrence: isRecurring ? recurrence : undefined,
-        guilt_free: hasAmount ? guiltFree : false,
       });
       await onSaved();
     } catch (e: any) {
@@ -969,9 +964,6 @@ function NewEventSheet({
           >
             <Field testID="new-event-amount" value={amount} onChangeText={setAmount} placeholder="Sumă aproximativă" keyboardType="decimal-pad" suffix="lei" tone={CUSTOM_EVENT_COLOR} />
           </ToggleRow>
-          {involvesPurchase ? (
-            <GuiltFreeToggle testID="new-event-guilt-free" value={guiltFree} onChange={setGuiltFree} tone={CUSTOM_EVENT_COLOR} />
-          ) : null}
           <ToggleRow
             testID="new-event-toggle-recurring"
             icon="repeat"

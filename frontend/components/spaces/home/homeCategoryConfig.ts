@@ -36,13 +36,8 @@ export type HomeCategoryField = {
    * shape. Added specifically so Recurring can offer a real due-date
    * picker and a frequency choice instead of every new entry silently
    * defaulting to "today" / "monthly" with no way to change either (see
-   * homeCategoryConfig.ts's "recurring" entry). "guiltFree" is the
-   * shared "Bani fără vină" GuiltFreeToggle (stores "true"/"false"; it
-   * hides itself until the person has an income plan). */
-  type?: "text" | "date" | "select" | "toggle" | "guiltFree";
-  /** guiltFree only: show it just while the record is flagged (see
-   * GuiltFreeToggle's `onlyIfSet`). */
-  onlyIfSet?: boolean;
+   * homeCategoryConfig.ts's "recurring" entry). */
+  type?: "text" | "date" | "select" | "toggle";
   /** A date field that may not fall before another date field's value
    * (a document's expiry vs. its issue date). */
   notBefore?: string;
@@ -96,19 +91,6 @@ const LEADING_NUMBER = /^[+-]?\d+\.?\d*/;
  * every buildEntry below already parses amounts). Null when the
  * string doesn't start with a number at all (empty, or non-numeric
  * text). */
-/** "Bani fără vină" -- only on the categories whose item type the server
- * accepts it for (home_expense, home_maintenance, home_recurring; see
- * Item::SPENDING_TYPES / RECURRING_TYPE_SPACE). Never supplies/documents. */
-const GUILT_FREE_FIELD: HomeCategoryField = {
-  key: "guiltFree",
-  label: "Bani fără vină",
-  placeholder: "",
-  type: "guiltFree",
-  required: false,
-};
-/** Bills and maintenance are rarely guilt-free: kept only to undo a flag. */
-const GUILT_FREE_IF_SET: HomeCategoryField = { ...GUILT_FREE_FIELD, onlyIfSet: true };
-
 export function parseLeadingNumber(raw: string): number | null {
   const match = normalizeNumberText(raw).match(LEADING_NUMBER);
   if (!match) return null;
@@ -280,7 +262,6 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
     fields: [
       { key: "title", label: "Titlu", placeholder: "ex. Reparație acoperiș" },
       { key: "amount", label: "Sumă (lei)", placeholder: "0", nonNegativeNumber: true },
-      GUILT_FREE_FIELD,
     ],
     submitLabel: "Adaugă cheltuiala",
     emptyLabel: "Nicio cheltuială încă.",
@@ -291,12 +272,11 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       title: values.title,
       amount: parseLeadingNumber(values.amount) ?? 0,
       notes: existing?.notes,
-      guiltFree: values.guiltFree === "true",
+      guiltFree: existing?.guiltFree,
     }),
     valuesFromEntry: (entry: HomeExpenseEntry) => ({
       title: entry.title,
       amount: String(entry.amount),
-      guiltFree: entry.guiltFree ? "true" : "false",
     }),
     rows: (data) =>
       data.expenseEntries.map((entry) => ({
@@ -304,7 +284,6 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
         title: entry.title,
         subtitle: formatDate(entry.date),
         amount: `${entry.amount.toLocaleString("ro-RO")} lei`,
-        guiltFree: entry.guiltFree,
       })),
   },
   {
@@ -343,7 +322,6 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
         showWhen: "isRecurring",
         keyboardType: "numeric",
       },
-      GUILT_FREE_IF_SET,
     ],
     submitLabel: "Adaugă lucrarea",
     emptyLabel: "Nicio lucrare de mentenanță încă.",
@@ -395,7 +373,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
         // this. An unrelated edit (price, service name) must not wipe
         // out every resolve logged so far.
         spendHistory: existing?.spendHistory,
-        guiltFree: values.guiltFree === "true",
+        guiltFree: existing?.guiltFree,
       };
     },
     /** The "Resolved" action -- recurring: advances nextDueDate one
@@ -421,7 +399,6 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       isRecurring: entry.isRecurring ? "true" : "false",
       recurrenceFrequency: entry.recurrenceFrequency ?? "monthly",
       recurrenceInterval: entry.recurrenceInterval != null ? String(entry.recurrenceInterval) : "1",
-      guiltFree: entry.guiltFree ? "true" : "false",
     }),
     rows: (data) => {
       const now = new Date();
@@ -452,8 +429,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
             amount: `${entry.price.toLocaleString("ro-RO")} lei`,
             isRecurring: entry.isRecurring,
             urgencyTier: taskTier,
-            guiltFree: entry.guiltFree,
-          };
+              };
         });
     },
   },
@@ -478,7 +454,6 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
           { value: "yearly", label: "Anual" },
         ],
       },
-      GUILT_FREE_IF_SET,
     ],
     submitLabel: "Adaugă factura",
     emptyLabel: "Nicio factură încă.",
@@ -496,7 +471,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       // appends to this. An unrelated edit (amount, title) must not wipe
       // out every payment logged so far.
       spendHistory: existing?.spendHistory,
-      guiltFree: values.guiltFree === "true",
+      guiltFree: existing?.guiltFree,
     }),
     // Every entry here recurs by definition (there's no on/off toggle
     // like Maintenance's "Recurent") -- Resolved always just advances
@@ -510,7 +485,6 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
       amount: String(entry.amount),
       nextDueDate: entry.nextDueDate,
       frequency: entry.frequency,
-      guiltFree: entry.guiltFree ? "true" : "false",
     }),
     rows: (data) => {
       const now = new Date();
@@ -531,8 +505,7 @@ export const HOME_CATEGORIES: HomeCategoryConfig[] = [
           amount: `${entry.amount.toLocaleString("ro-RO")} lei`,
           isRecurring: true,
           urgencyTier: taskTier,
-          guiltFree: entry.guiltFree,
-        };
+          };
       });
     },
   },

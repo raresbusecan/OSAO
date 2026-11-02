@@ -12,7 +12,7 @@ import { REFRESH_EVENT } from "@/lib/refresh";
 import { useFocusEffect, useRouter } from "expo-router";
 import { TodoCarouselSheet } from "@/components/dashboard/TodoCarouselSheet";
 import { isRecurringPayment } from "@/components/dashboard/RecurringBillRow";
-import { needsSpend } from "@/lib/budget/plan";
+import { monthSpend, normalizePlan } from "@/lib/budget/plan";
 import { HomeWidget, type HomeCtx } from "@/components/home/HomeWidgets";
 import { CatalogSheet, TemplatesSheet, WidgetSettingsSheet } from "@/components/home/LayoutSheets";
 import { serviceKmStatus } from "@/lib/dashboard/spaceDue";
@@ -135,17 +135,19 @@ function Home() {
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   const now = new Date();
-  // The budget is ALWAYS the income plan's Necesități envelope (Buget's
-  // hero). No plan = no budget (per-space limits dropped 2026-11-02).
-  const totalBudget = budget?.plan ? Number(budget.necessities?.envelope ?? 0) : 0;
-  const hasPlan = !!budget?.plan;
-  // With a plan, the spend card is on the Buget hero's basis: necessities
-  // only (no fără vină), every label -- the shared needsSpend() -- so
-  // "cheltuit" + "de plătit/planificat" + "Mai ai" add up to the envelope.
-  const needs = useMemo(() => needsSpend(budget?.spending, budget?.recurring, budget?.planned), [budget]);
+  // The budget is ALWAYS the income plan's De cheltuit (income − Pui
+  // deoparte, "Buget simplu" 2026-11-02). No plan = no budget.
+  const plan = normalizePlan(budget?.plan);
+  const totalBudget = plan ? plan.spendable : 0;
+  const hasPlan = !!plan;
+  const creditRates = Number(budget?.credit?.rates ?? 0) || 0;
+  // With a plan, the spend card is on Buget's basis: every label + the
+  // credit rates -- the shared monthSpend() -- so "cheltuit" + "de
+  // plătit/planificat" + "Mai ai" add up to De cheltuit.
+  const needs = useMemo(() => monthSpend(budget?.spending, budget?.recurring, budget?.planned, creditRates), [budget, creditRates]);
   const monthly = dashboard?.monthlyExpenses ?? { total: 0, sources: [] };
   // What the "Cheltuit" card shows: the raw month (dashboard total) without
-  // a plan; with one, each label's RECORDED necessities spend. Only the
+  // a plan; with one, each label's RECORDED spend. Only the
   // spend card uses it -- other cards keep the raw month.
   const spendMonthly = useMemo(() => {
     if (!hasPlan) return monthly;
@@ -267,13 +269,13 @@ function Home() {
   const goalRatio = goal && Number(goal.target_amount) > 0 ? Math.max(0, Math.min(1, Number(goal.current_amount) / Number(goal.target_amount))) : 0;
   // Recurring bills aren't in "Cheltuit" (nothing was recorded yet) but
   // they're still coming out of the budget -- same split as the Buget tab.
-  // Every label counts (one Necesități envelope), so these are needsSpend's.
+  // Every label counts (one De cheltuit), so these are monthSpend's: bills
+  // + credit rates.
   const recurringMonthly = needs.recurring;
   // Calendar purchases still ahead: not spent, but the budget counts them.
   const plannedMonthly = needs.planned;
-  // "Mai ai" is the Buget hero's own number: the necessities envelope minus
-  // every label's committed spend (needsSpend, fără vină excluded by the
-  // API -- the raw dashboard total includes it). Only read with a plan.
+  // "Mai ai" is Buget's own number: De cheltuit minus every label's
+  // committed spend + the credit rates (monthSpend). Only read with a plan.
   const remaining = totalBudget - needs.committed;
   const initial = (user?.name ?? "?").trim().charAt(0).toUpperCase();
 
@@ -296,6 +298,7 @@ function Home() {
     remaining,
     hasPlan,
     recurringMonthly,
+    creditRates: hasPlan ? needs.rates : 0,
     plannedMonthly,
     bills: (budget?.recurringBills || []).filter(isRecurringPayment),
     goal,

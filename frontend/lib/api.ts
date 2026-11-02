@@ -671,15 +671,14 @@ saveHomeProfile: (
     }),
 
   // -------------------------
-  // BUDGET -- income plan, spending per space label, recurring bills, savings goal.
-  // (`limits` = the old per-space limits: still sent, kept in the DB, no
-  // longer read or shown since 2026-11-02 -- one Necesități envelope.)
+  // BUDGET -- "Buget simplu" (2026-11-02): Venit -> Pui deoparte -> De
+  // cheltuit, spending per space label, recurring bills, credit rates,
+  // savings goal. No per-space limits, no jars, no guilt-free.
   // See BudgetController.
   // -------------------------
 
   getBudget: () =>
     request<{
-      limits: { category: string; monthly_limit: number; spent: number }[];
       spending: Record<string, { this_month: number; last_month: number; avg_last_3_months: number }>;
       biggest: Record<string, { title: string; amount: number; from_last_month: boolean } | null>;
       recurring: Record<string, number>;
@@ -687,35 +686,27 @@ saveHomeProfile: (
       planned?: Record<string, number>;
       recurringBills: any[];
       savingsGoal: { target_amount: number; current_amount: number; target_date: string | null } | null;
-      /** Buget din venit -- null until PUT /budget/plan ran once. */
-      plan: { monthly_income: number; split: { needs: number; guilt_free: number; third: number; short_term: number; long_term: number } } | null;
-      necessities: { envelope: number | null; avg_last_3_months: number };
-      guiltFree: { budget: number | null; spent: number; planned: number; count: number };
+      /** null until an income is saved. `set_aside` may be null until the
+       * backend migration ran: read it through normalizePlan() (null = 0). */
+      plan: { monthly_income: number; set_aside: number | null; spendable: number } | null;
+      /** Legacy alias of plan.spendable (older Acasă builds read it). */
+      necessities?: { envelope: number | null; avg_last_3_months?: number };
       credit: {
-        budget: number | null;
         rates: number;
         count: number;
         items: { id: number; title: string; amount: number; day_of_month: number; end_date: string; linked_space_id: number | null; remaining_rates: number; next_due: string | null }[];
       };
-      /** Suggested per-space split of the needs envelope -- sent by the backend, no longer read (per-space limits dropped 2026-11-02). */
-      suggested: Record<string, number> | null;
       /** Buget "Ritmul lunii" (2026-11): per-day recorded spend + Calendar purchases per label, user tz. Absent on an older backend. */
       pace?: import("@/lib/budget/pace").BudgetPace;
     }>("/budget"),
 
-  /** Monthly net income + the 5-jar split (ints summing to 100; 422 "Procentele trebuie să adune 100%." otherwise). */
-  saveBudgetPlan: (body: { monthly_income: number; split: { needs: number; guilt_free: number; third: number; short_term: number; long_term: number } }) =>
-    request<{ plan: { monthly_income: number; split: Record<string, number> }; budget_plan_set_at: string; savingsGoal: any }>("/budget/plan", {
+  /** Monthly net income + the monthly set-aside (0 <= set_aside <= income;
+   * 422 "Nu poți pune deoparte mai mult decât venitul." otherwise). */
+  saveBudgetPlan: (body: { monthly_income: number; set_aside: number }) =>
+    request<{ plan: { monthly_income: number; set_aside: number | null; spendable: number }; budget_plan_set_at: string; savingsGoal: any }>("/budget/plan", {
       method: "PUT",
       body: JSON.stringify(body),
     }),
-
-  /** "Bani fără vină": 4 months (oldest first, current last) + this month's flagged records. */
-  getGuiltFree: () =>
-    request<{
-      months: { month: string; budget: number | null; spent: number; planned: number }[];
-      items: { id: number | string; item_id?: number | string; type: string; title: string; amount: number | null; currency: string | null; due_at: string | null; guilt_free: boolean; space_id: number | null; label: string; recurring?: boolean; recurrence?: string | null; planned?: boolean }[];
-    }>("/budget/guilt-free"),
 
   getBudgetSpaceDetail: (category: string) =>
     request<{

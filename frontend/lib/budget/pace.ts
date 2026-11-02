@@ -13,10 +13,13 @@
  * Σ daily stays = this_month − recurring − planned and the solid line never
  * runs past today.
  *
- * Symbols (spec §0): E = the Necesități envelope (income plan only -- no
- * plan, no pace card; per-space limits were dropped 2026-11-02), R = recurring bills (flat, never "Cheltuit"), P_ahead = Calendar
- * purchases still ahead, S = recorded spend, Pm = ALL this month's Calendar
- * purchases, t = today, D = days in month.
+ * Symbols (spec §0): E = De cheltuit = income − Pui deoparte ("Buget
+ * simplu", 2026-11-02; income plan only -- no plan, no pace card; no
+ * per-space limits), R = recurring bills + active credit rates this month
+ * (flat, never "Cheltuit"; the hatched band), P_ahead = Calendar purchases
+ * still ahead, S = recorded spend (EVERYTHING -- the old guilt_free flag is
+ * no longer excluded), Pm = ALL this month's Calendar purchases, t = today,
+ * D = days in month.
  *
  *   flex    = E − R − Pm                (money for day-to-day spending)
  *   ritm(d) = flex × d / D + ev(≤d)     (the expected cumulative spend)
@@ -174,9 +177,9 @@ export type Run = { text: string; strong?: boolean };
 export function paceChip(r: PaceResult): string {
   switch (r.state) {
     case 1:
-      return "Facturile trec de necesități";
+      return "Facturile și ratele trec de buget";
     case 2:
-      return "Ai depășit necesitățile";
+      return "Ai trecut de buget";
     case 3:
       return "Început de lună";
     case 4:
@@ -201,15 +204,15 @@ export function paceSentence(r: PaceResult, input: Pick<PaceInput, "E" | "R" | "
   const maiAi = [p("Mai ai "), b(r.liber), p(" lei: cel mult ")];
   switch (r.state) {
     case 1:
-      return [p("Facturile recurente ("), b(input.R), p(" lei) iau toate necesitățile ("), b(input.E), p(" lei).")];
+      return [p("Facturile și ratele ("), b(input.R), p(" lei) iau tot ce ai de cheltuit ("), b(input.E), p(" lei).")];
     case 2:
-      return [p("Ai cheltuit "), b(input.S), p(" lei. Cu facturile și ce ai planificat, treci de necesități cu "), b(-r.liber), p(" lei.")];
+      return [p("Ai cheltuit "), b(input.S), p(" lei. Cu facturile, ratele și ce ai planificat, treci de cei "), b(input.E), p(" lei cu "), b(-r.liber), p(" lei.")];
     case 3:
       return input.S > 0
         ? [p("Ai cheltuit "), b(input.S), p(" lei. "), ...tail(maiAi)]
         : [p("Nimic cheltuit încă luna asta. "), ...tail(maiAi)];
     case 4:
-      return [p("Până azi, normal ar fi fost ~"), b(r.ritm), p(" lei. Ai cheltuit "), b(input.S), p(". "), ...tail([p("Ca să rămâi în necesități: cel mult ")])];
+      return [p("Până azi, normal ar fi fost ~"), b(r.ritm), p(" lei. Ai cheltuit "), b(input.S), p(". "), ...tail([p("Ca să rămâi în buget: cel mult ")])];
     case 5:
       return [p("Ai cheltuit "), b(input.S), p(" lei, cu "), b(Math.abs(r.delta)), p(" mai puțin decât era normal până azi. "), ...tail(maiAi)];
     default:

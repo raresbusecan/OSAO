@@ -4,8 +4,6 @@ import { useTheme } from "@/lib/theme";
 import { CUSTOM_EVENT_COLOR, spaceColors, spaceTextColor } from "@/lib/spaces/spaceProfile";
 import { Group, IconWell, InfoButton, Row } from "@/components/ui/primitives";
 import { capitalize, daysFromToday, lei, roDate } from "@/lib/format";
-import { GuiltFreeChip } from "@/components/dashboard/GuiltFree";
-import { TitleChipRow } from "@/components/spaces/expenses/TitleChipRow";
 
 const FREQUENCY_LABEL: Record<string, string> = { daily: "zilnic", weekly: "săptămânal", monthly: "lunar", yearly: "anual" };
 
@@ -74,11 +72,8 @@ export function RecurringGroups({
     <View style={{ gap: spacing.lg }}>
       {groups.map((g) => {
         const amountOf = (it: any) => (total === "monthly" ? monthlyEquivalent(it) : Number(it.amount) || 0);
-        // Fără vină bills come out of their own jar, not the budget: kept
-        // out of the group's total (which matches Buget's "de plătit")
-        // and shown as their own line.
-        const sum = g.items.filter((it) => !it.guilt_free).reduce((s, it) => s + amountOf(it), 0);
-        const guiltFreeSum = g.items.filter((it) => !!it.guilt_free).reduce((s, it) => s + amountOf(it), 0);
+        // Every bill counts (the old guilt_free flag is ignored, 2026-11-02).
+        const sum = g.items.reduce((s, it) => s + amountOf(it), 0);
         return (
           <View key={g.kind} style={{ gap: spacing.sm }} testID={`recurring-group-${g.kind}`}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: spacing.md }}>
@@ -88,11 +83,6 @@ export function RecurringGroups({
               </View>
               <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>{total === "monthly" ? `${lei(Math.round(sum))} / lună` : lei(Math.round(sum))}</Text>
             </View>
-            {guiltFreeSum > 0 ? (
-              <Text testID={`recurring-group-${g.kind}-guilt-free`} style={{ fontSize: 13, color: colors.onSurfaceTertiary, textAlign: "right", marginTop: -4 }}>
-                {`+ ${lei(Math.round(guiltFreeSum))}${total === "monthly" ? " / lună" : ""} fără vină, socotiți separat`}
-              </Text>
-            ) : null}
             <Group inset={68}>{g.items.map(renderRow)}</Group>
           </View>
         );
@@ -140,19 +130,5 @@ export function RecurringBillRow({
       </Text>
     </View>
   );
-  // A fără vină bill carries the chip (Row's title has no slot for it).
-  if (item.guilt_free) {
-    return (
-      <TitleChipRow
-        testID={testID}
-        onPress={onPress}
-        leading={leading}
-        title={item.title}
-        chip={<GuiltFreeChip testID={testID ? `${testID}-guilt-free` : undefined} />}
-        subtitle={subtitle}
-        trailing={trailing}
-      />
-    );
-  }
   return <Row testID={testID} onPress={onPress} leading={leading} title={item.title} subtitle={subtitle} trailing={trailing} />;
 }

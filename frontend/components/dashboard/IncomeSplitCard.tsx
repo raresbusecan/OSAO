@@ -1,10 +1,12 @@
+// DEAD since 2026-11-02 ("Buget simplu": no jars / no guilt-free) -- no importers, kept only because file deletion is denied here. See frontend/CLAUDE.md.
 import React from "react";
 import { View, Text } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { CircleButton, Group, IconWell, SectionHeader } from "@/components/ui/primitives";
-import { JAR_ORDER, jarAmounts, jarFill, jarLabel, monthsToTarget, nextMonthName, type BudgetPlan, type SplitKey } from "@/lib/budget/plan";
+import { monthsToTarget, nextMonthName } from "@/lib/budget/plan";
+import { JAR_ORDER, jarAmounts, jarFill, jarLabel, type LegacyBudgetPlan as BudgetPlan, type SplitKey } from "@/lib/budget/legacyJars";
 import { lei, roCount, roNumber } from "@/lib/format";
 import { useTourTarget } from "@/components/ui/tourTargets";
 

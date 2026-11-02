@@ -7,7 +7,6 @@ import { recurringWarningTierColor, type RecurringWarningTier } from "@/lib/spac
 import { SwipeRow } from "@/components/spaces/SwipeRow";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { SectionHeader } from "@/components/ui/primitives";
-import { GuiltFreeChip } from "@/components/dashboard/GuiltFree";
 
 const RECURRING_TIERS = new Set<string>(["red", "orangeToday", "orangeDays", "yellow"]);
 
@@ -42,8 +41,6 @@ export type HomeCategoryRow = {
    * resolveUrgencyColor above for how the two tier vocabularies map to
    * an actual color. */
   urgencyTier?: SeverityTier | RecurringWarningTier;
-  /** items.guilt_free -- a small "Fără vină" chip after the title. */
-  guiltFree?: boolean;
 };
 
 export type HomeCategorySectionProps = {
@@ -130,7 +127,6 @@ export function HomeCategorySection({
                       <Text style={{ flexShrink: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={2}>
                         {row.title}
                       </Text>
-                      {row.guiltFree ? <View><GuiltFreeChip testID={`home-row-guilt-free-${row.id}`} /></View> : null}
                     </View>
                     <Text style={{ fontSize: 13, marginTop: 2, color: tone ?? colors.onSurfaceTertiary, fontWeight: tone ? "500" : "400" }} numberOfLines={2}>
                       {row.subtitle}

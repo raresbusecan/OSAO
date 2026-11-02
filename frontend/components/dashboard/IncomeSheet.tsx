@@ -2,78 +2,161 @@ import React, { useState } from "react";
 import { View, Text } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { Sheet } from "@/components/ui/Sheet";
-import { Field, Group, Button } from "@/components/ui/primitives";
+import { Field, Button, Pill } from "@/components/ui/primitives";
 import { lei } from "@/lib/format";
-import { JAR_ORDER, jarAmounts, jarFill, jarShortLabel, parseAmount, type BudgetSplit } from "@/lib/budget/plan";
+import { parseAmount, planInputValid, setAsideFromPercent, SET_ASIDE_PRESETS } from "@/lib/budget/plan";
 
 /**
- * "Venitul tău" -- the monthly net income, the one input the whole plan
- * hangs on. Edited only here (Buget tab). The 5-jar preview updates live
- * with the current split; the split itself is edited in SplitSheet.
+ * "Venitul tău" ("Buget simplu", 2026-11-02, mockup Simplu2): the monthly
+ * net income + how much of it to put aside each month. De cheltuit = the
+ * difference, the one budget every space, bill and credit rate comes out
+ * of. Edited only here (Buget tab: the income strip, its pencil, or the
+ * onboarding card's "Adaugă venitul").
  */
 export function IncomeSheet({
   visible,
   onClose,
   initialIncome,
-  split,
+  initialSetAside,
+  bills = 0,
+  rates = 0,
   saving,
   onSave,
+  serverError,
+  onEdit,
 }: {
   visible: boolean;
   onClose: () => void;
   initialIncome: number | null;
-  split: BudgetSplit;
+  initialSetAside: number | null;
+  /** This month's recurring bills / credit rates, for the result caption. */
+  bills?: number;
+  rates?: number;
   saving?: boolean;
-  onSave: (income: number) => void;
+  onSave: (income: number, setAside: number) => void;
+  /** A 422 from PUT /budget/plan on set_aside, shown under that field. */
+  serverError?: string | null;
+  /** Any edit (clears serverError). */
+  onEdit?: () => void;
 }) {
-  return (
-    <Sheet visible={visible} onClose={onClose} title="Venitul tău" icon="wallet-outline" info="budget.income" testID="income-sheet">
-      {visible ? <IncomeBody initialIncome={initialIncome} split={split} saving={saving} onSave={onSave} /> : null}
-    </Sheet>
-  );
-}
+  const { colors, spacing, radius } = useTheme();
+  const fmt = (n: number | null) => (n ? String(Math.round(n * 100) / 100).replace(".", ",") : "");
+  const [incomeText, setIncomeText] = useState(fmt(initialIncome));
+  const [asideText, setAsideText] = useState(initialSetAside != null ? fmt(initialSetAside) || "0" : "");
 
-function IncomeBody({ initialIncome, split, saving, onSave }: { initialIncome: number | null; split: BudgetSplit; saving?: boolean; onSave: (income: number) => void }) {
-  const { colors, spacing, isDark } = useTheme();
-  const [text, setText] = useState(initialIncome ? String(Math.round(initialIncome * 100) / 100).replace(".", ",") : "");
-  const income = parseAmount(text);
-  const valid = Number.isFinite(income) && income >= 1;
-  const amounts = jarAmounts(valid ? income : 0, split);
+  // Re-seed every time the sheet opens (the values may have changed since)
+  // -- adjusted during render on the visible flip, not in an effect.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) {
+      setIncomeText(fmt(initialIncome));
+      setAsideText(initialSetAside != null ? fmt(initialSetAside) || "0" : "");
+    }
+  }
+
+  const income = parseAmount(incomeText);
+  const asideRaw = parseAmount(asideText);
+  const setAside = Number.isFinite(asideRaw) ? asideRaw : 0;
+  const incomeOk = Number.isFinite(income) && income > 0;
+  const valid = planInputValid(income, setAside);
+  const overIncome = incomeOk && setAside > income;
+  const spendable = incomeOk ? Math.max(0, income - setAside) : 0;
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const captionParts: string[] = [];
+  if (bills > 0) captionParts.push(`facturile (${lei(Math.round(bills))})`);
+  if (rates > 0) captionParts.push(`ratele (${lei(Math.round(rates))})`);
+  const caption =
+    (captionParts.length === 2
+      ? `Din ei vin și ${captionParts[0]} și ${captionParts[1]}. `
+      : captionParts.length === 1
+        ? `Din ei vin și ${captionParts[0]}. `
+        : "") + "Ce rămâne la final de lună trece la Economii.";
 
   return (
-    <>
+    <Sheet
+      visible={visible}
+      onClose={onClose}
+      title="Venitul tău"
+      icon="wallet-outline"
+      info="budget.income"
+      testID="income-sheet"
+      footer={
+        <Button
+          testID="income-save"
+          label="Salvează"
+          onPress={() => valid && onSave(round2(income), round2(setAside))}
+          disabled={!valid}
+          loading={saving}
+        />
+      }
+    >
       <Field
         testID="income-input"
-        label="Venit net lunar"
-        value={text}
-        onChangeText={setText}
+        label="Venit net pe lună"
+        value={incomeText}
+        onChangeText={(t) => {
+          setIncomeText(t);
+          onEdit?.();
+        }}
         placeholder="ex. 7000"
         keyboardType="decimal-pad"
         suffix="lei"
         big
-        autoFocus={!initialIncome}
-        hint="Cât intră în cont după taxe. Îl schimbi doar când se schimbă."
+        autoFocus={visible && !initialIncome}
+        hint="Cât intră în cont, după taxe."
       />
 
       <View style={{ gap: spacing.sm }}>
-        <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, paddingHorizontal: spacing.xs }}>Cum îl împărțim</Text>
-        <Group inset={34}>
-          {JAR_ORDER.map((k) => (
-            <View key={k} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: spacing.lg, minHeight: 48 }}>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: jarFill(k, colors, isDark) }} />
-              <Text style={{ flex: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface }}>{jarShortLabel(k)}</Text>
-              <Text style={{ width: 44, textAlign: "right", fontSize: 15, color: colors.onSurfaceTertiary }}>{split[k]}%</Text>
-              <Text style={{ minWidth: 84, textAlign: "right", fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{valid ? lei(Math.round(amounts[k])) : "–"}</Text>
-            </View>
-          ))}
-        </Group>
+        <Field
+          testID="set-aside-input"
+          label="Pui deoparte în fiecare lună"
+          value={asideText}
+          onChangeText={(t) => {
+            setAsideText(t);
+            onEdit?.();
+          }}
+          placeholder="0"
+          keyboardType="decimal-pad"
+          suffix="lei"
+          tone={colors.success}
+          error={overIncome ? "Nu poți pune deoparte mai mult decât venitul." : serverError || null}
+        />
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: spacing.sm }}>
+          {SET_ASIDE_PRESETS.map((p) => {
+            const amount = incomeOk ? setAsideFromPercent(income, p) : 0;
+            const selected = incomeOk && asideText.trim() !== "" && Math.abs(setAside - amount) < 0.005;
+            return (
+              <Pill
+                key={p}
+                testID={`set-aside-preset-${p}`}
+                label={p === 0 ? "Nimic" : `${p}%`}
+                a11yLabel={p === 0 ? "Nimic deoparte" : `${p}% din venit, ${lei(amount)}`}
+                active={selected}
+                tone={colors.success}
+                onPress={() => {
+                  setAsideText(String(amount));
+                  onEdit?.();
+                }}
+              />
+            );
+          })}
+        </View>
+        {!overIncome && !serverError ? (
+          <Text style={{ fontSize: 13, lineHeight: 18, color: colors.onSurfaceTertiary }}>Merge la Economii pe 1 a fiecărei luni. Poate fi și 0.</Text>
+        ) : null}
       </View>
 
-      <Text style={{ fontSize: 13, lineHeight: 18, color: colors.onSurfaceTertiary, paddingHorizontal: spacing.xs }}>
-        Ai un credit? Adaugă-l în spațiul Cheltuieli, la Credite. Cei {split.third}% îl urmăresc singuri.
-      </Text>
-
-      <Button testID="income-save" label="Salvează venitul" onPress={() => valid && onSave(Math.round(income * 100) / 100)} disabled={!valid} loading={saving} />
-    </>
+      <View testID="income-result" style={{ backgroundColor: colors.surfaceTertiary, borderRadius: radius.card, paddingVertical: 14, paddingHorizontal: 16, gap: 6 }}>
+        <View style={{ flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: spacing.md }}>
+          <Text style={{ fontSize: 15, color: colors.onSurface, flexShrink: 1 }}>De cheltuit pe lună</Text>
+          <Text style={{ fontSize: 22, fontWeight: "600", color: colors.onSurface, fontVariant: ["tabular-nums"] }} numberOfLines={1}>
+            {incomeOk && !overIncome ? lei(Math.round(spendable)) : "–"}
+          </Text>
+        </View>
+        <Text style={{ fontSize: 13, lineHeight: 18, color: colors.onSurfaceTertiary }}>{caption}</Text>
+      </View>
+    </Sheet>
   );
 }

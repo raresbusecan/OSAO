@@ -5,7 +5,6 @@ import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field, FieldButton } from "@/components/ui/primitives";
 import { roDate, parseLocaleNumber } from "@/lib/format";
-import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 
 import type { HomeTaskEntry } from "@/lib/spaces/home/home.types";
 import { nextTaskOccurrence } from "@/lib/spaces/home/calculations/dashboard.calculations";
@@ -17,10 +16,8 @@ export type HomeTaskResolveSheetProps = {
   /** price is undefined for a non-purchase task, or when "Rezolvă fără
    * preț" is tapped (still resolves, just never counts as spend).
    * nextDueDate is only meaningful for a recurring task -- undefined for
-   * a plain one, since it just archives instead of getting a next date.
-   * guiltFree ("Bani fără vină") is only passed when a price is logged
-   * (purchase step) -- undefined leaves the task's flag as it was. */
-  onResolve: (price: number | undefined, nextDueDate: string | undefined, guiltFree?: boolean) => void;
+   * a plain one, since it just archives instead of getting a next date. */
+  onResolve: (price: number | undefined, nextDueDate: string | undefined) => void;
 };
 
 /** Opened for a purchase task's checkbox tap (asks for the price) and,
@@ -37,7 +34,6 @@ export function HomeTaskResolveSheet({ entry, onCancel, onResolve }: HomeTaskRes
   );
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [error, setError] = useState("");
-  const [guiltFree, setGuiltFree] = useState(!!entry.guiltFree);
 
   const [saving, setSaving] = useState(false);
   const saveLock = useRef(false);
@@ -46,7 +42,7 @@ export function HomeTaskResolveSheet({ entry, onCancel, onResolve }: HomeTaskRes
     saveLock.current = true;
     setSaving(true);
     try {
-      await onResolve(value, nextDueDate, value !== undefined ? guiltFree : undefined);
+      await onResolve(value, nextDueDate);
     } catch (error: any) {
       setError(error?.message || "Nu am putut rezolva. Încearcă din nou.");
     } finally {
@@ -114,10 +110,6 @@ export function HomeTaskResolveSheet({ entry, onCancel, onResolve }: HomeTaskRes
           error={error || null}
           accessibilityLabel="Preț plătit"
         />
-      ) : null}
-
-      {entry.isPurchase ? (
-        <GuiltFreeToggle value={guiltFree} onChange={setGuiltFree} tone={homeColors.color} testID="home-task-resolve-guilt-free" />
       ) : null}
 
       {entry.isRecurring ? (

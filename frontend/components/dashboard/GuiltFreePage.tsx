@@ -1,3 +1,4 @@
+// @ts-nocheck -- // DEAD since 2026-11-02 ("Buget simplu": no jars / no guilt-free) -- no importers, kept only because file deletion is denied here. See frontend/CLAUDE.md.
 import React, { useCallback, useState } from "react";
 import { View, Text, ScrollView, ActivityIndicator, DeviceEventEmitter } from "react-native";
 import { useTheme } from "@/lib/theme";

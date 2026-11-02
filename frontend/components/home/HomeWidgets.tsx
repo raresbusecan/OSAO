@@ -54,19 +54,22 @@ export type HomeCtx = {
   daysLeft: number;
   monthly: { total: number; sources: any[] };
   segments: { key: string; kind: SpaceKind | "other"; label: string; amount: number; share: number; color: string }[];
-  /** The Necesități envelope with an income plan, else 0 (no budget). */
+  /** De cheltuit (income − Pui deoparte) with an income plan, else 0 (no budget). */
   totalBudget: number;
   remaining: number;
-  /** An income plan exists: the spend card is then on the necessities
-   * basis (spendMonthly/spendSegments, every label's bills/planned). */
+  /** An income plan exists: the spend card is then on Buget's basis
+   * (spendMonthly/spendSegments, every label's bills/planned + rates). */
   hasPlan: boolean;
   /** The month as the "Cheltuit" card shows it: = monthly without a plan;
-   * with one, recorded necessities spend (no fără vină), so it + bills +
-   * planned + "Mai ai" = the envelope. */
+   * with one, recorded spend (everything -- guilt_free is ignored), so it +
+   * bills + rates + planned + "Mai ai" = De cheltuit. */
   spendMonthly: { total: number; sources: any[] };
   spendSegments: HomeCtx["segments"];
-  /** Recurring bills still to pay this month, every space. */
+  /** Recurring bills still to pay this month, every space, + the credit
+   * rates (with a plan). */
   recurringMonthly: number;
+  /** The credit-rate part of recurringMonthly (0 without a plan). */
+  creditRates: number;
   /** Calendar purchases still ahead this month (not spent yet), every space. */
   plannedMonthly: number;
   bills: any[];
@@ -230,7 +233,7 @@ function SpendCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
       ) : (
         <Text style={{ fontSize: 14, color: muted }}>Nicio cheltuială înregistrată luna asta.</Text>
       )}
-      {ctx.recurringMonthly > 0 ? <Text style={{ fontSize: 13, color: muted }}>+ {lei(Math.round(ctx.recurringMonthly))} plăți recurente de plătit</Text> : null}
+      {ctx.recurringMonthly > 0 ? <Text style={{ fontSize: 13, color: muted }}>+ {lei(Math.round(ctx.recurringMonthly))} {ctx.creditRates > 0 ? "facturi și rate de plătit" : "plăți recurente de plătit"}</Text> : null}
       {ctx.plannedMonthly > 0 ? <Text style={{ fontSize: 13, color: muted }}>+ {lei(Math.round(ctx.plannedMonthly))} planificat în Calendar</Text> : null}
       {remainingLine ? (
         <Text style={{ fontSize: 13, fontWeight: "500", color: ctx.remaining >= 0 ? colors.success : colors.error }}>{remainingLine}</Text>
@@ -338,13 +341,18 @@ function SpendRingCard({ widget, ctx, title, go, remainingLine }: { widget: Widg
   const unpaid = [
     ...notYet(ctx.budget?.recurring, "rec", "facturi recurente", "de plătit"),
     ...notYet(ctx.budget?.planned, "plan", "cumpărături planificate", "planificat"),
+    // Credit rates: inside De cheltuit, never a space's -- one line.
+    ...(ctx.creditRates > 0
+      ? [{ key: "rates", label: "Credite · rate", amount: ctx.creditRates, color: hexToRgba(SPACE_IDENTITY_COLORS.expenses ?? muted, 0.45), base: SPACE_IDENTITY_COLORS.expenses ?? muted, note: "de plătit" }]
+      : []),
   ];
   const arcs = [
     ...ctx.spendSegments.map((s) => ({ value: (s.amount / scale) * progress, color: s.color })),
     ...unpaid.map((u) => ({ value: (u.amount / scale) * progress, color: u.color })),
   ];
-  // With a plan: everything counted against the envelope (spent + bills +
-  // planned), the complement of "Mai ai". No plan = no budget = no %.
+  // With a plan: everything counted against De cheltuit (spent + bills +
+  // rates + planned) = monthSpend().committed / E, the complement of "Mai
+  // ai". No plan = no budget = no %.
   const pct = ctx.totalBudget > 0
     ? Math.round(((ctx.spendMonthly.total + ctx.recurringMonthly + ctx.plannedMonthly) / ctx.totalBudget) * 100)
     : null;
@@ -354,7 +362,7 @@ function SpendRingCard({ widget, ctx, title, go, remainingLine }: { widget: Widg
       <MultiRingProgress segments={arcs} size={size} strokeWidth={compact ? 8 : 12} trackColor={colors.surfaceTertiary} />
       <View style={{ position: "absolute", alignItems: "center" }}>
         <Text style={{ fontSize: compact ? 15 : 22, fontWeight: "600", color: colors.onSurface }}>{pct !== null ? `${pct}%` : lei(Math.round(ctx.spendMonthly.total))}</Text>
-        {!compact && pct !== null ? <Text style={{ fontSize: 11, color: muted }}>din necesități</Text> : null}
+        {!compact && pct !== null ? <Text style={{ fontSize: 11, color: muted }}>din buget</Text> : null}
       </View>
     </View>
   );
@@ -654,7 +662,7 @@ function SavingsCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
 const LABEL_KIND: Record<string, SpaceKind> = { Car: "car", Home: "home", Grocery: "grocery", Expenses: "expenses" };
 
 /** Recorded spend this month per space label, highest first (no limits:
- * 2026-11-02, every space spends from one Necesități envelope). lib/dashboard/widgetVisibility.ts's
+ * 2026-11-02, every space spends from one De cheltuit). lib/dashboard/widgetVisibility.ts's
  * "budget" rule mirrors the same formula -- keep the two in sync. */
 function spendBySpace(budget: any): { label: string; kind: SpaceKind | "other"; amount: number }[] {
   const spending = (budget?.spending ?? {}) as Record<string, { this_month?: number }>;

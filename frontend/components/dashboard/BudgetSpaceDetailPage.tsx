@@ -9,7 +9,6 @@ import { capitalize, lei, roCount, roDate } from "@/lib/format";
 import { todoHref, todoTitle } from "@/lib/dashboard/spaceDue";
 import { useFocusEffect, useRouter } from "expo-router";
 import { REFRESH_EVENT } from "@/lib/refresh";
-import { GuiltFreeChip } from "@/components/dashboard/GuiltFree";
 import { fmtLei, weekBars, type PaceEvent } from "@/lib/budget/pace";
 
 export type BudgetSpaceDetailPageProps = {
@@ -21,16 +20,14 @@ export type BudgetSpaceDetailPageProps = {
   /** This space's slice of GET /budget's `pace` (lib/budget/pace.ts) --
    * absent on an older backend: no weekly card then. */
   pace?: { daily: number[]; events: PaceEvent[]; today: number; daysInMonth: number; month: string };
-  /** "+ rată 900 lei pe lună, socotită la Credit" for a linked credit. */
+  /** "+ rată 900 lei pe lună, intră în De cheltuit" for a linked credit. */
   creditNote?: string;
-  /** This month's fără vină spend in this space (not in Necesități). */
-  guiltFreeThisMonth?: number;
 };
 
 type MonthTotal = { year: number; month: number; label: string; total: number };
 /** `planned`: a Calendar purchase whose day hasn't come (EventSpend) --
  * listed, but not spent yet. */
-type SpaceItem = { id: number | string; item_id?: number | string; space_id?: number | null; type: string; title: string; amount: number | null; currency: string | null; due_at: string | null; planned?: boolean; guilt_free?: boolean };
+type SpaceItem = { id: number | string; item_id?: number | string; space_id?: number | null; type: string; title: string; amount: number | null; currency: string | null; due_at: string | null; planned?: boolean };
 
 function monthShort(m: MonthTotal): string {
   return new Date(m.year, m.month, 1).toLocaleDateString("ro-RO", { month: "short" }).replace(".", "");
@@ -42,12 +39,12 @@ function monthLong(m: MonthTotal): string {
 
 /**
  * Opened from a space's row on the Budget tab -- informational only (no
- * per-space limit since 2026-11-02: every space spends from ONE Necesități
- * envelope): this month's spend by week, the last 4 months and the recent
+ * per-space limit since 2026-11-02: every space spends from ONE De
+ * cheltuit): this month's spend by week, the last 4 months and the recent
  * records. Pulls GET /api/budget/spaces/{category}, the same type->space
  * map the Budget tab is built from.
  */
-export function BudgetSpaceDetailPage({ category, icon, onBack, pace, creditNote, guiltFreeThisMonth = 0 }: BudgetSpaceDetailPageProps) {
+export function BudgetSpaceDetailPage({ category, icon, onBack, pace, creditNote }: BudgetSpaceDetailPageProps) {
   const router = useRouter();
   const { card, colors, spacing, radius, typography, isDark } = useTheme();
   const kind = category.toLowerCase() as SpaceKind;
@@ -166,7 +163,6 @@ export function BudgetSpaceDetailPage({ category, icon, onBack, pace, creditNote
                 {[
                   recurringMonthly > 0 ? `+ ${fmtLei(recurringMonthly)} lei facturi recurente de plătit` : null,
                   planned > 0 ? `+ ${fmtLei(planned)} lei planificat în Calendar` : null,
-                  guiltFreeThisMonth > 0 ? `+ ${fmtLei(guiltFreeThisMonth)} lei fără vină, socotiți separat` : null,
                   creditNote || null,
                 ]
                   .filter(Boolean)
@@ -303,8 +299,7 @@ export function BudgetSpaceDetailPage({ category, icon, onBack, pace, creditNote
                     }
                     trailing={
                       <View style={{ alignItems: "flex-end", gap: spacing.xs }}>
-                        <Text style={{ fontSize: 15, fontWeight: it.planned ? "400" : "600", color: it.planned || it.guilt_free ? colors.onSurfaceTertiary : colors.onSurface }}>{lei(it.amount ?? 0)}</Text>
-                        {it.guilt_free ? <GuiltFreeChip /> : null}
+                        <Text style={{ fontSize: 15, fontWeight: it.planned ? "400" : "600", color: it.planned ? colors.onSurfaceTertiary : colors.onSurface }}>{lei(it.amount ?? 0)}</Text>
                       </View>
                     }
                   />

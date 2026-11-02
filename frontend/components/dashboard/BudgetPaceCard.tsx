@@ -18,7 +18,7 @@ let revealedThisSession = false;
 /**
  * Buget "Ritmul lunii" (direction C, 2026-11): the month's pace in lei.
  * Status chip + one sentence (lib/budget/pace.ts holds every formula and
- * string), then a chart: envelope line, recurring bills as a hatched band
+ * string), then a chart: De cheltuit line, recurring bills + credit rates as a hatched band
  * under it, the dashed "ritm normal" line, the solid recorded-spend line up
  * to today, and a dotted line for the Calendar purchases still ahead. Tap =
  * the month overview. Only drawn when GET /budget sends `pace`.
@@ -177,8 +177,8 @@ export function BudgetPaceCard({
               </Defs>
               {R > 0 && bandH > 0 ? <Rect x={4} y={bandTop} width={w - 8} height={bandH} fill="url(#budgetPaceHatch)" /> : null}
               <Line x1={4} y1={bandTop} x2={w - 4} y2={bandTop} stroke={colors.surfaceTertiary} strokeWidth={2} />
-              {label({ x: w - 4, y: bandTop + 4 + 9, anchor: "end", text: `Necesități ${fmtLei(E)}` })}
-              {R > 0 && bandH >= 14 ? label({ x: 8, y: bandTop + 4 + 9, anchor: "start", text: `facturi ${fmtLei(R)}` }) : null}
+              {label({ x: w - 4, y: bandTop + 4 + 9, anchor: "end", text: `De cheltuit ${fmtLei(E)}` })}
+              {R > 0 && bandH >= 14 ? label({ x: 8, y: bandTop + 4 + 9, anchor: "start", text: `facturi și rate ${fmtLei(R)}` }) : null}
               <Line x1={4} y1={y(0)} x2={w - 4} y2={y(0)} stroke={colors.surfaceTertiary} strokeWidth={1} />
               {r.state !== 1 ? (
                 <Polyline points={pts(ritm)} fill="none" stroke={colors.onSurfaceTertiary} strokeWidth={1.5} strokeDasharray="4 4" />
@@ -216,7 +216,7 @@ export function BudgetPaceCard({
           [
             ["solid", "cheltuit"],
             ["dashed", "ritm normal"],
-            ["dotted", "facturi și planificate"],
+            ["dotted", "facturi, rate și planificate"],
           ] as const
         ).map(([kind, text]) => (
           <View key={kind} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>

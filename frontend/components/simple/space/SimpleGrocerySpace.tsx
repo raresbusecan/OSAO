@@ -211,7 +211,7 @@ export function SimpleGrocerySpace({ space, onBack }: SimpleSpaceProps) {
 
   /** GroceryDashboard.handleFinishShopping, same order: restocks first,
    * then the trip's spend, then the refresh event, then the cart clears. */
-  const finish = async (listId: string, price: number | undefined, guiltFree: boolean) => {
+  const finish = async (listId: string, price: number | undefined) => {
     setFinishListId(null);
     const bought = getItemsForList(items, listId).filter((i) => i.inCart);
     const linked = bought.filter((i) => i.linkedSupplyId);
@@ -235,7 +235,7 @@ export function SimpleGrocerySpace({ space, onBack }: SimpleSpaceProps) {
     if (price != null) {
       const list = lists.find((l) => l.id === listId);
       try {
-        await api.createItem(groceryTripToItemBody(space.id, { listId, listName: list?.name ?? "Cumpărături", price, guiltFree }));
+        await api.createItem(groceryTripToItemBody(space.id, { listId, listName: list?.name ?? "Cumpărături", price }));
       } catch (error: any) {
         notifyAction("Nu am putut salva cheltuiala", error?.message || "A apărut o eroare.");
       }
@@ -363,7 +363,7 @@ export function SimpleGrocerySpace({ space, onBack }: SimpleSpaceProps) {
           listName={finishing.name}
           linkedSupplyCount={getItemsForList(items, finishing.id).filter((i) => i.inCart && i.linkedSupplyId).length}
           onCancel={() => setFinishListId(null)}
-          onConfirm={(price, guiltFree) => finish(finishing.id, price, guiltFree)}
+          onConfirm={(price) => finish(finishing.id, price)}
         />
       ) : null}
     </SimplePage>

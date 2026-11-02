@@ -7,7 +7,6 @@ import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field, ToggleRow } from "@/components/ui/primitives";
 import { maintenanceLabel } from "@/lib/spaces/car/maintenanceLabels";
-import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 
 import { confirmAction } from "@/lib/confirm";
 
@@ -206,8 +205,6 @@ export default function CarMaintenanceForm({
 
   // ---- Shared fields (apply to the whole visit, every service in it) ----
   const [description, setDescription] = useState(entry?.description ?? "");
-  // One flag for the whole visit (applies to every line in batch mode).
-  const [guiltFree, setGuiltFree] = useState(!!entry?.guiltFree);
   const [odometer, setOdometer] = useState(entry ? String(entry.odometer) : "");
   const [provider, setProvider] = useState(entry?.provider ?? renewFrom?.provider ?? "");
 
@@ -292,7 +289,6 @@ export default function CarMaintenanceForm({
           id: `maintenance-${Date.now()}-${index}`,
           date: dateIso,
           ...draft,
-          guiltFree,
         }))));
 
       return;
@@ -324,7 +320,7 @@ export default function CarMaintenanceForm({
       date: parseDateInput(date) ?? entry?.date ?? new Date().toISOString(),
       ...draftEntry,
       renewedFromId: isRenewing ? renewFrom?.sourceId : entry?.renewedFromId,
-      guiltFree,
+      guiltFree: entry?.guiltFree,
     };
 
     await persist(() => onSave(entryToSave));
@@ -788,8 +784,6 @@ export default function CarMaintenanceForm({
             );
           })
         )}
-
-        <GuiltFreeToggle value={guiltFree} onChange={setGuiltFree} tone={CAR} testID="car-maintenance-guilt-free" onlyIfSet />
 
         {error ? (
           <View style={{ padding: spacing.md, borderRadius: radius.control, backgroundColor: `${colors.error}14` }}>

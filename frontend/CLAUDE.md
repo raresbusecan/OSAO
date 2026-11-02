@@ -28,7 +28,7 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
   All 15 Space item types resolve to their owning section/record, including
   raw `space_id` payloads and Home payment occurrences (`item_id`). Bills in
   Acasă compact/wide and Buget, credit reminders, both Calendar modes and
-  Budget detail/guilt-free rows share `todoHref`; Calendar is reserved for
+  Budget detail rows share `todoHref`; Calendar is reserved for
   personal events. Grocery links select the actual list/product; trips show
   their saved purchase details. `useRecordMutation` guards the additional
   forms against overlapping writes and preserves them on failure. Budget
@@ -139,71 +139,73 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
   the pill is visual only -- don't nest a pressable in it.
 - `app/(tabs)/budget.tsx` — Budget tab, backed by `components/dashboard/
   BudgetOverviewPage.tsx` / `BudgetSpaceDetailPage.tsx`.
-  **Buget din venit** (2026-10): `lib/budget/plan.ts` (jars, labels, colors,
-  `jarAmounts`, `parseAmount`, and the shared plan cache `useBudgetPlan()` /
-  `primeBudgetPlan()` / `refreshBudgetPlan()` that every form reads).
-  **One Necesități envelope** (2026-11-02, user decision, same branch):
-  NO per-space limits. The budget ALWAYS comes from income; every space's
-  spending comes out of the one Necesități envelope (one big car expense
-  doesn't throw a single space "over"). No plan = no budget: Buget shows
-  the onboarding card + spend per space only. `budget_limits` rows stay in
-  the DB (reversible) but the frontend never reads GET /budget's `limits`
-  or `suggested`; the backend still uses them for the Economii rollover /
-  archive -- see BACKLOG "Backend still reads the hidden per-space limits".
-  **Ritmul lunii** (2026-11-02, direction C, branch feat/budget-pace):
-  order = onboarding card (no plan) -> `BudgetPaceCard.tsx` (plan only;
-  status chip + sentence in LEI, never %; react-native-svg chart: envelope
-  line, bills as a hatched band, dashed "ritm normal", solid recorded
-  spend to today, dotted Calendar purchases ahead; tap = overview; the
-  solid line reveals once per app session via RN Animated) -> "Cheltuit pe
-  spații" (both states; rows = dot + name + recorded spend this month +
-  a thin share bar + "N% din ce ai cheltuit", SORTED by amount, highest
-  first; a label with spend but no space of its kind gets a row too; tap
-  = the space detail. No limit, chip, tick, footer or Reîmparte) ->
-  `IncomeSplitCard.tsx` (5 jars, plain segments, Credit/Investiții 3
-  states; the Necesități row is just the envelope) -> Economii (no plan)
-  -> Plăți recurente. Every pace formula + string is in
-  `lib/budget/pace.ts` (pure, `tests/budget-pace.test.cjs`; total only --
-  the per-space pace was removed): reads GET /budget's `pace` (per label
+  **Buget simplu** (2026-11-02, user decision, branch feat/budget-pace;
+  mockups "Buget simplu" Simplu1/Simplu2/SimpluGrafit): Venit -> Pui
+  deoparte -> De cheltuit. `lib/budget/plan.ts`: `BudgetPlan =
+  {monthly_income, set_aside, spendable}` (GET /budget's `plan`, null = no
+  income; read it through `normalizePlan()` -- `set_aside` null before the
+  backend migration = 0), `monthSpend(spending, recurring, planned,
+  creditRates)` (THE shared total: committed = Σ this_month + rates,
+  recurring = bills + rates = the hatched band, recorded = what was
+  actually spent; Buget, Acasă "Mai ai" and the overview all use it),
+  `SET_ASIDE_PRESETS` (0/10/20/30 % of income), `planInputValid`,
+  `savingsCaption`, `parseAmount`, and the shared plan cache
+  `useBudgetPlan()` / `primeBudgetPlan()` / `refreshBudgetPlan()`
+  (`{plan, credit: {rates, count, items}}`). PUT /budget/plan =
+  `{monthly_income, set_aside}`; a 422 on set_aside shows inline in the
+  sheet, anything else (503 "Bugetul se actualizează…" before the live
+  migration) via notifyAction with the server message. No jars, no
+  Procente, no per-space limits: every space, every recurring bill and
+  every credit rate comes out of ONE De cheltuit (E = I − A). No plan = no
+  budget: onboarding card + spend per space + Economii only.
+  **`guilt_free` is ignored everywhere** (2026-11, user decision): the
+  items column stays, the server strips the field on write, nothing reads
+  it; the item mappers/types still round-trip it (BACKLOG). No "Bani fără
+  vină" toggle, chip, page or row anywhere.
+  **Screen order** (budget.tsx): onboarding card (no plan) / income strip
+  (plan: one PressableScale, Venit · Pui deoparte (− A, success; "0" grey)
+  · De cheltuit + a pencil CircleButton -> `IncomeSheet.tsx`) ->
+  `BudgetPaceCard.tsx` (plan only; status chip + sentence in LEI, never %;
+  react-native-svg chart: "De cheltuit" line, "facturi și rate" hatched
+  band, dashed "ritm normal", solid recorded spend to today, dotted
+  Calendar purchases ahead; tap = overview; the solid line reveals once per
+  app session via RN Animated) -> "Cheltuit pe spații" (both states; rows
+  = dot + name + recorded spend + a thin share bar + "N% din ce ai
+  cheltuit", sorted highest first; a label with spend but no space of its
+  kind gets a row too; tap = space detail) -> Economii (both states; one
+  card -> the goal sheet; caption `savingsCaption`: "+ A puși deoparte și
+  ce rămâne necheltuit din cei E", overspending -- credit rates included,
+  user decision 2026-11-02 -- reduces it) -> Plăți recurente (header "{bills
+  + rates} / lună"; credit rows "credit · intră în De cheltuit").
+  IncomeSheet = "Venit net pe lună" + "Pui deoparte în fiecare lună" with
+  Nimic/10/20/30% Pills + the "De cheltuit pe lună" result box; Save
+  disabled while I ≤ 0 or A > I. Every pace formula + string is in
+  `lib/budget/pace.ts` (pure, `tests/budget-pace.test.cjs` +
+  `tests/budget-simple.test.cjs`): reads GET /budget's `pace` (per label
   `daily` recorded spend per user-tz day + Calendar purchase `events`;
   `today` / `days_in_month` come from the server -- never the device
-  date). No over/under verdict in the first 5 days. E = the plan's
-  envelope, every label merged. `pace` absent (older backend) = the old
-  ring hero (plan only). The space drill-down (`BudgetSpaceDetailPage`,
-  props `pace` / `creditNote` / `guiltFreeThisMonth`, no limit) opens
-  with "Cheltuit în {lună}" (big amount + bills / planned / fără vină /
-  credit lines, weekly bars from `weekBars` -- spend only, no "normal"
-  mark; current month only); the old month chart is "Ultimele 4 luni"
-  (big amount only for a past month, or without `pace`). The overview
-  (`BudgetOverviewPage`) lists spend per space ("Pe spații") and, in the
-  archive, only `spent` for space rows (budget/diff only for the Fără
-  vină / Credit jar rows). Acasă: `totalBudget` = envelope with a plan,
-  else 0; the "budget" card is "Cheltuit pe spații" (`BudgetCard` in
-  HomeWidgets: spend per label + share bar, compact = top 3; visible when
-  any label has recorded spend). Dead since then, not deleted (deletion
-  denied): `BudgetSplitBar.tsx`, `ResplitSheet.tsx` (a null stub).
-  The guilt-free / credit / biggest-expense notes left the rows (the
-  drill-down shows the first two). Sheets: `IncomeSheet.tsx`, `SplitSheet.tsx`
-  (−/+ steppers, Save only at 100). Pages: `GuiltFreePage.tsx`,
-  `BudgetCreditPage.tsx`. `GuiltFree.tsx` = `GuiltFreeToggle` (edit forms
-  only, hidden until a plan exists; only where spending can be guilt-free --
-  general expenses, purchases, shopping, Calendar purchases. Fuel, services,
-  documents and Casă bills/maintenance pass `onlyIfSet`: shown only to undo
-  an existing flag, user decision 2026-11-02) + `GuiltFreeChip`. The Economii goal
-  is the "Termen scurt" row (standalone card only without a plan).
-  First-use tour "budget" (version 2, 4 steps in screen order income ->
-  spaces -> jars -> recurring; copy adapts to TourCtx hasPlan /
-  hasSpaces / hasCredit; a step's `illustration` may be a
-  function of ctx): `budget.top` = the onboarding card
-  without a plan, the pace card (a View around it) with one;
-  `budget.split` = the onboarding bar + legend, or IncomeSplitCard's
-  "Venit net lunar" + 5-part bar block (the hook lives IN
-  IncomeSplitCard); `budget.spaces` = the FIRST space row after sorting (or the empty
-  state) -- the whole section is too tall to leave room for the card;
-  `budget.recurring` = the "Plăți recurente" header. useAutoTour ready =
-  loaded, no space detail / overview / fără vină / credit page, no income /
-  split / goal sheet open. The "spaces" step's illustration is
-  `spaceSpend` (a spend row), its glyph `shareBar`.
+  date). No over/under verdict in the first 5 days. The space drill-down
+  (`BudgetSpaceDetailPage`, props `pace` / `creditNote`, no limit) opens
+  with "Cheltuit în {lună}" (big amount + bills / planned / credit lines,
+  weekly bars from `weekBars`; current month only); the old month chart is
+  "Ultimele 4 luni". The overview (`BudgetOverviewPage`, props `spendable`
+  / `creditRates`) heads with "Cheltuit luna asta · N% din cei E de
+  cheltuit", lists spend per space ("Pe spații"); the archive month shows
+  "{spent} din {E}" when the server archived a `Spendable` row, else
+  "{spent} cheltuiți"; only the `Credit` row is shown outside the spaces
+  (`Spendable` / old `GuiltFree` rows never render). Acasă: `totalBudget`
+  = plan.spendable, else 0; the spend card adds the rates to "de plătit"
+  ("facturi și rate de plătit" + a "Credite · rate" ring line); the
+  "budget" card is "Cheltuit pe spații" (`BudgetCard` in HomeWidgets).
+  The old jar helpers live in `lib/budget/legacyJars.ts` (only TourHost's
+  unused jar glyphs + dead files import it).
+  First-use tour "budget" (version 3, steps income -> spaces -> plan ->
+  recurring; `TourStep.when(ctx)` skips "plan" without a plan -- TourHost
+  filters steps by it): `budget.top` = the onboarding card without a plan,
+  the pace card (a View around it) with one; `budget.split` = the income
+  strip; `budget.spaces` = the FIRST space row after sorting (or the empty
+  state); `budget.recurring` = the "Plăți recurente" header. useAutoTour
+  ready = loaded, no space detail / overview, no income / goal sheet open.
 - `app/(tabs)/calendar.tsx` — the whole Calendar screen, one file (2026-10
   redesign, mockup "orgOS Calendar redesign"): "Următoarele 3 luni" =
   three `MonthMiniCard`s (2026-11-01, user pick from mockup "Calendar · 3
@@ -259,7 +261,7 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
   tab roots (hidden inside a Space; SwipeBackView owns that left edge).
   Left edge drag right = previous tab, right edge drag left = next tab.
 - Tabs are `lazy:false`, so Buget's sub-page state (overview/space
-  detail/credit/guilt-free) survives a tab switch. EXCEPTION: `[id].tsx`
+  detail) survives a tab switch. EXCEPTION: `[id].tsx`
   bumps `visitId` on every focus, remounting the Space dashboard (sub-pages
   reset on a normal re-visit) -- except when arriving via the return trail
   (`markTrailReturn`/`consumeTrailReturn`), which keeps the sub-page. Don't
@@ -613,7 +615,15 @@ name + price + date + notes, no sub-categories.
 - Dead in `components/dashboard/`: `BudgetGlanceCard.tsx`,
   `MonthlyExpensesCard.tsx`, `BudgetSplitBar.tsx` and `ResplitSheet.tsx`
   (both since 2026-11-02, no per-space limits; ResplitSheet is a null
-  stub). Dead in `components/navigation/`:
+  stub); since "Buget simplu" (2026-11-02): `IncomeSplitCard.tsx`,
+  `SplitSheet.tsx`, `GuiltFreePage.tsx`, `GuiltFree.tsx`
+  (`GuiltFreeToggle` + `GuiltFreeChip`), `BudgetCreditPage.tsx` -- each
+  starts with a "DEAD since 2026-11-02" line; GuiltFree/GuiltFreePage
+  carry `// @ts-nocheck` (GET /budget/guilt-free + the summary's guiltFree
+  key are gone). `tests/guilt-free-toggle.test.cjs` now asserts no live
+  file imports them. Also unused, kept: TourHost's `jarNeeds` /
+  `jarGuiltFree` / `jarThird` / `jarSaving` glyphs and `jarBar`
+  illustration. Dead in `components/navigation/`:
   `SpaceCategoryMenu.tsx`. Dead in `lib/dashboard/`:
   `monthlyExpenses.ts` (self-marked `@deprecated`). Dead Expo-template
   leftovers, never touched: `components/hello-wave.tsx`,

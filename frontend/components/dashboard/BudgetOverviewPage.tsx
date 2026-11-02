@@ -8,13 +8,13 @@ import { SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, type SpaceKind } from "@/lib/s
 import { PressableScale } from "@/components/ui/PressableScale";
 import { TopBar, Identity, SectionHeader, Group, EmptyState } from "@/components/ui/primitives";
 import { capitalize, lei } from "@/lib/format";
-import { LABEL_KIND, needsSpend } from "@/lib/budget/plan";
+import { LABEL_KIND, monthSpend } from "@/lib/budget/plan";
 
 type ArchiveMonth = {
   month: string;
   label: string;
   total_spent: number;
-  total_budget: number;
+  total_budget: number | null;
   total_diff: number | null;
   categories: { category: string; budget_limit: number | null; spent: number; diff: number | null }[];
 };
@@ -28,10 +28,12 @@ export type BudgetOverviewPageProps = {
   /** Calendar purchases still ahead this month per label -- also inside
    * `spent`; shown apart as "planificat". */
   planned?: Record<string, number>;
-  /** The necessities envelope when an income plan exists: the header
-   * then compares the shared needsSpend() total to it (same numbers as
-   * Buget's hero and its Necesități row). null = no plan = no budget. */
-  envelope?: number | null;
+  /** De cheltuit (income − Pui deoparte) when an income plan exists: the
+   * header then compares the shared monthSpend() total to it (same numbers
+   * as Buget's pace card and Acasă). null = no plan = no budget. */
+  spendable?: number | null;
+  /** This month's active credit rates (inside De cheltuit, never a space). */
+  creditRates?: number;
   onBack: () => void;
 };
 
@@ -46,13 +48,13 @@ function signedLei(n: number): string {
   return `${n >= 0 ? "+" : "−"}${lei(Math.abs(n))}`;
 }
 
-/** Archive categories that aren't spaces (Buget din venit jars); the
- * month header's totals cover only the space rows. */
-const OUTSIDE_SPACES = ["GuiltFree", "Credit"];
+/** Archive categories that aren't spaces. Only "Credit" is ever rendered
+ * (as "Credit (rate)"); "Spendable" is the month's De cheltuit total (used
+ * for the header), "GuiltFree" an old jar row, never shown. */
+const OUTSIDE_SPACES = ["Credit", "Spendable", "GuiltFree"];
 
-/** One archived category. `withBudget` only for the plan jars (Fără vină,
- * Credit): a space row shows just what was spent -- the archive still
- * stores the old per-space limit, no longer shown (2026-11-02). */
+/** One archived category. A row shows just what was spent -- the archive's
+ * old per-space limits / jar budgets are no longer shown (2026-11-02). */
 function ArchiveCategoryLine({ c, meta, withBudget = false, showDiff = true }: { c: ArchiveMonth["categories"][number]; meta: { name: string; color: string }; withBudget?: boolean; showDiff?: boolean }) {
   const { colors, spacing } = useTheme();
   return (
@@ -78,7 +80,7 @@ function ArchiveCategoryLine({ c, meta, withBudget = false, showDiff = true }: {
  * SPENT this month (each space in its identity color), the spaces
  * ranked by spend, and one archived snapshot per completed month.
  */
-export function BudgetOverviewPage({ spending, spaceKinds, recurring = {}, planned = {}, envelope = null, onBack }: BudgetOverviewPageProps) {
+export function BudgetOverviewPage({ spending, spaceKinds, recurring = {}, planned = {}, spendable = null, creditRates = 0, onBack }: BudgetOverviewPageProps) {
   const { card, colors, spacing, radius, typography } = useTheme();
 
   const [archive, setArchive] = useState<ArchiveMonth[]>([]);
@@ -104,7 +106,7 @@ export function BudgetOverviewPage({ spending, spaceKinds, recurring = {}, plann
   const rows = useMemo(() => {
     // Labels with spend but no space of that kind (e.g. a Calendar
     // purchase lands on "Expenses" without a Cheltuieli space) still
-    // count in Necesități -- they get a row too.
+    // count in De cheltuit -- they get a row too.
     const extra = Object.keys(spending)
       .filter((label) => !spaceKinds.some((k) => k.label === label) && LABEL_KIND[label] && Number(spending[label]?.this_month || 0) > 0)
       .map((label) => ({ kind: LABEL_KIND[label].kind as SpaceKind, label, icon: LABEL_KIND[label].icon }));
@@ -127,13 +129,13 @@ export function BudgetOverviewPage({ spending, spaceKinds, recurring = {}, plann
       .sort((a, b) => b.spent - a.spent);
   }, [spaceKinds, spending, recurring, planned, colors.onSurfaceTertiary]);
 
-  const hasPlan = envelope != null;
-  const needs = needsSpend(spending, recurring, planned);
-  const totalSpent = hasPlan ? needs.recorded : rows.reduce((sum, r) => sum + r.spent, 0);
-  const totalRecurring = hasPlan ? needs.recurring : rows.reduce((sum, r) => sum + r.rec, 0);
-  const totalPlanned = hasPlan ? needs.planned : rows.reduce((sum, r) => sum + r.plan, 0);
-  const totalBudget = hasPlan ? Number(envelope) : 0;
-  const overallRatio = totalBudget > 0 ? needs.committed / totalBudget : 0;
+  const hasPlan = spendable != null;
+  const ms = monthSpend(spending, recurring, planned, hasPlan ? creditRates : 0);
+  const totalSpent = hasPlan ? ms.recorded : rows.reduce((sum, r) => sum + r.spent, 0);
+  const totalRecurring = hasPlan ? ms.recurring : rows.reduce((sum, r) => sum + r.rec, 0);
+  const totalPlanned = hasPlan ? ms.planned : rows.reduce((sum, r) => sum + r.plan, 0);
+  const totalBudget = hasPlan ? Number(spendable) : 0;
+  const overallRatio = totalBudget > 0 ? ms.committed / totalBudget : 0;
   const segments = rows
     .filter((r) => r.spent > 0)
     .map((r) => ({ value: totalSpent > 0 ? r.spent / totalSpent : 0, color: r.color }));
@@ -141,9 +143,7 @@ export function BudgetOverviewPage({ spending, spaceKinds, recurring = {}, plann
   // Archived categories carry the English key ("Car") -- show the
   // Romanian name and the right color for it.
   const categoryMeta = (category: string) => {
-    // Plan rows the archive adds outside the spaces (BudgetController's
-    // ARCHIVE_GUILT_FREE / Credit) -- not part of the month's totals.
-    if (category === "GuiltFree") return { name: "Fără vină", color: colors.onSurfaceTertiary };
+    // The one non-space row still rendered (BudgetController's ARCHIVE_CREDIT).
     if (category === "Credit") return { name: "Credit (rate)", color: colors.success };
     const kind = spaceKinds.find((k) => k.label === category)?.kind
       ?? (["car", "home", "grocery", "expenses"] as SpaceKind[]).find((k) => k === category.toLowerCase());
@@ -172,17 +172,17 @@ export function BudgetOverviewPage({ spending, spaceKinds, recurring = {}, plann
             <View style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
               <MultiRingProgress segments={segments} size={96} trackColor={colors.surfaceTertiary} />
               <View style={{ flex: 1, gap: 2 }}>
-                <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{hasPlan ? "Cheltuit din necesități" : "Cheltuit în total"}</Text>
+                <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{hasPlan ? "Cheltuit luna asta" : "Cheltuit în total"}</Text>
                 <Text style={{ ...typography.display, color: colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>{lei(totalSpent)}</Text>
                 {totalRecurring > 0 ? (
-                  <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>+ {lei(totalRecurring)} plăți recurente de plătit</Text>
+                  <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>+ {lei(totalRecurring)} {hasPlan && ms.rates > 0 ? "facturi și rate de plătit" : "plăți recurente de plătit"}</Text>
                 ) : null}
                 {totalPlanned > 0 ? (
                   <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>+ {lei(totalPlanned)} planificat în Calendar</Text>
                 ) : null}
                 {totalBudget > 0 ? (
                   <Text style={{ fontSize: 13, color: overallRatio >= 1 ? colors.error : colors.success, marginTop: 2 }}>
-                    {Math.round(overallRatio * 100)}% din necesitățile de {lei(Math.round(totalBudget))}
+                    {Math.round(overallRatio * 100)}% din cei {lei(Math.round(totalBudget))} de cheltuit
                   </Text>
                 ) : null}
               </View>
@@ -202,7 +202,7 @@ export function BudgetOverviewPage({ spending, spaceKinds, recurring = {}, plann
           </View>
 
           {/* Per space: recorded spend, then what's not spent yet. No limit
-              (2026-11-02: one Necesități envelope for every space). */}
+              (2026-11-02: one De cheltuit for every space). */}
           <View style={{ gap: spacing.sm }}>
             <SectionHeader title="Pe spații" />
             <Group>
@@ -226,9 +226,9 @@ export function BudgetOverviewPage({ spending, spaceKinds, recurring = {}, plann
 
           {/* One archived snapshot per completed month
               (BudgetController::archiveCompletedMonths). The month shows
-              what was spent; the archive's old per-space limits (and the
-              month's total_budget / total_diff built from them) are no
-              longer shown since 2026-11-02. */}
+              what was spent, "din {De cheltuit}" when the server archived a
+              Spendable row for it (Buget simplu, from 2026-11); older
+              months' limit-based totals are not shown. */}
           <View style={{ gap: spacing.sm }}>
             <SectionHeader title="Lunile trecute" />
             {archiveLoading ? (
@@ -241,6 +241,9 @@ export function BudgetOverviewPage({ spending, spaceKinds, recurring = {}, plann
               <Group>
                 {archive.map((m) => {
                   const isExpanded = expandedMonth === m.month;
+                  const hasSpendable = m.categories.some((c) => c.category === "Spendable") && m.total_budget != null;
+                  const creditRows = m.categories.filter((c) => c.category === "Credit");
+                  const headerText = hasSpendable ? `${lei(m.total_spent)} din ${lei(m.total_budget!)}` : `${lei(m.total_spent)} cheltuiți`;
                   return (
                     <View key={m.month}>
                       <PressableScale
@@ -250,14 +253,13 @@ export function BudgetOverviewPage({ spending, spaceKinds, recurring = {}, plann
                         pressedStyle={{ backgroundColor: colors.surfaceTertiary }}
                         accessibilityRole="button"
                         accessibilityState={{ expanded: isExpanded }}
-                        accessibilityLabel={`${monthTitle(m.month)}, ${lei(m.total_spent)} cheltuiți`}
+                        accessibilityLabel={`${monthTitle(m.month)}, ${headerText}`}
                         style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, minHeight: 58, backgroundColor: colors.surfaceSecondary }}
                       >
                         <View style={{ flex: 1, paddingVertical: 10 }}>
                           <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }}>{monthTitle(m.month)}</Text>
                           <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, marginTop: 2 }}>
-                            {lei(m.total_spent)} cheltuiți
-                            {m.categories.some((c) => OUTSIDE_SPACES.includes(c.category)) ? " · pe spații" : ""}
+                            {headerText}
                           </Text>
                         </View>
                         <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={16} color={colors.onSurfaceTertiary} />
@@ -268,13 +270,11 @@ export function BudgetOverviewPage({ spending, spaceKinds, recurring = {}, plann
                           {m.categories.filter((c) => !OUTSIDE_SPACES.includes(c.category)).map((c) => (
                             <ArchiveCategoryLine key={c.category} c={c} meta={categoryMeta(c.category)} />
                           ))}
-                          {m.categories.some((c) => OUTSIDE_SPACES.includes(c.category)) ? (
+                          {creditRows.length > 0 ? (
                             <View testID={`archive-outside-${m.month}`} style={{ gap: spacing.sm, marginTop: 4, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.surfaceTertiary }}>
-                              <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>În afara spațiilor · nu intră în totalul lunii</Text>
-                              {m.categories.filter((c) => OUTSIDE_SPACES.includes(c.category)).map((c) => (
-                                // Credit rates are fixed instalments, not overspend:
-                                // no red +/- diff for them.
-                                <ArchiveCategoryLine key={c.category} c={c} meta={categoryMeta(c.category)} withBudget showDiff={c.category !== "Credit"} />
+                              <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>În afara spațiilor</Text>
+                              {creditRows.map((c) => (
+                                <ArchiveCategoryLine key={c.category} c={c} meta={categoryMeta(c.category)} />
                               ))}
                             </View>
                           ) : null}

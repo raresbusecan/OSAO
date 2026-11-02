@@ -54,7 +54,8 @@ export function widgetHasContent(widget: Widget, ctx: VisibilityCtx): boolean {
 
     // A savings goal the user set (target or amount non-zero), or any
     // goal while an income plan exists -- saving a plan auto-creates the
-    // goal (target 0) and Economii is then the plan's "Termen scurt" jar.
+    // goal (target 0), and Economii then grows from Pui deoparte + what is
+    // left of De cheltuit each month.
     case "savings":
       return !!ctx.goal && (ctx.hasPlan || Number(ctx.goal.target_amount) > 0 || Number(ctx.goal.current_amount) !== 0);
 

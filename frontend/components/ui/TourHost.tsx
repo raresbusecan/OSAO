@@ -23,7 +23,8 @@ import { api } from "@/lib/api";
 import { CUSTOM_EVENT_COLOR, SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, spaceTextColor, type SpaceKind } from "@/lib/spaces/spaceProfile";
 import { heatColor, type HeatLevel } from "@/lib/statusColors";
 import { MultiRingProgress } from "@/components/dashboard/RingProgress";
-import { DEFAULT_SPLIT, JAR_ORDER, jarFill, type SplitKey } from "@/lib/budget/plan";
+// The jar glyphs / jarBar illustration below are unused since "Buget simplu" (2026-11-02), kept (no deletion).
+import { DEFAULT_SPLIT, JAR_ORDER, jarFill, type SplitKey } from "@/lib/budget/legacyJars";
 import {
   markSeenLocally,
   setTourHandler,
@@ -109,13 +110,15 @@ function TourOverlay({ active, onFinished }: { active: Active; onFinished: () =>
   const pathname = usePathname();
   const { user, updateUser } = useAuth();
 
-  const total = def.steps.length;
+  // Steps whose `when` says no for this ctx are skipped (Buget's "plan" step without a plan).
+  const steps = React.useMemo(() => def.steps.filter((s) => !s.when || s.when(ctx)), [def, ctx]);
+  const total = steps.length;
   const [index, setIndex] = useState(0);
   const [hole, setHole] = useState<Hole | null>(null);
   // Which step `hole` was measured for -- until then the step shows no
   // fallback illustration (no flash of it before the hole lands).
   const [measuredIndex, setMeasuredIndex] = useState(-1);
-  const step: TourStep = def.steps[index];
+  const step: TourStep = steps[index];
   const last = index === total - 1;
   const cta = last && def.finalCta ? def.finalCta(ctx) : null;
 
@@ -361,7 +364,7 @@ function TourOverlay({ active, onFinished }: { active: Active; onFinished: () =>
           {/* Progress: done/current filled, ahead faint, then "N din 4". */}
           <View style={{ height: 24, paddingRight: 96, flexDirection: "row", alignItems: "center", gap: 10 }} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
             <View style={{ width: 88, flexDirection: "row", gap: 4 }}>
-              {def.steps.map((s, i) => (
+              {steps.map((s, i) => (
                 <View key={s.id} style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: i <= index ? colors.onSurface : colors.borderStrong }} />
               ))}
             </View>

@@ -4,7 +4,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { api } from "@/lib/api";
 import { lei } from "@/lib/format";
-import { useBudgetPlan } from "@/lib/budget/plan";
 import {
   SPACE_KIND_LABEL,
   detectSpaceType,
@@ -36,12 +35,11 @@ function untilLabel(endDate: string): string {
 
 /**
  * "Credite" -- bank loans / leasing in the Cheltuieli space. Listed apart
- * from the expenses and never summed with them: their monthly rates go
- * against Buget's 10% "Credit" jar, not any space's spend.
+ * from the expenses and never summed with them: their monthly rates come
+ * out of what Buget says you have to spend, not any space's spend.
  */
 export function ExpensesCreditsSection({ spaceId, credits, onChanged, initialEditId }: ExpensesCreditsSectionProps) {
   const { colors, spacing, isDark } = useTheme();
-  const summary = useBudgetPlan();
   const exp = useSpaceColors("expenses");
   const tint = exp.tint;
   const [editing, setEditing] = useState<CreditEntry | "new" | null>(null);
@@ -82,9 +80,6 @@ export function ExpensesCreditsSection({ spaceId, credits, onChanged, initialEdi
   const ended = useMemo(() => credits.filter((c) => !isCreditActive(c)), [credits]);
   const monthly = useMemo(() => Math.round(active.reduce((sum, c) => sum + c.amount, 0) * 100) / 100, [active]);
 
-  const jar = summary?.plan ? summary.credit.budget : null;
-  const overJar = jar != null && monthly > jar;
-
   const renderCredit = (c: CreditEntry, isEnded: boolean) => {
     const linked = c.linkedSpaceId ? linkable.find((s) => s.id === c.linkedSpaceId) : null;
     return (
@@ -112,7 +107,7 @@ export function ExpensesCreditsSection({ spaceId, credits, onChanged, initialEdi
 
       {credits.length === 0 ? (
         <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, lineHeight: 18 }}>
-          Rate la bancă sau leasing? Adaugă-le aici. Nu intră la cheltuieli.
+          Rate la bancă sau leasing? Adaugă-le aici. Intră în ce ai de cheltuit, nu în spațiu.
         </Text>
       ) : (
         <Group>
@@ -123,11 +118,6 @@ export function ExpensesCreditsSection({ spaceId, credits, onChanged, initialEdi
                 <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>Pe lună</Text>
                 <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurface }}>{lei(monthly)}</Text>
               </View>
-              {overJar ? (
-                <Text testID="credits-over-jar" style={{ fontSize: 13, color: colors.warning }}>
-                  {`Peste cei ${summary!.plan!.split.third}% din venit (${lei(Math.round(jar!))})`}
-                </Text>
-              ) : null}
             </View>
           ) : null}
           {ended.length > 0 ? (

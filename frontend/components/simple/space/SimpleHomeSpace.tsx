@@ -101,7 +101,7 @@ export function SimpleHomeSpace({ space, homeData, onChanged, onBack }: SimpleSp
 
   /** Complet's HomeDashboard.resolveTask, same saved shape: a price logs a
    * spendHistory event dated now. */
-  const resolvePurchase = async (entry: HomeTaskEntry, price: number | undefined, explicitNextDue?: string, guiltFree?: boolean) => {
+  const resolvePurchase = async (entry: HomeTaskEntry, price: number | undefined, explicitNextDue?: string) => {
     setPriceTask(null);
     const now = new Date().toISOString();
     const nextDue = entry.isRecurring ? (explicitNextDue ?? nextTaskOccurrence(entry.dueDate, entry.recurrenceFrequency)) : entry.dueDate;
@@ -111,7 +111,6 @@ export function SimpleHomeSpace({ space, homeData, onChanged, onBack }: SimpleSp
       completedAt: now,
       dueDate: nextDue,
       price: price ?? entry.price,
-      guiltFree: guiltFree ?? entry.guiltFree,
       spendHistory: price ? [...(entry.spendHistory ?? []), { date: now, amount: price }] : entry.spendHistory,
     };
     setBusy(true);
@@ -225,7 +224,7 @@ export function SimpleHomeSpace({ space, homeData, onChanged, onBack }: SimpleSp
         <HomeTaskResolveSheet
           entry={priceTask}
           onCancel={() => setPriceTask(null)}
-          onResolve={(price, nextDue, guiltFree) => resolvePurchase(priceTask, price, nextDue, guiltFree)}
+          onResolve={(price, nextDue) => resolvePurchase(priceTask, price, nextDue)}
         />
       ) : null}
     </SimplePage>

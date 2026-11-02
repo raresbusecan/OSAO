@@ -2,7 +2,6 @@ import React from "react";
 import { View, Text } from "react-native";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { IconWell } from "@/components/ui/primitives";
-import { GuiltFreeChip } from "@/components/dashboard/GuiltFree";
 import { severityColor, urgencyTierColor } from "@/lib/statusColors";
 import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import type { CarRecentItem } from "./utils/carEntries.types";
@@ -30,7 +29,6 @@ export function RecentRow({
     amount,
     statusDot,
     overdue,
-    guiltFree,
     colors,
     spacing,
     last,
@@ -93,7 +91,6 @@ export function RecentRow({
             <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                     <Text style={{ flexShrink: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>{title}</Text>
-                    {guiltFree ? <View><GuiltFreeChip /></View> : null}
                 </View>
                 <Text style={{ marginTop: 2, fontSize: 13, color: colors.onSurfaceTertiary }} numberOfLines={1}>{subtitle}</Text>
             </View>

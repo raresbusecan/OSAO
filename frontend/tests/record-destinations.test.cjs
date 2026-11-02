@@ -22,12 +22,12 @@ test('all 15 Space record types route to their owner, with either API representa
   assert.equal(todoHref({ id: 1, type: 'custom_event', due_at: '2026-10-20T12:00:00' }), '/calendar?date=2026-10-20');
 });
 
-test('Budget history and guilt-free rows open the original payment record', () => {
+// GuiltFreePage is dead since "Buget simplu" (2026-11-02) -- only the space detail is tested.
+test('Budget history rows open the original payment record', () => {
   const visited = [];
   const context = { it: { ...bill, id: 'hs-42-3', item_id: 42 }, router: { navigate: (href) => visited.push(href) }, todoHref };
-  loadPress('components/dashboard/GuiltFreePage.tsx', 'guilt-free-item-', context)();
   loadPress('components/dashboard/BudgetSpaceDetailPage.tsx', 'budget-space-item-', context)();
-  assert.deepEqual(visited, [destination, destination]);
+  assert.deepEqual(visited, [destination]);
 });
 
 test('shared form mutation waits, excludes save/delete overlap, and unlocks an editable form after failure', async () => {
@@ -92,7 +92,7 @@ test('Car service history edits the existing record; only the explicit renewal a
   }
 });
 
-for (const [file, method] of [['GuiltFreePage', 'getGuiltFree'], ['BudgetSpaceDetailPage', 'getBudgetSpaceDetail']]) {
+for (const [file, method] of [['BudgetSpaceDetailPage', 'getBudgetSpaceDetail']]) {
   test(`${file}: returning refreshes records and stale responses cannot overwrite a later save`, async () => {
     const pending = [], shown = [];
     let refresh, removed = false;

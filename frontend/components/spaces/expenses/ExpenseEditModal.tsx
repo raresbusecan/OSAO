@@ -7,7 +7,6 @@ import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Disclosure, Field, FieldButton } from "@/components/ui/primitives";
 import { ExpenseDatePickerSheet } from "./ExpenseDatePickerSheet";
-import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 
 export type ExpenseEditModalProps = {
   entry: ExpenseEntry | null;
@@ -50,7 +49,6 @@ function ExpenseEditSheet({
   const [price, setPrice] = useState(String(entry.price));
   const [date, setDate] = useState(entry.date);
   const [notes, setNotes] = useState(entry.notes ?? "");
-  const [guiltFree, setGuiltFree] = useState(!!entry.guiltFree);
   const [datePickerVisible, setDatePickerVisible] = useState(false);
   const [moreOpen, setMoreOpen] = useState(!!entry.notes);
   const [error, setError] = useState("");
@@ -63,7 +61,7 @@ function ExpenseEditSheet({
       setError("Introdu un nume și un preț valid.");
       return;
     }
-    await onSave({ ...entry, name: name.trim(), price: parsedPrice, date, notes: notes.trim() || undefined, guiltFree });
+    await onSave({ ...entry, name: name.trim(), price: parsedPrice, date, notes: notes.trim() || undefined });
   });
 
   const handleDelete = () => mutation.run(async () => {
@@ -89,7 +87,6 @@ function ExpenseEditSheet({
       <Field testID="expense-edit-name" label="Ce ai cumpărat" value={name} onChangeText={setName} placeholder="ex. Geacă de iarnă" tone={TEAL} />
       <Field testID="expense-edit-price" label="Preț" value={price} onChangeText={setPrice} keyboardType="decimal-pad" big suffix="lei" tone={TEAL} error={error || null} />
       <FieldButton testID="expense-edit-date" label="Data" value={date ? formatShortDate(date) : null} onPress={() => setDatePickerVisible(true)} />
-      <GuiltFreeToggle testID="expense-edit-guilt-free" value={guiltFree} onChange={setGuiltFree} tone={TEAL} />
       <Disclosure label="Adaugă o notă" open={moreOpen} onToggle={() => setMoreOpen((v) => !v)} />
       {moreOpen ? (
         <Field testID="expense-edit-notes" label="Notă" value={notes} onChangeText={setNotes} placeholder="Orice detaliu util" multiline tone={TEAL} />

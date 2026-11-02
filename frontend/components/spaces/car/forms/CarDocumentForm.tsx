@@ -7,7 +7,6 @@ import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field, Pill } from "@/components/ui/primitives";
 
-import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 import { confirmAction } from "@/lib/confirm";
 
 import type { CarDocumentEntry } from "@/lib/spaces/car/car.types";
@@ -72,7 +71,6 @@ export default function CarDocumentForm({
   const [expiryDate, setExpiryDate] = useState(entry?.expiryDate ?? renewFrom?.expiryDate ?? "");
   const [price, setPrice] = useState(entry?.price !== undefined ? String(entry.price) : renewFrom?.price !== undefined ? String(renewFrom.price) : "");
   const [notes, setNotes] = useState(entry?.notes ?? "");
-  const [guiltFree, setGuiltFree] = useState(!!entry?.guiltFree);
 
 
   const [error, setError] = useState("");
@@ -162,7 +160,7 @@ export default function CarDocumentForm({
       price: priceValue,
       notes: notes.trim() || undefined,
       renewedFromId: isRenewing ? renewFrom?.sourceId : entry?.renewedFromId,
-      guiltFree,
+      guiltFree: entry?.guiltFree,
     };
 
     saveLock.current = true;
@@ -249,7 +247,6 @@ export default function CarDocumentForm({
       </View>
       <Field label="Preț (opțional)" value={price} onChangeText={setPrice} placeholder="ex. 650" keyboardType="decimal-pad" suffix="lei" tone={CAR} editable={!readOnly} />
       <Field label="Notițe (opțional)" value={notes} onChangeText={setNotes} placeholder="Orice detaliu util" multiline tone={CAR} editable={!readOnly} />
-      {!readOnly ? <GuiltFreeToggle value={guiltFree} onChange={setGuiltFree} tone={CAR} testID="car-document-guilt-free" onlyIfSet /> : null}
 
       {error ? (
         <View style={{ padding: spacing.md, borderRadius: radius.control, backgroundColor: `${colors.error}14` }}>

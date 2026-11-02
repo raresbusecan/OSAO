@@ -8,7 +8,6 @@ import { useTheme } from "@/lib/theme";
 import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import { Sheet } from "@/components/ui/Sheet";
 import { Button, Field, Disclosure } from "@/components/ui/primitives";
-import { GuiltFreeToggle } from "@/components/dashboard/GuiltFree";
 
 import { confirmAction } from "@/lib/confirm";
 
@@ -62,7 +61,6 @@ export default function CarFuelForm({
     entry?.odometer !== undefined ? String(entry.odometer) : "",
   );
   const [station, setStation] = useState(entry?.station ?? "");
-  const [guiltFree, setGuiltFree] = useState(!!entry?.guiltFree);
 
   // Defaults to today -- fill-ups get logged on the day they happen most
   // of the time, but a receipt from yesterday shouldn't have to become
@@ -183,7 +181,7 @@ export default function CarFuelForm({
       id: entry?.id ?? `fuel-${Date.now()}`,
       date: parseDateInput(date) ?? entry?.date ?? new Date().toISOString(),
       ...draftEntry,
-      guiltFree,
+      guiltFree: entry?.guiltFree,
     };
 
     await onSave(entryToSave);
@@ -197,7 +195,7 @@ export default function CarFuelForm({
   // Sliders, station: secondary details, folded away until asked for
   // (open straight away when editing an entry that already uses them).
   const [moreOpen, setMoreOpen] = useState(
-    !!(entry?.station || entry?.level_before != null || entry?.level_after != null || entry?.guiltFree),
+    !!(entry?.station || entry?.level_before != null || entry?.level_after != null),
   );
 
   return (
@@ -292,7 +290,6 @@ export default function CarFuelForm({
               Setează capacitatea rezervorului (Editează mașina) ca să primești litrii sugerați și consumul estimat.
             </Text>
           ) : null}
-          <GuiltFreeToggle value={guiltFree} onChange={setGuiltFree} tone={CAR} testID="car-fuel-guilt-free" onlyIfSet />
         </View>
       ) : null}
 

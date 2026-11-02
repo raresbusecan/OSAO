@@ -399,7 +399,7 @@ export default function HomeDashboard({
   // default, but the resolve sheet lets the user override that computed
   // date -- explicitNextDue, when passed, wins. A plain task's dueDate
   // stays put; it completes and archives normally.
-  const resolveTask = async (entry: HomeTaskEntry, price: number | undefined, explicitNextDue?: string, guiltFree?: boolean) => {
+  const resolveTask = async (entry: HomeTaskEntry, price: number | undefined, explicitNextDue?: string) => {
     const now = new Date().toISOString();
     const nextDue = entry.isRecurring
       ? (explicitNextDue ?? nextTaskOccurrence(entry.dueDate, entry.recurrenceFrequency))
@@ -411,8 +411,6 @@ export default function HomeDashboard({
       completedAt: now,
       dueDate: nextDue,
       price: price ?? entry.price,
-      // "Bani fără vină" from HomeTaskResolveSheet's purchase step; kept as-is otherwise.
-      guiltFree: guiltFree ?? entry.guiltFree,
       // A real price logs a NEW spend event every time, instead of just
       // overwriting the single `price` field above -- a recurring
       // purchase task resolved 3 times this month should count 3 times,
@@ -445,9 +443,9 @@ export default function HomeDashboard({
     resolveTask(entry, undefined);
   };
 
-  const handleResolveConfirm = async (price: number | undefined, nextDueDate: string | undefined, guiltFree?: boolean) => {
+  const handleResolveConfirm = async (price: number | undefined, nextDueDate: string | undefined) => {
     if (!resolveSheetEntry) return;
-    await resolveTask(resolveSheetEntry, price, nextDueDate, guiltFree);
+    await resolveTask(resolveSheetEntry, price, nextDueDate);
     setResolveSheetEntry(null);
   };
 

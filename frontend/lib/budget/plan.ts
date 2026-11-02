@@ -1,119 +1,100 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { onSessionReset, sessionVersion } from "@/lib/sessionCache";
-import type { ThemeColors } from "@/lib/theme";
 import type { BudgetCreditItem } from "@/lib/spaces/expenses/credits";
 
 /**
- * "Buget din venit" -- the monthly NET income split into 5 jars (integer
- * percents that sum to 100). Backend: users.monthly_income/budget_split,
- * PUT /budget/plan, GET /budget's plan/necessities/guiltFree/credit keys
- * (BudgetController; its `suggested` / `limits` keys are no longer read).
+ * "Buget simplu" (2026-11-02, user decision): Venit -> Pui deoparte -> De
+ * cheltuit. Backend: users.monthly_income + users.monthly_set_aside, PUT
+ * /budget/plan {monthly_income, set_aside}, GET /budget's plan/credit keys
+ * (BudgetController).
  *
- *  - needs       Necesități -- ONE envelope every space's spending comes
- *                out of (no per-space limits since 2026-11-02)
- *  - guilt_free  Bani fără vină -- tracked via each item's guilt_free flag
- *  - third       Credit (tracked while >= 1 active credit) else Investiții
- *  - short_term  Obiective pe termen scurt = the Economii savings goal;
- *                added to it automatically at month end
- *  - long_term   Bani pe termen lung -- a target only
+ *  - Venit (I)         monthly net income
+ *  - Pui deoparte (A)  a fixed sum per month (0 <= A <= I), added to the
+ *                      Economii goal on the 1st of the next month
+ *  - De cheltuit (E)   = I - A, the ONE budget every space's spending,
+ *                      every recurring bill and every credit rate comes
+ *                      out of. Whatever is left of E at month end also goes
+ *                      to Economii; overspending is taken out of it.
+ *
+ * No per-space limits, no jars, no "Bani fără vină": the items' guilt_free
+ * flag is ignored everywhere (the server strips it on write). The old jar
+ * helpers live on, unused, in lib/budget/legacyJars.ts.
  */
 
-export type SplitKey = "needs" | "guilt_free" | "third" | "short_term" | "long_term";
-export type BudgetSplit = Record<SplitKey, number>;
-export type BudgetPlan = { monthly_income: number; split: BudgetSplit };
+export type BudgetPlan = { monthly_income: number; set_aside: number; spendable: number };
 
-export const JAR_ORDER: SplitKey[] = ["needs", "guilt_free", "third", "short_term", "long_term"];
-export const DEFAULT_SPLIT: BudgetSplit = { needs: 55, guilt_free: 5, third: 10, short_term: 15, long_term: 15 };
+/** "Pui deoparte" presets, percent of income (IncomeSheet's chips). */
+export const SET_ASIDE_PRESETS = [0, 10, 20, 30] as const;
 
-/** Jar names. `third` depends on whether a credit is active. */
-export function jarLabel(key: SplitKey, hasCredit = false): string {
-  switch (key) {
-    case "needs":
-      return "Necesități";
-    case "guilt_free":
-      return "Bani fără vină";
-    case "third":
-      return hasCredit ? "Credit" : "Investiții";
-    case "short_term":
-      return "Obiective pe termen scurt";
-    case "long_term":
-      return "Bani pe termen lung";
-  }
+/** A preset's amount: income x percent, rounded to whole lei. */
+export function setAsideFromPercent(income: number, percent: number): number {
+  return Math.round((income * percent) / 100);
 }
 
-/** Short names, for the income sheet's preview. */
-export function jarShortLabel(key: SplitKey): string {
-  switch (key) {
-    case "needs":
-      return "Necesități";
-    case "guilt_free":
-      return "Bani fără vină";
-    case "third":
-      return "Credit sau investiții";
-    case "short_term":
-      return "Termen scurt";
-    case "long_term":
-      return "Termen lung";
-  }
+/** IncomeSheet's validation: a positive income, 0 <= set-aside <= income. */
+export function planInputValid(income: number, setAside: number): boolean {
+  return Number.isFinite(income) && income > 0 && Number.isFinite(setAside) && setAside >= 0 && setAside <= income;
 }
 
-/** Jar colors (mockup): needs = the ink color, fără vină = muted grey, credit = success green, the
- * two savings jars = lighter / darker greens. */
-export function jarFill(key: SplitKey, colors: ThemeColors, isDark: boolean): string {
-  switch (key) {
-    case "needs":
-      return colors.onSurface;
-    case "guilt_free":
-      return colors.onSurfaceTertiary;
-    case "third":
-      return colors.success;
-    case "short_term":
-      return isDark ? "#22916A" : "#10B981";
-    case "long_term":
-      return isDark ? "#17654A" : "#6EE7B7";
-  }
-}
-
-export function splitTotal(split: BudgetSplit): number {
-  return JAR_ORDER.reduce((sum, k) => sum + (Number(split[k]) || 0), 0);
-}
-
-/** Each jar's monthly amount (income x percent, 2 decimals like the server). */
-export function jarAmounts(income: number, split: BudgetSplit): BudgetSplit {
-  const out = {} as BudgetSplit;
-  JAR_ORDER.forEach((k) => {
-    out[k] = Math.round(income * (split[k] || 0)) / 100;
-  });
-  return out;
+/** Normalise GET /budget's `plan` (strings from Laravel's decimal casts;
+ * `set_aside` null until the backend migration ran = 0). */
+export function normalizePlan(raw: any): BudgetPlan | null {
+  if (!raw || raw.monthly_income == null) return null;
+  const income = Number(raw.monthly_income) || 0;
+  const setAside = Math.max(0, Number(raw.set_aside ?? 0) || 0);
+  const spendable = raw.spendable != null && Number.isFinite(Number(raw.spendable)) ? Number(raw.spendable) : income - setAside;
+  return { monthly_income: income, set_aside: setAside, spendable };
 }
 
 /**
- * Necessities spend this month -- the ONE number Buget's hero, the
- * Necesități jar row, its drill-down and Acasă's "Mai ai" all use, so they
- * always agree. Sums EVERY label GET /budget returns (not only the kinds
- * the user has a space for): a Calendar purchase lands on the "Expenses"
- * label even without a Cheltuieli space and still counts against
- * Necesități. Fără vină is already excluded by the API.
- *  - committed: everything counted against the envelope (= this_month,
- *    which already folds in recurring bills + Calendar purchases ahead)
- *  - recurring: bills still to pay ("de plătit")
+ * This month's spend against De cheltuit -- the ONE number Buget's pace
+ * card, Acasă's "Mai ai" and the overview all use, so they always agree.
+ * Sums EVERY label GET /budget returns (not only the kinds the user has a
+ * space for): a Calendar purchase lands on the "Expenses" label even
+ * without a Cheltuieli space and still counts.
+ *  - committed: everything counted against E (= Σ this_month, which already
+ *    folds in recurring bills + Calendar purchases ahead, + credit rates)
+ *  - recurring: bills + credit rates (the hatched band, "de plătit")
+ *  - bills / rates: the two halves of `recurring`
  *  - planned:   Calendar purchases still ahead ("planificat")
- *  - recorded:  actually spent = committed - recurring - planned
+ *  - recorded:  actually spent = Σ this_month - bills - planned (rates are
+ *    never "Cheltuit")
  */
-export type NeedsSpend = { committed: number; recurring: number; planned: number; recorded: number };
+export type MonthSpend = { committed: number; recurring: number; bills: number; rates: number; planned: number; recorded: number };
 
-export function needsSpend(
+export function monthSpend(
   spending: Record<string, { this_month?: number } | undefined> | null | undefined,
   recurring: Record<string, number> | null | undefined,
   planned: Record<string, number> | null | undefined,
-): NeedsSpend {
+  creditRates: number = 0,
+): MonthSpend {
   const sum = (o: Record<string, any> | null | undefined, pick: (v: any) => number) =>
     Object.values(o ?? {}).reduce((s: number, v) => s + (Number(pick(v)) || 0), 0);
-  const committed = sum(spending, (v) => v?.this_month);
-  const rec = sum(recurring, (v) => v);
+  const thisMonth = sum(spending, (v) => v?.this_month);
+  const bills = sum(recurring, (v) => v);
   const pl = sum(planned, (v) => v);
-  return { committed, recurring: rec, planned: pl, recorded: Math.max(0, committed - rec - pl) };
+  const rates = Math.max(0, Number(creditRates) || 0);
+  return {
+    committed: thisMonth + rates,
+    recurring: bills + rates,
+    bills,
+    rates,
+    planned: pl,
+    recorded: Math.max(0, thisMonth - bills - pl),
+  };
+}
+
+/** Economii's caption on Buget: what lands in it on the 1st of next month.
+ * Credit rates are inside E, so a month they push over E reduces Economii
+ * (user decision 2026-11-02). `month` = "decembrie". */
+export function savingsCaption(setAside: number, spendable: number, month: string): string {
+  // Whole lei, inline: this module stays free of @/lib/format (tests load it bare).
+  const lei = (n: number) => `${Math.round(n).toLocaleString("ro-RO")} lei`;
+  const E = lei(spendable);
+  return setAside > 0
+    ? `Pe 1 ${month}: + ${lei(setAside)} puși deoparte și ce rămâne necheltuit din cei ${E}. Dacă treci de ei, diferența se scade.`
+    : `Pe 1 ${month}: ce rămâne necheltuit din cei ${E}. Dacă treci de ei, diferența se scade.`;
 }
 
 /** Budget label ("Car", "Home"...) -> its space kind + icon. */
@@ -146,18 +127,15 @@ export function nextMonthName(now: Date = new Date()): string {
 }
 
 // ---------------------------------------------------------------------
-// Shared plan cache -- edit forms across the app need "is there a plan?"
-// (the Bani fără vină toggle stays hidden until there is) and the jar
-// amounts, without each re-fetching /budget. budget.tsx primes it on
-// every load; anything else reads it through useBudgetPlan(), which
-// fetches once if it's empty or stale.
+// Shared plan cache -- screens outside Buget need the plan and the active
+// credits (Car's top card, LinkedCreditsLine) without each re-fetching
+// /budget. budget.tsx primes it on every load; anything else reads it
+// through useBudgetPlan(), which fetches once if it's empty or stale.
 // ---------------------------------------------------------------------
 
 export type BudgetPlanSummary = {
   plan: BudgetPlan | null;
-  necessities: { envelope: number | null; avg_last_3_months: number };
-  guiltFree: { budget: number | null; spent: number; planned: number; count: number };
-  credit: { budget: number | null; rates: number; count: number; items: BudgetCreditItem[] };
+  credit: { rates: number; count: number; items: BudgetCreditItem[] };
 };
 
 const STALE_MS = 60_000;
@@ -172,12 +150,11 @@ onSessionReset(() => {
   listeners.forEach((listener) => listener(null));
 });
 
-function pickSummary(b: any): BudgetPlanSummary {
+export function pickSummary(b: any): BudgetPlanSummary {
+  const c = b?.credit;
   return {
-    plan: b?.plan ?? null,
-    necessities: b?.necessities ?? { envelope: null, avg_last_3_months: 0 },
-    guiltFree: b?.guiltFree ?? { budget: null, spent: 0, planned: 0, count: 0 },
-    credit: b?.credit ?? { budget: null, rates: 0, count: 0, items: [] },
+    plan: normalizePlan(b?.plan),
+    credit: { rates: Number(c?.rates) || 0, count: Number(c?.count) || 0, items: Array.isArray(c?.items) ? c.items : [] },
   };
 }
 

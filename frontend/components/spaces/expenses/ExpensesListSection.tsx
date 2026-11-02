@@ -5,7 +5,6 @@ import { useTheme } from "@/lib/theme";
 import { useSpaceColors } from "@/lib/spaces/spaceTheme";
 import type { ExpenseEntry } from "@/lib/spaces/expenses/expenses.types";
 import { Group, IconWell, SectionHeader, EmptyState } from "@/components/ui/primitives";
-import { GuiltFreeChip } from "@/components/dashboard/GuiltFree";
 import { TitleChipRow } from "./TitleChipRow";
 import { SwipeRow } from "@/components/spaces/SwipeRow";
 import { capitalize, lei, roDate } from "@/lib/format";
@@ -69,7 +68,6 @@ export function ExpensesListSection({ entries, onEntryPress, onEntryDelete, empt
                 onPress={onEntryPress ? () => onEntryPress(entry) : undefined}
                 leading={<IconWell icon={entry.source === "calendar" ? "calendar-outline" : "receipt-outline"} color={exp.color} tint={tint} />}
                 title={entry.name}
-                chip={entry.guiltFree ? <GuiltFreeChip testID={`expense-row-${entry.id}-guilt-free`} /> : undefined}
                 subtitle={
                   entry.source === "calendar"
                     ? `${entry.planned ? "Planificat pe " : ""}${roDate(entry.date)} · din Calendar`

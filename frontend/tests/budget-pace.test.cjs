@@ -53,14 +53,14 @@ test('7. over the envelope: state 2, no per-day', () => {
   assert.equal(r.liber, -350);
   assert.equal(r.state, 2);
   const text = pace.runsText(pace.paceSentence(r, input));
-  assert.match(text, /treci de necesități cu 350 lei/);
+  assert.match(text, /treci de cei 3.850 lei cu 350 lei/);
   assert.doesNotMatch(text, /pe zi/);
 });
 
 test('8. bills take the whole envelope: state 1', () => {
   const r = pace.paceStatus({ ...base, R: 3850 });
   assert.equal(r.state, 1);
-  assert.equal(pace.paceChip(r), 'Facturile trec de necesități');
+  assert.equal(pace.paceChip(r), 'Facturile și ratele trec de buget');
 });
 
 test('9. nothing spent on day 1', () => {

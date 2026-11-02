@@ -7,7 +7,6 @@ import { PressableScale } from "@/components/ui/PressableScale";
 import { AnimatedNumber } from "@/components/ui/AnimatedNumber";
 import { TopBar, Identity, Pill, SectionHeader, Group, Row, IconWell, EmptyState } from "@/components/ui/primitives";
 import { motion } from "@/lib/motion";
-import { GuiltFreeChip } from "@/components/dashboard/GuiltFree";
 import { CAR_PERIOD_PRESETS } from "./CarPeriodSheet";
 import { PeriodPicker } from "@/components/ui/PeriodPicker";
 import { SwipeBackView } from "@/components/spaces/SwipeBackView";
@@ -229,9 +228,6 @@ export function CarExpensesPage({ carData, profile, onBack, onRecordPress }: Car
               trailing={
                 <View style={{ alignItems: "flex-end", gap: spacing.xs }}>
                   <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{formatCarNumber(record.amount)} lei</Text>
-                  {/* Row's title is a plain string, so the chip sits under the amount
-                      (wrapped: the chip itself aligns flex-start). */}
-                  {record.guiltFree ? <View><GuiltFreeChip /></View> : null}
                 </View>
               }
             />

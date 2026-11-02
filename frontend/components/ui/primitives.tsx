@@ -168,10 +168,13 @@ export function SectionHeader({
   action,
   muted,
   info,
+  right,
 }: {
   title: string;
   /** "ⓘ" right after the title -- see InfoButton. */
   info?: HelpKey;
+  /** Plain grey text on the right ("1.130 lei / lună"); ignored with `action`. */
+  right?: string;
   action?: { label: string; onPress: () => void; testID?: string; /** Emphasized action ("Gata"). */ tone?: string; /** Icon before the label, in the same colour ("add" for "Adaugă"). */ icon?: IconName };
   /** Smaller grey heading (month groups, settings groups). */
   muted?: boolean;
@@ -195,6 +198,8 @@ export function SectionHeader({
           {action.icon ? <Ionicons name={action.icon} size={17} color={action.tone ?? colors.onSurfaceTertiary} /> : null}
           <Text style={{ fontSize: 14, color: action.tone ?? colors.onSurfaceTertiary, fontWeight: action.tone ? "600" : "400" }}>{action.label}</Text>
         </Pressable>
+      ) : right ? (
+        <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary, paddingLeft: 12 }} numberOfLines={1}>{right}</Text>
       ) : null}
     </View>
   );

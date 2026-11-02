@@ -123,7 +123,34 @@ drifted a day across the 25 Oct DST change; plus the known
 
 ## Found along the way (not yet fixed)
 
+### Frontend `guiltFree` plumbing left in item mappers and types (2026-11-02) [from: Buget simplu, feat/budget-pace 2026-11-02]
+
+The UI no longer shows or sets "Bani fără vină", and ItemBudgetRules strips `guilt_free` on write. But the mappers still round-trip the flag: `lib/spaces/car/carItems.ts`, `lib/spaces/home/homeItems.ts`, `lib/spaces/expenses/expensesItems.ts`, `lib/spaces/grocery/groceryItems.ts`, the `guiltFree?` fields in `car.types.ts` / `home.types.ts` / `expenses.types.ts` / `carEntries.types.ts`, `expenses.calculations.ts`, `components/spaces/car/utils/carEntries.ts`, and the `guiltFree: false` lines in `components/simple/quickAdd/kinds.ts`. The forms now pass the existing value through unchanged. Removing all of it touches about 15 files of plumbing with no visible effect, so it was left out on purpose. Their comments still describe the chip.
+
+### Old `GuiltFree` / limit-based rows in `budget_archives` (2026-11-02) [from: Buget simplu, feat/budget-pace 2026-11-02]
+
+These rows stay as history. `BudgetOverviewPage` never renders `GuiltFree` or `Spendable` rows; it shows the old `Credit` row with spent only. Past months archived before Buget simplu still have per-space `budget_limit`/`diff` values and limit-based `total_budget`/`total_diff`. The UI ignores these (it shows "{spent} cheltuiți" when there is no `Spendable` row). A later pass could null them out or hide them server-side; new months already write null.
+
+### Buget's "Plăți recurente" header total can differ from the sum of its groups (2026-11-02) [from: Buget simplu, feat/budget-pace 2026-11-02]
+
+The section header shows `monthSpend().bills + rates`. Those bills come from GET /budget's `recurring` per label (`recurringMonthlyForLabel`, the bills folded into `this_month`). Each `RecurringGroups` group header instead sums its own `recurringBills` rows with `monthlyEquivalent` (×52/12 for weekly bills, etc.). The two only agree if both use the same set of rows and the same monthly normalisation. Not checked on live data. A personal (`custom_event`) recurring payment, or a maintenance group that `recurring` doesn't count, would make the header and the groups disagree. Verify on the QA sandbox, then decide which one the header should show.
+
+### `Item::activeCredits($month)` has no start bound: a credit counts in months before it existed (2026-11-02) [from: Buget simplu backend, feat/budget-pace 2026-11-02]
+
+`scopeActiveCredits` only checks `status` and `metadata.end_date >= start of month`. Nothing records when a credit started, so `creditRatesForMonth` counts it for every past month too. This mattered little while rates were display-only, but under Buget simplu the rates are part of `committed`. So a credit added on, say, Dec 3 lowers Economii for November and enters November's `Spendable` archive row, if the lazy rollover for November first runs after Dec 3 (the user doesn't open Buget on Dec 1-2). Possible fix: bound it by `created_at` (or a `metadata.start_date`) in the user's zone, in `activeCredits` or only in the rollover/archive callers. Needs a decision, since the frontend's "rate luna asta" probably wants today's behaviour.
+
+### Leftover guilt-free / limit plumbing on the backend after Buget simplu (2026-11-02) [from: Buget simplu backend, feat/budget-pace 2026-11-02]
+
+These are harmless, but they're cleanup for a later pass:
+- `items.guilt_free` is still in `Item::$fillable`, `$casts` and `$attributes`.
+- `HomeSpend`/`EventSpend` keep their `?bool $guiltFree` parameter, but every caller now passes null.
+- `DemoSeeder`'s `$gf` closure parameters are dead: the `item()` helper forces `guilt_free => false`.
+- The `BudgetCategory` model and the `budget_categories` table are only touched now by DemoSeeder's cleanup delete.
+- `BudgetController::ARCHIVE_GUILT_FREE` is only read, so old months' totals can keep excluding those rows.
+
 ### Backend still reads the hidden per-space limits: Economii rollover + archive (2026-11-02) [from: one Necesități envelope, feat/budget-pace 2026-11-02]
+
+**Resolved by Buget simplu (backend, 2026-11-02):** `applyMonthlySavings` no longer reads `budget_categories`; it now adds `income − (Σ spent + credit rates)` for each plan month. Archive space rows have a null `budget_limit`/`diff`, and a `Spendable` row carries the month totals. `limits`/`suggested` are gone from GET /budget, and the limit routes are removed. The original notes follow, kept for history.
 
 User decision 2026-11-02: no per-space limits -- every space spends from ONE Necesități envelope; the frontend no longer reads or shows `budget_limits` (rows kept in the DB on purpose, reversible). Backend semantics were deliberately NOT changed, so three things still depend on those now-invisible rows:
 1. `BudgetController::applyMonthlySavings` adds Σ (limit − spent) for EVERY legacy `BudgetCategory` row, every completed month, plan or no plan. A user with old limits keeps getting Economii moved up/down by numbers they can no longer see or edit; a user without limit rows gets only (fără vină jar − fără vină spent) + the short-term jar. The natural rule for the new model is probably `+ (envelope − needs committed)` for plan months (and nothing for spaces) -- needs a product decision. The help/tour copy was rewritten to describe the no-legacy-rows case only (short-term jar + fără vină leftover).
