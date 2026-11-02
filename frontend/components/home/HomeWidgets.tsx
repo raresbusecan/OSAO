@@ -80,6 +80,9 @@ export type HomeCtx = {
   refresh: () => void;
   /** Edit mode: cards render as previews -- no navigation, no swipes. */
   preview?: boolean;
+  /** The lifted copy of a held card (components/ui/Hold.tsx): no count-up
+   * or ring sweep on mount -- the real card under it already did that. */
+  still?: boolean;
 };
 
 /** The card's own surface: Settings > Aspect's card style (`card`: fill,
@@ -213,7 +216,7 @@ function SpendCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
         {ctx.totalBudget > 0 ? <Text style={{ fontSize: 13, color: muted }}>buget {lei(Math.round(ctx.totalBudget))}</Text> : null}
       </View>
       <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-        <AnimatedNumber countUpOnMount={!ctx.preview} value={ctx.spendMonthly.total} style={{ ...typography.hero, color: colors.onSurface }} />
+        <AnimatedNumber countUpOnMount={!ctx.preview && !ctx.still} value={ctx.spendMonthly.total} style={{ ...typography.hero, color: colors.onSurface }} />
         <Text style={{ fontSize: 17, fontWeight: "500", color: muted }}>lei</Text>
       </View>
       <SpendBar segments={ctx.spendSegments} track={colors.surfaceTertiary} />
@@ -321,7 +324,7 @@ function SpendRingCard({ widget, ctx, title, go, remainingLine }: { widget: Widg
   const { colors, typography, spacing } = useTheme();
   const muted = colors.onSurfaceTertiary;
   const compact = widget.size === "compact";
-  const progress = useSweep(!ctx.preview);
+  const progress = useSweep(!ctx.preview && !ctx.still);
   const scale = Math.max(ctx.totalBudget, ctx.spendMonthly.total + ctx.recurringInBudget + ctx.plannedInBudget, 1);
   // Money not spent yet, per space that has a budget -- recurring bills
   // still to pay and Calendar purchases still ahead -- drawn in THAT
@@ -381,7 +384,7 @@ function SpendRingCard({ widget, ctx, title, go, remainingLine }: { widget: Widg
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           <TitleWithInfo title={title} ctx={ctx} topic="card.spend" />
           <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6 }}>
-            <AnimatedNumber countUpOnMount={!ctx.preview} value={ctx.spendMonthly.total} style={{ ...typography.display, color: colors.onSurface }} />
+            <AnimatedNumber countUpOnMount={!ctx.preview && !ctx.still} value={ctx.spendMonthly.total} style={{ ...typography.display, color: colors.onSurface }} />
             <Text style={{ fontSize: 15, fontWeight: "500", color: muted }}>lei</Text>
           </View>
           {ctx.totalBudget > 0 ? <Text style={{ fontSize: 13, color: muted }}>din {lei(Math.round(ctx.totalBudget))}</Text> : null}

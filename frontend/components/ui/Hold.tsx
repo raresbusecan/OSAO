@@ -228,7 +228,8 @@ export function useHoldGroup({
     s.dragging = true;
     s.order = [...(opts.current.order ?? [])];
     ghost.setValue({ x: 0, y: 0 });
-    showHoldGhost({ rect: s.rect, offset: ghost, preview: reg.get().preview });
+    // A copy: auto-scroll shifts the measured rects in place.
+    showHoldGhost({ rect: { ...s.rect }, offset: ghost, preview: reg.get().preview });
     setDragId(s.held);
     setLive(s.order);
     const scroller: Scroller = opts.current.scrollRef?.current ?? null;
@@ -452,3 +453,18 @@ export function HoldItem({
     </Animated.View>
   );
 }
+
+/**
+ * Something on a holdable page that is neither an item nor an empty spot
+ * (a banner with its own buttons): a hold on it does nothing. Outside a
+ * HoldGroup it's a plain View.
+ */
+export function HoldInert({ id, style, children }: { id: string; style?: StyleProp<ViewStyle>; children: React.ReactNode }) {
+  return (
+    <HoldItem id={id} actions={NO_ACTIONS} reorderable={false} style={style}>
+      {children}
+    </HoldItem>
+  );
+}
+
+const NO_ACTIONS: HoldAction[] = [];

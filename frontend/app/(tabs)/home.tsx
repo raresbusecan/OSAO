@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { View, Text, ScrollView, RefreshControl, ActivityIndicator, DeviceEventEmitter, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { ReorderHandle, ReorderList, type ReorderRenderParams } from "@/components/ui/ReorderList";
-import { HoldGroup, HoldItem, useHoldGroup } from "@/components/ui/Hold";
+import { HoldGroup, HoldInert, HoldItem, useHoldGroup } from "@/components/ui/Hold";
 import { reorderSubset } from "@/lib/holdGeometry";
 import type { HoldAction } from "@/lib/holdMenu";
 import { useTheme } from "@/lib/theme";
@@ -508,7 +508,7 @@ function Home() {
     enabled: !loading && !editing,
   });
   const holdCard = (w: Widget, style?: { flex: number; minWidth: number }) => (
-    <HoldItem key={w.id} id={w.id} actions={cardActions(w)} preview={<HomeWidget widget={w} ctx={ctx} />} style={style}>
+    <HoldItem key={w.id} id={w.id} actions={cardActions(w)} preview={<HomeWidget widget={w} ctx={{ ...ctx, still: true }} />} style={style}>
       {spendWrap(w, <HomeWidget widget={w} ctx={ctx} />)}
     </HoldItem>
   );
@@ -603,9 +603,9 @@ function Home() {
           >
             {SHOW_TOUR_TEST_BUTTON ? (
               // TEMP for testing -- see SHOW_TOUR_TEST_BUTTON (lib/tours.ts).
-              <View style={{ flexDirection: "row" }}>
+              <HoldInert id="home-tour-test" style={{ flexDirection: "row" }}>
                 <Pill testID="home-tour-test" icon="play-circle-outline" label="Pornește ghidul" onPress={() => startTour("home", tourCtx)} />
-              </View>
+              </HoldInert>
             ) : null}
             <VerifyEmailBanner testID="home-verify-email-banner" />
             {loading ? (
@@ -675,17 +675,21 @@ function Home() {
           else saveLayoutNow(layout.map((x) => (x.id === w.id ? w : x)));
         }}
         onRemove={async (id) => {
-          setSettingsFor(null);
           if (inDraft) {
+            setSettingsFor(null);
             setDraft((d) => d.filter((w) => w.id !== id || w.type === "spend"));
             return;
           }
-          // Opened from the card's menu: saved at once, so ask first.
+          // Opened from the card's menu: saved at once, so ask first --
+          // with the sheet still open: its own ConfirmHost shows the
+          // question, and closing the sheet first would answer it "no".
           const ok = await confirmAction("Scoți cardul de pe Acasă?", "Setările lui se pierd. Îl poți adăuga din nou din Personalizează Acasă.", {
             confirmLabel: "Scoate",
             destructive: true,
           });
-          if (ok) saveLayoutNow(layout.filter((w) => w.id !== id || w.type === "spend"));
+          if (!ok) return;
+          setSettingsFor(null);
+          saveLayoutNow(layout.filter((w) => w.id !== id || w.type === "spend"));
         }}
       />
 

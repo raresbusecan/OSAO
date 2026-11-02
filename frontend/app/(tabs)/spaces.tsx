@@ -257,7 +257,9 @@ export default function Spaces() {
 
   const finishEditing = async () => {
     const current = spaces.map((x) => String(x.id));
-    const order = draftOrder.filter((id) => current.includes(id));
+    // A space created meanwhile (a "Creează" tile while arranging) goes last.
+    const kept = draftOrder.filter((id) => current.includes(id));
+    const order = [...kept, ...current.filter((id) => !kept.includes(id))];
     if (order.join(",") === current.join(",")) {
       cancelEditing();
       return;
@@ -434,7 +436,11 @@ export default function Spaces() {
 
   // The grid, in the dragged order while arranging.
   const gridSpaces = arranging
-    ? (draftOrder.map((id) => spaces.find((x) => String(x.id) === id)).filter(Boolean) as any[])
+    ? [
+        ...(draftOrder.map((id) => spaces.find((x) => String(x.id) === id)).filter(Boolean) as any[]),
+        // Created while arranging: shown last, as Gata will save it.
+        ...spaces.filter((x) => !draftOrder.includes(String(x.id))),
+      ]
     : spaces;
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const hold = useHoldGroup({

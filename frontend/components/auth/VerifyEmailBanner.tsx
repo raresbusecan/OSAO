@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState, useSyncExternalStore } from "r
 import { View, Text, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
+import { HoldInert } from "@/components/ui/Hold";
 import { api, apiErrorMessage } from "@/lib/api";
 import { useAuth } from "@/providers/auth";
 import { Button } from "@/components/ui/primitives";
@@ -99,7 +100,9 @@ export function VerifyEmailBanner({ testID = "verify-email-banner" }: { testID?:
 
   if (!user || user.email_verified_at !== null || dismissed) return null;
 
+  // On Acasă's holdable page: a hold here is neither a card nor an empty spot.
   return (
+    <HoldInert id="verify-email-banner">
     <View testID={testID} style={{ ...card, borderRadius: radius.card, padding: spacing.lg, gap: spacing.md }}>
       <View style={{ flexDirection: "row", gap: spacing.md }}>
         <Ionicons name="mail-unread-outline" size={22} color={colors.warning} style={{ marginTop: 1 }} />
@@ -136,5 +139,6 @@ export function VerifyEmailBanner({ testID = "verify-email-banner" }: { testID?:
         disabled={secondsLeft > 0}
       />
     </View>
+    </HoldInert>
   );
 }
