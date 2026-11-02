@@ -23,7 +23,6 @@ import { api } from "@/lib/api";
 import { CUSTOM_EVENT_COLOR, SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, spaceTextColor, type SpaceKind } from "@/lib/spaces/spaceProfile";
 import { heatColor, type HeatLevel } from "@/lib/statusColors";
 import { MultiRingProgress } from "@/components/dashboard/RingProgress";
-import { BudgetSplitBar } from "@/components/dashboard/BudgetSplitBar";
 import { DEFAULT_SPLIT, JAR_ORDER, jarFill, type SplitKey } from "@/lib/budget/plan";
 import {
   markSeenLocally,
@@ -554,13 +553,14 @@ function Glyph({ glyph, ctx }: { glyph: TourGlyph; ctx: TourCtx }) {
       const key: SplitKey = glyph === "jarNeeds" ? "needs" : glyph === "jarGuiltFree" ? "guilt_free" : glyph === "jarThird" ? "third" : "short_term";
       return slot(<View style={{ width: 16, height: 8, borderRadius: 4, backgroundColor: jarFill(key, colors, isDark), opacity: key === "needs" ? 0.85 : 1 }} />, { paddingTop: 6 });
     }
-    // Buget: the three parts of a space's BudgetSplitBar.
-    case "barSpent":
-      return slot(<BudgetSplitBar style={{ width: 24 }} recorded={1} upcoming={0} limit={1} color={colors.success} />, { paddingTop: 7 });
-    case "barHatched":
-      return slot(<BudgetSplitBar style={{ width: 24 }} recorded={0} upcoming={1} limit={1} color={SPACE_IDENTITY_COLORS.home!} />, { paddingTop: 7 });
-    case "barLine":
-      return slot(<BudgetSplitBar style={{ width: 24 }} recorded={0.5} upcoming={0.5} limit={0.7} color={colors.success} upcomingColor={SPACE_IDENTITY_COLORS.home!} />, { paddingTop: 7 });
+    // Buget: a "Cheltuit pe spații" row's share bar (part of the month, not a limit).
+    case "shareBar":
+      return slot(
+        <View style={{ width: 24, height: 4, borderRadius: 2, backgroundColor: colors.surfaceTertiary, overflow: "hidden" }}>
+          <View style={{ width: "40%", height: "100%", borderRadius: 2, backgroundColor: SPACE_IDENTITY_COLORS.home! }} />
+        </View>,
+        { paddingTop: 8 },
+      );
     case "repeat":
       return circle(<Ionicons name="repeat" size={15} color={colors.onSurface} />);
     case "savings":
@@ -723,24 +723,20 @@ function Illustration({ kind }: { kind: TourIllustration }) {
           </View>
         </View>
       );
-    case "splitBar": {
-      // One "Necesități pe spații" row: spent + hatched past the budget line.
+    case "spaceSpend": {
+      // One "Cheltuit pe spații" row: spent this month + its share of the total.
       const home = SPACE_IDENTITY_COLORS.home!;
       return (
         <View {...hidden} style={{ borderRadius: 12, backgroundColor: colors.surfaceTertiary, paddingHorizontal: 12, paddingVertical: 10, gap: 8 }}>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: hexToRgba(home, 0.16), alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name="home-outline" size={14} color={spaceTextColor("home", isDark) ?? home} />
-            </View>
-            <Text style={{ flex: 1, fontSize: 13, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>
-              {SPACE_KIND_LABEL.home}
-              <Text style={{ fontWeight: "400", color: colors.onSurfaceTertiary }}> · 40%</Text>
-            </Text>
-            <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>
-              <Text style={{ fontWeight: "600", color: colors.onSurface }}>300</Text> + 250 / 500 lei
-            </Text>
+            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: home }} />
+            <Text style={{ flex: 1, fontSize: 13, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>{SPACE_KIND_LABEL.home}</Text>
+            <Text style={{ fontSize: 13, fontWeight: "600", color: colors.onSurface }}>1.240 lei</Text>
           </View>
-          <BudgetSplitBar style={{ marginLeft: 38 }} recorded={300} upcoming={250} limit={500} color={colors.success} upcomingColor={home} />
+          <View style={{ height: 4, borderRadius: 2, backgroundColor: colors.surface, overflow: "hidden" }}>
+            <View style={{ width: "40%", height: "100%", borderRadius: 2, backgroundColor: home }} />
+          </View>
+          <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }}>40% din ce ai cheltuit</Text>
         </View>
       );
     }

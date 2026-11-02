@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { BudgetSplitBar, BudgetUpcomingNote, budgetUpcomingSuffix } from "@/components/dashboard/BudgetSplitBar";
 import { View, Text, ScrollView, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
@@ -21,7 +20,6 @@ type ArchiveMonth = {
 };
 
 export type BudgetOverviewPageProps = {
-  limits: { category: string; monthly_limit: number; spent: number }[];
   spending: Record<string, { this_month: number; last_month: number; avg_last_3_months: number }>;
   spaceKinds: { kind: SpaceKind; label: string; icon: keyof typeof Ionicons.glyphMap }[];
   /** Monthly recurring bills per label -- already folded into `spent` /
@@ -32,7 +30,7 @@ export type BudgetOverviewPageProps = {
   planned?: Record<string, number>;
   /** The necessities envelope when an income plan exists: the header
    * then compares the shared needsSpend() total to it (same numbers as
-   * Buget's hero and its Necesități row), instead of the sum of limits. */
+   * Buget's hero and its Necesități row). null = no plan = no budget. */
   envelope?: number | null;
   onBack: () => void;
 };
@@ -52,20 +50,23 @@ function signedLei(n: number): string {
  * month header's totals cover only the space rows. */
 const OUTSIDE_SPACES = ["GuiltFree", "Credit"];
 
-function ArchiveCategoryLine({ c, meta, showDiff = true }: { c: ArchiveMonth["categories"][number]; meta: { name: string; color: string }; showDiff?: boolean }) {
+/** One archived category. `withBudget` only for the plan jars (Fără vină,
+ * Credit): a space row shows just what was spent -- the archive still
+ * stores the old per-space limit, no longer shown (2026-11-02). */
+function ArchiveCategoryLine({ c, meta, withBudget = false, showDiff = true }: { c: ArchiveMonth["categories"][number]; meta: { name: string; color: string }; withBudget?: boolean; showDiff?: boolean }) {
   const { colors, spacing } = useTheme();
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: meta.color }} />
       <Text style={{ flex: 1, fontSize: 14, color: colors.onSurface }}>{meta.name}</Text>
       <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>
-        {lei(c.spent)}{c.budget_limit !== null ? ` din ${lei(c.budget_limit)}` : ""}
+        {lei(c.spent)}{withBudget && c.budget_limit !== null ? ` din ${lei(c.budget_limit)}` : ""}
       </Text>
-      {showDiff && c.diff !== null ? (
+      {withBudget && showDiff && c.diff !== null ? (
         <Text style={{ fontSize: 13, fontWeight: "600", color: c.diff < 0 ? colors.error : colors.onSurfaceTertiary, minWidth: 64, textAlign: "right" }}>
           {signedLei(c.diff)}
         </Text>
-      ) : !showDiff ? (
+      ) : withBudget && !showDiff ? (
         <View style={{ minWidth: 64 }} />
       ) : null}
     </View>
@@ -77,7 +78,7 @@ function ArchiveCategoryLine({ c, meta, showDiff = true }: { c: ArchiveMonth["ca
  * SPENT this month (each space in its identity color), the spaces
  * ranked by spend, and one archived snapshot per completed month.
  */
-export function BudgetOverviewPage({ limits, spending, spaceKinds, recurring = {}, planned = {}, envelope = null, onBack }: BudgetOverviewPageProps) {
+export function BudgetOverviewPage({ spending, spaceKinds, recurring = {}, planned = {}, envelope = null, onBack }: BudgetOverviewPageProps) {
   const { card, colors, spacing, radius, typography } = useTheme();
 
   const [archive, setArchive] = useState<ArchiveMonth[]>([]);
@@ -103,16 +104,13 @@ export function BudgetOverviewPage({ limits, spending, spaceKinds, recurring = {
   const rows = useMemo(() => {
     // Labels with spend but no space of that kind (e.g. a Calendar
     // purchase lands on "Expenses" without a Cheltuieli space) still
-    // count against the budget -- they get a row too.
+    // count in Necesități -- they get a row too.
     const extra = Object.keys(spending)
       .filter((label) => !spaceKinds.some((k) => k.label === label) && LABEL_KIND[label] && Number(spending[label]?.this_month || 0) > 0)
       .map((label) => ({ kind: LABEL_KIND[label].kind as SpaceKind, label, icon: LABEL_KIND[label].icon }));
     return [...spaceKinds, ...extra]
       .map((meta) => {
-        const limit = limits.find((l) => l.category === meta.label);
-        // A space without its own limit still spent real money this
-        // month -- it stays in the ranking instead of silently dropping.
-        const committed = limit ? limit.spent : spending[meta.label]?.this_month ?? 0;
+        const committed = Number(spending[meta.label]?.this_month ?? 0);
         const rec = recurring[meta.label] || 0;
         const plan = planned[meta.label] || 0;
         return {
@@ -123,21 +121,19 @@ export function BudgetOverviewPage({ limits, spending, spaceKinds, recurring = {
           committed,
           rec,
           plan,
-          up: rec + plan,
-          budget: limit?.monthly_limit,
           color: SPACE_IDENTITY_COLORS[meta.kind] ?? colors.onSurfaceTertiary,
         };
       })
       .sort((a, b) => b.spent - a.spent);
-  }, [spaceKinds, limits, spending, recurring, planned, colors.onSurfaceTertiary]);
+  }, [spaceKinds, spending, recurring, planned, colors.onSurfaceTertiary]);
 
   const hasPlan = envelope != null;
   const needs = needsSpend(spending, recurring, planned);
   const totalSpent = hasPlan ? needs.recorded : rows.reduce((sum, r) => sum + r.spent, 0);
   const totalRecurring = hasPlan ? needs.recurring : rows.reduce((sum, r) => sum + r.rec, 0);
   const totalPlanned = hasPlan ? needs.planned : rows.reduce((sum, r) => sum + r.plan, 0);
-  const totalBudget = hasPlan ? Number(envelope) : limits.reduce((sum, l) => sum + l.monthly_limit, 0);
-  const overallRatio = totalBudget > 0 ? (hasPlan ? needs.committed : totalSpent + totalRecurring + totalPlanned) / totalBudget : 0;
+  const totalBudget = hasPlan ? Number(envelope) : 0;
+  const overallRatio = totalBudget > 0 ? needs.committed / totalBudget : 0;
   const segments = rows
     .filter((r) => r.spent > 0)
     .map((r) => ({ value: totalSpent > 0 ? r.spent / totalSpent : 0, color: r.color }));
@@ -168,7 +164,7 @@ export function BudgetOverviewPage({ limits, spending, spaceKinds, recurring = {
 
       {rows.length === 0 ? (
         <View style={{ ...card, borderRadius: radius.card }}>
-          <EmptyState icon="pie-chart-outline" message="Niciun spațiu cu buget sau cheltuieli încă." />
+          <EmptyState icon="pie-chart-outline" message="Niciun spațiu cu cheltuieli încă." />
         </View>
       ) : (
         <>
@@ -186,15 +182,14 @@ export function BudgetOverviewPage({ limits, spending, spaceKinds, recurring = {
                 ) : null}
                 {totalBudget > 0 ? (
                   <Text style={{ fontSize: 13, color: overallRatio >= 1 ? colors.error : colors.success, marginTop: 2 }}>
-                    {Math.round(overallRatio * 100)}% din {hasPlan ? "necesitățile de" : "bugetul de"} {lei(Math.round(totalBudget))}
+                    {Math.round(overallRatio * 100)}% din necesitățile de {lei(Math.round(totalBudget))}
                   </Text>
                 ) : null}
               </View>
             </View>
 
             {/* Share of the month's total per space -- the same order as
-                the ring's arcs. Each space's own budget lives in the rows
-                below, so the two numbers never share one bar. */}
+                the ring's arcs. */}
             <View style={{ gap: spacing.sm }}>
               {rows.filter((r) => r.spent > 0).map((r) => (
                 <View key={r.kind} style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
@@ -206,48 +201,34 @@ export function BudgetOverviewPage({ limits, spending, spaceKinds, recurring = {
             </View>
           </View>
 
+          {/* Per space: recorded spend, then what's not spent yet. No limit
+              (2026-11-02: one Necesități envelope for every space). */}
           <View style={{ gap: spacing.sm }}>
-            <SectionHeader title="Față de bugetul fiecăruia" />
+            <SectionHeader title="Pe spații" />
             <Group>
-              {rows.map((row) => {
-                // A 0 limit is still a set limit (anything spent is over it).
-                const hasBudget = row.budget != null;
-                return (
-                  <View key={row.kind} style={{ paddingHorizontal: spacing.lg, paddingVertical: 14, gap: spacing.sm }}>
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
-                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: row.color }} />
-                      <Text style={{ flex: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface }}>{row.name}</Text>
-                      <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>
-                        <Text style={{ fontWeight: "600", color: hasBudget && row.spent > row.budget! ? colors.error : colors.onSurface }}>{lei(row.spent)}</Text>
-                        {hasBudget ? `${budgetUpcomingSuffix(row.up)} din ${lei(row.budget!)}` : ""}
-                      </Text>
-                    </View>
-                    {hasBudget ? (
-                      <>
-                        <BudgetSplitBar recorded={row.spent} upcoming={row.up} limit={row.budget!} color={row.color} />
-                        <BudgetUpcomingNote recorded={row.spent} upcoming={row.up} limit={row.budget!} planned={row.plan} />
-                      </>
-                    ) : (
-                      <>
-                        <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>Fără buget setat</Text>
-                        {row.rec > 0 ? (
-                          <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>+ {lei(row.rec)} facturi recurente încă neplătite</Text>
-                        ) : null}
-                        {row.plan > 0 ? (
-                          <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>+ {lei(row.plan)} cumpărături planificate în Calendar</Text>
-                        ) : null}
-                      </>
-                    )}
+              {rows.map((row) => (
+                <View key={row.kind} style={{ paddingHorizontal: spacing.lg, paddingVertical: 14, gap: spacing.xs }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: row.color }} />
+                    <Text style={{ flex: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface }}>{row.name}</Text>
+                    <Text style={{ fontSize: 14, fontWeight: "600", color: colors.onSurface }}>{lei(row.spent)}</Text>
                   </View>
-                );
-              })}
+                  {row.rec > 0 ? (
+                    <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>+ {lei(row.rec)} facturi recurente încă neplătite</Text>
+                  ) : null}
+                  {row.plan > 0 ? (
+                    <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>+ {lei(row.plan)} cumpărături planificate în Calendar</Text>
+                  ) : null}
+                </View>
+              ))}
             </Group>
           </View>
 
           {/* One archived snapshot per completed month
-              (BudgetController::archiveCompletedMonths), using the budget
-              active that month -- changing a limit today never rewrites
-              what a past month looked like. */}
+              (BudgetController::archiveCompletedMonths). The month shows
+              what was spent; the archive's old per-space limits (and the
+              month's total_budget / total_diff built from them) are no
+              longer shown since 2026-11-02. */}
           <View style={{ gap: spacing.sm }}>
             <SectionHeader title="Lunile trecute" />
             {archiveLoading ? (
@@ -260,7 +241,6 @@ export function BudgetOverviewPage({ limits, spending, spaceKinds, recurring = {
               <Group>
                 {archive.map((m) => {
                   const isExpanded = expandedMonth === m.month;
-                  const diffColor = m.total_diff === null ? colors.onSurfaceTertiary : m.total_diff < 0 ? colors.error : colors.success;
                   return (
                     <View key={m.month}>
                       <PressableScale
@@ -270,19 +250,16 @@ export function BudgetOverviewPage({ limits, spending, spaceKinds, recurring = {
                         pressedStyle={{ backgroundColor: colors.surfaceTertiary }}
                         accessibilityRole="button"
                         accessibilityState={{ expanded: isExpanded }}
-                        accessibilityLabel={`${monthTitle(m.month)}, ${lei(m.total_spent)} din ${lei(m.total_budget)}`}
+                        accessibilityLabel={`${monthTitle(m.month)}, ${lei(m.total_spent)} cheltuiți`}
                         style={{ flexDirection: "row", alignItems: "center", gap: spacing.md, paddingHorizontal: spacing.lg, minHeight: 58, backgroundColor: colors.surfaceSecondary }}
                       >
                         <View style={{ flex: 1, paddingVertical: 10 }}>
                           <Text style={{ fontSize: 15, fontWeight: "500", color: colors.onSurface }}>{monthTitle(m.month)}</Text>
                           <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary, marginTop: 2 }}>
-                            {lei(m.total_spent)} din {lei(m.total_budget)}
+                            {lei(m.total_spent)} cheltuiți
                             {m.categories.some((c) => OUTSIDE_SPACES.includes(c.category)) ? " · pe spații" : ""}
                           </Text>
                         </View>
-                        {m.total_diff !== null ? (
-                          <Text style={{ fontSize: 14, fontWeight: "600", color: diffColor }}>{signedLei(m.total_diff)}</Text>
-                        ) : null}
                         <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={16} color={colors.onSurfaceTertiary} />
                       </PressableScale>
 
@@ -297,7 +274,7 @@ export function BudgetOverviewPage({ limits, spending, spaceKinds, recurring = {
                               {m.categories.filter((c) => OUTSIDE_SPACES.includes(c.category)).map((c) => (
                                 // Credit rates are fixed instalments, not overspend:
                                 // no red +/- diff for them.
-                                <ArchiveCategoryLine key={c.category} c={c} meta={categoryMeta(c.category)} showDiff={c.category !== "Credit"} />
+                                <ArchiveCategoryLine key={c.category} c={c} meta={categoryMeta(c.category)} withBudget showDiff={c.category !== "Credit"} />
                               ))}
                             </View>
                           ) : null}

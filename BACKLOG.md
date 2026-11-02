@@ -29,7 +29,7 @@ User request: when creating a Mașină or Casă space, a toggle "În rate" (on c
 
 **Status: parked, undecided** -- user wants a distinguishing "label" that appears ONLY when 2+ spaces of the same kind exist (a single home keeps today's look), but hasn't decided what it is, how it looks, or what it's derived from (name? a short tag/variant the user picks? auto "Casa 1/2"?). User asked for design-lead to propose.
 
-**Today:** all spaces of a kind share one identity colour + icon; rows from Calendar / Acasă / recurring bills carry `space {id,name}` from the API, but it's not verified the name is shown everywhere. **Buget groups by KIND label** (`Item::SPENDING_TYPE_SPACE` → "Car"/"Home"; `budget_categories.category`), so two homes share ONE budget and one share of Necesități -- the budget-from-income suggestion/limits are per kind, not per space.
+**Today:** all spaces of a kind share one identity colour + icon; rows from Calendar / Acasă / recurring bills carry `space {id,name}` from the API, but it's not verified the name is shown everywhere. **Buget groups by KIND label** (`Item::SPENDING_TYPE_SPACE` → "Car"/"Home"; `budget_categories.category`), so two homes share ONE row in "Cheltuit pe spații" (spend is grouped per kind, not per space). Since 2026-11-02 there are no per-space limits at all (one Necesități envelope), so the "budget granularity" half of the question below is moot -- only the spend breakdown remains.
 
 **For design-lead:** audit every place a record from a space surfaces (Acasă widgets + De făcut, Calendar, Buget rows/detail/overview, recurring bills, credits chip, LinkedCreditsLine, Cheltuieli, archive) and propose the label (what it is, where it's defined -- likely space create/edit -- and how it renders). Also propose budget granularity with 2+ same-kind spaces: separate limit per space vs one per kind with per-space breakdown (per-space would need `budget_categories` keyed by space_id + BudgetController grouping change).
 
@@ -123,6 +123,18 @@ drifted a day across the 25 Oct DST change; plus the known
 
 ## Found along the way (not yet fixed)
 
+### Backend still reads the hidden per-space limits: Economii rollover + archive (2026-11-02) [from: one Necesități envelope, feat/budget-pace 2026-11-02]
+
+User decision 2026-11-02: no per-space limits -- every space spends from ONE Necesități envelope; the frontend no longer reads or shows `budget_limits` (rows kept in the DB on purpose, reversible). Backend semantics were deliberately NOT changed, so three things still depend on those now-invisible rows:
+1. `BudgetController::applyMonthlySavings` adds Σ (limit − spent) for EVERY legacy `BudgetCategory` row, every completed month, plan or no plan. A user with old limits keeps getting Economii moved up/down by numbers they can no longer see or edit; a user without limit rows gets only (fără vină jar − fără vină spent) + the short-term jar. The natural rule for the new model is probably `+ (envelope − needs committed)` for plan months (and nothing for spaces) -- needs a product decision. The help/tour copy was rewritten to describe the no-legacy-rows case only (short-term jar + fără vină leftover).
+2. `archiveCompletedMonths` still writes `budget_limit` / `diff` per space from the legacy rows, and `archive()` builds `total_budget` / `total_diff` from them. `BudgetOverviewPage` now shows only `spent` for space rows and the month total (budget/diff kept only for the Fără vină / Credit jar rows), so this is invisible but still stored.
+3. `index()` still computes `limits` (one monthly sum per row) and `suggested` (`suggestSplit`) on every GET /budget -- unread now, wasted queries. `POST/PUT /budget/limits` and `DELETE /budget/limits/{category}` have no frontend caller any more (api.ts methods removed).
+Also: the no-plan standalone Economii card's negative-goal text ("Ai cheltuit cu X peste bugetele planificate", `budget.tsx`) can now only come from legacy limits via (1).
+
+### Buget without an income plan has no way into the month overview / archive (2026-11-02) [from: one Necesități envelope, feat/budget-pace 2026-11-02]
+
+The overview page (`BudgetOverviewPage`: composition ring + "Lunile trecute" archive) only opens from the pace card / ring hero, which now exists only with a plan (no plan = no budget). Before, a no-plan user with limits reached it from the "Cheltuit din buget" hero. A no-plan user now sees the onboarding card + "Cheltuit pe spații" rows (each opens its space detail) but can't reach the archive. Decide whether "Cheltuit pe spații" needs a "Vezi luna" link.
+
 ### Untracked `backend/tests/Feature/TmpCarDocReplayTest.php` runs with the suite (2026-11-02) [from: qa-lead on feat/budget-pace]
 
 An untracked, temp-looking test file sits in backend/tests/Feature and runs with every `php artisan test`. Not committed anywhere; decide whether to keep (commit) or delete it.
@@ -136,7 +148,7 @@ The hero ring in `budget.tsx` draws `needsCommitted / envelope` (unpaid bills in
 
 ### ~~Buget: "Cu N% peste ritmul lunii" is percentage points (2026-11-02)~~ FIXED on feat/budget-pace [from: Buget redesign review 2026-11-02]
 
-FIXED on `feat/budget-pace` (2026-11-02): `paceDelta()`/`monthProgress()` deleted. The total card says pace in lei ("Cu 475 lei peste ritm"), rows use words (Prea repede / În ritm / Sub ritm), all from `lib/budget/pace.ts`.
+FIXED on `feat/budget-pace` (2026-11-02): `paceDelta()`/`monthProgress()` deleted. The total card says pace in lei ("Cu 475 lei peste ritm"), all from `lib/budget/pace.ts`. (The per-space row words Prea repede / În ritm / Sub ritm were removed the same day with the per-space limits -- rows are spend + share only.)
 
 
 `paceDelta` notes read "Cu 17% peste ritmul lunii" when 60% is spent at 43% of the month: 17 is percentage points, not a percentage. Reword, e.g. "60% cheltuit în 43% din lună".
@@ -279,9 +291,9 @@ Fix on either side: set `dueDate` to the resolution date for a priced one-off, o
 
 `HomeDashboard.tsx` (~856 and ~970) `onSubmit` looks up `existing` by `editingId`; if the record is gone (deleted/archived elsewhere, or a refresh while the form is open), `buildEntry(values, undefined)` quietly creates a NEW record. Should refuse/notify instead. Root of the old "row resolve checkbox vs open form" worry (that exact path is no longer reachable -- the form is a modal Sheet covering the list; a guard was added in `HomeCategoryPage.tsx` anyway). `[from: frontend-lead backlog sweep 2026-10-10]`
 
-### BudgetSplitBar ignores a 0 limit (2026-10-10)
+### ~~BudgetSplitBar ignores a 0 limit (2026-10-10)~~ OBSOLETE 2026-11-02 [from: one Necesități envelope, feat/budget-pace 2026-11-02]
 
-`BudgetSplitBar.tsx:93` (`overByUpcoming`) and `:42` (`budgetAt`) require `limit > 0`, so with a 0 limit plus unpaid bills there's no "bills push you over" note and no budget line. Minor; same whether 0 came from Reîmparte or the space page. `[from: frontend-lead 0-limit fix 2026-10-10]`
+Moot: per-space limits are gone and `BudgetSplitBar.tsx` has no importers (dead, not deleted). Original note: `BudgetSplitBar.tsx:93` (`overByUpcoming`) and `:42` (`budgetAt`) require `limit > 0`, so with a 0 limit plus unpaid bills there's no "bills push you over" note and no budget line. Minor; same whether 0 came from Reîmparte or the space page. `[from: frontend-lead 0-limit fix 2026-10-10]`
 
 Things noticed while working on something else — not the task at hand,
 not worth derailing it for, but real enough to not just forget. Add an
@@ -357,9 +369,9 @@ Besides id 88, the `lifeos` dev DB still has ~20 other obvious test accounts fro
 
 `lib/api.ts` now maps Laravel's default "Too Many Attempts." to Romanian, but Laravel validation messages are still English wherever the backend doesn't set its own (e.g. register's "The email has already been taken.", forgot-password's "The email field must be a valid email address.", login's "The provided credentials are incorrect." -- the last one is papered over in login.tsx's `loginError`). Proper fix is a `lang/ro/validation.php` + `APP_LOCALE=ro` on the backend, not per-screen string matching. `[from: auth-email frontend 2026-10-08]`
 
-### Budget: a 0 limit can be saved from "Reîmparte" but not from the space's own page (2026-10-08)
+### ~~Budget: a 0 limit can be saved from "Reîmparte" but not from the space's own page (2026-10-08)~~ OBSOLETE 2026-11-02 [from: one Necesități envelope, feat/budget-pace 2026-11-02]
 
-`ResplitSheet` saves an explicit 0 per space (and 0 now counts as a set limit everywhere: "Depășit", red amount, "Șterge bugetul"), but `BudgetSpaceDetailPage`'s single amount field still requires > 0 (`saveManualAmount`'s `!(amount > 0)` guard + `typedOk`), so you can't type 0 there to set or keep a 0 limit. Decide whether 0 is a valid limit on that page too. Related: Acasă's "Buget pe spații" card (`HomeWidgets.tsx` BudgetCard) still compares the sum of limits, not the necessities envelope, when a plan exists -- check it against the Buget tab's "Necesități pe spații" footer. `[from: budget-from-income QA fixes 2026-10-08]`
+Moot: no per-space limits any more -- Reîmparte (`ResplitSheet`, now a dead stub), the limit field on `BudgetSpaceDetailPage` and Acasă's limits card are all gone. Original note: `ResplitSheet` saves an explicit 0 per space (and 0 now counts as a set limit everywhere: "Depășit", red amount, "Șterge bugetul"), but `BudgetSpaceDetailPage`'s single amount field still requires > 0 (`saveManualAmount`'s `!(amount > 0)` guard + `typedOk`), so you can't type 0 there to set or keep a 0 limit. Decide whether 0 is a valid limit on that page too. Related: Acasă's "Buget pe spații" card (`HomeWidgets.tsx` BudgetCard) still compares the sum of limits, not the necessities envelope, when a plan exists -- check it against the Buget tab's "Necesități pe spații" footer. `[from: budget-from-income QA fixes 2026-10-08]`
 
 ### Leftover QA test account in the dev DB (2026-10-08)
 
@@ -417,7 +429,7 @@ Mockup "Spații create-space templates": https://claude.ai/artifact/VadARnBuD5N2
 
 ### Budget-from-income QA low findings (2026-10-08)
 
-(a) Credits have no start date: `activeCredits` only checks end_date, so a backfilled archive counts a credit in months before it existed, and a credit created after its pay day counts in this month's `credit.rates` though `next_due` is next month. (b) `suggestSplit` can return a negative amount when recurring floors sit within ~10 lei of the envelope (rounding) -- ResplitSheet saves it as 0, cosmetic. (c) `PUT /items/{credit} {type:"expense_item"}` retypes a credit into an expense (no UI path). (d) With no past-month history the suggestion puts the whole envelope on the space with recurring bills (spec-correct, may surprise). `[from: qa-lead budget-from-income 2026-10-08]`
+(a) Credits have no start date: `activeCredits` only checks end_date, so a backfilled archive counts a credit in months before it existed, and a credit created after its pay day counts in this month's `credit.rates` though `next_due` is next month. (b) `suggestSplit` can return a negative amount when recurring floors sit within ~10 lei of the envelope (rounding) -- moot since 2026-11-02, `suggested` is no longer read. (c) `PUT /items/{credit} {type:"expense_item"}` retypes a credit into an expense (no UI path). (d) With no past-month history the suggestion puts the whole envelope on the space with recurring bills (spec-correct, may surprise). `[from: qa-lead budget-from-income 2026-10-08]`
 
 ### Tap = preview everywhere, long press = actions + haptic everywhere (2026-10-05) -- user decision, Casă done first
 
@@ -916,6 +928,8 @@ no shortcut back to today. Every mainstream calendar app offers a one-tap
 
 ### Budget's Savings Goal auto-update depends invisibly on per-space budget limits being set
 
+**2026-11-02:** superseded by "Backend still reads the hidden per-space limits" in Found along the way -- the limits can't even be set from the UI now, but `applyMonthlySavings` still reads any legacy rows. [from: one Necesități envelope, feat/budget-pace 2026-11-02]
+
 **Where:** `frontend/app/(tabs)/budget.tsx` (Savings Goal card, lines
 ~216-263) + `backend/app/Http/Controllers/Api/BudgetController.php`'s
 `applyMonthlySavings`.
@@ -944,7 +958,9 @@ for the pace signal vs. the ratio-severity signal.
 
 **Found:** `[from: design-lead Phase 3 Budget audit, 2026-09-22]`.
 
-### Budget's per-space limit entry has two competing UIs (3 presets + manual field) for one number
+### ~~Budget's per-space limit entry has two competing UIs (3 presets + manual field) for one number~~ OBSOLETE 2026-11-02 [from: one Necesități envelope, feat/budget-pace 2026-11-02]
+
+Moot: there is no per-space limit entry any more.
 
 **Where:** `frontend/components/dashboard/BudgetSpaceDetailPage.tsx`,
 `BUDGET_PRESETS` + manual `TextInput`/save (lines ~30-34, ~349-472).

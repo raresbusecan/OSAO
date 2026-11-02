@@ -671,7 +671,9 @@ saveHomeProfile: (
     }),
 
   // -------------------------
-  // BUDGET -- category spending limits, recurring bills, savings goal.
+  // BUDGET -- income plan, spending per space label, recurring bills, savings goal.
+  // (`limits` = the old per-space limits: still sent, kept in the DB, no
+  // longer read or shown since 2026-11-02 -- one Necesități envelope.)
   // See BudgetController.
   // -------------------------
 
@@ -695,7 +697,7 @@ saveHomeProfile: (
         count: number;
         items: { id: number; title: string; amount: number; day_of_month: number; end_date: string; linked_space_id: number | null; remaining_rates: number; next_due: string | null }[];
       };
-      /** Suggested per-space split of the needs envelope (labels "Car"...), null without a plan. */
+      /** Suggested per-space split of the needs envelope -- sent by the backend, no longer read (per-space limits dropped 2026-11-02). */
       suggested: Record<string, number> | null;
       /** Buget "Ritmul lunii" (2026-11): per-day recorded spend + Calendar purchases per label, user tz. Absent on an older backend. */
       pace?: import("@/lib/budget/pace").BudgetPace;
@@ -708,30 +710,12 @@ saveHomeProfile: (
       body: JSON.stringify(body),
     }),
 
-  /** Bulk-set several space limits in one transaction ("Reîmparte"). */
-  saveBudgetLimits: (limits: { category: string; monthly_limit: number }[]) =>
-    request<{ message: string; limits: { category: string; monthly_limit: number }[] }>("/budget/limits", {
-      method: "PUT",
-      body: JSON.stringify({ limits }),
-    }),
-
   /** "Bani fără vină": 4 months (oldest first, current last) + this month's flagged records. */
   getGuiltFree: () =>
     request<{
       months: { month: string; budget: number | null; spent: number; planned: number }[];
       items: { id: number | string; item_id?: number | string; type: string; title: string; amount: number | null; currency: string | null; due_at: string | null; guilt_free: boolean; space_id: number | null; label: string; recurring?: boolean; recurrence?: string | null; planned?: boolean }[];
     }>("/budget/guilt-free"),
-
-  saveBudgetLimit: (body: { category: string; monthly_limit: number }) =>
-    request("/budget/limits", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
-
-  deleteBudgetLimit: (category: string) =>
-    request(`/budget/limits/${encodeURIComponent(category)}`, {
-      method: "DELETE",
-    }),
 
   getBudgetSpaceDetail: (category: string) =>
     request<{

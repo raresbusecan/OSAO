@@ -12,8 +12,8 @@ type IconName = keyof typeof Ionicons.glyphMap;
 
 /**
  * Buget's "Împărțirea venitului" card: the income (pencil -> IncomeSheet),
- * a 10px 5-segment bar (the Necesități segment made of the spaces'
- * colors, by their share of the envelope), then one row per jar:
+ * a 10px 5-segment bar (one plain segment per jar -- Necesități is ONE
+ * envelope since 2026-11-02, no per-space split), then one row per jar:
  * Necesități -> overview, Bani fără vină -> GuiltFreePage, Credit /
  * Investiții (3 states) -> BudgetCreditPage, Termen scurt (= the Economii
  * goal, auto-added at month start) -> goal sheet, Termen lung (target).
@@ -23,7 +23,6 @@ export function IncomeSplitCard({
   guiltFree,
   credit,
   savingsGoal,
-  needsSegments,
   onEditIncome,
   onEditSplit,
   onOpenNeeds,
@@ -35,8 +34,6 @@ export function IncomeSplitCard({
   guiltFree: { spent: number; planned: number };
   credit: { rates: number; count: number };
   savingsGoal: { target_amount: number; current_amount: number } | null;
-  /** Space colors with their share of the needs segment (sum <= 1). */
-  needsSegments: { color: string; share: number }[];
   onEditIncome: () => void;
   onEditSplit: () => void;
   onOpenNeeds: () => void;
@@ -110,21 +107,9 @@ export function IncomeSplitCard({
             accessibilityLabel={JAR_ORDER.map((k) => `${jarLabel(k, hasCredit)} ${split[k]}%`).join(", ")}
             style={{ flexDirection: "row", gap: 2, height: 10 }}
           >
-            {JAR_ORDER.filter((k) => split[k] > 0).map((k) =>
-              k === "needs" && needsSegments.length > 0 ? (
-                <View key={k} style={{ flex: split[k], flexDirection: "row", borderRadius: 5, overflow: "hidden", backgroundColor: colors.surfaceTertiary }}>
-                  {needsSegments.map((s, i) => (
-                    <View key={i} style={{ flex: s.share, backgroundColor: s.color }} />
-                  ))}
-                  {/* The unallocated rest of the envelope stays the track. */}
-                  {needsSegments.reduce((a, s) => a + s.share, 0) < 1 ? (
-                    <View style={{ flex: Math.max(0, 1 - needsSegments.reduce((a, s) => a + s.share, 0)) }} />
-                  ) : null}
-                </View>
-              ) : (
-                <View key={k} style={{ flex: split[k], borderRadius: 5, backgroundColor: k === "needs" ? colors.onSurface : fill(k), opacity: k === "needs" ? 0.85 : 1 }} />
-              ),
-            )}
+            {JAR_ORDER.filter((k) => split[k] > 0).map((k) => (
+              <View key={k} style={{ flex: split[k], borderRadius: 5, backgroundColor: k === "needs" ? colors.onSurface : fill(k), opacity: k === "needs" ? 0.85 : 1 }} />
+            ))}
           </View>
         </View>
 

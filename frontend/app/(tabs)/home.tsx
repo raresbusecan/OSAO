@@ -135,10 +135,9 @@ function Home() {
   const onRefresh = async () => { setRefreshing(true); await load(); setRefreshing(false); };
 
   const now = new Date();
-  // With an income plan the budget is the necessities envelope (Buget's hero).
-  const totalBudget = !budget ? 0
-    : budget.plan ? Number(budget.necessities?.envelope ?? 0)
-    : budget.limits.reduce((sum: number, l: any) => sum + Number(l.monthly_limit), 0);
+  // The budget is ALWAYS the income plan's Necesități envelope (Buget's
+  // hero). No plan = no budget (per-space limits dropped 2026-11-02).
+  const totalBudget = budget?.plan ? Number(budget.necessities?.envelope ?? 0) : 0;
   const hasPlan = !!budget?.plan;
   // With a plan, the spend card is on the Buget hero's basis: necessities
   // only (no fără vină), every label -- the shared needsSpend() -- so
@@ -268,17 +267,14 @@ function Home() {
   const goalRatio = goal && Number(goal.target_amount) > 0 ? Math.max(0, Math.min(1, Number(goal.current_amount) / Number(goal.target_amount))) : 0;
   // Recurring bills aren't in "Cheltuit" (nothing was recorded yet) but
   // they're still coming out of the budget -- same split as the Buget tab.
-  const recurringMonthly = Object.values(budget?.recurring ?? {}).reduce((sum: number, v: any) => sum + Number(v || 0), 0);
-  const recurringInBudget = hasPlan ? needs.recurring : (budget?.limits ?? []).reduce((sum: number, l: any) => sum + Number(budget?.recurring?.[l.category] || 0), 0);
+  // Every label counts (one Necesități envelope), so these are needsSpend's.
+  const recurringMonthly = needs.recurring;
   // Calendar purchases still ahead: not spent, but the budget counts them.
-  const plannedMonthly = Object.values(budget?.planned ?? {}).reduce((sum: number, v: any) => sum + Number(v || 0), 0);
-  const plannedInBudget = hasPlan ? needs.planned : (budget?.limits ?? []).reduce((sum: number, l: any) => sum + Number(budget?.planned?.[l.category] || 0), 0);
-  // With an income plan, "Mai ai" is the Buget hero's own number: the
-  // necessities envelope minus every label's committed spend (needsSpend,
-  // fără vină excluded by the API -- the raw dashboard total includes it).
-  const remaining = hasPlan
-    ? totalBudget - needs.committed
-    : totalBudget - monthly.total - recurringInBudget - plannedInBudget;
+  const plannedMonthly = needs.planned;
+  // "Mai ai" is the Buget hero's own number: the necessities envelope minus
+  // every label's committed spend (needsSpend, fără vină excluded by the
+  // API -- the raw dashboard total includes it). Only read with a plan.
+  const remaining = totalBudget - needs.committed;
   const initial = (user?.name ?? "?").trim().charAt(0).toUpperCase();
 
   const ctx: HomeCtx = {
@@ -300,9 +296,7 @@ function Home() {
     remaining,
     hasPlan,
     recurringMonthly,
-    recurringInBudget,
     plannedMonthly,
-    plannedInBudget,
     bills: (budget?.recurringBills || []).filter(isRecurringPayment),
     goal,
     goalRatio,

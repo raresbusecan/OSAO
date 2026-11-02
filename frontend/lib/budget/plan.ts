@@ -7,10 +7,11 @@ import type { BudgetCreditItem } from "@/lib/spaces/expenses/credits";
 /**
  * "Buget din venit" -- the monthly NET income split into 5 jars (integer
  * percents that sum to 100). Backend: users.monthly_income/budget_split,
- * PUT /budget/plan, GET /budget's plan/necessities/guiltFree/credit/
- * suggested keys (BudgetController).
+ * PUT /budget/plan, GET /budget's plan/necessities/guiltFree/credit keys
+ * (BudgetController; its `suggested` / `limits` keys are no longer read).
  *
- *  - needs       Necesități -- the envelope the per-space limits split
+ *  - needs       Necesități -- ONE envelope every space's spending comes
+ *                out of (no per-space limits since 2026-11-02)
  *  - guilt_free  Bani fără vină -- tracked via each item's guilt_free flag
  *  - third       Credit (tracked while >= 1 active credit) else Investiții
  *  - short_term  Obiective pe termen scurt = the Economii savings goal;
@@ -57,8 +58,7 @@ export function jarShortLabel(key: SplitKey): string {
   }
 }
 
-/** Jar colors (mockup): needs = the ink color (its bar segment is made of
- * the space colors), fără vină = muted grey, credit = success green, the
+/** Jar colors (mockup): needs = the ink color, fără vină = muted grey, credit = success green, the
  * two savings jars = lighter / darker greens. */
 export function jarFill(key: SplitKey, colors: ThemeColors, isDark: boolean): string {
   switch (key) {
@@ -88,12 +88,6 @@ export function jarAmounts(income: number, split: BudgetSplit): BudgetSplit {
   return out;
 }
 
-/** Part of the necessities envelope not given to any space yet
- * (negative = the spaces' limits go over it). */
-export function unallocated(envelope: number, limits: { monthly_limit: number }[]): number {
-  return Math.round((envelope - limits.reduce((s, l) => s + (Number(l.monthly_limit) || 0), 0)) * 100) / 100;
-}
-
 /**
  * Necessities spend this month -- the ONE number Buget's hero, the
  * Necesități jar row, its drill-down and Acasă's "Mai ai" all use, so they
@@ -120,41 +114,6 @@ export function needsSpend(
   const rec = sum(recurring, (v) => v);
   const pl = sum(planned, (v) => v);
   return { committed, recurring: rec, planned: pl, recorded: Math.max(0, committed - rec - pl) };
-}
-
-/**
- * Suggested per-space amounts (GET /budget's `suggested`, which can be
- * fractional) rounded to whole lei so they add up EXACTLY to the envelope
- * as shown (Math.round(envelope)) -- the largest one absorbs the
- * difference. Without this, applying the suggestion untouched could read
- * "trec de necesități cu 1 lei".
- */
-export function roundSuggested(suggested: Record<string, number> | null | undefined, envelope: number): Record<string, number> | null {
-  if (!suggested) return null;
-  const keys = Object.keys(suggested);
-  if (keys.length === 0) return {};
-  const out: Record<string, number> = {};
-  keys.forEach((k) => {
-    out[k] = Math.max(0, Math.round(Number(suggested[k]) || 0));
-  });
-  const target = Math.round(envelope);
-  const diff = target - keys.reduce((s, k) => s + out[k], 0);
-  if (diff !== 0) {
-    const largest = keys.reduce((a, b) => (out[b] > out[a] ? b : a));
-    out[largest] = Math.max(0, out[largest] + diff);
-  }
-  return out;
-}
-
-/** Allocations vs the envelope: within 1 leu = exactly split (fractional
- * envelopes like 3767,50 can't be matched by whole-lei limits). */
-export const ENVELOPE_TOLERANCE = 1;
-
-/** "over" | "under" | "exact" with the < 1 leu tolerance. */
-export function envelopeStatus(unallocatedAmount: number): "over" | "under" | "exact" {
-  if (unallocatedAmount <= -ENVELOPE_TOLERANCE) return "over";
-  if (unallocatedAmount >= ENVELOPE_TOLERANCE) return "under";
-  return "exact";
 }
 
 /** Budget label ("Car", "Home"...) -> its space kind + icon. */
@@ -199,7 +158,6 @@ export type BudgetPlanSummary = {
   necessities: { envelope: number | null; avg_last_3_months: number };
   guiltFree: { budget: number | null; spent: number; planned: number; count: number };
   credit: { budget: number | null; rates: number; count: number; items: BudgetCreditItem[] };
-  suggested: Record<string, number> | null;
 };
 
 const STALE_MS = 60_000;
@@ -220,7 +178,6 @@ function pickSummary(b: any): BudgetPlanSummary {
     necessities: b?.necessities ?? { envelope: null, avg_last_3_months: 0 },
     guiltFree: b?.guiltFree ?? { budget: null, spent: 0, planned: 0, count: 0 },
     credit: b?.credit ?? { budget: null, rates: 0, count: 0, items: [] },
-    suggested: b?.suggested ?? null,
   };
 }
 

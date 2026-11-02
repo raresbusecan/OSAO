@@ -18,14 +18,12 @@ export type TourKey = "home" | "spaces" | "budget" | "calendar" | "space_car" | 
 
 /** What a tour's copy may depend on. Each screen fills what its own tour
  * reads (Acasă: hasSpaces/emailState/hasPlan/spendChart/initial; Calendar:
- * nothing yet; Buget: hasPlan/hasSpaces/hasBudgets/hasCredit; Mașină:
+ * nothing yet; Buget: hasPlan/hasSpaces/hasCredit; Mașină:
  * hasCredit/hasUpcoming). */
 export type TourCtx = {
   hasSpaces?: boolean;
   emailState?: "verified" | "unverified" | null;
   hasPlan?: boolean;
-  /** Buget: at least one space has a monthly budget (a bar to point at). */
-  hasBudgets?: boolean;
   /** Buget: at least one active credit (the third part is "Credit").
    * Mașină: a credit linked to THIS car (the line under its top card). */
   hasCredit?: boolean;
@@ -43,11 +41,11 @@ export type TourGlyph =
   // Calendar
   | "month" | "heat" | "eventDot" | "lateDot" | "swipe" | "reminder"
   // Buget
-  | "jarNeeds" | "jarGuiltFree" | "jarThird" | "jarSaving" | "barSpent" | "barHatched" | "barLine" | "repeat" | "savings"
+  | "jarNeeds" | "jarGuiltFree" | "jarThird" | "jarSaving" | "shareBar" | "repeat" | "savings"
   // Mașină (car-tinted icons)
   | "odometer" | "fuel" | "service" | "expense" | "document" | "archive" | "history";
 export type TourPoint = { glyph: TourGlyph; lead?: string; text: string };
-export type TourIllustration = "spaceDots" | "ring" | "ghostCards" | "spaceKinds" | "heatDays" | "swipeRow" | "eventChip" | "jarBar" | "splitBar" | "carHero" | "carActions" | "carNext" | "carPages";
+export type TourIllustration = "spaceDots" | "ring" | "ghostCards" | "spaceKinds" | "heatDays" | "swipeRow" | "eventChip" | "jarBar" | "spaceSpend" | "carHero" | "carActions" | "carNext" | "carPages";
 
 export type TourStep = {
   id: string;
@@ -138,7 +136,7 @@ const HOME: TourDef = {
         ctx.spendChart === "bar"
           ? { glyph: "faded", lead: "„+ … de plătit” și „planificat”:", text: "facturi și cumpărături din Calendar care nu sunt cheltuite încă; le scădem din buget din timp." }
           : { glyph: "faded", lead: "Estompat:", text: "facturi de plătit și cumpărături planificate în Calendar. Nu sunt cheltuite încă, dar le scădem din buget din timp." },
-        { glyph: "remaining", lead: "Mai ai:", text: "ce rămâne din buget până la sfârșitul lunii. Se face roșu dacă treci de buget." },
+        { glyph: "remaining", lead: "Mai ai:", text: "cu venitul adăugat în Buget, ce rămâne din necesități până la sfârșitul lunii. Se face roșu dacă treci de ele." },
         { glyph: "tap", text: ctx.hasSpaces ? "Atinge cardul ca să deschizi Buget." : "Când ai un spațiu, atingi cardul ca să deschizi Buget." },
       ],
     },
@@ -241,12 +239,13 @@ const CALENDAR: TourDef = {
 
 /* ---------------- Buget ---------------- */
 
-// Two states: no income yet (onboarding card, "Pe spații", standalone
-// Economii card) and with a plan ("Ritmul lunii" card, "Necesități pe
-// spații", the five jars, Economii = the "Termen scurt" row). Steps follow
-// the screen: income/pace -> spaces -> jars -> recurring. Facts come from
-// lib/help.ts budget.* -- keep the two in sync. Version 2 (2026-11,
-// "Ritmul lunii"): existing users see it once more.
+// Two states: no income yet (onboarding card, "Cheltuit pe spații",
+// standalone Economii card) and with a plan ("Ritmul lunii" card,
+// "Cheltuit pe spații", the five jars, Economii = the "Termen scurt" row).
+// Steps follow the screen: income/pace -> spaces -> jars -> recurring.
+// Facts come from lib/help.ts budget.* -- keep the two in sync. Version 2
+// (2026-11, "Ritmul lunii" + one Necesități envelope, no per-space limits):
+// existing users see it once more.
 const BUDGET: TourDef = {
   key: "budget",
   version: 2,
@@ -263,7 +262,7 @@ const BUDGET: TourDef = {
       body: (ctx) =>
         ctx.hasPlan
           ? "Linia plină e ce ai cheltuit zi de zi. Linia punctată „ritm normal” arată cât ar fi firesc să fi cheltuit până azi, ca să termini luna în necesități."
-          : "Spune-ne cât câștigi net pe lună, după taxe. Îl împărțim în cinci părți, iar fiecare spațiu își primește bugetul din necesități.",
+          : "Spune-ne cât câștigi net pe lună, după taxe. Îl împărțim în cinci părți, iar tot ce cheltuiești în spații se scade din necesități.",
       points: (ctx) =>
         ctx.hasPlan
           ? [
@@ -274,9 +273,7 @@ const BUDGET: TourDef = {
             ]
           : [
               { glyph: "tap", text: "Atinge „Adaugă venitul”. Îl schimbi doar când se schimbă." },
-              ctx.hasBudgets
-                ? { glyph: "budget", text: "Ai deja bugete pe spații: la prima salvare alegi dacă le păstrezi sau reîmparți necesitățile după cât cheltuiești." }
-                : { glyph: "budget", text: "Până atunci, ecranul arată bugetele pe spații, ca înainte." },
+              { glyph: "budget", text: "Până atunci nu ai un buget: vezi doar cât ai cheltuit în fiecare spațiu." },
             ],
     },
     {
@@ -284,27 +281,21 @@ const BUDGET: TourDef = {
       // The first space row (or the empty state when there's no space).
       target: "budget.spaces",
       placement: "bottom",
-      illustration: "splitBar",
-      // No bar on screen yet (no space, or no budget set) -> show one.
-      illustrationWhen: (ctx) => (ctx.hasSpaces && ctx.hasBudgets ? "fallback" : "always"),
+      illustration: "spaceSpend",
+      // No space yet -> show what a row will look like.
+      illustrationWhen: (ctx) => (ctx.hasSpaces ? "fallback" : "always"),
       scrollIntoView: true,
       targetRadius: 16,
-      title: (ctx) => (ctx.hasPlan ? "Necesități pe spații" : "Bugetele pe spații"),
+      title: () => "Cheltuit pe spații",
       body: (ctx) =>
         !ctx.hasSpaces
-          ? "Când creezi un spațiu Mașină, Casă, Cumpărături sau Cheltuieli, apare aici cu bugetul lui și o bară ca asta:"
+          ? "Când creezi un spațiu Mașină, Casă, Cumpărături sau Cheltuieli, apare aici cu cât ai cheltuit în el luna asta:"
           : ctx.hasPlan
-            ? "Fiecare spațiu, ordonat după ritm: întâi cel care merge prea repede."
-            : "Fiecare spațiu poate avea un buget lunar. Bara lui arată așa:",
+            ? "Cât ai cheltuit luna asta în fiecare spațiu, de la cel mai mare. Spațiile nu au bugete separate: toate cheltuiesc din aceleași necesități."
+            : "Cât ai cheltuit luna asta în fiecare spațiu, de la cel mai mare.",
       points: (ctx) => [
-        { glyph: "barSpent", lead: "Plin:", text: "ce ai cheltuit deja." },
-        { glyph: "barHatched", lead: "Hașurat:", text: "bani socotiți din timp, dar necheltuiți încă: facturi neplătite și cumpărături planificate în Calendar." },
-        { glyph: "barLine", lead: "Liniuța gri:", text: "unde ar fi normal să fii azi. Dacă plinul trece de ea, mergi prea repede." },
-        { glyph: "barLine", lead: "Linia:", text: "bugetul, când bara trece de el." },
-        ...(ctx.hasPlan && ctx.hasSpaces
-          ? [{ glyph: "budget" as TourGlyph, lead: "„Reîmparte”:", text: "împarte necesitățile pe spații după cât cheltuiești de obicei. Dedesubt vezi cât e împărțit și cât a rămas nealocat." }]
-          : []),
-        ...(ctx.hasSpaces ? [{ glyph: "tap" as TourGlyph, text: "Atinge un spațiu ca să-i vezi cheltuielile și să-i setezi sau schimbi bugetul." }] : []),
+        { glyph: "shareBar", lead: "Bara:", text: "partea spațiului din tot ce ai cheltuit luna asta. Nu e o limită." },
+        ...(ctx.hasSpaces ? [{ glyph: "tap" as TourGlyph, text: "Atinge un spațiu ca să-i vezi cheltuielile pe săptămâni și pe ultimele 4 luni." }] : []),
       ],
     },
     {
@@ -322,8 +313,8 @@ const BUDGET: TourDef = {
           ? "Venitul, împărțit în cinci. Venitul îl schimbi din creion, procentele din „Procente”. Sub bară, fiecare parte are rândul ei."
           : "După ce adaugi venitul, îl împărțim implicit 55 / 5 / 10 / 15 / 15. Procentele le poți schimba oricând.",
       points: (ctx) => [
-        { glyph: "jarNeeds", lead: "Necesități:", text: "bugetele spațiilor: Mașină, Casă, Cumpărături, Cheltuieli." },
-        { glyph: "jarGuiltFree", lead: "Bani fără vină:", text: "pe ce vrei tu. Marchezi o cheltuială „fără vină” când o editezi și nu mai intră în bugetul spațiului." },
+        { glyph: "jarNeeds", lead: "Necesități:", text: "o singură sumă din care cheltuiesc toate spațiile: Mașină, Casă, Cumpărături, Cheltuieli." },
+        { glyph: "jarGuiltFree", lead: "Bani fără vină:", text: "pe ce vrei tu. Marchezi o cheltuială „fără vină” când o editezi și nu mai intră în necesități." },
         ctx.hasCredit
           ? { glyph: "jarThird", lead: "Credit:", text: "cât timp ai un credit activ, partea asta urmărește ratele. Dacă trec de procentul ales, te avertizăm." }
           : { glyph: "jarThird", lead: "Credit sau investiții:", text: "cu un credit activ în Cheltuieli, urmărește ratele; fără credit, e o țintă de investit." },
@@ -344,11 +335,11 @@ const BUDGET: TourDef = {
         { glyph: "repeat", lead: "Facturi:", text: "le scădem din buget din timp, ca „de plătit”. Mentenanța intră la Cheltuit abia când o marchezi făcută." },
         { glyph: "swipe", text: "Glisează o plată spre dreapta ca s-o rezolvi, spre stânga ca s-o ștergi." },
         ...(ctx.hasCredit
-          ? [{ glyph: "reminder" as TourGlyph, lead: "Credite:", text: "ratele apar tot aici, dar se socotesc la Credit, nu în bugetul spațiului." }]
+          ? [{ glyph: "reminder" as TourGlyph, lead: "Credite:", text: "ratele apar tot aici, dar se socotesc la Credit, nu în necesități." }]
           : []),
         ctx.hasPlan
-          ? { glyph: "savings", lead: "Economii:", text: "la începutul fiecărei luni primesc partea pe termen scurt și ce a rămas necheltuit din bugete. Le vezi la „Termen scurt”." }
-          : { glyph: "savings", lead: "Economii:", text: "la începutul fiecărei luni primesc ce a rămas necheltuit din bugetele spațiilor. Atinge cardul Economii ca să-ți pui o țintă." },
+          ? { glyph: "savings", lead: "Economii:", text: "la începutul fiecărei luni primesc partea pe termen scurt și ce a rămas din banii fără vină. Le vezi la „Termen scurt”." }
+          : { glyph: "savings", lead: "Economii:", text: "atinge cardul Economii ca să-ți pui o țintă și să notezi cât ai strâns." },
       ],
     },
   ],

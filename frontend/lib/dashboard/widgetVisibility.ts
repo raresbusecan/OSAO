@@ -58,10 +58,15 @@ export function widgetHasContent(widget: Widget, ctx: VisibilityCtx): boolean {
     case "savings":
       return !!ctx.goal && (ctx.hasPlan || Number(ctx.goal.target_amount) > 0 || Number(ctx.goal.current_amount) !== 0);
 
-    // Per-space limits. A plan alone isn't enough: this card only lists
-    // limits and shows "Niciun buget setat" without them.
-    case "budget":
-      return (ctx.budget?.limits ?? []).length > 0;
+    // "Cheltuit pe spații" (2026-11-02: no per-space limits any more): at
+    // least one space label with RECORDED spend this month -- the same
+    // this_month − recurring − planned the card lists.
+    case "budget": {
+      const spending = (ctx.budget?.spending ?? {}) as Record<string, { this_month?: number }>;
+      return Object.entries(spending).some(
+        ([label, v]) => Number(v?.this_month || 0) - Number(ctx.budget?.recurring?.[label] || 0) - Number(ctx.budget?.planned?.[label] || 0) > 0,
+      );
+    }
 
     // A car with records (dashboard.cars only lists cars that have
     // fuel/service/expense/document rows). The card falls back to the

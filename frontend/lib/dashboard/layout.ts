@@ -50,7 +50,7 @@ export const WIDGET_META: Record<WidgetType, {
   hasRows?: boolean;
 }> = {
   spend: { label: "Cheltuit în luna asta", description: "Totalul lunii, pe spații", group: "bani", icon: "wallet-outline", defaultSize: "wide" },
-  budget: { label: "Buget pe spații", description: "Cât ai cheltuit din fiecare buget", group: "bani", icon: "pie-chart-outline", defaultSize: "wide" },
+  budget: { label: "Cheltuit pe spații", description: "Cât ai cheltuit luna asta în fiecare spațiu", group: "bani", icon: "pie-chart-outline", defaultSize: "wide" },
   savings: { label: "Economii", description: "Obiectivul și cât ai strâns", group: "bani", icon: "trending-up-outline", defaultSize: "wide" },
   bills: { label: "Plăți recurente", description: "Următoarele facturi și restanțele", group: "bani", icon: "repeat", defaultSize: "wide", hasRows: true },
   todo: { label: "De făcut", description: "Cel mai urgent din fiecare spațiu", group: "todo", icon: "checkbox-outline", defaultSize: "wide", hasRows: true },

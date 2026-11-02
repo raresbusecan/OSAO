@@ -33,7 +33,6 @@ export function BudgetPaceCard({
   daily,
   events,
   month,
-  envelopeLabel,
   onPress,
 }: {
   E: number;
@@ -48,8 +47,6 @@ export function BudgetPaceCard({
   events: PaceEvent[];
   /** "2026-11". */
   month: string;
-  /** "Necesități" with a plan, "Bugete" without. */
-  envelopeLabel: string;
   onPress: () => void;
 }) {
   const { card, colors, spacing, radius, typography } = useTheme();
@@ -180,7 +177,7 @@ export function BudgetPaceCard({
               </Defs>
               {R > 0 && bandH > 0 ? <Rect x={4} y={bandTop} width={w - 8} height={bandH} fill="url(#budgetPaceHatch)" /> : null}
               <Line x1={4} y1={bandTop} x2={w - 4} y2={bandTop} stroke={colors.surfaceTertiary} strokeWidth={2} />
-              {label({ x: w - 4, y: bandTop + 4 + 9, anchor: "end", text: `${envelopeLabel} ${fmtLei(E)}` })}
+              {label({ x: w - 4, y: bandTop + 4 + 9, anchor: "end", text: `Necesități ${fmtLei(E)}` })}
               {R > 0 && bandH >= 14 ? label({ x: 8, y: bandTop + 4 + 9, anchor: "start", text: `facturi ${fmtLei(R)}` }) : null}
               <Line x1={4} y1={y(0)} x2={w - 4} y2={y(0)} stroke={colors.surfaceTertiary} strokeWidth={1} />
               {r.state !== 1 ? (

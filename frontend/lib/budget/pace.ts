@@ -13,15 +13,15 @@
  * Σ daily stays = this_month − recurring − planned and the solid line never
  * runs past today.
  *
- * Symbols (spec §0): E = the envelope (Necesități, or Σ limits without a
- * plan), R = recurring bills (flat, never "Cheltuit"), P_ahead = Calendar
+ * Symbols (spec §0): E = the Necesități envelope (income plan only -- no
+ * plan, no pace card; per-space limits were dropped 2026-11-02), R = recurring bills (flat, never "Cheltuit"), P_ahead = Calendar
  * purchases still ahead, S = recorded spend, Pm = ALL this month's Calendar
  * purchases, t = today, D = days in month.
  *
  *   flex    = E − R − Pm                (money for day-to-day spending)
  *   ritm(d) = flex × d / D + ev(≤d)     (the expected cumulative spend)
  *   Δ       = S − ritm(t)
- *   band    = max(5% × (E − R), 50)     (20 for one space)
+ *   band    = max(5% × (E − R), 50)
  *   Liber   = E − (S + R + P_ahead)
  *   Y       = floor(Liber / daysLeft)   (daysLeft counts today)
  *
@@ -33,11 +33,10 @@ export type PaceLabel = { daily: number[]; events: PaceEvent[] };
 export type BudgetPace = { month: string; today: number; days_in_month: number; labels: Record<string, PaceLabel> };
 
 /** First N days after which a big single expense would distort the picture:
- * no over/under verdict, no row chips, no ticks. */
+ * no over/under verdict. */
 export const EARLY_DAYS = 5;
 
 const num = (v: unknown) => (Number.isFinite(Number(v)) ? Number(v) : 0);
-const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
 /** Cumulative spend: c[0] = 0, c[d] = Σ daily[0..d-1] (end of day d). */
 export function cumulative(daily: number[]): number[] {
@@ -281,105 +280,16 @@ export function weekSegments(D: number, firstWeekday: number): WeekSegment[] {
   return segs;
 }
 
-export type WeekBar = WeekSegment & { value: number; normal: number; when: "past" | "current" | "future" };
+export type WeekBar = WeekSegment & { value: number; when: "past" | "current" | "future" };
 
-/** One bar per week: recorded spend in it, and what was normal (for the
- * current week: normal up to today). */
-export function weekBars(daily: number[], events: PaceEvent[], flex: number, D: number, t: number, firstWeekday: number): WeekBar[] {
+/** One bar per week: the recorded spend in it (the current week: up to
+ * today). No "normal" mark since there's no per-space budget any more. */
+export function weekBars(daily: number[], D: number, t: number, firstWeekday: number): WeekBar[] {
   return weekSegments(D, firstWeekday).map((s) => {
     const when: WeekBar["when"] = s.end < t ? "past" : s.start > t ? "future" : "current";
     const lastDay = when === "current" ? t : s.end;
     let value = 0;
     for (let d = s.start; d <= Math.min(lastDay, s.end); d++) value += num(daily[d - 1]);
-    const days = lastDay - s.start + 1;
-    const normal = (flex / D) * days + eventsBetween(events, s.start, lastDay);
-    return { ...s, value, normal, when };
-  });
-}
-
-/* ---------------- One space (row + drill-down) ---------------- */
-
-export type SpacePaceStatus = "over" | "fast" | "on" | "under" | "early";
-export type SpacePace = {
-  /** The space's monthly limit L. */
-  limit: number;
-  rec: number;
-  flex: number;
-  ritm: number;
-  delta: number;
-  band: number;
-  left: number;
-  status: SpacePaceStatus;
-  /** Where the "today" tick goes on BudgetSplitBar (0..1), null = none. */
-  todayAt: number | null;
-};
-
-/** A space with a limit L (spec §2.2). `spent` = the limit's `spent` from
- * /budget (recorded + bills + planned), r = recurring, pa = planned ahead.
- * `hideTicks` = the total card is in state 1 (bills take everything). */
-export function spacePace({
-  L,
-  spent,
-  r,
-  pa,
-  events,
-  t,
-  D,
-  hideTicks = false,
-}: {
-  L: number;
-  spent: number;
-  r: number;
-  pa: number;
-  events: PaceEvent[];
-  t: number;
-  D: number;
-  hideTicks?: boolean;
-}): SpacePace {
-  const rec = Math.max(0, spent - r - pa);
-  const flex = L - r - eventsTotal(events);
-  const ritm = ritmAt(t, flex, D, events);
-  const delta = rec - ritm;
-  const band = Math.max(0.05 * (L - r), 20);
-  const left = L - (rec + r + pa);
-  let status: SpacePaceStatus;
-  if (rec > L) status = "over";
-  else if (t <= EARLY_DAYS) status = "early";
-  else if (delta > band) status = "fast";
-  else if (delta < -band) status = "under";
-  else status = "on";
-  const todayAt = t <= EARLY_DAYS || hideTicks ? null : clamp01(ritm / Math.max(L, rec + r + pa, 1));
-  return { limit: L, rec, flex, ritm, delta, band, left, status, todayAt };
-}
-
-export const SPACE_STATUS_CHIP: Record<SpacePaceStatus, { text: string; tone: PaceTone } | null> = {
-  over: { text: "Depășit", tone: "error" },
-  fast: { text: "Prea repede", tone: "warning" },
-  on: { text: "În ritm", tone: "neutral" },
-  under: { text: "Sub ritm", tone: "success" },
-  early: null,
-};
-
-const KIND_ORDER = ["car", "home", "grocery", "expenses"];
-const STATUS_RANK: Record<SpacePaceStatus, number> = { over: 0, fast: 1, on: 2, under: 3, early: 4 };
-
-/** Rows sorted by pace: Depășit (most over first), Prea repede (largest Δ
- * first), În ritm, Sub ritm, no chip, then spaces without a limit. Ties by
- * kind order car, home, grocery, expenses. */
-export function sortSpaceRows<T extends { kind: string; pace: SpacePace | null }>(rows: T[]): T[] {
-  const rank = (p: SpacePace | null) => (p ? STATUS_RANK[p.status] : 5);
-  const kindIdx = (k: string) => {
-    const i = KIND_ORDER.indexOf(k);
-    return i < 0 ? KIND_ORDER.length : i;
-  };
-  return [...rows].sort((a, b) => {
-    const ra = rank(a.pace);
-    const rb = rank(b.pace);
-    if (ra !== rb) return ra - rb;
-    let byAmount = 0;
-    if (a.pace && b.pace && a.pace.status === "over") byAmount = (b.pace.rec - b.pace.limit) - (a.pace.rec - a.pace.limit);
-    else if (a.pace && b.pace && a.pace.status === "fast") byAmount = b.pace.delta - a.pace.delta;
-    if (byAmount !== 0) return byAmount;
-    return kindIdx(a.kind) - kindIdx(b.kind);
+    return { ...s, value, when };
   });
 }

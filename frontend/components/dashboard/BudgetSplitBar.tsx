@@ -1,3 +1,9 @@
+/**
+ * @deprecated DEAD since 2026-11-02 (no per-space limits any more, so no
+ * bar against a limit): zero importers -- Buget, Acasă's "Cheltuit pe
+ * spații", the overview and the Buget tour no longer use it. Kept only
+ * because file deletion is denied in this environment; delete when you can.
+ */
 import React, { useState } from "react";
 import { View, Text } from "react-native";
 import { useTheme } from "@/lib/theme";

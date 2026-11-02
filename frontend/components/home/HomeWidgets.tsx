@@ -18,7 +18,6 @@ import { kmUrgencyTier } from "@/lib/spaces/car/maintenanceTiers";
 import { urgencyTierColor } from "@/lib/statusColors";
 import { WIDGET_META, type Widget } from "@/lib/dashboard/layout";
 import { MultiRingProgress } from "@/components/dashboard/RingProgress";
-import { BudgetSplitBar, BudgetUpcomingNote, budgetUpcomingSuffix } from "@/components/dashboard/BudgetSplitBar";
 
 type IconName = keyof typeof Ionicons.glyphMap;
 
@@ -55,6 +54,7 @@ export type HomeCtx = {
   daysLeft: number;
   monthly: { total: number; sources: any[] };
   segments: { key: string; kind: SpaceKind | "other"; label: string; amount: number; share: number; color: string }[];
+  /** The Necesități envelope with an income plan, else 0 (no budget). */
   totalBudget: number;
   remaining: number;
   /** An income plan exists: the spend card is then on the necessities
@@ -65,13 +65,10 @@ export type HomeCtx = {
    * planned + "Mai ai" = the envelope. */
   spendMonthly: { total: number; sources: any[] };
   spendSegments: HomeCtx["segments"];
+  /** Recurring bills still to pay this month, every space. */
   recurringMonthly: number;
-  /** Recurring bills of spaces that HAVE a budget (count against it). */
-  recurringInBudget: number;
-  /** Calendar purchases still ahead this month (not spent yet) -- all,
-   * and those of spaces that HAVE a budget (count against it). */
+  /** Calendar purchases still ahead this month (not spent yet), every space. */
   plannedMonthly: number;
-  plannedInBudget: number;
   bills: any[];
   goal: { target_amount: number; current_amount: number } | null;
   goalRatio: number;
@@ -238,7 +235,7 @@ function SpendCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
       {remainingLine ? (
         <Text style={{ fontSize: 13, fontWeight: "500", color: ctx.remaining >= 0 ? colors.success : colors.error }}>{remainingLine}</Text>
       ) : (
-        <Text style={{ fontSize: 13, fontWeight: "500", color: colors.onSurface }}>Setează un buget lunar</Text>
+        <Text style={{ fontSize: 13, fontWeight: "500", color: colors.onSurface }}>Adaugă venitul în Buget</Text>
       )}
     </TapCard>
   );
@@ -325,16 +322,16 @@ function SpendRingCard({ widget, ctx, title, go, remainingLine }: { widget: Widg
   const muted = colors.onSurfaceTertiary;
   const compact = widget.size === "compact";
   const progress = useSweep(!ctx.preview && !ctx.still);
-  const scale = Math.max(ctx.totalBudget, ctx.spendMonthly.total + ctx.recurringInBudget + ctx.plannedInBudget, 1);
-  // Money not spent yet, per space that has a budget -- recurring bills
-  // still to pay and Calendar purchases still ahead -- drawn in THAT
-  // space's color, faded, so "725 lei" reads as "Casă's bills, not paid
-  // yet" instead of a free-floating grey number.
+  const scale = Math.max(ctx.totalBudget, ctx.spendMonthly.total + ctx.recurringMonthly + ctx.plannedMonthly, 1);
+  // Money not spent yet, per space -- recurring bills still to pay and
+  // Calendar purchases still ahead -- drawn in THAT space's color, faded,
+  // so "725 lei" reads as "Casă's bills, not paid yet" instead of a
+  // free-floating grey number. Every space counts (no per-space limits).
   const notYet = (source: Record<string, number> | undefined, prefix: string, what: string, note: string) =>
     Object.entries((source ?? {}) as Record<string, number>)
-      .filter(([label, v]) => Number(v) > 0 && (ctx.hasPlan || (ctx.budget?.limits ?? []).some((l: any) => l.category === label)))
+      .filter(([, v]) => Number(v) > 0)
       .map(([label, v]) => {
-        const kind = LIMIT_KIND[label] ?? "other";
+        const kind = LABEL_KIND[label] ?? "other";
         const base = SPACE_IDENTITY_COLORS[kind] ?? muted;
         return { key: `${prefix}-${label}`, label: `${SPACE_KIND_LABEL[kind] ?? label} · ${what}`, amount: Number(v), color: hexToRgba(base, 0.45), base, note };
       });
@@ -347,9 +344,9 @@ function SpendRingCard({ widget, ctx, title, go, remainingLine }: { widget: Widg
     ...unpaid.map((u) => ({ value: (u.amount / scale) * progress, color: u.color })),
   ];
   // With a plan: everything counted against the envelope (spent + bills +
-  // planned), the complement of "Mai ai".
+  // planned), the complement of "Mai ai". No plan = no budget = no %.
   const pct = ctx.totalBudget > 0
-    ? Math.round(((ctx.spendMonthly.total + (ctx.hasPlan ? ctx.recurringInBudget + ctx.plannedInBudget : 0)) / ctx.totalBudget) * 100)
+    ? Math.round(((ctx.spendMonthly.total + ctx.recurringMonthly + ctx.plannedMonthly) / ctx.totalBudget) * 100)
     : null;
   const size = compact ? 72 : 116;
   const center = (
@@ -357,7 +354,7 @@ function SpendRingCard({ widget, ctx, title, go, remainingLine }: { widget: Widg
       <MultiRingProgress segments={arcs} size={size} strokeWidth={compact ? 8 : 12} trackColor={colors.surfaceTertiary} />
       <View style={{ position: "absolute", alignItems: "center" }}>
         <Text style={{ fontSize: compact ? 15 : 22, fontWeight: "600", color: colors.onSurface }}>{pct !== null ? `${pct}%` : lei(Math.round(ctx.spendMonthly.total))}</Text>
-        {!compact && pct !== null ? <Text style={{ fontSize: 11, color: muted }}>{ctx.hasPlan ? "din necesități" : "din buget"}</Text> : null}
+        {!compact && pct !== null ? <Text style={{ fontSize: 11, color: muted }}>din necesități</Text> : null}
       </View>
     </View>
   );
@@ -391,7 +388,7 @@ function SpendRingCard({ widget, ctx, title, go, remainingLine }: { widget: Widg
           {remainingLine ? (
             <Text style={{ fontSize: 13, fontWeight: "500", color: ctx.remaining >= 0 ? colors.success : colors.error, marginTop: 2 }}>{remainingLine}</Text>
           ) : (
-            <Text style={{ fontSize: 13, fontWeight: "500", color: colors.onSurface, marginTop: 2 }}>Setează un buget lunar</Text>
+            <Text style={{ fontSize: 13, fontWeight: "500", color: colors.onSurface, marginTop: 2 }}>Adaugă venitul în Buget</Text>
           )}
         </View>
       </View>
@@ -651,64 +648,70 @@ function SavingsCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
   );
 }
 
-/* ---------------- Buget pe spații ---------------- */
+/* ---------------- Cheltuit pe spații ---------------- */
 
-const LIMIT_KIND: Record<string, SpaceKind> = { Car: "car", Home: "home", Grocery: "grocery", Expenses: "expenses" };
+/** GET /budget's space label ("Car"...) -> its kind. */
+const LABEL_KIND: Record<string, SpaceKind> = { Car: "car", Home: "home", Grocery: "grocery", Expenses: "expenses" };
+
+/** Recorded spend this month per space label, highest first (no limits:
+ * 2026-11-02, every space spends from one Necesități envelope). lib/dashboard/widgetVisibility.ts's
+ * "budget" rule mirrors the same formula -- keep the two in sync. */
+function spendBySpace(budget: any): { label: string; kind: SpaceKind | "other"; amount: number }[] {
+  const spending = (budget?.spending ?? {}) as Record<string, { this_month?: number }>;
+  return Object.entries(spending)
+    .map(([label, v]) => ({
+      label,
+      kind: LABEL_KIND[label] ?? ("other" as const),
+      amount: Math.max(0, Number(v?.this_month || 0) - Number(budget?.recurring?.[label] || 0) - Number(budget?.planned?.[label] || 0)),
+    }))
+    .filter((r) => r.amount > 0)
+    .sort((a, b) => b.amount - a.amount);
+}
 
 function BudgetCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
   const { spacing, colors } = useTheme();
   const muted = colors.onSurfaceTertiary;
-  const title = widget.settings?.title || "Buget pe spații";
-  const limits: any[] = ctx.budget?.limits ?? [];
-  if (limits.length === 0) return <Missing widget={widget} text="Niciun buget setat încă." />;
+  const title = widget.settings?.title || "Cheltuit pe spații";
+  const rows = spendBySpace(ctx.budget);
+  if (rows.length === 0) return <Missing widget={widget} text="Nimic cheltuit luna asta." />;
   const go = ctx.preview ? undefined : () => ctx.navigate("/budget");
-  const recurring = ctx.budget?.recurring ?? {};
-  const planned = ctx.budget?.planned ?? {};
-  const totalLimit = limits.reduce((s, l) => s + Number(l.monthly_limit), 0);
-  const totalSpent = limits.reduce((s, l) => s + Number(l.spent), 0);
-  const totalUpcoming = limits.reduce((s, l) => s + Number(recurring[l.category] || 0), 0);
-  const totalPlanned = limits.reduce((s, l) => s + Number(planned[l.category] || 0), 0);
-  if (widget.size === "compact") {
-    const ratio = totalLimit > 0 ? totalSpent / totalLimit : 0;
-    return (
-      <TapCard widget={widget} onPress={go} label={title}>
-        <CardHeading icon="pie-chart-outline" text={title} color={widget.color ?? muted} info={infoOf(ctx, "card.budget")} />
-        <Text style={{ fontSize: 22, fontWeight: "600", color: colors.onSurface }}>{Math.round(ratio * 100)}%</Text>
-        <Text style={{ fontSize: 12, color: muted }} numberOfLines={2}>
-          din {lei(totalLimit)}
-          {totalUpcoming > 0 || totalPlanned > 0
-            ? `, din care ${[totalUpcoming > 0 ? `${lei(Math.round(totalUpcoming))} facturi neplătite` : null, totalPlanned > 0 ? `${lei(Math.round(totalPlanned))} planificat` : null].filter(Boolean).join(" și ")}`
-            : ""}
-        </Text>
-      </TapCard>
-    );
-  }
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+  const compact = widget.size === "compact";
+  const shown = compact ? rows.slice(0, 3) : rows;
   return (
-    <TapCard widget={widget} onPress={go} label={title} style={{ gap: spacing.md }}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-        <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{title}</Text>
-        {!ctx.preview ? <InfoButton topic="card.budget" /> : null}
-      </View>
-      {limits.map((l) => {
-        const kind = LIMIT_KIND[l.category] ?? "other";
-        const rec = Number(recurring[l.category] || 0);
-        const plan = Number(planned[l.category] || 0);
-        const up = rec + plan;
-        const recorded = Math.max(0, Number(l.spent) - up);
-        const limit = Number(l.monthly_limit);
+    <TapCard widget={widget} onPress={go} label={`${title}: ${rows.map((r) => `${SPACE_KIND_LABEL[r.kind] ?? r.label} ${lei(Math.round(r.amount))}`).join(", ")}`} style={compact ? undefined : { gap: spacing.md }}>
+      {compact ? (
+        <CardHeading icon="pie-chart-outline" text={title} color={widget.color ?? muted} info={infoOf(ctx, "card.budget")} />
+      ) : (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{title}</Text>
+          {!ctx.preview ? <InfoButton topic="card.budget" /> : null}
+        </View>
+      )}
+      {shown.map((r) => {
+        const color = SPACE_IDENTITY_COLORS[r.kind] ?? muted;
+        const share = total > 0 ? r.amount / total : 0;
         return (
-          <View key={l.category} style={{ gap: 6 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={{ fontSize: 14, color: colors.onSurface }}>{SPACE_KIND_LABEL[kind] ?? l.category}</Text>
-              <Text style={{ fontSize: 14, color: muted }}>
-                <Text style={{ fontWeight: "600", color: recorded > limit ? colors.error : colors.onSurface }}>{roNumber(recorded)}</Text>{budgetUpcomingSuffix(up)} / {lei(limit)}
+          <View key={r.label} style={{ gap: 6 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
+              <Text style={{ flex: 1, fontSize: compact ? 13 : 14, color: colors.onSurface }} numberOfLines={1}>{SPACE_KIND_LABEL[r.kind] ?? r.label}</Text>
+              <Text style={{ fontSize: compact ? 13 : 14, fontWeight: "600", color: colors.onSurface, fontVariant: ["tabular-nums"] }}>
+                {compact ? roNumber(Math.round(r.amount)) : lei(Math.round(r.amount))}
               </Text>
             </View>
-            <BudgetSplitBar recorded={recorded} upcoming={up} limit={limit} color={SPACE_IDENTITY_COLORS[kind] ?? muted} />
-            <BudgetUpcomingNote recorded={recorded} upcoming={up} limit={limit} planned={plan} />
+            {!compact ? (
+              // Its share of the month's spend -- not a limit.
+              <View style={{ height: 4, borderRadius: 2, backgroundColor: colors.surfaceTertiary, overflow: "hidden" }}>
+                <View style={{ width: `${Math.max(2, share * 100)}%`, height: "100%", borderRadius: 2, backgroundColor: color }} />
+              </View>
+            ) : null}
           </View>
         );
       })}
+      {compact && rows.length > shown.length ? (
+        <Text style={{ fontSize: 12, color: muted }}>{`+ încă ${rows.length - shown.length}`}</Text>
+      ) : null}
     </TapCard>
   );
 }
