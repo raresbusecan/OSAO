@@ -142,11 +142,33 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
   **Buget din venit** (2026-10): `lib/budget/plan.ts` (jars, labels, colors,
   `jarAmounts`, `parseAmount`, and the shared plan cache `useBudgetPlan()` /
   `primeBudgetPlan()` / `refreshBudgetPlan()` that every form reads).
-  No plan = onboarding card + today's UI. With a plan: hero on the
-  Necesități envelope -> `IncomeSplitCard.tsx` (5 jars; Credit/Investiții
-  3 states) -> "Necesități pe spații" (+ % of envelope, footer
-  Împărțit/Nealocat, "Reîmparte" = `ResplitSheet.tsx`, PUT /budget/limits)
-  -> Plăți recurente. Sheets: `IncomeSheet.tsx`, `SplitSheet.tsx`
+  **Ritmul lunii** (2026-11-02, direction C, branch feat/budget-pace):
+  order = onboarding card (no plan) -> `BudgetPaceCard.tsx` (status chip
+  + sentence in LEI, never %; react-native-svg chart: envelope line,
+  bills as a hatched band, dashed "ritm normal", solid recorded spend to
+  today, dotted Calendar purchases ahead; tap = overview; the solid line
+  reveals once per app session via RN Animated) -> "Necesități pe
+  spații" (no plan: "Pe spații"; rows = dot + name + chip Depășit / Prea
+  repede / În ritm / Sub ritm, `BudgetSplitBar` with the grey `todayAt`
+  tick, caption "X din L lei · mai ai Y"; SORTED by pace; footer
+  Împărțit/Nealocat only when not exact; "Reîmparte" = `ResplitSheet.tsx`,
+  PUT /budget/limits) -> `IncomeSplitCard.tsx` (5 jars, Credit/Investiții
+  3 states; the Necesități row is just the envelope) -> Economii (no
+  plan) -> Plăți recurente. Every formula + string is in
+  `lib/budget/pace.ts` (pure, `tests/budget-pace.test.cjs`): reads GET
+  /budget's `pace` (per label `daily` recorded spend per user-tz day +
+  Calendar purchase `events`; `today` / `days_in_month` come from the
+  server -- never the device date). No chips/ticks in the first 5 days.
+  Without a plan the card uses Σ limits and only labels with a limit; no
+  plan and no limit = no card. `pace` absent (older backend) = the old
+  ring hero, rows without chips. The space drill-down
+  (`BudgetSpaceDetailPage`, props `pace` / `creditNote` /
+  `guiltFreeThisMonth`) opens with its own "Ritmul lunii" card (left, per
+  day, weekly bars from `weekSegments` with a dashed normal per week;
+  current month + a limit only); the old month chart is "Ultimele 4
+  luni" (big amount only for a past month, or without the pace card).
+  The guilt-free / credit / biggest-expense notes left the rows (the
+  drill-down shows the first two). Sheets: `IncomeSheet.tsx`, `SplitSheet.tsx`
   (−/+ steppers, Save only at 100). Pages: `GuiltFreePage.tsx`,
   `BudgetCreditPage.tsx`. `GuiltFree.tsx` = `GuiltFreeToggle` (edit forms
   only, hidden until a plan exists; only where spending can be guilt-free --
@@ -154,12 +176,14 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
   documents and Casă bills/maintenance pass `onlyIfSet`: shown only to undo
   an existing flag, user decision 2026-11-02) + `GuiltFreeChip`. The Economii goal
   is the "Termen scurt" row (standalone card only without a plan).
-  First-use tour "budget" (4 steps, copy adapts to TourCtx hasPlan /
-  hasSpaces / hasBudgets / hasCredit): `budget.top` = the onboarding card
-  without a plan, the hero (a View around its PressableScale) with one;
+  First-use tour "budget" (version 2, 4 steps in screen order income ->
+  spaces -> jars -> recurring; copy adapts to TourCtx hasPlan /
+  hasSpaces / hasBudgets / hasCredit; a step's `illustration` may be a
+  function of ctx): `budget.top` = the onboarding card
+  without a plan, the pace card (a View around it) with one;
   `budget.split` = the onboarding bar + legend, or IncomeSplitCard's
   "Venit net lunar" + 5-part bar block (the hook lives IN
-  IncomeSplitCard); `budget.spaces` = the FIRST space row (or the empty
+  IncomeSplitCard); `budget.spaces` = the FIRST space row after sorting (or the empty
   state) -- the whole section is too tall to leave room for the card;
   `budget.recurring` = the "Plăți recurente" header. useAutoTour ready =
   loaded, no space detail / overview / fără vină / credit page, no income /

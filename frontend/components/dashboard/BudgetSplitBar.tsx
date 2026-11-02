@@ -22,6 +22,7 @@ export function BudgetSplitBar({
   limit,
   color,
   upcomingColor,
+  todayAt,
   style,
 }: {
   recorded: number;
@@ -31,6 +32,10 @@ export function BudgetSplitBar({
   color: string;
   /** The bills part, hatched -- defaults to `color`. */
   upcomingColor?: string;
+  /** Buget "Ritmul lunii": where the space should normally be today, as a
+   * fraction of the bar (0..1) -- a grey tick, unlike the budget line
+   * (onSurface). Omitted = no tick (Acasă never passes it). */
+  todayAt?: number | null;
   style?: any;
 }) {
   const { colors } = useTheme();
@@ -50,6 +55,12 @@ export function BudgetSplitBar({
         <View
           accessibilityLabel="Bugetul"
           style={{ position: "absolute", left: `${budgetAt * 100}%`, top: -3, width: 2, height: 12, marginLeft: -1, borderRadius: 1, backgroundColor: colors.onSurface }}
+        />
+      ) : null}
+      {todayAt != null ? (
+        <View
+          accessibilityLabel="Ritmul normal până azi"
+          style={{ position: "absolute", left: `${Math.max(0, Math.min(1, todayAt)) * 100}%`, top: -3, width: 2, height: 12, marginLeft: -1, borderRadius: 1, backgroundColor: colors.onSurfaceTertiary }}
         />
       ) : null}
     </View>

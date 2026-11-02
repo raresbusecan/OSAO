@@ -8,7 +8,8 @@ import { AccessibilityInfo, Easing } from "react-native";
  * components/spaces/SwipeBackView.tsx's header for the full story).
  *
  * Motion answers an action (a press, a sheet opening, a value changing);
- * the only unprompted motion is Home's one-time total/bar reveal.
+ * the only unprompted motions are Home's one-time total/bar reveal and
+ * Buget's "Ritmul lunii" spend line (once per app session, BudgetPaceCard).
  */
 export const motion = {
   /** Press squeeze per element size: small controls squeeze most, big

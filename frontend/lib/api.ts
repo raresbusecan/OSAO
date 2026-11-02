@@ -697,6 +697,8 @@ saveHomeProfile: (
       };
       /** Suggested per-space split of the needs envelope (labels "Car"...), null without a plan. */
       suggested: Record<string, number> | null;
+      /** Buget "Ritmul lunii" (2026-11): per-day recorded spend + Calendar purchases per label, user tz. Absent on an older backend. */
+      pace?: import("@/lib/budget/pace").BudgetPace;
     }>("/budget"),
 
   /** Monthly net income + the 5-jar split (ints summing to 100; 422 "Procentele trebuie să adune 100%." otherwise). */

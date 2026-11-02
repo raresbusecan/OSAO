@@ -4,7 +4,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { CircleButton, Group, IconWell, SectionHeader } from "@/components/ui/primitives";
-import { BudgetSplitBar, BudgetUpcomingNote, budgetUpcomingSuffix } from "@/components/dashboard/BudgetSplitBar";
 import { JAR_ORDER, jarAmounts, jarFill, jarLabel, monthsToTarget, nextMonthName, type BudgetPlan, type SplitKey } from "@/lib/budget/plan";
 import { lei, roCount, roNumber } from "@/lib/format";
 import { useTourTarget } from "@/components/ui/tourTargets";
@@ -21,7 +20,6 @@ type IconName = keyof typeof Ionicons.glyphMap;
  */
 export function IncomeSplitCard({
   plan,
-  needs,
   guiltFree,
   credit,
   savingsGoal,
@@ -34,8 +32,6 @@ export function IncomeSplitCard({
   onOpenGoal,
 }: {
   plan: BudgetPlan;
-  /** Recorded spend over all spaces (excl. fără vină), + upcoming (bills + planned). */
-  needs: { recorded: number; recurring: number; planned: number };
   guiltFree: { spent: number; planned: number };
   credit: { rates: number; count: number };
   savingsGoal: { target_amount: number; current_amount: number } | null;
@@ -53,7 +49,7 @@ export function IncomeSplitCard({
   const amounts = jarAmounts(plan.monthly_income, split);
   const hasCredit = credit.count > 0;
   const fill = (k: SplitKey) => jarFill(k, colors, isDark);
-  // Buget tour step 2 (lib/tours.ts "jars"): the income + 5-part bar.
+  // Buget tour step 3 (lib/tours.ts "jars"): the income + 5-part bar.
   const splitTarget = useTourTarget("budget.split");
 
   const pct = (k: SplitKey) => <Text style={{ fontWeight: "400", color: colors.onSurfaceTertiary }}>{` · ${split[k]}%`}</Text>;
@@ -82,10 +78,6 @@ export function IncomeSplitCard({
   const note = (text: string, color = colors.onSurfaceTertiary) => (
     <Text style={{ marginLeft: 46, fontSize: 13, lineHeight: 18, color }}>{text}</Text>
   );
-
-  // --- Necesități
-  const needsUp = needs.recurring + needs.planned;
-  const needsOver = needs.recorded > amounts.needs;
 
   // --- Fără vină
   const gfUsed = guiltFree.spent + guiltFree.planned;
@@ -136,19 +128,10 @@ export function IncomeSplitCard({
           </View>
         </View>
 
-        {/* Necesități */}
-        <PressableScale testID="jar-needs" onPress={onOpenNeeds} scaleTo={1} pressedStyle={{ backgroundColor: colors.surfaceTertiary }} accessibilityRole="button" accessibilityLabel={`Necesități: ${lei(needs.recorded)} cheltuiți din ${lei(amounts.needs)}`} style={rowStyle}>
-          {head(
-            "layers-outline",
-            colors.onSurface,
-            "needs",
-            <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>
-              <Text style={{ fontWeight: "600", color: needsOver ? colors.error : colors.onSurface }}>{roNumber(Math.round(needs.recorded))}</Text>
-              {`${budgetUpcomingSuffix(Math.round(needsUp))} / ${lei(Math.round(amounts.needs))}`}
-            </Text>,
-          )}
-          <BudgetSplitBar style={{ marginLeft: 46 }} recorded={needs.recorded} upcoming={needsUp} limit={amounts.needs} color={colors.success} />
-          <BudgetUpcomingNote style={{ marginLeft: 46 }} recorded={needs.recorded} upcoming={needsUp} limit={amounts.needs} planned={needs.planned} />
+        {/* Necesități -- just the envelope since the 2026-11 "Ritmul lunii"
+            card above shows how it's being spent (no duplicate bar). */}
+        <PressableScale testID="jar-needs" onPress={onOpenNeeds} scaleTo={1} pressedStyle={{ backgroundColor: colors.surfaceTertiary }} accessibilityRole="button" accessibilityLabel={`${jarLabel("needs")}, ${split.needs}%: ${lei(Math.round(amounts.needs))}. Vezi luna`} style={rowStyle}>
+          {head("layers-outline", colors.onSurface, "needs", <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface }}>{lei(Math.round(amounts.needs))}</Text>)}
         </PressableScale>
 
         {/* Bani fără vină */}

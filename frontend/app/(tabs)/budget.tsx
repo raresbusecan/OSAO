@@ -13,7 +13,9 @@ import { BudgetSpaceDetailPage } from "@/components/dashboard/BudgetSpaceDetailP
 import { profileFromSpace, detectSpaceType, SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, spaceTextColor, type SpaceKind } from "@/lib/spaces/spaceProfile";
 import { BudgetOverviewPage } from "@/components/dashboard/BudgetOverviewPage";
 import { RecurringBillRow, RecurringGroups, isRecurringPayment } from "@/components/dashboard/RecurringBillRow";
-import { BudgetSplitBar, budgetUpcomingNote, budgetUpcomingSuffix, upcomingWords } from "@/components/dashboard/BudgetSplitBar";
+import { BudgetSplitBar, upcomingWords } from "@/components/dashboard/BudgetSplitBar";
+import { BudgetPaceCard } from "@/components/dashboard/BudgetPaceCard";
+import { mergeLabels, paceStatus, spacePace, sortSpaceRows, SPACE_STATUS_CHIP, type BudgetPace, type SpacePace } from "@/lib/budget/pace";
 import { SwipeItemRow } from "@/components/dashboard/SwipeItemRow";
 import { IncomeSplitCard } from "@/components/dashboard/IncomeSplitCard";
 import { IncomeSheet } from "@/components/dashboard/IncomeSheet";
@@ -21,13 +23,13 @@ import { SplitSheet } from "@/components/dashboard/SplitSheet";
 import { ResplitSheet } from "@/components/dashboard/ResplitSheet";
 import { GuiltFreePage } from "@/components/dashboard/GuiltFreePage";
 import { BudgetCreditPage } from "@/components/dashboard/BudgetCreditPage";
-import { DEFAULT_SPLIT, JAR_ORDER, jarFill, jarAmounts, primeBudgetPlan, unallocated, needsSpend, envelopeStatus, roundSuggested, type BudgetPlan, type BudgetPlanSummary, type BudgetSplit } from "@/lib/budget/plan";
+import { LABEL_KIND, DEFAULT_SPLIT, JAR_ORDER, jarFill, jarAmounts, primeBudgetPlan, unallocated, needsSpend, envelopeStatus, roundSuggested, type BudgetPlan, type BudgetPlanSummary, type BudgetSplit } from "@/lib/budget/plan";
 import { useRouter } from "expo-router";
 import { todoHref } from "@/lib/dashboard/spaceDue";
 import { severityColor, budgetSeverity } from "@/lib/statusColors";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { Sheet } from "@/components/ui/Sheet";
-import { SectionHeader, Group, IconWell, InfoButton, Button, Field, EmptyState, Row, Pill } from "@/components/ui/primitives";
+import { SectionHeader, Group, IconWell, InfoButton, Button, Field, EmptyState, Row, Pill, hexToRgba } from "@/components/ui/primitives";
 import { useTourScroll, useTourTarget } from "@/components/ui/tourTargets";
 import { useAutoTour } from "@/lib/useAutoTour";
 import { SHOW_TOUR_TEST_BUTTON, startTour, type TourCtx } from "@/lib/tours";
@@ -51,13 +53,6 @@ const SPACE_KIND_META: Partial<Record<SpaceKind, { label: string; icon: keyof ty
 };
 
 
-// Every grocery_trip's title is literally "Cumpărături -- {listName}"
-// (see groceryTripToItemBody) -- the row already says which space it
-// is, so that fixed prefix is stripped for display only.
-function biggestExpenseTitle(title: string): string {
-  return title.replace(/^Cumpărături -- /, "");
-}
-
 const ONBOARDING_LEGEND: [string, string][] = [
   ["55%", "necesități"],
   ["5%", "bani fără vină"],
@@ -65,33 +60,6 @@ const ONBOARDING_LEGEND: [string, string][] = [
   ["15%", "termen scurt"],
   ["15%", "termen lung"],
 ];
-
-function shorten(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
-}
-
-/** "sept." -- last month, short, for "Cea mai mare în sept.". */
-function lastMonthShort(): string {
-  const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth() - 1, 1).toLocaleDateString("ro-RO", { month: "short" });
-}
-
-// Fraction of the current month already elapsed (0-1) -- what spending
-// "should" be at today if a budget were spread evenly across the month.
-function monthProgress(): number {
-  const now = new Date();
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  return now.getDate() / daysInMonth;
-}
-
-// How many percentage points ahead of pace a space is -- e.g. 67% of
-// the month gone but 80% of the budget spent is +13. Null once already
-// over budget (that's its own, more urgent state) or under 10 points.
-function paceDelta(ratio: number): number | null {
-  if (ratio >= 1) return null;
-  const delta = (ratio - monthProgress()) * 100;
-  return delta > 10 ? Math.round(delta) : null;
-}
 
 export default function BudgetScreen() {
   const { card, colors, spacing, radius, typography, isDark } = useTheme();
@@ -101,8 +69,6 @@ export default function BudgetScreen() {
   // average -- populated whether or not a limit is set, so an unset row
   // still shows a real number to base the first budget on.
   const [spending, setSpending] = useState<Record<string, { this_month: number; last_month: number; avg_last_3_months: number }>>({});
-  // This month's single largest line item per label.
-  const [biggest, setBiggest] = useState<Record<string, { title: string; amount: number; from_last_month: boolean } | null>>({});
   // Home-only: monthly commitment from active Recurring items --
   // deliberately separate from `spent` (see BudgetController::index).
   const [recurring, setRecurring] = useState<Record<string, number>>({});
@@ -110,6 +76,9 @@ export default function BudgetScreen() {
   // `spent`, shown apart as "planificat" (BudgetController::plannedForLabel).
   const [planned, setPlanned] = useState<Record<string, number>>({});
   const [recurringBills, setRecurringBills] = useState<any[]>([]);
+  // "Ritmul lunii" (lib/budget/pace.ts): per-day spend + Calendar purchases
+  // per label, in the user's timezone. null = an older backend -> the ring.
+  const [pace, setPace] = useState<BudgetPace | null>(null);
   const [savingsGoal, setSavingsGoal] = useState<SavingsGoal>(null);
   // Every space kind the user actually has at least one space for --
   // "other" spaces don't feed the spending aggregation, so no row.
@@ -169,9 +138,9 @@ export default function BudgetScreen() {
       const [b, spacesRes] = await Promise.all([api.getBudget(), api.listSpaces()]);
       setLimits(b.limits || []);
       setSpending(b.spending || {});
-      setBiggest(b.biggest || {});
       setRecurring(b.recurring || {});
       setPlanned(b.planned || {});
+      setPace(b.pace && b.pace.labels && b.pace.days_in_month > 0 ? b.pace : null);
       setRecurringBills((b.recurringBills || []).filter(isRecurringPayment));
       setSavingsGoal(b.savingsGoal || null);
       primeBudgetPlan(b);
@@ -376,6 +345,43 @@ export default function BudgetScreen() {
   const heroRatio = plan ? (envelope > 0 ? needsCommitted / envelope : 0) : totalRatio;
   const heroLabel = plan ? "Cheltuit din necesități" : "Cheltuit din buget";
 
+  // ---- Ritmul lunii (lib/budget/pace.ts) ----
+  // With a plan: every label against the envelope. Without one: only the
+  // labels that have a limit, against Σ limits (as the old no-plan hero).
+  const paceT = pace?.today ?? 0;
+  const paceD = pace?.days_in_month ?? 0;
+  const paceLabels = pace ? (plan ? Object.keys(pace.labels) : limits.map((l) => l.category)) : [];
+  const paceMerged = pace ? mergeLabels(paceLabels.map((k) => pace.labels[k]), paceD) : null;
+  const paceTotal = pace && paceMerged ? paceStatus({ E: heroBudget, R: heroRecurring, pAhead: heroPlanned, S: heroSpent, t: paceT, D: paceD, events: paceMerged.events }) : null;
+  // Per-space verdicts; ticks hidden when bills take the whole envelope.
+  const paceFor = (label: string): SpacePace | null => {
+    const limit = limits.find((l) => l.category === label);
+    if (!pace || !limit) return null;
+    return spacePace({
+      L: limit.monthly_limit,
+      spent: limit.spent,
+      r: recurring[label] || 0,
+      pa: planned[label] || 0,
+      events: pace.labels[label]?.events ?? [],
+      t: paceT,
+      D: paceD,
+      hideTicks: paceTotal?.state === 1,
+    });
+  };
+  // Without `pace` (older backend) the rows keep kind order, Depășit first.
+  const spaceRows = sortSpaceRows(
+    spaceKinds.map((meta) => {
+      const limit = limits.find((l) => l.category === meta.label);
+      let p = paceFor(meta.label);
+      if (!p && limit) {
+        const rec = Math.max(0, limit.spent - (recurring[meta.label] || 0) - (planned[meta.label] || 0));
+        const left = limit.monthly_limit - limit.spent;
+        p = { limit: limit.monthly_limit, rec, flex: 0, ritm: 0, delta: 0, band: 0, left, status: rec > limit.monthly_limit ? "over" : "early", todayAt: null };
+      }
+      return { ...meta, pace: p };
+    }),
+  );
+
   const tourCtx: TourCtx = { hasPlan: !!plan, hasSpaces: spaceKinds.length > 0, hasBudgets: limits.length > 0, hasCredit };
   useAutoTour("budget", {
     ready: !loading && !spaceDetailFor && !showOverview && !showGuiltFree && !showCredit && !incomeOpen && !splitOpen && !resplitOpen && !editingGoal,
@@ -396,6 +402,13 @@ export default function BudgetScreen() {
           plan={plan}
           suggested={roundSuggested(planSummary?.suggested, envelope)?.[spaceDetailFor.label] ?? null}
           otherLimitsTotal={limits.filter((l) => l.category !== spaceDetailFor.label).reduce((sum, l) => sum + l.monthly_limit, 0)}
+          pace={pace && pace.labels[spaceDetailFor.label] ? { ...pace.labels[spaceDetailFor.label], today: pace.today, daysInMonth: pace.days_in_month, month: pace.month } : undefined}
+          creditNote={(() => {
+            const k = LABEL_KIND[spaceDetailFor.label]?.kind;
+            const amount = k ? creditByKind[k] : 0;
+            return amount ? `+ rată ${lei(Math.round(amount))} pe lună, socotită la Credit` : undefined;
+          })()}
+          guiltFreeThisMonth={plan ? guiltFreeByLabel[spaceDetailFor.label] || 0 : 0}
           onBack={() => setSpaceDetailFor(null)}
           onLimitSaved={load}
         />
@@ -450,7 +463,7 @@ export default function BudgetScreen() {
                     Spune-ne cât câștigi net pe lună. Îl împărțim în cinci și fiecare spațiu își primește bugetul din necesități.
                   </Text>
                 </View>
-                {/* Tour step 2 ("Cele cinci părți") without a plan. */}
+                {/* Tour step 3 ("Cele cinci părți") without a plan. */}
                 <View {...onboardingSplitTarget} style={{ gap: 14 }}>
                   <View accessible accessibilityRole="image" accessibilityLabel="Împărțirea implicită: 55, 5, 10, 15, 15 la sută" style={{ flexDirection: "row", gap: 2, height: 10 }}>
                     {JAR_ORDER.map((k) => (
@@ -472,6 +485,22 @@ export default function BudgetScreen() {
             {plan || limits.length > 0 ? (
               // Tour step 1 with a plan (without one it's the onboarding card).
               <View {...(plan ? topTarget : {})}>
+              {pace && paceMerged ? (
+                <BudgetPaceCard
+                  E={heroBudget}
+                  R={heroRecurring}
+                  pAhead={heroPlanned}
+                  S={heroSpent}
+                  t={paceT}
+                  D={paceD}
+                  daily={paceMerged.daily}
+                  events={paceMerged.events}
+                  month={pace.month}
+                  envelopeLabel={plan ? "Necesități" : "Bugete"}
+                  onPress={() => setShowOverview(true)}
+                />
+              ) : (
+              // Older backend without `pace`: the previous ring hero.
               <PressableScale
                 testID="budget-overview-entry"
                 onPress={() => setShowOverview(true)}
@@ -485,8 +514,6 @@ export default function BudgetScreen() {
                   size={96}
                   color={severityColor(budgetSeverity(heroRatio), colors)}
                   trackColor={colors.surfaceTertiary}
-                  paceMarker={monthProgress()}
-                  markerColor={colors.onSurfaceTertiary}
                 />
                 <View style={{ flex: 1, gap: 2 }}>
                   <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>{heroLabel}</Text>
@@ -503,24 +530,8 @@ export default function BudgetScreen() {
                   </Text>
                 </View>
               </PressableScale>
+              )}
               </View>
-            ) : null}
-
-            {plan && planSummary ? (
-              <IncomeSplitCard
-                plan={plan}
-                needs={{ recorded: needsRecorded, recurring: needsRecurring, planned: needsPlanned }}
-                guiltFree={{ spent: planSummary.guiltFree.spent, planned: planSummary.guiltFree.planned }}
-                credit={{ rates: planSummary.credit.rates, count: planSummary.credit.count }}
-                savingsGoal={savingsGoal}
-                needsSegments={needsSegments}
-                onEditIncome={() => setIncomeOpen(true)}
-                onEditSplit={() => setSplitOpen(true)}
-                onOpenNeeds={() => setShowOverview(true)}
-                onOpenGuiltFree={() => setShowGuiltFree(true)}
-                onOpenCredit={() => setShowCredit(true)}
-                onOpenGoal={openEditGoal}
-              />
             ) : null}
 
             <View style={{ gap: spacing.sm }} testID="section-limits">
@@ -534,51 +545,24 @@ export default function BudgetScreen() {
                   <EmptyState icon="wallet-outline" message="Creează un spațiu Mașină, Casă, Cumpărături sau Cheltuieli ca să-i poți pune un buget." />
                 </View>
               ) : (
-                <Group inset={62}>
-                  {spaceKinds.map((meta, i) => {
+                <Group inset={spacing.lg}>
+                  {spaceRows.map((meta, i) => {
                     const name = SPACE_KIND_LABEL[meta.kind] ?? meta.label;
                     const color = SPACE_IDENTITY_COLORS[meta.kind] ?? colors.onSurfaceTertiary;
                     const tint = spaceTextColor(meta.kind, isDark) ?? color;
                     const limit = limits.find((l) => l.category === meta.label);
                     const spend = spending[meta.label];
-                    const topItem = biggest[meta.label];
                     const rec = recurring[meta.label] || 0;
                     const plannedAmt = planned[meta.label] || 0;
                     // Not spent yet: bills to pay + Calendar purchases ahead.
                     const up = rec + plannedAmt;
-                    // Recorded spend only; the rest shown apart (hatched).
-                    const recorded = Math.max(0, (limit ? limit.spent : spend?.this_month ?? 0) - up);
-
-                    // Tone and pace from what was actually SPENT -- the bills
-                    // still to pay sit in the bar's faded part (BudgetSplitBar)
-                    // and get their own note, instead of turning an untouched
-                    // budget red on the 1st of the month.
-                    // A 0 limit is a real limit: any spend is already over it.
-                    const ratio = !limit ? 0 : limit.monthly_limit > 0 ? recorded / limit.monthly_limit : recorded > 0 ? 2 : 0;
-                    // A pace warning takes priority even under 80% --
-                    // 20 points over pace a third into the month is a
-                    // real early signal a plain ratio tone would miss.
-                    const pace = limit ? paceDelta(ratio) : null;
-                    const tone = pace !== null ? colors.warning : severityColor(budgetSeverity(ratio), colors);
-
-                    const upcomingNote = limit ? budgetUpcomingNote(recorded, up, limit.monthly_limit, plannedAmt) : null;
-                    // At most two notes, most urgent first. Whenever the bar
-                    // holds bills not paid yet, one of them says so.
-                    const notes = ([
-                      limit && recorded > limit.monthly_limit
-                        ? { text: `Depășit cu ${lei(recorded - limit.monthly_limit)}`, color: colors.error }
-                        : null,
-                      upcomingNote ? { text: upcomingNote.text, color: upcomingNote.tone === "warning" ? colors.warning : colors.onSurfaceTertiary } : null,
-                      pace !== null ? { text: `Cu ${pace}% peste ritmul lunii`, color: colors.warning } : null,
-                      plan && guiltFreeByLabel[meta.label] > 0 ? { text: `+ ${lei(Math.round(guiltFreeByLabel[meta.label]))} fără vină, socotiți separat`, color: colors.onSurfaceTertiary } : null,
-                      topItem ? { text: `Cea mai mare${topItem.from_last_month ? " în " + lastMonthShort() : ""}: ${shorten(biggestExpenseTitle(topItem.title), 18)}, ${lei(topItem.amount)}`, color: colors.onSurfaceTertiary } : null,
-                    ].filter(Boolean) as { text: string; color: string }[]).slice(0, 2);
-                    // A linked credit's rate: its own line, outside the
-                    // 2-note cap, shown with or without a limit.
-                    const creditNote = creditByKind[meta.kind] ? `+ rată ${lei(Math.round(creditByKind[meta.kind]!))} pe lună, socotită la Credit` : null;
+                    const p = meta.pace;
+                    const recorded = p ? p.rec : Math.max(0, (spend?.this_month ?? 0) - up);
+                    const chip = p ? SPACE_STATUS_CHIP[p.status] : null;
+                    const chipColor = chip && chip.tone !== "neutral" ? colors[chip.tone] : null;
 
                     return (
-                      // Tour step 3 points at the first space row.
+                      // Tour step "spaces" points at the first row (after sorting).
                       <View key={meta.kind} {...(i === 0 ? spacesTarget : {})}>
                       <PressableScale
                         testID={limit ? `space-budget-${meta.kind}` : `space-budget-unset-${meta.kind}`}
@@ -586,22 +570,21 @@ export default function BudgetScreen() {
                         scaleTo={1}
                         pressedStyle={{ backgroundColor: colors.surfaceTertiary }}
                         accessibilityRole="button"
-                        accessibilityLabel={limit ? `${name}: ${lei(recorded)} cheltuiți din ${lei(limit.monthly_limit)}${up > 0 ? `, ${upcomingWords(rec, plannedAmt, lei)}` : ""}` : `Setează un buget pentru ${name}`}
-                        style={{ paddingHorizontal: spacing.lg, paddingVertical: 14, gap: spacing.sm, backgroundColor: colors.surfaceSecondary }}
+                        accessibilityLabel={limit ? `${name}${chip ? `, ${chip.text}` : ""}: ${lei(Math.round(recorded))} cheltuiți din ${lei(limit.monthly_limit)}${up > 0 ? `, ${upcomingWords(rec, plannedAmt, lei)}` : ""}` : `Setează un buget pentru ${name}`}
+                        style={{ paddingHorizontal: spacing.lg, paddingVertical: 12, gap: spacing.sm, minHeight: 48, backgroundColor: colors.surfaceSecondary }}
                       >
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
-                          <IconWell icon={meta.icon} color={color} tint={tint} size={34} />
-                          <Text style={{ flex: 1, fontSize: 15, fontWeight: "500", color: colors.onSurface }} numberOfLines={1}>
-                            {name}
-                            {plan && limit && envelope > 0 ? (
-                              <Text style={{ fontWeight: "400", color: colors.onSurfaceTertiary }}>{` · ${Math.round((limit.monthly_limit / envelope) * 100)}%`}</Text>
-                            ) : null}
-                          </Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
+                          <Text style={{ ...typography.body, flex: 1, color: colors.onSurface }} numberOfLines={1}>{name}</Text>
                           {limit ? (
-                            <Text style={{ fontSize: 14, color: colors.onSurfaceTertiary }}>
-                              <Text style={{ fontWeight: "600", color: recorded > limit.monthly_limit ? colors.error : colors.onSurface }}>{roNumber(recorded, 2)}</Text>
-                              {`${budgetUpcomingSuffix(up)} / ${lei(limit.monthly_limit)}`}
-                            </Text>
+                            chip ? (
+                              <Text
+                                testID={`space-pace-${meta.kind}`}
+                                style={{ ...typography.chip, paddingHorizontal: 9, paddingVertical: 3, borderRadius: radius.pill, overflow: "hidden", color: chipColor ?? colors.onSurfaceSecondary, backgroundColor: chipColor ? hexToRgba(chipColor, 0.12) : colors.surfaceTertiary }}
+                              >
+                                {chip.text}
+                              </Text>
+                            ) : null
                           ) : (
                             <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
                               <Text style={{ fontSize: 14, color: tint }}>Setează</Text>
@@ -609,44 +592,60 @@ export default function BudgetScreen() {
                             </View>
                           )}
                         </View>
-                        {limit ? (
-                          <BudgetSplitBar style={{ marginLeft: 46 }} recorded={recorded} upcoming={up} limit={limit.monthly_limit} color={tone} upcomingColor={color} />
+                        {limit && p ? (
+                          <>
+                            <BudgetSplitBar recorded={recorded} upcoming={up} limit={limit.monthly_limit} color={color} upcomingColor={color} todayAt={p.todayAt} />
+                            <Text style={{ fontSize: 13, lineHeight: 18, color: colors.onSurfaceTertiary }}>
+                              {`${roNumber(Math.round(recorded))} din ${lei(limit.monthly_limit)} · `}
+                              {p.left >= 0 ? (
+                                `mai ai ${roNumber(Math.round(p.left))}`
+                              ) : (
+                                <Text style={{ color: colors.error }}>{`trece cu ${roNumber(Math.round(-p.left))}`}</Text>
+                              )}
+                            </Text>
+                          </>
                         ) : spend ? (
-                          <Text style={{ marginLeft: 46, fontSize: 13, color: colors.onSurfaceTertiary }}>
-                            {lei(recorded)} luna asta{up > 0 ? ` ${upcomingWords(rec, plannedAmt, lei)}` : ""}
+                          <Text style={{ fontSize: 13, lineHeight: 18, color: colors.onSurfaceTertiary }}>
+                            {lei(Math.round(recorded))} luna asta{up > 0 ? ` ${upcomingWords(rec, plannedAmt, lei)}` : ""}
                           </Text>
-                        ) : null}
-                        {limit && notes.length > 0 ? (
-                          <View style={{ marginLeft: 46, gap: 2 }}>
-                            {notes.map((n) => (
-                              <Text key={n.text} style={{ fontSize: 13, lineHeight: 18, color: n.color }}>{n.text}</Text>
-                            ))}
-                          </View>
-                        ) : null}
-                        {creditNote ? (
-                          <Text testID={`space-credit-note-${meta.kind}`} style={{ marginLeft: 46, fontSize: 13, lineHeight: 18, color: colors.onSurfaceTertiary }}>{creditNote}</Text>
                         ) : null}
                       </PressableScale>
                       </View>
                     );
                   })}
-                  {plan ? (
+                  {plan && allocStatus !== "exact" ? (
                     <View testID="needs-footer" style={{ flexDirection: "row", alignItems: "center", gap: spacing.sm, paddingHorizontal: spacing.lg, minHeight: 48, backgroundColor: colors.surfaceSecondary }}>
                       <Ionicons
-                        name={allocStatus === "exact" ? "checkmark" : allocStatus === "under" ? "ellipse-outline" : "alert-circle-outline"}
+                        name={allocStatus === "under" ? "ellipse-outline" : "alert-circle-outline"}
                         size={16}
-                        color={allocStatus === "exact" ? colors.success : allocStatus === "under" ? colors.onSurfaceTertiary : colors.warning}
+                        color={allocStatus === "under" ? colors.onSurfaceTertiary : colors.warning}
                       />
                       <Text style={{ flex: 1, fontSize: 13, lineHeight: 18, color: allocStatus === "over" ? colors.warning : colors.onSurfaceTertiary }}>
                         {allocStatus === "over"
                           ? `Bugetele trec de necesități cu ${lei(Math.round(-notAllocated))}`
-                          : `Împărțit: ${roNumber(Math.round(allocated))} din ${lei(Math.round(envelope))}${allocStatus === "under" ? ` · Nealocat ${lei(Math.round(notAllocated))}` : ""}`}
+                          : `Împărțit: ${roNumber(Math.round(allocated))} din ${lei(Math.round(envelope))} · Nealocat ${lei(Math.round(notAllocated))}`}
                       </Text>
                     </View>
                   ) : null}
                 </Group>
               )}
             </View>
+
+            {plan && planSummary ? (
+              <IncomeSplitCard
+                plan={plan}
+                credit={{ rates: planSummary.credit.rates, count: planSummary.credit.count }}
+                guiltFree={{ spent: planSummary.guiltFree.spent, planned: planSummary.guiltFree.planned }}
+                savingsGoal={savingsGoal}
+                needsSegments={needsSegments}
+                onEditIncome={() => setIncomeOpen(true)}
+                onEditSplit={() => setSplitOpen(true)}
+                onOpenNeeds={() => setShowOverview(true)}
+                onOpenGuiltFree={() => setShowGuiltFree(true)}
+                onOpenCredit={() => setShowCredit(true)}
+                onOpenGoal={openEditGoal}
+              />
+            ) : null}
 
             {/* Savings goal -- filled up automatically at month's end
                 with whatever was left in each space's budget. With an

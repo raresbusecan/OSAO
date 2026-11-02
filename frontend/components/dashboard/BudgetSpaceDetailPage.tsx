@@ -13,6 +13,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { REFRESH_EVENT } from "@/lib/refresh";
 import { GuiltFreeChip } from "@/components/dashboard/GuiltFree";
 import { jarAmounts, parseAmount, ENVELOPE_TOLERANCE, type BudgetPlan } from "@/lib/budget/plan";
+import { fmtLei, perDay, spacePace, weekBars, type PaceEvent } from "@/lib/budget/pace";
 
 export type BudgetSpaceDetailPageProps = {
   /** The budget KEY ("Car", "Home"...) -- what the API takes; the page
@@ -30,6 +31,13 @@ export type BudgetSpaceDetailPageProps = {
   suggested?: number | null;
   /** Σ the OTHER spaces' limits -- for the over-envelope warning. */
   otherLimitsTotal?: number;
+  /** This space's slice of GET /budget's `pace` (lib/budget/pace.ts) --
+   * absent on an older backend: no "Ritmul lunii" card then. */
+  pace?: { daily: number[]; events: PaceEvent[]; today: number; daysInMonth: number; month: string };
+  /** "+ rată 900 lei pe lună, socotită la Credit" for a linked credit. */
+  creditNote?: string;
+  /** This month's fără vină spend in this space (not in its budget). */
+  guiltFreeThisMonth?: number;
 };
 
 type MonthTotal = { year: number; month: number; label: string; total: number };
@@ -55,7 +63,7 @@ function monthLong(m: MonthTotal): string {
  * /api/budget/spaces/{category}, the same type->space map the Budget
  * tab is built from.
  */
-export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, onLimitSaved, plan = null, suggested = null, otherLimitsTotal = 0 }: BudgetSpaceDetailPageProps) {
+export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, onLimitSaved, plan = null, suggested = null, otherLimitsTotal = 0, pace, creditNote, guiltFreeThisMonth = 0 }: BudgetSpaceDetailPageProps) {
   const router = useRouter();
   const { card, colors, spacing, radius, typography, isDark } = useTheme();
   const kind = category.toLowerCase() as SpaceKind;
@@ -191,6 +199,21 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
   const selectedRecorded = recordedOf(selectedMonth);
   const selectedPlanned = selectedMonth && selectedMonth === thisMonth ? planned : 0;
 
+  // ---- Ritmul lunii (current month, with a limit) ----
+  const showsCurrent = !selected || (!!thisMonth && selected.year === thisMonth.year && selected.month === thisMonth.month);
+  const sp =
+    pace && localLimit != null && thisMonth && showsCurrent
+      ? spacePace({ L: localLimit, spent: thisMonth.total, r: recurringMonthly, pa: planned, events: pace.events, t: pace.today, D: pace.daysInMonth })
+      : null;
+  const paceMonthName = pace ? new Date(Number(pace.month.slice(0, 4)), Number(pace.month.slice(5, 7)) - 1, 1).toLocaleDateString("ro-RO", { month: "long" }) : "";
+  const paceDaysLeft = pace ? Math.max(1, pace.daysInMonth - pace.today + 1) : 1;
+  const weeks = sp && pace ? weekBars(pace.daily, pace.events, sp.flex, pace.daysInMonth, pace.today, new Date(Number(pace.month.slice(0, 4)), Number(pace.month.slice(5, 7)) - 1, 1).getDay()) : [];
+  const weekMax = Math.max(1, ...weeks.map((w) => Math.max(w.value, w.normal)));
+  const currentWeek = weeks.find((w) => w.when === "current");
+  // The 4-month card shows the big amount only when the Ritmul card
+  // doesn't already show this month.
+  const showMonthAmount = !sp;
+
   const toggleMonth = (m: MonthTotal) => {
     const isSame = selected?.year === m.year && selected?.month === m.month;
     setSelected(isSame ? null : { year: m.year, month: m.month });
@@ -210,11 +233,84 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
         <ActivityIndicator color={colors.onSurfaceTertiary} />
       ) : (
         <>
+          {sp && pace ? (
+            <View testID="budget-space-pace" style={{ ...card, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>
+              <View style={{ gap: 2 }}>
+                <Text style={{ ...typography.caption, color: colors.onSurfaceTertiary }}>{`Mai ai până pe ${pace.daysInMonth} ${paceMonthName}`}</Text>
+                <Text style={{ ...typography.display, color: sp.left < 0 ? colors.error : colors.onSurface }} numberOfLines={1} adjustsFontSizeToFit>
+                  {sp.left < 0 ? `Ai trecut cu ${fmtLei(-sp.left)} lei` : `${fmtLei(sp.left)} lei`}
+                </Text>
+                <Text style={{ fontSize: 15, lineHeight: 22, color: colors.onSurfaceSecondary }}>
+                  {`≈ ${fmtLei(perDay(Math.max(0, sp.left), paceDaysLeft))} lei pe zi · ai cheltuit ${fmtLei(sp.rec)} din ${fmtLei(localLimit ?? 0)}`}
+                </Text>
+                {[
+                  recurringMonthly > 0 ? `+ ${fmtLei(recurringMonthly)} lei facturi, socotite în buget` : null,
+                  planned > 0 ? `+ ${fmtLei(planned)} lei planificat în Calendar` : null,
+                  guiltFreeThisMonth > 0 ? `+ ${fmtLei(guiltFreeThisMonth)} lei fără vină, socotiți separat` : null,
+                  creditNote || null,
+                ]
+                  .filter(Boolean)
+                  .map((line) => (
+                    <Text key={line!} style={{ ...typography.caption, lineHeight: 18, color: colors.onSurfaceTertiary }}>{line}</Text>
+                  ))}
+              </View>
+
+              {weeks.length > 0 ? (
+                <View style={{ gap: spacing.sm }}>
+                  <View
+                    accessible
+                    accessibilityRole="image"
+                    accessibilityLabel={weeks.map((w) => `${w.start}–${w.end}: ${w.when === "future" ? "urmează" : `${fmtLei(w.value)} lei, normal ${fmtLei(w.normal)}`}`).join("; ")}
+                    style={{ flexDirection: "row", gap: spacing.md }}
+                  >
+                    {weeks.map((w) => {
+                      const barH = w.when === "future" ? 6 : Math.max(4, (w.value / weekMax) * 96);
+                      const normalAt = (w.normal / weekMax) * 96;
+                      return (
+                        <View key={w.start} style={{ flex: 1, gap: 6, alignItems: "center" }}>
+                          <View style={{ width: "100%", height: 96, justifyContent: "flex-end" }}>
+                            <View
+                              style={{
+                                width: "100%",
+                                height: barH,
+                                borderRadius: radius.sm,
+                                backgroundColor: w.when === "future" ? colors.surfaceTertiary : color,
+                                opacity: w.when === "current" ? 0.75 : 1,
+                              }}
+                            />
+                            {w.normal > 0 ? (
+                              // The week's normal: a 2px dashed mark across the column.
+                              <View style={{ position: "absolute", left: 0, right: 0, bottom: Math.min(96, normalAt) - 1, height: 2, flexDirection: "row", gap: 3, overflow: "hidden" }}>
+                                {Array.from({ length: 8 }, (_, k) => (
+                                  <View key={k} style={{ flex: 1, height: 2, backgroundColor: colors.onSurfaceTertiary }} />
+                                ))}
+                              </View>
+                            ) : null}
+                          </View>
+                          <Text style={{ fontSize: 12, fontWeight: w.when === "current" ? "600" : "400", color: w.when === "current" ? colors.onSurface : colors.onSurfaceTertiary }}>
+                            {`${w.start}–${w.end}`}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                  {currentWeek ? (
+                    <Text style={{ fontSize: 14, lineHeight: 20, color: currentWeek.value > currentWeek.normal * 1.15 ? colors.warning : colors.onSurfaceTertiary }}>
+                      {`Săptămâna asta: ${fmtLei(currentWeek.value)} lei, normal până azi ~${fmtLei(currentWeek.normal)}.`}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
           <View style={{ ...card, borderRadius: radius.lg, padding: spacing.gutter, gap: spacing.md }}>
             <View style={{ gap: 2 }}>
               <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }}>
-                {selected && selectedMonth ? monthLong(selectedMonth) : "Luna asta"}
+                {showMonthAmount ? (selected && selectedMonth ? monthLong(selectedMonth) : "Luna asta") : selected && selectedMonth && !showsCurrent ? monthLong(selectedMonth) : "Ultimele 4 luni"}
               </Text>
+              {showMonthAmount || (selected && !showsCurrent) ? (
+              <>
               <View style={{ flexDirection: "row", alignItems: "baseline", gap: 6, flexWrap: "wrap" }}>
                 <Text style={{ ...typography.display, color: colors.onSurface }}>{lei(selectedRecorded)}</Text>
                 {localLimit != null ? <Text style={{ fontSize: 15, color: colors.onSurfaceTertiary }}>din {lei(localLimit)}</Text> : null}
@@ -231,6 +327,8 @@ export function BudgetSpaceDetailPage({ category, icon, monthlyLimit, onBack, on
                 <Text style={{ fontSize: 13, lineHeight: 18, color: colors.onSurfaceTertiary }}>
                   + {lei(selectedPlanned)} cumpărături planificate în Calendar, socotite în buget
                 </Text>
+              ) : null}
+              </>
               ) : null}
               {!selected && lastMonth ? (
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>

@@ -296,7 +296,8 @@ function TourOverlay({ active, onFinished }: { active: Active; onFinished: () =>
       : null;
 
   const measured = measuredIndex === index;
-  const showIllustration = !!step.illustration && ((typeof step.illustrationWhen === "function" ? step.illustrationWhen(ctx) : step.illustrationWhen) === "always" || (measured && !hole));
+  const illustration = typeof step.illustration === "function" ? step.illustration(ctx) : step.illustration;
+  const showIllustration = !!illustration && ((typeof step.illustrationWhen === "function" ? step.illustrationWhen(ctx) : step.illustrationWhen) === "always" || (measured && !hole));
   const maxCardH = hole ? roomFor(hole, step.placement) : winH - insets.top - insets.bottom - EDGE * 2;
   const title = step.title(ctx);
   const body = step.body?.(ctx) ?? null;
@@ -376,7 +377,7 @@ function TourOverlay({ active, onFinished }: { active: Active; onFinished: () =>
             }}
           >
             <ScrollView style={{ flexGrow: 0, flexShrink: 1 }} contentContainerStyle={{ gap: 14 }} showsVerticalScrollIndicator persistentScrollbar bounces={false}>
-              {showIllustration ? <Illustration kind={step.illustration!} /> : null}
+              {showIllustration ? <Illustration kind={illustration!} /> : null}
               <View ref={headerRef} accessible accessibilityRole="header" accessibilityLabel={`Pasul ${index + 1} din ${total}. ${title}`}>
                 <Text style={{ ...typography.subtitle, color: colors.onSurface }}>{title}</Text>
               </View>

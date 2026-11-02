@@ -229,12 +229,15 @@ export const HELP = {
   "budget.page": {
     title: "Buget",
     tour: "budget",
-    intro: "Pornește de la venitul tău net: îl împărțim în cinci și vezi cât ai cheltuit din fiecare parte.",
+    intro: "Cum stai luna asta față de ritmul normal și cât mai poți cheltui pe zi. Dedesubt: spațiile, împărțirea venitului și plățile recurente.",
     points: [
-      { title: "Cheltuit din necesități", text: "Tot ce ai înregistrat luna asta în spații, față de partea de necesități din venit. Cheltuielile marcate „Bani fără vină” nu intră aici." },
+      { title: "Cheltuit", text: "Tot ce ai înregistrat luna asta în spații, față de necesități. Cheltuielile marcate „Bani fără vină” nu intră aici." },
+      { title: "Ritm normal", text: "Cât ar fi firesc să fi cheltuit până azi: necesitățile fără facturile recurente, împărțite pe zilele lunii, plus cumpărăturile din Calendar în ziua lor." },
+      { title: "Peste sau sub ritm", text: "Diferența, în lei. În primele 5 zile nu o arătăm: o singură cheltuială mare ar strica imaginea." },
+      { title: "Cel mult pe zi", text: "Cât mai ai din necesități, împărțit la zilele rămase, cu azi cu tot." },
       { title: "Plăți recurente de plătit", text: "Facturile spațiilor, socotite pe lună. Le scădem din timp, ca să nu te surprindă." },
       { title: "Planificat în Calendar", text: "Evenimentele care implică o cumpărare, până în ziua lor. Din ziua evenimentului trec la Cheltuit." },
-      { title: "Mai ai", text: "Necesitățile minus cheltuit, de plătit și planificat." },
+      { title: "Mai ai", text: "Necesitățile minus cheltuit, facturi și planificat." },
       { title: "Fără venit setat", text: "Până adaugi venitul, ecranul arată bugetele pe spații, ca înainte." },
     ],
   },
@@ -259,7 +262,9 @@ export const HELP = {
   "budget.spaces": {
     title: "Necesități pe spații",
     points: [
-      { text: "Cât ai cheltuit în fiecare spațiu, din bugetul lui. Procentul e partea spațiului din necesități." },
+      { text: "Cât ai cheltuit în fiecare spațiu, din bugetul lui, ordonat după ritm. Sus, spațiile care merg prea repede." },
+      { title: "Liniuța gri", text: "Unde ar fi normal să fii azi în acel spațiu." },
+      { title: "Prea repede / În ritm / Sub ritm", text: "Comparăm ce ai cheltuit cu ritmul normal al spațiului. Diferențe mici (sub 5% din buget, minim 20 lei) contează ca „în ritm”." },
       { title: "Cum se citește bara", text: "Plin = ce ai cheltuit deja. Hașurat = bani pe care bugetul îi socotește din timp, dar nu i-ai cheltuit încă: facturi recurente neplătite și cumpărături planificate în Calendar („0 + 725 / 140 lei”). Linia verticală e bugetul, când bara trece de el." },
       { title: "Împărțit și nealocat", text: "Sub spații vezi cât din necesități ai dat deja spațiilor și cât a rămas neîmpărțit. Dacă bugetele trec de necesități, îți spunem cu cât." },
       { title: "Reîmparte", text: "Împarte necesitățile pe spații după cât cheltuiești de obicei în fiecare. Facturile recurente ale unui spațiu sunt minimul lui." },
@@ -331,13 +336,14 @@ export const HELP = {
   "budget.spaceDetail": {
     title: "Bugetul unui spațiu",
     points: [
+      { title: "Ritmul lunii", text: "Cât mai ai și cât înseamnă pe zi. Barele sunt săptămânile lunii; linia punctată pe fiecare e cât ar fi normal în săptămâna aceea." },
       { title: "Bugetul lunar", text: "Partea spațiului din necesități: cât îți propui să cheltuiești aici într-o lună. Sub sumă vezi cât înseamnă din necesități și din venit." },
       { title: "Sugerat", text: "O sumă calculată din cât cheltuiești de obicei aici, față de celelalte spații. Atinge-o ca s-o folosești." },
       { title: "Peste necesități", text: "Dacă bugetele tuturor spațiilor trec de necesități, te avertizăm. Poți salva oricum." },
       { title: "Facturile", text: "Facturile recurente ale spațiului se adaugă la cheltuit în fiecare lună." },
       { title: "Planificat", text: "Cumpărăturile din evenimentele Calendarului care încă n-au venit. Sunt în listă, dar nu în Cheltuit până în ziua lor." },
       { title: "Fără vină", text: "Înregistrările marcate apar în listă, dar nu intră în totaluri." },
-      { title: "Înregistrări", text: "Atinge o lună din grafic ca să vezi doar cheltuielile ei." },
+      { title: "Ultimele 4 luni", text: "Atinge o lună din grafic ca să vezi doar cheltuielile ei." },
     ],
   },
 
