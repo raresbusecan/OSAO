@@ -144,7 +144,9 @@ function Home() {
   // With a plan, the spend card is on Buget's basis: every label + the
   // credit rates -- the shared monthSpend() -- so "cheltuit" + "de
   // plătit/planificat" + "Mai ai" add up to De cheltuit.
-  const needs = useMemo(() => monthSpend(budget?.spending, budget?.recurring, budget?.planned, creditRates), [budget, creditRates]);
+  // Rates only with a plan (they live inside De cheltuit); without one the
+  // card's "plăți recurente" stays bills only, as ctx.creditRates.
+  const needs = useMemo(() => monthSpend(budget?.spending, budget?.recurring, budget?.planned, hasPlan ? creditRates : 0), [budget, creditRates, hasPlan]);
   const monthly = dashboard?.monthlyExpenses ?? { total: 0, sources: [] };
   // What the "Cheltuit" card shows: the raw month (dashboard total) without
   // a plan; with one, each label's RECORDED spend. Only the

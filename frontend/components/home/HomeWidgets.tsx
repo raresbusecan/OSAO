@@ -181,8 +181,10 @@ function SpendCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
   const muted = colors.onSurfaceTertiary;
   const title = widget.settings?.title || `Cheltuit în ${ctx.monthName}`;
   const go = ctx.preview ? undefined : () => ctx.navigate("/budget");
+  // On hasPlan, not totalBudget > 0: everything put aside (De cheltuit
+  // 0) still has a plan -- not "Adaugă venitul".
   const remainingLine =
-    ctx.totalBudget > 0
+    ctx.hasPlan
       ? ctx.remaining >= 0
         ? `Mai ai ${lei(Math.round(ctx.remaining))}${widget.size === "wide" ? ` pentru ${roCount(ctx.daysLeft, "zi", "zile")}` : ""}`
         : `Ai depășit cu ${lei(Math.round(-ctx.remaining))}`
