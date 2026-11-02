@@ -4,6 +4,32 @@ What landed on `main` (= what runs on the phone day to day), newest first.
 One entry per merge, written when `main` moves. Details live in the
 commits; open follow-ups live in `BACKLOG.md`.
 
+## 2026-11-02 — Hold a card for its menu, hold + drag to move it
+
+Fast-forward of `main` from `b9069ae` to `feat/hold-menu` (5 commits,
+`134df62`..`44498b8`, plus this entry). QA: qa-lead, three rounds — round 1 found 1 medium
+(the remove-from-menu confirm auto-answered "no") + 3 low, all fixed in
+`6593775` and re-verified with a dialogCoordinator proof; round 2 confirmed
+them and its one leftover (SpendBar regrow) was fixed in `4753c74`; round 3
+PASS on `4753c74` + `947d8e3` (drop batching, stale closures, leftover state;
+npm test 139/139, tsc 0 errors, iOS bundle 200). `44498b8` is a comment fix.
+User checked it on iPhone ("Este OK"); gated by release-lead.
+
+**Changes**
+- Acasă and Spații: hold a card to open its menu; hold + drag moves the card
+  and the new order saves on drop (no Renunță / Gata step)
+  (`app/(tabs)/home.tsx`, `app/(tabs)/spaces.tsx`, `HomeWidgets.tsx`).
+- Reusable `components/ui/Hold.tsx` with `components/ui/HoldMenuHost.tsx`
+  (mounted in `app/_layout.tsx`), `lib/holdMenu.ts` and
+  `lib/holdGeometry.ts`.
+- A lifted spend card's split bar no longer regrows.
+- New test `frontend/tests/hold-geometry.test.cjs`; `VerifyEmailBanner.tsx`,
+  `lib/help.ts`, `BACKLOG.md`, `frontend/CLAUDE.md` updated.
+
+**Still needs a phone check** — ghost alignment on Android; auto-scroll at
+the top/bottom edges while dragging; two quick drags in a row on a slow or
+failing network (overlapping saves, same pattern menu actions already have).
+
 ## 2026-11-02 — Car services show on Acasă from the Mașină km window
 
 Fast-forward of `main` from `30e04e5` to `feat/service-due-window` (3
