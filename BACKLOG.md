@@ -123,6 +123,10 @@ drifted a day across the 25 Oct DST change; plus the known
 
 ## Found along the way (not yet fixed)
 
+### Buget: `savingsCaption` is dead in the app (2026-11-02) [from: Obiectiv de economii, QA 2026-11-02]
+
+The Economii card no longer shows the "Pe 1 decembrie: + X lei puși deoparte..." caption (replaced by the goal hint), so `savingsCaption` in `frontend/lib/budget/plan.ts` is only called by `tests/budget-simple.test.cjs`. Remove it with its test cases in a cleanup pass.
+
 ### Frontend `guiltFree` plumbing left in item mappers and types (2026-11-02) [from: Buget simplu, feat/budget-pace 2026-11-02]
 
 The UI no longer shows or sets "Bani fără vină", and ItemBudgetRules strips `guilt_free` on write. But the mappers still round-trip the flag: `lib/spaces/car/carItems.ts`, `lib/spaces/home/homeItems.ts`, `lib/spaces/expenses/expensesItems.ts`, `lib/spaces/grocery/groceryItems.ts`, the `guiltFree?` fields in `car.types.ts` / `home.types.ts` / `expenses.types.ts` / `carEntries.types.ts`, `expenses.calculations.ts`, `components/spaces/car/utils/carEntries.ts`, and the `guiltFree: false` lines in `components/simple/quickAdd/kinds.ts`. The forms now pass the existing value through unchanged. Removing all of it touches about 15 files of plumbing with no visible effect, so it was left out on purpose. Their comments still describe the chip.

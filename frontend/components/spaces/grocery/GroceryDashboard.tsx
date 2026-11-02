@@ -841,37 +841,39 @@ export default function GroceryDashboard({
         </TopBar>
 
         {/* IDENTITY + SHARING -- who can see the active list. The avatar
-            stack (or "Invită pe cineva") opens SpaceMembersModal. */}
+            stack (or "Invită pe cineva") opens SpaceMembersModal; with no
+            list there is nothing to share, so it isn't shown at all. */}
         <View style={{ gap: spacing.md }}>
           <Identity color={groceryFill} kicker="Cumpărături" title={space?.name || "Cumpărături"} info="grocery.space" />
 
-          <PressableScale
-            testID="grocery-members-stack"
-            onPress={() => setMembersModalVisible(true)}
-            disabled={!effectiveActiveListId}
-            accessibilityRole="button"
-            accessibilityLabel="Cine are acces la această listă"
-            style={{ flexDirection: "row", alignItems: "center", alignSelf: "flex-start", minHeight: 44, gap: spacing.sm, opacity: effectiveActiveListId ? 1 : 0.4 }}
-          >
-            {otherPeople.length > 0 ? (
-              <View style={{ flexDirection: "row" }}>
-                {otherPeople.slice(0, 3).map((person, index) => (
-                  <View key={person.id} style={{ marginLeft: index === 0 ? 0 : -10, zIndex: 10 - index }}>
-                    <Avatar id={person.id} name={person.name} size={30} ringed />
-                  </View>
-                ))}
-              </View>
-            ) : (
-              <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" }}>
-                <Ionicons name="person-add-outline" size={15} color={muted} />
-              </View>
-            )}
-            <Text style={{ fontSize: 14, color: muted }}>
-              {otherPeopleCount === 0
-                ? "Doar tu. Invită pe cineva"
-                : `Împărțită cu ${roCount(otherPeopleCount, "persoană", "persoane")}`}
-            </Text>
-          </PressableScale>
+          {activeList ? (
+            <PressableScale
+              testID="grocery-members-stack"
+              onPress={() => setMembersModalVisible(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Cine are acces la această listă"
+              style={{ flexDirection: "row", alignItems: "center", alignSelf: "flex-start", minHeight: 44, gap: spacing.sm }}
+            >
+              {otherPeople.length > 0 ? (
+                <View style={{ flexDirection: "row" }}>
+                  {otherPeople.slice(0, 3).map((person, index) => (
+                    <View key={person.id} style={{ marginLeft: index === 0 ? 0 : -10, zIndex: 10 - index }}>
+                      <Avatar id={person.id} name={person.name} size={30} ringed />
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.surfaceSecondary, alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="person-add-outline" size={15} color={muted} />
+                </View>
+              )}
+              <Text style={{ fontSize: 14, color: muted }}>
+                {otherPeopleCount === 0
+                  ? "Doar tu. Invită pe cineva"
+                  : `Împărțită cu ${roCount(otherPeopleCount, "persoană", "persoane")}`}
+              </Text>
+            </PressableScale>
+          ) : null}
         </View>
 
         {/* LIST PILLS -- tapping one switches which list shows below,

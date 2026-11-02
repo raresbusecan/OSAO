@@ -16,7 +16,7 @@ import { BudgetPaceCard } from "@/components/dashboard/BudgetPaceCard";
 import { mergeLabels, normalizePace, type BudgetPace } from "@/lib/budget/pace";
 import { SwipeItemRow } from "@/components/dashboard/SwipeItemRow";
 import { IncomeSheet } from "@/components/dashboard/IncomeSheet";
-import { LABEL_KIND, primeBudgetPlan, pickSummary, monthSpend, savingsCaption, nextMonthName, type BudgetPlan, type BudgetPlanSummary } from "@/lib/budget/plan";
+import { LABEL_KIND, primeBudgetPlan, pickSummary, monthSpend, type BudgetPlan, type BudgetPlanSummary } from "@/lib/budget/plan";
 import { useRouter } from "expo-router";
 import { todoHref } from "@/lib/dashboard/spaceDue";
 import { PressableScale } from "@/components/ui/PressableScale";
@@ -26,10 +26,19 @@ import { useTourScroll, useTourTarget } from "@/components/ui/tourTargets";
 import { useAutoTour } from "@/lib/useAutoTour";
 import { SHOW_TOUR_TEST_BUTTON, startTour, type TourCtx } from "@/lib/tours";
 import { motion } from "@/lib/motion";
-import { lei, roDate, parseLocaleNumber } from "@/lib/format";
+import { lei, roDate, roCount, parseLocaleNumber } from "@/lib/format";
+import { goalPace, localDay, type GoalPace } from "@/lib/budget/goal";
+import { DateField } from "@/components/ui/DateField";
+import { formatDateInput, isValidDateInput } from "@/lib/spaces/car/utils/dateInput";
 
-type SavingsGoal = { target_amount: number; current_amount: number; target_date: string | null } | null;
+type SavingsGoal = { name?: string | null; target_amount: number; current_amount: number; target_date: string | null } | null;
 type SpaceKindMeta = { kind: SpaceKind; label: string; icon: keyof typeof Ionicons.glyphMap };
+
+/** The goal's "YYYY-MM-DD..." as a local Date at noon (no tz day shift). */
+function goalDay(value: string): Date {
+  const [y, m, d] = value.slice(0, 10).split("-").map(Number);
+  return new Date(y, m - 1, d, 12);
+}
 
 // The same type->space label map Item::SPENDING_TYPE_SPACE uses on the
 // backend for the Monthly Expenses breakdown -- GET /budget's `spending`
@@ -89,6 +98,9 @@ export default function BudgetScreen() {
   const [editingGoal, setEditingGoal] = useState(false);
   const [goalTarget, setGoalTarget] = useState("");
   const [goalCurrent, setGoalCurrent] = useState("");
+  const [goalName, setGoalName] = useState("");
+  /** "ZZ.LL.AAAA" (DateField's format), "" = no date. */
+  const [goalDate, setGoalDate] = useState("");
   const [savingGoal, setSavingGoal] = useState(false);
 
   // First-use tour (lib/tours.ts "budget"): what it points at, and the
@@ -145,6 +157,8 @@ export default function BudgetScreen() {
   const openEditGoal = () => {
     setGoalTarget(savingsGoal ? String(savingsGoal.target_amount) : "");
     setGoalCurrent(savingsGoal ? String(savingsGoal.current_amount) : "");
+    setGoalName(savingsGoal?.name ?? "");
+    setGoalDate(savingsGoal?.target_date ? formatDateInput(goalDay(savingsGoal.target_date)) : "");
     setEditingGoal(true);
   };
 
@@ -155,6 +169,8 @@ export default function BudgetScreen() {
       await api.saveSavingsGoal({
         target_amount: parseLocaleNumber(goalTarget) || 0,
         current_amount: parseLocaleNumber((goalCurrent || "0")) || 0,
+        name: goalName.trim() || null,
+        target_date: sheetGoalDay,
       });
       setEditingGoal(false);
       await load();
@@ -166,6 +182,8 @@ export default function BudgetScreen() {
   };
 
   const goalIsNegative = !!savingsGoal && savingsGoal.current_amount < 0;
+  // The sheet's date as "YYYY-MM-DD" (null = none), for saving and its preview.
+  const sheetGoalDay = isValidDateInput(goalDate) ? goalDate.split(".").reverse().join("-") : null;
 
   const plan: BudgetPlan | null = planSummary?.plan ?? null;
   const hasCredit = (planSummary?.credit.count ?? 0) > 0;
@@ -206,12 +224,20 @@ export default function BudgetScreen() {
   // "Cheltuit" is only what was recorded; bills + rates are the hatched band.
   const E = plan ? plan.spendable : 0;
   const ms = monthSpend(spending, recurring, planned, planSummary?.credit.rates ?? 0);
-  // "decembrie" for Economii's caption -- from the server's month (user tz)
-  // when there is one, else the device date.
-  const nextMonth = (() => {
-    const [y, m] = (pace?.month ?? "").split("-").map(Number);
-    return y && m ? nextMonthName(new Date(y, m - 1, 1)) : nextMonthName();
-  })();
+  // ---- Obiectiv de economii (lib/budget/goal.ts): per day / week / month
+  // to reach the target by its date -- the card's saved goal, and the
+  // sheet's draft (a live preview while typing).
+  const today = localDay(new Date());
+  const cardGoal = savingsGoal
+    ? goalPace({ target: Number(savingsGoal.target_amount), current: Number(savingsGoal.current_amount), targetDate: savingsGoal.target_date, today, setAside: plan?.set_aside })
+    : ({ status: "none" } as GoalPace);
+  const sheetGoal = goalPace({
+    target: parseLocaleNumber(goalTarget) || 0,
+    current: parseLocaleNumber(goalCurrent || "0") || 0,
+    targetDate: sheetGoalDay,
+    today,
+    setAside: plan?.set_aside,
+  });
 
   // ---- Ritmul lunii (lib/budget/pace.ts): with a plan only, every label
   // against the one De cheltuit. ----
@@ -399,7 +425,7 @@ export default function BudgetScreen() {
                 onPress={openEditGoal}
                 scaleTo={motion.scale.card}
                 accessibilityRole="button"
-                accessibilityLabel={`Economii: ${lei(Math.round(savingsGoal?.current_amount ?? 0))}${savingsGoal && savingsGoal.target_amount > 0 ? ` din ținta de ${lei(Math.round(savingsGoal.target_amount))}` : ""}. Modifică ținta`}
+                accessibilityLabel={`Economii: ${lei(Math.round(savingsGoal?.current_amount ?? 0))}${savingsGoal && savingsGoal.target_amount > 0 ? ` din ținta de ${lei(Math.round(savingsGoal.target_amount))}${savingsGoal.name ? ` pentru ${savingsGoal.name}` : ""}` : ""}. ${goalPaceText(cardGoal, plan?.set_aside, savingsGoal?.target_date)} Modifică obiectivul`}
                 style={{ ...card, borderRadius: radius.card, padding: spacing.lg, gap: 10 }}
               >
                 <View style={{ flexDirection: "row", alignItems: "center", gap: spacing.md }}>
@@ -409,7 +435,9 @@ export default function BudgetScreen() {
                       {lei(Math.round((savingsGoal?.current_amount ?? 0) * 100) / 100)}
                     </Text>
                     <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }} numberOfLines={1}>
-                      {savingsGoal && savingsGoal.target_amount > 0 ? `din ținta de ${lei(Math.round(savingsGoal.target_amount))}` : "Pune-ți o țintă"}
+                      {savingsGoal && savingsGoal.target_amount > 0
+                        ? `${savingsGoal.name ? `${savingsGoal.name} · ` : ""}din ${lei(Math.round(savingsGoal.target_amount))}`
+                        : "Pune-ți o țintă"}
                     </Text>
                   </View>
                   <Ionicons name="chevron-forward" size={18} color={colors.onSurfaceTertiary} />
@@ -419,9 +447,14 @@ export default function BudgetScreen() {
                     <View style={{ width: `${Math.max(0, Math.min(1, savingsGoal.current_amount / savingsGoal.target_amount)) * 100}%`, height: "100%", borderRadius: 3, backgroundColor: colors.success }} />
                   </View>
                 ) : null}
-                <Text style={{ fontSize: 13, lineHeight: 18, color: colors.onSurfaceTertiary }}>
-                  {plan ? savingsCaption(plan.set_aside, E, nextMonth) : "Adaugă venitul ca să crească singure la final de lună."}
-                </Text>
+                <GoalPaceBlock goal={cardGoal} setAside={plan?.set_aside} date={savingsGoal?.target_date} testID="savings-goal-pace" />
+                {/* No goal yet: a nudge to set one (how Economii fills up
+                    lives in the (i) help, budget.savings). */}
+                {cardGoal.status === "none" ? (
+                  <Text testID="savings-goal-hint" style={{ fontSize: 13, lineHeight: 18, color: colors.onSurfaceTertiary }}>
+                    Obiectivele pe termen lung aduc recompense pe măsură. Pune-ți o țintă și o perioadă alese de tine.
+                  </Text>
+                ) : null}
                 {goalIsNegative ? (
                   <Text style={{ fontSize: 13, lineHeight: 18, color: colors.error }}>
                     Ai cheltuit cu {lei(Math.round(Math.abs(savingsGoal!.current_amount)))} mai mult decât ai avut.
@@ -524,6 +557,8 @@ export default function BudgetScreen() {
         footer={<Button testID="goal-save-button" label="Salvează obiectivul" onPress={saveGoal} loading={savingGoal} disabled={!goalTarget.trim()} />}
       >
         <Field testID="goal-target-input" label="Vreau să strâng" value={goalTarget} onChangeText={setGoalTarget} placeholder="ex. 10000" keyboardType="decimal-pad" suffix="lei" big tone={colors.success} autoFocus />
+        <DateField testID="goal-date-input" label="Până când" value={goalDate} onChange={setGoalDate} range="future" clearable placeholder="Alege data (opțional)" />
+        <Field testID="goal-name-input" label="Pentru ce (opțional)" value={goalName} onChangeText={setGoalName} placeholder="ex. Vacanță" maxLength={80} tone={colors.success} />
         <Field
           testID="goal-current-input"
           label="Am strâns deja"
@@ -535,7 +570,62 @@ export default function BudgetScreen() {
           tone={colors.success}
           hint="Se actualizează singur la final de lună. Schimbă suma doar dacă vrei s-o corectezi."
         />
+        <GoalPaceBlock goal={sheetGoal} setAside={plan?.set_aside} date={sheetGoalDay} testID="goal-sheet-pace" />
       </Sheet>
     </TabScreen>
+  );
+}
+
+/** One plain sentence for the goal's state (also the card's a11y text). */
+function goalPaceText(goal: GoalPace, setAside: number | null | undefined, date: string | null | undefined): string {
+  const up = (n: number) => lei(Math.ceil(n));
+  switch (goal.status) {
+    case "none":
+      return "";
+    case "reached":
+      return "Ai strâns toată suma. Felicitări!";
+    case "no-date":
+      return "Alege până când vrei să strângi banii și îți arătăm cât să pui deoparte pe zi, pe săptămână și pe lună.";
+    case "overdue":
+      return `Data a trecut și mai ai ${up(goal.remaining)} de strâns. Alege o dată nouă.`;
+    case "ok": {
+      const until = `Până pe ${roDate(goalDay(date!), { withYear: true })} mai ai ${up(goal.remaining)} de strâns, în ${roCount(goal.days, "zi", "zile")}.`;
+      if (goal.onTrack == null) return until;
+      return goal.onTrack
+        ? `${until} Cu cei ${lei(Math.round(setAside ?? 0))} puși deoparte pe lună ajungi la timp.`
+        : `${until} ${setAside ? `Doar din cei ${lei(Math.round(setAside))} puși deoparte pe lună nu ajungi.` : "Nu pui nimic deoparte lunar."} Ia în calcul ${up(goal.perMonth)} pe lună.`;
+    }
+  }
+}
+
+/** Obiectiv de economii: the state sentence and, with a date ahead, how
+ * much to put aside per day / week / month (rounded up, so it's enough). */
+function GoalPaceBlock({ goal, setAside, date, testID }: { goal: GoalPace; setAside: number | null | undefined; date: string | null | undefined; testID?: string }) {
+  const { colors, spacing, radius } = useTheme();
+  if (goal.status === "none") return null;
+  const text = goalPaceText(goal, setAside, date);
+  const tone = goal.status === "reached" ? colors.success : goal.status === "overdue" ? colors.error : colors.onSurfaceSecondary;
+  return (
+    <View testID={testID} style={{ gap: spacing.sm }}>
+      {goal.status === "ok" ? (
+        <View style={{ flexDirection: "row", gap: spacing.sm }}>
+          {(
+            [
+              ["pe zi", goal.perDay],
+              ["pe săptămână", goal.perWeek],
+              ["pe lună", goal.perMonth],
+            ] as const
+          ).map(([label, amount]) => (
+            <View key={label} style={{ flex: 1, paddingVertical: spacing.sm, paddingHorizontal: 10, borderRadius: radius.control, backgroundColor: colors.surfaceTertiary, gap: 2 }}>
+              <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface, fontVariant: ["tabular-nums"] }} numberOfLines={1} adjustsFontSizeToFit>
+                {lei(Math.ceil(amount))}
+              </Text>
+              <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }} numberOfLines={1}>{label}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
+      <Text style={{ fontSize: 13, lineHeight: 18, color: tone }}>{text}</Text>
+    </View>
   );
 }

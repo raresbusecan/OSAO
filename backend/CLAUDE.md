@@ -228,7 +228,10 @@ defaults to `en-us`: send an empty Accept-Language for "no preference").
   spent + credit rates), i.e. set aside + what was left of De cheltuit;
   credit rates CAN lower Economii (user decision 2026-11-02). Before the
   `monthly_set_aside` migration runs: set_aside reads 0, savePlan 503s,
-  archiving waits. Known perf: ~30+ separate queries per
+  archiving waits. `PUT /budget/savings-goal` also takes an optional `name`
+  (max 80, blank = null, `savings_goals.name`, migration
+  `2026_11_02_000002`; dropped silently until it runs) and `target_date`;
+  the per day/week/month math is frontend-only (`lib/budget/goal.ts`). Known perf: ~30+ separate queries per
   request (not classic N+1, but scales linearly-ish with label count ×
   months) — fine for now, revisit if it gets slow.
 - `RecipeController.php`, `IngredientReferenceController.php` —

@@ -308,4 +308,28 @@ class BudgetSimplePlanTest extends TestCase
         // A type that could never carry the flag no longer 422s either.
         $this->postJson('/api/items', ['space_id' => $this->expenses->id, 'type' => 'home_task', 'title' => 'T', 'guilt_free' => true])->assertCreated();
     }
+
+    public function test_savings_goal_saves_a_name_and_a_target_date(): void
+    {
+        $this->putJson('/api/budget/savings-goal', [
+            'name' => '  Vacanță  ', 'target_amount' => 10000, 'current_amount' => 1000, 'target_date' => '2027-06-01',
+        ])->assertOk();
+        $goal = SavingsGoal::where('user_id', $this->user->id)->first();
+        $this->assertSame('Vacanță', $goal->name);
+        $this->assertSame('2027-06-01', $goal->target_date->toDateString());
+        $this->getJson('/api/budget')
+            ->assertJsonPath('savingsGoal.name', 'Vacanță')
+            ->assertJsonPath('savingsGoal.target_date', fn ($d) => str_starts_with($d, '2027-06-01'));
+
+        // Blank name and no date clear them; leaving `name` out keeps it.
+        $this->putJson('/api/budget/savings-goal', ['name' => ' ', 'target_amount' => 10000, 'current_amount' => 1000, 'target_date' => null])->assertOk();
+        $this->assertNull($goal->fresh()->name);
+        $this->assertNull($goal->fresh()->target_date);
+        $this->putJson('/api/budget/savings-goal', ['name' => 'Mașină', 'target_amount' => 5000, 'current_amount' => 0])->assertOk();
+        $this->putJson('/api/budget/savings-goal', ['target_amount' => 6000, 'current_amount' => 0])->assertOk();
+        $this->assertSame('Mașină', $goal->fresh()->name);
+
+        $this->putJson('/api/budget/savings-goal', ['name' => str_repeat('a', 81), 'target_amount' => 1, 'current_amount' => 0])
+            ->assertStatus(422)->assertJsonValidationErrors('name');
+    }
 }

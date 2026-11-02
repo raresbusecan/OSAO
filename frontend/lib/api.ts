@@ -685,7 +685,8 @@ saveHomeProfile: (
       /** Calendar purchases still ahead this month per label (inside `spent`). */
       planned?: Record<string, number>;
       recurringBills: any[];
-      savingsGoal: { target_amount: number; current_amount: number; target_date: string | null } | null;
+      /** `name` is absent until the 2026_11_02_000002 migration ran. */
+      savingsGoal: { name?: string | null; target_amount: number; current_amount: number; target_date: string | null } | null;
       /** null until an income is saved. `set_aside` may be null until the
        * backend migration ran: read it through normalizePlan() (null = 0). */
       plan: { monthly_income: number; set_aside: number | null; spendable: number } | null;
@@ -718,7 +719,8 @@ saveHomeProfile: (
       planned?: number;
     }>(`/budget/spaces/${encodeURIComponent(category)}`),
 
-  saveSavingsGoal: (body: { target_amount: number; current_amount: number; target_date?: string | null }) =>
+  /** target_date "YYYY-MM-DD" or null (no date); name null/blank = none. */
+  saveSavingsGoal: (body: { name?: string | null; target_amount: number; current_amount: number; target_date?: string | null }) =>
     request("/budget/savings-goal", {
       method: "PUT",
       body: JSON.stringify(body),

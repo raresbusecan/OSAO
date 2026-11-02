@@ -777,7 +777,17 @@ class BudgetController extends Controller
             // to a floor that hides it.
             'current_amount' => ['required', 'numeric'],
             'target_date' => ['nullable', 'date'],
+            // Obiectiv de economii's optional name ("Vacanță"); blank = none.
+            'name' => ['sometimes', 'nullable', 'string', 'max:80'],
         ]);
+        if (array_key_exists('name', $validated)) {
+            $validated['name'] = trim((string) $validated['name']) ?: null;
+            // Before the 2026_11_02_000002 migration runs there is no
+            // column: keep everything else saving.
+            if (! Schema::hasColumn('savings_goals', 'name')) {
+                unset($validated['name']);
+            }
+        }
 
         $goal = SavingsGoal::updateOrCreate(
             ['user_id' => $request->user()->id],

@@ -297,7 +297,7 @@ export const HELP = {
       { title: "Cum crește", text: "Pe 1 a fiecărei luni adăugăm ce pui deoparte și ce a rămas necheltuit din luna trecută." },
       { title: "Poate și scădea", text: "Dacă ai cheltuit mai mult decât aveai de cheltuit (cu facturi și rate), diferența se scade." },
       { title: "Și ratele contează", text: "Ratele la credit intră în ce ai de cheltuit. O lună în care ratele te duc peste sumă scade și economiile." },
-      { title: "Obiectiv", text: "Atinge rândul ca să schimbi suma țintă sau cât ai strâns deja." },
+      { title: "Obiectiv", text: "Atinge cardul ca să pui suma pe care vrei s-o strângi, până când și, dacă vrei, pentru ce. Îți arătăm cât să pui deoparte pe zi, pe săptămână și pe lună." },
     ],
   },
   "budget.credit": {

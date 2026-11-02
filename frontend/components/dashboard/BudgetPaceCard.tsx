@@ -7,9 +7,11 @@ import { PressableScale } from "@/components/ui/PressableScale";
 import { hexToRgba } from "@/components/ui/primitives";
 import { aheadPoints, cumulative, fmtLei, paceChip, paceSentence, paceStatus, ritmPoints, type PaceEvent, type PaceTone } from "@/lib/budget/pace";
 
-const H = 168;
-const TOP = 10;
-const BOTTOM = 140;
+const H = 184;
+// Room above the envelope line for its "De cheltuit" label (kept off the
+// ritm line, which ends right under it).
+const TOP = 26;
+const BOTTOM = 156;
 
 // The S line's reveal plays once per app session (lib/motion.ts: the second
 // unprompted motion in the app, after Home's total).
@@ -177,7 +179,7 @@ export function BudgetPaceCard({
               </Defs>
               {R > 0 && bandH > 0 ? <Rect x={4} y={bandTop} width={w - 8} height={bandH} fill="url(#budgetPaceHatch)" /> : null}
               <Line x1={4} y1={bandTop} x2={w - 4} y2={bandTop} stroke={colors.surfaceTertiary} strokeWidth={2} />
-              {label({ x: w - 4, y: bandTop + 4 + 9, anchor: "end", text: `De cheltuit ${fmtLei(E)}` })}
+              {label({ x: w - 4, y: bandTop - 7, anchor: "end", text: `De cheltuit ${fmtLei(E)}` })}
               {R > 0 && bandH >= 14 ? label({ x: 8, y: bandTop + 4 + 9, anchor: "start", text: `facturi și rate ${fmtLei(R)}` }) : null}
               <Line x1={4} y1={y(0)} x2={w - 4} y2={y(0)} stroke={colors.surfaceTertiary} strokeWidth={1} />
               {r.state !== 1 ? (
@@ -201,11 +203,11 @@ export function BudgetPaceCard({
               {t < D ? (
                 <Polyline points={pts(ahead)} fill="none" stroke={colors.onSurfaceTertiary} strokeWidth={2} strokeDasharray="1 4" strokeLinecap="round" />
               ) : null}
-              <Line x1={xt} y1={14} x2={xt} y2={BOTTOM} stroke={colors.onSurface} strokeOpacity={0.35} strokeWidth={1} />
+              <Line x1={xt} y1={TOP} x2={xt} y2={BOTTOM} stroke={colors.onSurface} strokeOpacity={0.35} strokeWidth={1} />
               <Circle cx={xt} cy={y(S)} r={4.5} fill={dotFill} stroke={colors.surfaceSecondary} strokeWidth={2} />
-              {label({ x: 4, y: 158, anchor: "start", text: leftLabel })}
-              {showAzi ? label({ x: xt, y: 158, anchor: "middle", text: "azi", strong: true }) : null}
-              {label({ x: w - 4, y: 158, anchor: "end", text: rightLabel })}
+              {label({ x: 4, y: 174, anchor: "start", text: leftLabel })}
+              {showAzi ? label({ x: xt, y: 174, anchor: "middle", text: "azi", strong: true }) : null}
+              {label({ x: w - 4, y: 174, anchor: "end", text: rightLabel })}
             </Svg>
           </>
         ) : null}
