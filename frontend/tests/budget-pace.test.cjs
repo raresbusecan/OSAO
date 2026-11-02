@@ -151,3 +151,12 @@ test('invariant: the solid line ends on Cheltuit; merged labels; ahead line', ()
   assert.deepEqual(plain(m.events.map((e) => e.day)), [3, 24]);
   assert.deepEqual(JSON.parse(JSON.stringify(pace.aheadPoints(420, 13, D, m.events))), [[13, 420], [24, 420], [24, 600], [30, 600]]);
 });
+
+test('a Calendar purchase done before its day counts as of today (QA 2026-11-02)', () => {
+  const p = pace.normalizePace({ month: '2026-11', today: 10, days_in_month: 30, labels: { Expenses: { daily: [], events: [
+    { day: 20, amount: 300, planned: false, title: 'ITP' },
+    { day: 24, amount: 180, planned: true, title: 'Revizie' },
+    { day: 4, amount: 50, planned: false, title: 'Taxă' },
+  ] } } });
+  assert.deepEqual(plain(p.labels.Expenses.events.map((e) => e.day)), [10, 24, 4]);
+});

@@ -76,6 +76,24 @@ export function perDay(liber: number, daysLeft: number): number {
   return Math.floor(liber / daysLeft);
 }
 
+/**
+ * A Calendar purchase marked done before its day is already spent: the
+ * backend puts its amount in TODAY's daily bucket, so here it moves to
+ * today too -- else ritm() would expect it only on its own (future) day
+ * and the verdict / dashed line would be off by its amount (QA,
+ * 2026-11-02). Applied once, where /budget's pace arrives.
+ */
+export function normalizePace(p: BudgetPace): BudgetPace {
+  const t = num(p.today);
+  const labels = Object.fromEntries(
+    Object.entries(p.labels).map(([k, l]) => [
+      k,
+      l ? { ...l, events: (l.events || []).map((e) => (!e.planned && num(e.day) > t ? { ...e, day: t } : e)) } : l,
+    ]),
+  ) as BudgetPace["labels"];
+  return { ...p, labels };
+}
+
 /** Merge several labels' pace into one (the total card): daily summed
  * day by day, events concatenated and sorted by day. */
 export function mergeLabels(labels: (PaceLabel | undefined)[], D: number): PaceLabel {

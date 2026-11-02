@@ -123,6 +123,10 @@ drifted a day across the 25 Oct DST change; plus the known
 
 ## Found along the way (not yet fixed)
 
+### Untracked `backend/tests/Feature/TmpCarDocReplayTest.php` runs with the suite (2026-11-02) [from: qa-lead on feat/budget-pace]
+
+An untracked, temp-looking test file sits in backend/tests/Feature and runs with every `php artisan test`. Not committed anywhere; decide whether to keep (commit) or delete it.
+
 ### ~~Buget: the hero ring and its big number disagree (2026-11-02)~~ FIXED on feat/budget-pace [from: Buget redesign review 2026-11-02]
 
 FIXED on `feat/budget-pace` (2026-11-02, direction C "Ritmul lunii"): the ring is gone; `BudgetPaceCard` shows Cheltuit as the end of the solid line and in the sentence, bills as a hatched band and Calendar purchases as a dotted line, each with one meaning. The ring stays only as the fallback when an older backend sends no `pace`.

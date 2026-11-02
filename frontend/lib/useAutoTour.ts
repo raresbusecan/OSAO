@@ -6,6 +6,7 @@ import { isDialogOpen, subscribeDialog } from "@/lib/confirmHost";
 import { isHelpOpen, subscribeHelp } from "@/lib/help";
 import {
   ONE_AUTO_TOUR_PER_SESSION,
+  TOURS,
   consumePendingTour,
   isSeenLocally,
   isTourActive,
@@ -60,7 +61,10 @@ export function useAutoTour(key: TourKey, { ready, ctx }: { ready: boolean; ctx:
   const gate = useSyncExternalStore(subscribeGate, () => gateVersion, () => 0);
   const ctxRef = useRef(ctx);
   ctxRef.current = ctx;
-  const seenOnServer = !!user?.tours?.[key];
+  // Seen = this version or a newer one: bumping a tour's `version` shows
+  // it once more to everyone who saw the old one (Buget v2, 2026-11-02).
+  const seen = user?.tours?.[key];
+  const seenOnServer = !!seen && (seen.v ?? 1) >= (TOURS[key]?.version ?? 1);
 
   useEffect(() => {
     if (!user || !focused || !ready) return;

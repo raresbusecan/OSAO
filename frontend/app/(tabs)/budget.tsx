@@ -15,7 +15,7 @@ import { BudgetOverviewPage } from "@/components/dashboard/BudgetOverviewPage";
 import { RecurringBillRow, RecurringGroups, isRecurringPayment } from "@/components/dashboard/RecurringBillRow";
 import { BudgetSplitBar, upcomingWords } from "@/components/dashboard/BudgetSplitBar";
 import { BudgetPaceCard } from "@/components/dashboard/BudgetPaceCard";
-import { mergeLabels, paceStatus, spacePace, sortSpaceRows, SPACE_STATUS_CHIP, type BudgetPace, type SpacePace } from "@/lib/budget/pace";
+import { mergeLabels, normalizePace, paceStatus, spacePace, sortSpaceRows, SPACE_STATUS_CHIP, type BudgetPace, type SpacePace } from "@/lib/budget/pace";
 import { SwipeItemRow } from "@/components/dashboard/SwipeItemRow";
 import { IncomeSplitCard } from "@/components/dashboard/IncomeSplitCard";
 import { IncomeSheet } from "@/components/dashboard/IncomeSheet";
@@ -140,7 +140,7 @@ export default function BudgetScreen() {
       setSpending(b.spending || {});
       setRecurring(b.recurring || {});
       setPlanned(b.planned || {});
-      setPace(b.pace && b.pace.labels && b.pace.days_in_month > 0 ? b.pace : null);
+      setPace(b.pace && b.pace.labels && b.pace.days_in_month > 0 ? normalizePace(b.pace) : null);
       setRecurringBills((b.recurringBills || []).filter(isRecurringPayment));
       setSavingsGoal(b.savingsGoal || null);
       primeBudgetPlan(b);
