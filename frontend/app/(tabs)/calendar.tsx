@@ -318,8 +318,9 @@ function CalendarScreen() {
   // Credit instalments are reminders only: listed apart ("Mementouri"),
   // never swiped, never counted as something to resolve.
   const dayRecords = dayItems.filter((it) => !!it.space && !isReminder(it));
-  const dayReminders = dayItems.filter((it) => !!it.space && isReminder(it));
-  const dayEvents = dayItems.filter((it) => !it.space);
+  // Savings reminders (Obiectiv de economii) are reminders without a space.
+  const dayReminders = dayItems.filter((it) => isReminder(it));
+  const dayEvents = dayItems.filter((it) => !it.space && !isReminder(it));
 
   /* ---------------- events: next 3 months, each once ---------------- */
 
@@ -331,7 +332,7 @@ function CalendarScreen() {
       .sort()
       .forEach((k) =>
         (allDays[k] ?? []).forEach((it: any) => {
-          if (it.space) return;
+          if (it.space || isReminder(it)) return;
           const id = String(it.id);
           if (!seen.has(id)) seen.set(id, it);
         }),
@@ -489,7 +490,7 @@ function CalendarScreen() {
                   const items = allDays[key] ?? [];
                   const past = key < todayKey;
                   const level = heatLevel(loadOf(key, new Date(y, m, d)));
-                  const hasEvent = items.some((it) => !it.space);
+                  const hasEvent = items.some((it) => !it.space && !isReminder(it));
                   const lateMark = past && items.some(isUnresolved);
                   const isSelected = key === selected;
                   const isToday = key === todayKey;

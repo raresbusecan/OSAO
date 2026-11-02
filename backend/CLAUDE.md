@@ -231,7 +231,19 @@ defaults to `en-us`: send an empty Accept-Language for "no preference").
   archiving waits. `PUT /budget/savings-goal` also takes an optional `name`
   (max 80, blank = null, `savings_goals.name`, migration
   `2026_11_02_000002`; dropped silently until it runs) and `target_date`;
-  the per day/week/month math is frontend-only (`lib/budget/goal.ts`). Known perf: ~30+ separate queries per
+  the per day/week/month math is frontend-only (`lib/budget/goal.ts`).
+  **Rhythm (2026-11-02, migration `2026_11_02_000003`):** `PUT
+  /budget/savings-goal/cadence {cadence: day|week|month|null, amount}`
+  stores cadence/cadence_amount/cadence_since, resets reminders_since and
+  (with a plan) sets `monthly_set_aside` = amount × periods per month
+  (capped at income). `POST /budget/savings-goal/deposits {amount}` =
+  "Am pus deoparte": adds to current_amount now, a `savings_deposits` row;
+  3 consecutive periods (`App\Services\SavingsCadence::streak`) set
+  `reminders_since` (phone notifications: frontend
+  `lib/savingsReminders.ts`). The rollover subtracts that month's deposits
+  (they're already in Economii). GET /budget's savingsGoal adds `streak`,
+  `period_done`, `deposited_this_month`. /calendar adds `savings_reminder`
+  rows (`reminder: true`, no space, `done`) on the rhythm's days. Known perf: ~30+ separate queries per
   request (not classic N+1, but scales linearly-ish with label count ×
   months) — fine for now, revisit if it gets slow.
 - `RecipeController.php`, `IngredientReferenceController.php` —

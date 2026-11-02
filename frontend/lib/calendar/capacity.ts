@@ -38,6 +38,7 @@ export const TYPE_EFFORT: Record<string, EffortRule> = {
   // A bill or an online payment.
   home_recurring: { effort: 0.5 },
   expense_credit: { effort: 0.5 }, // credit instalment reminders
+  savings_reminder: { effort: 0 }, // Obiectiv de economii: a tap in Buget
   expense_item: { effort: 0.5 },
   home_expense: { effort: 0.5 },
   car_expense: { effort: 0.5 },

@@ -17,14 +17,35 @@ export function isReminder(item: any): boolean {
   return !!item?.reminder;
 }
 
+/** Obiectiv de economii's "Pune deoparte X lei" (type savings_reminder,
+ * from /calendar only): no space, `done` once that period is confirmed. */
+export function isSavingsReminder(item: any): boolean {
+  return item?.type === "savings_reminder";
+}
+
 export function CreditReminderRow({ item, testID, onBeforeOpen }: {
   item: any;
   testID?: string;
   /** Runs before navigating (e.g. close the sheet the row sits in). */
   onBeforeOpen?: () => void;
 }) {
-  const { isDark } = useTheme();
+  const { isDark, colors } = useTheme();
   const router = useRouter();
+  if (isSavingsReminder(item)) {
+    const sum = Number(item?.amount) > 0 ? lei(Math.ceil(Number(item.amount))) : null;
+    return (
+      <Row
+        testID={testID ?? `savings-reminder-${String(item?.id)}`}
+        onPress={() => {
+          onBeforeOpen?.();
+          router.navigate("/budget" as any);
+        }}
+        leading={<IconWell icon={item?.done ? "checkmark-circle-outline" : "wallet-outline"} color={colors.success} />}
+        title={item?.title || "Economii"}
+        subtitle={[item?.done ? "Pus deoparte" : "Pune deoparte", sum].filter(Boolean).join(" · ")}
+      />
+    );
+  }
   // The Cheltuieli space the credit lives in (its pick, else teal).
   const own = spaceColors(item?.space?.type ? item.space : { kind: "expenses", color: item?.space?.color }, isDark)!;
   const fill = own.color;

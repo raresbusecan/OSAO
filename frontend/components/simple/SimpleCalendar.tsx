@@ -12,7 +12,7 @@ import { CUSTOM_EVENT_COLOR, spaceColors } from "@/lib/spaces/spaceProfile";
 import { heatColor, type HeatLevel } from "@/lib/statusColors";
 import { dayCapacity, dayEffort, monthStatus } from "@/lib/calendar/capacity";
 import { serviceKmStatus, todoHref, todoTitle } from "@/lib/dashboard/spaceDue";
-import { isReminder } from "@/components/dashboard/CreditReminderRow";
+import { isReminder, isSavingsReminder } from "@/components/dashboard/CreditReminderRow";
 import { SwipeItemRow } from "@/components/dashboard/SwipeItemRow";
 import { canSwipeResolve, resolveFromSummary } from "@/lib/dashboard/itemActions";
 import { MonthSwipeView, useMonthPager } from "@/components/ui/MonthSwipe";
@@ -212,9 +212,11 @@ export function SimpleCalendar() {
   );
 
   const fallbackDot = colors.onSurfaceTertiary;
+  const savingsColor = colors.success;
   const dotColor = useCallback(
-    (it: any): string => (it.space ? (spaceColors(it.space, isDark)?.color ?? fallbackDot) : CUSTOM_EVENT_COLOR),
-    [isDark, fallbackDot],
+    (it: any): string =>
+      it.space ? (spaceColors(it.space, isDark)?.color ?? fallbackDot) : isSavingsReminder(it) ? savingsColor : CUSTOM_EVENT_COLOR,
+    [isDark, fallbackDot, savingsColor],
   );
 
   // The 42 cells of the displayed month (6 rows, Monday first).
@@ -242,11 +244,12 @@ export function SimpleCalendar() {
       if (c.past) return;
       (allDays[c.dayKey] ?? []).forEach((it: any) => {
         if (it.space) out.set(`s${it.space.id}`, { label: it.space.name ?? "Spațiu", color: dotColor(it) });
+        else if (isSavingsReminder(it)) out.set("savings", { label: "Economii", color: savingsColor });
         else out.set("event", { label: "Eveniment", color: CUSTOM_EVENT_COLOR });
       });
     });
     return [...out.entries()].map(([key, v]) => ({ key, ...v }));
-  }, [cells, allDays, dotColor, errorColor]);
+  }, [cells, allDays, dotColor, errorColor, savingsColor]);
 
   const selectedDate = useMemo(() => {
     const [yy, mm, dd] = selected.split("-").map(Number);
@@ -334,6 +337,11 @@ export function SimpleCalendar() {
   };
 
   const openRow = (it: any) => {
+    // Obiectiv de economii's reminder: confirmed on Buget's Economii card.
+    if (isSavingsReminder(it)) {
+      router.navigate("/budget" as any);
+      return;
+    }
     if (it.space_id != null || it.space?.id != null) {
       router.navigate(todoHref(it) as any);
       return;
@@ -357,16 +365,17 @@ export function SimpleCalendar() {
   const renderRow = (row: AgendaRow, late: boolean, showDate: boolean) => {
     const it = row.item;
     const reminder = isReminder(it);
-    const isEvent = !it.space;
+    const isEvent = !it.space && !reminder;
     const barColor = isEvent ? CUSTOM_EVENT_COLOR : (spaceColors(it.space, isDark)?.color ?? muted);
     const amount = it.amount != null && Number(it.amount) > 0 ? Number(it.amount) : null;
-    const title = isEvent ? it.title : reminder ? it.title || "Credit" : todoTitle(it);
+    const savings = isSavingsReminder(it);
+    const title = isEvent ? it.title : reminder ? it.title || (savings ? "Economii" : "Credit") : todoTitle(it);
     const time = isEvent ? timeOf(it.due_at) : null;
     const km = !isEvent && !reminder ? serviceKmStatus(it)?.label ?? null : null;
     const subtitle = isEvent
       ? ["Eveniment", time].filter(Boolean).join(" · ")
       : reminder
-        ? ["Rată", amount ? lei(amount) : null].filter(Boolean).join(" · ")
+        ? [savings ? (it.done ? "Pus deoparte" : "Pune deoparte") : "Rată", amount ? lei(amount) : null].filter(Boolean).join(" · ")
         : [it.space?.name, km, amount ? lei(amount) : null].filter(Boolean).join(" · ");
     const dow = DOW[row.date.getDay()];
     const checkable = !isEvent && !reminder && canSwipeResolve(it) && isUnresolved(it);

@@ -154,10 +154,13 @@ test('Simple Calendar opens Space records in their owner before considering its 
   const openRow = loadCallback('components/simple/SimpleCalendar.tsx', 'openRow', {
     router: { navigate: (href) => visited.push(href) }, todoHref,
     canEditRecord: () => { throw new Error('Space record reached the generic editor'); },
+    isSavingsReminder: (it) => it?.type === 'savings_reminder',
   });
   openRow(bill);
   openRow({ ...bill, space: null });
-  assert.deepEqual(visited, [destination, destination]);
+  // Obiectiv de economii's Calendar reminder is confirmed on Buget.
+  openRow({ id: 'savings-2026-11-05', type: 'savings_reminder', space: null, space_id: null, reminder: true });
+  assert.deepEqual(visited, [destination, destination, '/budget']);
 });
 
 for (const type of ['home_recurring', 'home_document', 'home_maintenance', 'home_expense', 'home_supply', 'home_task']) {

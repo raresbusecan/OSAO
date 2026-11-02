@@ -298,6 +298,8 @@ export const HELP = {
       { title: "Poate și scădea", text: "Dacă ai cheltuit mai mult decât aveai de cheltuit (cu facturi și rate), diferența se scade." },
       { title: "Și ratele contează", text: "Ratele la credit intră în ce ai de cheltuit. O lună în care ratele te duc peste sumă scade și economiile." },
       { title: "Obiectiv", text: "Atinge cardul ca să pui suma pe care vrei s-o strângi, până când și, dacă vrei, pentru ce. Îți arătăm cât să pui deoparte pe zi, pe săptămână și pe lună." },
+      { title: "Ritmul tău", text: "Atinge una dintre sume (pe zi, pe săptămână sau pe lună) ca s-o alegi. Apoi atinge-o de fiecare dată când pui banii deoparte: se adaugă în Economii pe loc, iar „Pui deoparte” din bandă arată estimarea lunii." },
+      { title: "Amintiri", text: "Ritmul ales apare în Calendar până la data obiectivului. După 3 zile, săptămâni sau luni la rând îți amintim și pe telefon, la ora 20. Îl oprești din formularul obiectivului." },
     ],
   },
   "budget.credit": {

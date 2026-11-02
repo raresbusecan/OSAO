@@ -72,3 +72,56 @@ export function goalPace(input: {
     onTrack: input.setAside == null ? null : input.setAside >= perMonth - 0.5,
   };
 }
+
+// ---- The goal's rhythm (2026-11): tapping a "pe zi / pe săptămână / pe
+// lună" cell picks it, every later tap confirms money put aside. Mirrors
+// backend App\Services\SavingsCadence (periods, reminder days).
+
+export type Cadence = "day" | "week" | "month";
+
+/** Average periods per month (SavingsCadence::PER_MONTH): Pui deoparte's estimate. */
+export const PER_MONTH: Record<Cadence, number> = { day: 365.25 / 12, week: 365.25 / 12 / 7, month: 1 };
+
+export const CADENCE_TEXT: Record<Cadence, { per: string; period: string; periods: string; thisPeriod: string }> = {
+  day: { per: "pe zi", period: "zi", periods: "zile", thisPeriod: "azi" },
+  week: { per: "pe săptămână", period: "săptămână", periods: "săptămâni", thisPeriod: "săptămâna aceasta" },
+  month: { per: "pe lună", period: "lună", periods: "luni", thisPeriod: "luna aceasta" },
+};
+
+export function monthlyEstimate(cadence: Cadence, amount: number): number {
+  return Math.round(amount * PER_MONTH[cadence]);
+}
+
+function addDays(day: string, n: number): string {
+  const ms = dayNumber(day)! + n * DAY_MS;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
+/**
+ * The next `count` reminder days from `today` on (today included):
+ * every day; every 7th day from `since`; or `since`'s day of the month
+ * (clamped to the month's length). A day in the current period is left
+ * out when that period is already confirmed (`periodDone`).
+ */
+export function reminderDays(cadence: Cadence, since: string, today: string, periodDone: boolean, count: number): string[] {
+  const start = dayNumber(since.slice(0, 10));
+  const now = dayNumber(today);
+  if (start == null || now == null) return [];
+  const sinceDay = Number(since.slice(8, 10));
+  const out: string[] = [];
+  let day = now > start ? today : since.slice(0, 10);
+  for (let guard = 0; out.length < count && guard < 400; guard++, day = addDays(day, 1)) {
+    const n = dayNumber(day)!;
+    const [y, m, d] = day.split("-").map(Number);
+    const hit =
+      cadence === "day" ||
+      (cadence === "week" && Math.round((n - start) / DAY_MS) % 7 === 0) ||
+      (cadence === "month" && d === Math.min(sinceDay, new Date(Date.UTC(y, m, 0)).getUTCDate()));
+    if (!hit) continue;
+    const week = (ms: number) => Math.floor(Math.round((ms - start) / DAY_MS) / 7);
+    const current = cadence === "month" ? day.slice(0, 7) === today.slice(0, 7) : cadence === "week" ? week(n) === week(now) : day === today;
+    if (current && periodDone) continue;
+    out.push(day);
+  }
+  return out;
+}

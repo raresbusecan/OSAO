@@ -1,13 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { TabHeader, TabScreen } from "@/components/navigation/TabHeader";
-import { View, Text, ScrollView, ActivityIndicator, DeviceEventEmitter } from "react-native";
+import { View, Text, ScrollView, ActivityIndicator, DeviceEventEmitter, LayoutAnimation } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useTheme } from "@/lib/theme";
 import { api, apiErrorMessage } from "@/lib/api";
 import { REFRESH_EVENT } from "@/lib/refresh";
 import { useFocusEffect } from "expo-router";
 import { useTabDepth } from "@/lib/navigation/returnTrail";
-import { notifyAction } from "@/lib/confirm";
+import { notifyAction, confirmAction, chooseAction } from "@/lib/confirm";
 import { BudgetSpaceDetailPage } from "@/components/dashboard/BudgetSpaceDetailPage";
 import { profileFromSpace, detectSpaceType, SPACE_IDENTITY_COLORS, SPACE_KIND_LABEL, spaceTextColor, type SpaceKind } from "@/lib/spaces/spaceProfile";
 import { BudgetOverviewPage } from "@/components/dashboard/BudgetOverviewPage";
@@ -21,17 +21,31 @@ import { useRouter } from "expo-router";
 import { todoHref } from "@/lib/dashboard/spaceDue";
 import { PressableScale } from "@/components/ui/PressableScale";
 import { Sheet } from "@/components/ui/Sheet";
-import { SectionHeader, Group, IconWell, InfoButton, Button, Field, EmptyState, Row, Pill, CircleButton } from "@/components/ui/primitives";
+import { SectionHeader, Group, IconWell, InfoButton, Button, Field, EmptyState, Row, Pill, CircleButton, hexToRgba } from "@/components/ui/primitives";
 import { useTourScroll, useTourTarget } from "@/components/ui/tourTargets";
 import { useAutoTour } from "@/lib/useAutoTour";
 import { SHOW_TOUR_TEST_BUTTON, startTour, type TourCtx } from "@/lib/tours";
 import { motion } from "@/lib/motion";
 import { lei, roDate, roCount, parseLocaleNumber } from "@/lib/format";
-import { goalPace, localDay, type GoalPace } from "@/lib/budget/goal";
+import { goalPace, localDay, monthlyEstimate, CADENCE_TEXT, type GoalPace, type Cadence } from "@/lib/budget/goal";
+import { syncSavingsReminders } from "@/lib/savingsReminders";
 import { DateField } from "@/components/ui/DateField";
 import { formatDateInput, isValidDateInput } from "@/lib/spaces/car/utils/dateInput";
 
-type SavingsGoal = { name?: string | null; target_amount: number; current_amount: number; target_date: string | null } | null;
+type SavingsGoal = {
+  name?: string | null;
+  target_amount: number;
+  current_amount: number;
+  target_date: string | null;
+  /** The rhythm picked on the card (absent until the 2026_11_02_000003 migration). */
+  cadence?: Cadence | null;
+  cadence_amount?: number | string | null;
+  cadence_since?: string | null;
+  reminders_since?: string | null;
+  streak?: number;
+  period_done?: boolean;
+  deposited_this_month?: number;
+} | null;
 type SpaceKindMeta = { kind: SpaceKind; label: string; icon: keyof typeof Ionicons.glyphMap };
 
 /** The goal's "YYYY-MM-DD..." as a local Date at noon (no tz day shift). */
@@ -172,6 +186,13 @@ export default function BudgetScreen() {
         name: goalName.trim() || null,
         target_date: sheetGoalDay,
       });
+      const rhythm = savingsGoal?.cadence;
+      if (rhythm && sheetGoal.status === "ok") {
+        const per = rhythm === "day" ? sheetGoal.perDay : rhythm === "week" ? sheetGoal.perWeek : sheetGoal.perMonth;
+        if (Math.ceil(per) !== Math.ceil(Number(savingsGoal?.cadence_amount ?? 0))) {
+          await api.saveSavingsCadence({ cadence: rhythm, amount: Math.ceil(per) });
+        }
+      }
       setEditingGoal(false);
       await load();
     } catch (error: any) {
@@ -182,6 +203,100 @@ export default function BudgetScreen() {
   };
 
   const goalIsNegative = !!savingsGoal && savingsGoal.current_amount < 0;
+
+  // ---- Obiectiv de economii's rhythm: the first tap on a "pe zi / pe
+  // săptămână / pe lună" cell picks it (Pui deoparte becomes its monthly
+  // estimate), every later tap on it confirms money put aside; another
+  // cell offers to switch. 3 periods in a row turn on phone reminders
+  // (lib/savingsReminders.ts). ----
+  const [goalBusy, setGoalBusy] = useState(false);
+  const pickCadence = async (cadence: Cadence, amount: number) => {
+    const t = CADENCE_TEXT[cadence];
+    const current = savingsGoal?.cadence ?? null;
+    if (current && current !== cadence) {
+      const ok = await confirmAction(
+        `Pui deoparte ${lei(amount)} ${t.per}?`,
+        `Acum pui deoparte ${CADENCE_TEXT[current].per}. Dacă schimbi, numărătoarea pentru amintiri o ia de la capăt.`,
+        { confirmLabel: "Da, schimbă" },
+      );
+      if (ok) await saveCadence(cadence, amount, false);
+      return;
+    }
+    const choice = await chooseAction(
+      `Pui deoparte ${lei(amount)} ${t.per}?`,
+      `${plan ? `„Pui deoparte” din bandă devine ~${lei(monthlyEstimate(cadence, amount))} pe lună. ` : ""}Atinge caseta de fiecare dată când pui banii deoparte. După 3 ${t.periods} la rând îți amintim pe telefon.`,
+      [
+        { key: "now", label: `Da, i-am pus ${t.thisPeriod}` },
+        { key: "later", label: "Da, încep de acum", secondary: true },
+      ],
+    );
+    if (choice) await saveCadence(cadence, amount, choice === "now");
+  };
+  const saveCadence = async (cadence: Cadence, amount: number, depositNow: boolean) => {
+    setGoalBusy(true);
+    try {
+      const res: any = await api.saveSavingsCadence({ cadence, amount });
+      if (res?.capped) notifyAction("Pui deoparte tot venitul", "Suma pe lună trece de venit, așa că „Pui deoparte” e cât tot venitul.");
+      if (depositNow) await api.saveSavingsDeposit({ amount });
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      await load();
+    } catch (error: any) {
+      notifyAction("Nu am putut salva", apiErrorMessage(error, "A apărut o eroare."));
+    } finally {
+      setGoalBusy(false);
+    }
+  };
+  const confirmDeposit = async (cadence: Cadence, amount: number) => {
+    const t = CADENCE_TEXT[cadence];
+    const ok = await confirmAction(
+      `Ai pus deoparte ${lei(amount)}?`,
+      savingsGoal?.period_done
+        ? `Ai confirmat deja ${t.thisPeriod}. Dacă ai mai pus o dată, suma se adaugă din nou în Economii.`
+        : "Se adaugă în Economii și bara obiectivului crește.",
+      { confirmLabel: "Da, i-am pus" },
+    );
+    if (!ok) return;
+    setGoalBusy(true);
+    try {
+      const wasOn = !!savingsGoal?.reminders_since;
+      const res: any = await api.saveSavingsDeposit({ amount });
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      await load();
+      if (!wasOn && res?.savingsGoal?.reminders_since) {
+        notifyAction(
+          `${res.savingsGoal.streak ?? 3} ${t.periods} la rând!`,
+          `Ai prins obiceiul. De acum îți amintim pe telefon, la ora 20, să pui deoparte ${lei(Math.ceil(Number(res.savingsGoal.cadence_amount) || amount))} ${t.per}.`,
+        );
+      }
+    } catch (error: any) {
+      notifyAction("Nu am putut salva", apiErrorMessage(error, "A apărut o eroare."));
+    } finally {
+      setGoalBusy(false);
+    }
+  };
+  const stopRhythm = async () => {
+    const ok = await confirmAction(
+      "Oprești ritmul?",
+      `Nu mai apare în Calendar și nu mai primești amintiri. ${plan ? `„Pui deoparte” din bandă rămâne ${lei(Math.round(plan.set_aside))}; îl schimbi atingând banda.` : ""}`,
+      { confirmLabel: "Oprește" },
+    );
+    if (!ok) return;
+    setGoalBusy(true);
+    try {
+      await api.saveSavingsCadence({ cadence: null });
+      setEditingGoal(false);
+      await load();
+    } catch (error: any) {
+      notifyAction("Nu am putut opri ritmul", apiErrorMessage(error, "A apărut o eroare."));
+    } finally {
+      setGoalBusy(false);
+    }
+  };
+  const onGoalCell = (cadence: Cadence, amount: number) => {
+    if (goalBusy) return;
+    if (savingsGoal?.cadence === cadence) confirmDeposit(cadence, amount);
+    else pickCadence(cadence, amount);
+  };
   // The sheet's date as "YYYY-MM-DD" (null = none), for saving and its preview.
   const sheetGoalDay = isValidDateInput(goalDate) ? goalDate.split(".").reverse().join("-") : null;
 
@@ -231,6 +346,11 @@ export default function BudgetScreen() {
   const cardGoal = savingsGoal
     ? goalPace({ target: Number(savingsGoal.target_amount), current: Number(savingsGoal.current_amount), targetDate: savingsGoal.target_date, today, setAside: plan?.set_aside })
     : ({ status: "none" } as GoalPace);
+  useEffect(() => {
+    if (loading) return;
+    syncSavingsReminders(savingsGoal, cardGoal.status === "ok");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, savingsGoal?.cadence, savingsGoal?.cadence_amount, savingsGoal?.cadence_since, savingsGoal?.reminders_since, savingsGoal?.period_done, savingsGoal?.name, savingsGoal?.target_date, cardGoal.status]);
   const sheetGoal = goalPace({
     target: parseLocaleNumber(goalTarget) || 0,
     current: parseLocaleNumber(goalCurrent || "0") || 0,
@@ -336,13 +456,21 @@ export default function BudgetScreen() {
                   style={{ ...card, borderRadius: radius.card, paddingHorizontal: spacing.lg, paddingVertical: 14, flexDirection: "row", alignItems: "center", gap: spacing.sm }}
                 >
                   {([
-                    ["Venit", lei(Math.round(plan.monthly_income)), colors.onSurface],
-                    ["Pui deoparte", plan.set_aside > 0 ? `− ${lei(Math.round(plan.set_aside))}` : "0", plan.set_aside > 0 ? colors.success : colors.onSurfaceTertiary],
-                    ["De cheltuit", lei(Math.round(E)), colors.onSurface],
-                  ] as const).map(([label, value, tone]) => (
+                    ["Venit", lei(Math.round(plan.monthly_income)), colors.onSurface, null],
+                    // With a rhythm (Obiectiv de economii) it's the month's
+                    // estimate (~), plus what was confirmed so far.
+                    [
+                      "Pui deoparte",
+                      plan.set_aside > 0 ? `− ${savingsGoal?.cadence ? "~" : ""}${lei(Math.round(plan.set_aside))}` : "0",
+                      plan.set_aside > 0 ? colors.success : colors.onSurfaceTertiary,
+                      savingsGoal?.cadence ? `pus: ${lei(Math.round(savingsGoal.deposited_this_month ?? 0))}` : null,
+                    ],
+                    ["De cheltuit", lei(Math.round(E)), colors.onSurface, null],
+                  ] as const).map(([label, value, tone, sub]) => (
                     <View key={label} style={{ flex: 1, gap: 2 }}>
                       <Text style={{ fontSize: 13, color: colors.onSurfaceTertiary }} numberOfLines={1}>{label}</Text>
                       <Text style={{ fontSize: 16, fontWeight: "600", color: tone, fontVariant: ["tabular-nums"] }} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
+                      {sub ? <Text testID="income-strip-deposited" style={{ fontSize: 12, color: colors.onSurfaceTertiary }} numberOfLines={1}>{sub}</Text> : null}
                     </View>
                   ))}
                   <CircleButton testID="income-strip-edit" icon="pencil" label="Modifică venitul" onPress={() => setIncomeOpen(true)} />
@@ -447,7 +575,14 @@ export default function BudgetScreen() {
                     <View style={{ width: `${Math.max(0, Math.min(1, savingsGoal.current_amount / savingsGoal.target_amount)) * 100}%`, height: "100%", borderRadius: 3, backgroundColor: colors.success }} />
                   </View>
                 ) : null}
-                <GoalPaceBlock goal={cardGoal} setAside={plan?.set_aside} date={savingsGoal?.target_date} testID="savings-goal-pace" />
+                <GoalPaceBlock
+                  goal={cardGoal}
+                  setAside={plan?.set_aside}
+                  date={savingsGoal?.target_date}
+                  testID="savings-goal-pace"
+                  rhythm={savingsGoal ? { cadence: savingsGoal.cadence ?? null, done: !!savingsGoal.period_done, streak: savingsGoal.streak ?? 0, reminders: !!savingsGoal.reminders_since } : undefined}
+                  onCell={onGoalCell}
+                />
                 {/* No goal yet: a nudge to set one (how Economii fills up
                     lives in the (i) help, budget.savings). */}
                 {cardGoal.status === "none" ? (
@@ -571,6 +706,15 @@ export default function BudgetScreen() {
           hint="Se actualizează singur la final de lună. Schimbă suma doar dacă vrei s-o corectezi."
         />
         <GoalPaceBlock goal={sheetGoal} setAside={plan?.set_aside} date={sheetGoalDay} testID="goal-sheet-pace" />
+        {savingsGoal?.cadence ? (
+          <Button
+            testID="goal-stop-rhythm"
+            variant="secondary"
+            label={`Oprește ritmul (${lei(Math.ceil(Number(savingsGoal.cadence_amount ?? 0)))} ${CADENCE_TEXT[savingsGoal.cadence].per})`}
+            onPress={stopRhythm}
+            loading={goalBusy}
+          />
+        ) : null}
       </Sheet>
     </TabScreen>
   );
@@ -600,10 +744,40 @@ function goalPaceText(goal: GoalPace, setAside: number | null | undefined, date:
 
 /** Obiectiv de economii: the state sentence and, with a date ahead, how
  * much to put aside per day / week / month (rounded up, so it's enough). */
-function GoalPaceBlock({ goal, setAside, date, testID }: { goal: GoalPace; setAside: number | null | undefined; date: string | null | undefined; testID?: string }) {
+function GoalPaceBlock({
+  goal,
+  setAside,
+  date,
+  testID,
+  rhythm,
+  onCell,
+}: {
+  goal: GoalPace;
+  setAside: number | null | undefined;
+  date: string | null | undefined;
+  testID?: string;
+  /** On the card: the picked rhythm and its state (absent in the sheet's preview). */
+  rhythm?: { cadence: Cadence | null; done: boolean; streak: number; reminders: boolean };
+  /** On the card: a cell was tapped (pick the rhythm / confirm money put aside). */
+  onCell?: (cadence: Cadence, amount: number) => void;
+}) {
   const { colors, spacing, radius } = useTheme();
   if (goal.status === "none") return null;
   const text = goalPaceText(goal, setAside, date);
+  const picked = rhythm?.cadence ?? null;
+  const rhythmLine = !onCell
+    ? null
+    : goal.status !== "ok"
+      ? picked
+        ? `Ritmul tău (${CADENCE_TEXT[picked].per}) e încă pornit. Atinge cardul ca să-l oprești.`
+        : null
+      : !picked
+      ? "Atinge o casetă ca să alegi cât pui deoparte."
+      : `${rhythm!.done ? `Pus deoparte ${CADENCE_TEXT[picked].thisPeriod}. ` : `Atinge „${CADENCE_TEXT[picked].per}” când pui banii deoparte. `}${
+          rhythm!.reminders
+            ? "Îți amintim pe telefon la ora 20."
+            : `${rhythm!.streak} din 3 ${CADENCE_TEXT[picked].periods} la rând până la amintiri pe telefon.`
+        }`;
   const tone = goal.status === "reached" ? colors.success : goal.status === "overdue" ? colors.error : colors.onSurfaceSecondary;
   return (
     <View testID={testID} style={{ gap: spacing.sm }}>
@@ -611,21 +785,57 @@ function GoalPaceBlock({ goal, setAside, date, testID }: { goal: GoalPace; setAs
         <View style={{ flexDirection: "row", gap: spacing.sm }}>
           {(
             [
-              ["pe zi", goal.perDay],
-              ["pe săptămână", goal.perWeek],
-              ["pe lună", goal.perMonth],
+              ["day", goal.perDay],
+              ["week", goal.perWeek],
+              ["month", goal.perMonth],
             ] as const
-          ).map(([label, amount]) => (
-            <View key={label} style={{ flex: 1, paddingVertical: spacing.sm, paddingHorizontal: 10, borderRadius: radius.control, backgroundColor: colors.surfaceTertiary, gap: 2 }}>
-              <Text style={{ fontSize: 15, fontWeight: "600", color: colors.onSurface, fontVariant: ["tabular-nums"] }} numberOfLines={1} adjustsFontSizeToFit>
-                {lei(Math.ceil(amount))}
-              </Text>
-              <Text style={{ fontSize: 12, color: colors.onSurfaceTertiary }} numberOfLines={1}>{label}</Text>
-            </View>
-          ))}
+          ).map(([cadence, raw]) => {
+            const amount = Math.ceil(raw);
+            const on = picked === cadence;
+            const label = CADENCE_TEXT[cadence].per;
+            const cell = (
+              <>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                  <Text style={{ flexShrink: 1, fontSize: 15, fontWeight: "600", color: colors.onSurface, fontVariant: ["tabular-nums"] }} numberOfLines={1} adjustsFontSizeToFit>
+                    {lei(amount)}
+                  </Text>
+                  {on && rhythm?.done ? <Ionicons name="checkmark-circle" size={14} color={colors.success} /> : null}
+                </View>
+                <Text style={{ fontSize: 12, color: on ? colors.success : colors.onSurfaceTertiary }} numberOfLines={1}>{label}</Text>
+              </>
+            );
+            const style = {
+              flex: 1,
+              paddingVertical: spacing.sm,
+              paddingHorizontal: 10,
+              borderRadius: radius.control,
+              backgroundColor: on ? hexToRgba(colors.success, 0.12) : colors.surfaceTertiary,
+              borderWidth: 1.5,
+              borderColor: on ? colors.success : "transparent",
+              gap: 2,
+            } as const;
+            return onCell ? (
+              <PressableScale
+                key={cadence}
+                testID={`savings-goal-cell-${cadence}`}
+                onPress={() => onCell(cadence, amount)}
+                accessibilityRole="button"
+                accessibilityLabel={on ? `Am pus deoparte ${lei(amount)} ${label}` : `Pun deoparte ${lei(amount)} ${label}`}
+                accessibilityState={{ selected: on }}
+                style={style}
+              >
+                {cell}
+              </PressableScale>
+            ) : (
+              <View key={cadence} style={style}>{cell}</View>
+            );
+          })}
         </View>
       ) : null}
       <Text style={{ fontSize: 13, lineHeight: 18, color: tone }}>{text}</Text>
+      {rhythmLine ? (
+        <Text testID="savings-goal-rhythm" style={{ fontSize: 13, lineHeight: 18, color: picked ? colors.success : colors.onSurfaceTertiary }}>{rhythmLine}</Text>
+      ) : null}
     </View>
   );
 }

@@ -5,10 +5,14 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\CarProfile;
 use App\Models\Item;
+use App\Models\SavingsDeposit;
+use App\Models\SavingsGoal;
 use App\Services\EventSpend;
 use App\Services\RecurrenceProjector;
+use App\Services\SavingsCadence;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 
 class CalendarController extends Controller
 {
@@ -222,6 +226,42 @@ class CalendarController extends Controller
                     'is_projected' => true,
                     'reminder' => true,
                 ]);
+            }
+        }
+
+        // Obiectiv de economii's rhythm (2026-11): a "Pune deoparte X lei"
+        // reminder on each of its days (SavingsCadence::reminderDays), at
+        // 20:00 local like the phone notification. Not an item: type
+        // `savings_reminder`, no space, `done` when that period already
+        // has a deposit. Tapping it opens Buget.
+        // Only while the goal is still ahead: a target left to reach, and
+        // never past its date.
+        $goal = Schema::hasTable('savings_deposits') ? SavingsGoal::where('user_id', $user->id)->first() : null;
+        if ($goal && $goal->cadence && $goal->cadence_since && $goal->isOpen()) {
+            $rowsEnd = $goal->target_date
+                ? Carbon::parse($goal->target_date->toDateString(), $userTz)->endOfDay()->min($end)
+                : $end;
+            $since = Carbon::parse($goal->cadence_since->toDateString(), $userTz);
+            $donePeriods = SavingsDeposit::where('user_id', $user->id)
+                ->where('cadence', $goal->cadence)
+                ->pluck('period_start')
+                ->map(fn ($d) => Carbon::parse($d)->toDateString())
+                ->flip();
+            foreach (SavingsCadence::reminderDays($goal, $start, $rowsEnd) as $day) {
+                $key = $day->toDateString();
+                $days[$key] ??= [];
+                $days[$key][] = [
+                    'id' => 'savings-'.$key,
+                    'type' => 'savings_reminder',
+                    'title' => $goal->name ?: 'Economii',
+                    'amount' => (float) $goal->cadence_amount,
+                    'due_at' => $day->copy()->setTime(20, 0)->toJSON(),
+                    'space' => null,
+                    'space_id' => null,
+                    'is_projected' => true,
+                    'reminder' => true,
+                    'done' => $donePeriods->has(SavingsCadence::periodStart($goal->cadence, $since, $day)->toDateString()),
+                ];
             }
         }
 

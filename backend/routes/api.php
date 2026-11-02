@@ -71,6 +71,8 @@ Route::middleware(['auth:sanctum', 'throttle:api', SyncUserTimezone::class])->gr
     // limit routes and GET /budget/guilt-free are gone (no callers).
     Route::put('/budget/plan', [BudgetController::class, 'savePlan']);
     Route::put('/budget/savings-goal', [BudgetController::class, 'saveSavingsGoal']);
+    Route::put('/budget/savings-goal/cadence', [BudgetController::class, 'saveSavingsCadence']);
+    Route::post('/budget/savings-goal/deposits', [BudgetController::class, 'saveSavingsDeposit']);
     Route::get('/budget/spaces/{category}', [BudgetController::class, 'spaceDetail']);
     Route::get('/budget/archive', [BudgetController::class, 'archive']);
 

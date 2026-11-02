@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\BudgetArchive;
 use App\Models\Item;
+use App\Models\SavingsDeposit;
 use App\Models\SavingsGoal;
 use App\Models\User;
 use App\Services\EventSpend;
 use App\Services\HomeSpend;
 use App\Services\RecurrenceProjector;
+use App\Services\SavingsCadence;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Schema;
@@ -268,6 +270,52 @@ class BudgetController extends Controller
         return self::$hasSetAsideColumn ??= Schema::hasColumn('users', 'monthly_set_aside');
     }
 
+    /** The 2026_11_02_000003 migration (cadence + savings_deposits) ran. */
+    private static ?bool $hasCadence = null;
+
+    private function hasCadence(): bool
+    {
+        return self::$hasCadence ??= Schema::hasTable('savings_deposits');
+    }
+
+    /** Σ "Am pus deoparte" taps in the user's local month of $month. */
+    private function depositsInMonth(int $userId, Carbon $month): float
+    {
+        if (!$this->hasCadence()) {
+            return 0.0;
+        }
+
+        return round((float) SavingsDeposit::where('user_id', $userId)
+            ->whereBetween('deposited_on', [$month->copy()->startOfMonth()->toDateString(), $month->copy()->endOfMonth()->toDateString()])
+            ->sum('amount'), 2);
+    }
+
+    /** The goal as GET /budget sends it, plus its rhythm's live state:
+     * `streak` (periods in a row confirmed), `period_done` (the current
+     * period has a deposit), `deposited_this_month`. */
+    private function goalPayload(?SavingsGoal $goal, Carbon $today): ?array
+    {
+        if (!$goal) {
+            return null;
+        }
+        $out = $goal->toArray();
+        if (!$this->hasCadence()) {
+            return $out;
+        }
+        $out['deposited_this_month'] = $this->depositsInMonth($goal->user_id, $today);
+        $out['streak'] = SavingsCadence::streak($goal, $today);
+        $out['period_done'] = false;
+        if ($goal->cadence && $goal->cadence_since) {
+            $since = Carbon::parse($goal->cadence_since->toDateString(), $today->getTimezone());
+            $out['period_done'] = SavingsDeposit::where('user_id', $goal->user_id)
+                ->where('cadence', $goal->cadence)
+                ->where('period_start', SavingsCadence::periodStart($goal->cadence, $since, $today)->toDateString())
+                ->exists();
+        }
+
+        return $out;
+    }
+
     /** The user's plan, or null when no income was ever saved. */
     private function plan(User $user): ?array
     {
@@ -371,7 +419,10 @@ class BudgetController extends Controller
         while ($cursor->lt($lastMonthStart)) {
             $cursor->addMonthNoOverflow();
             if ($plan && $this->planAppliesTo($planStart, $cursor)) {
-                $added += $plan['monthly_income'] - $this->committedForMonth($user->id, $cursor)['committed'];
+                // Minus what the user already put in by hand that month
+                // ("Am pus deoparte" on the card) -- it's in Economii already.
+                $added += $plan['monthly_income'] - $this->committedForMonth($user->id, $cursor)['committed']
+                    - $this->depositsInMonth($user->id, $cursor);
             }
         }
 
@@ -609,7 +660,7 @@ class BudgetController extends Controller
             // inside `spent`, like `recurring`; shown apart as "planificat".
             'planned' => $planned,
             'recurringBills' => $recurringBills,
-            'savingsGoal' => $savingsGoal,
+            'savingsGoal' => $this->goalPayload($savingsGoal, $now),
             // "Ritmul lunii": recorded spend per local day + this month's
             // Calendar purchases, per label (paceForLabel). User's zone.
             'pace' => [
@@ -789,12 +840,107 @@ class BudgetController extends Controller
             }
         }
 
+        // No target any more: nothing to keep a rhythm for.
+        if ((float) $validated['target_amount'] <= 0 && $this->hasCadence()) {
+            $validated += ['cadence' => null, 'cadence_amount' => null, 'cadence_since' => null, 'reminders_since' => null];
+        }
+
         $goal = SavingsGoal::updateOrCreate(
             ['user_id' => $request->user()->id],
             $validated,
         );
 
         return response()->json(['message' => 'Obiectivul de economii a fost salvat.', 'goal' => $goal]);
+    }
+
+    // PUT /api/budget/savings-goal/cadence -- the first tap on one of the
+    // Economii card's "pe zi / pe săptămână / pe lună" cells picks that
+    // rhythm (cadence null = stop). Picking one restarts the streak and
+    // the reminders, and -- with an income plan -- makes Pui deoparte the
+    // month's estimate: amount x periods per month, at most the income
+    // (user decision 2026-11-02: the confirmations replace the fixed sum).
+    public function saveSavingsCadence(Request $request)
+    {
+        $validated = $request->validate([
+            'cadence' => ['present', 'nullable', 'in:'.implode(',', SavingsCadence::CADENCES)],
+            'amount' => ['required_with:cadence', 'nullable', 'numeric', 'min:1', 'max:9999999999'],
+        ]);
+        if (!$this->hasCadence()) {
+            return response()->json(['message' => 'Economiile se actualizează. Încearcă din nou puțin mai târziu.'], 503);
+        }
+
+        $user = $request->user();
+        $today = Carbon::now($user->timezone ?? 'UTC');
+        $goal = SavingsGoal::firstOrCreate(['user_id' => $user->id], ['target_amount' => 0, 'current_amount' => 0]);
+        $cadence = $validated['cadence'] ?? null;
+        if ($cadence && $cadence === $goal->cadence && $goal->cadence_since) {
+            // The same rhythm again (the goal's target or date changed):
+            // only the amount moves; the streak and reminders carry on.
+            $goal->cadence_amount = round((float) $validated['amount'], 2);
+            $goal->save();
+        } else {
+            $goal->fill([
+                'cadence' => $cadence,
+                'cadence_amount' => $cadence ? round((float) $validated['amount'], 2) : null,
+                'cadence_since' => $cadence ? $today->toDateString() : null,
+                'reminders_since' => null,
+            ])->save();
+        }
+
+        $capped = false;
+        if ($cadence && $user->monthly_income !== null && $this->hasSetAsideColumn()) {
+            $estimate = round((float) $validated['amount'] * SavingsCadence::PER_MONTH[$cadence]);
+            $capped = $estimate > (float) $user->monthly_income;
+            $user->monthly_set_aside = min($estimate, (float) $user->monthly_income);
+            $user->save();
+        }
+
+        return response()->json([
+            'savingsGoal' => $this->goalPayload($goal->fresh(), $today),
+            'plan' => $this->plan($user),
+            'capped' => $capped,
+        ]);
+    }
+
+    // POST /api/budget/savings-goal/deposits -- "Am pus deoparte X lei":
+    // adds X to Economii now (the month's rollover leaves it out, see
+    // applyMonthlySavings) in the current period of the goal's rhythm.
+    // The 3rd period in a row turns the reminders on (reminders_since),
+    // and they stay on until the rhythm changes.
+    public function saveSavingsDeposit(Request $request)
+    {
+        $validated = $request->validate([
+            'amount' => ['required', 'numeric', 'min:0.01', 'max:9999999999'],
+        ]);
+        if (!$this->hasCadence()) {
+            return response()->json(['message' => 'Economiile se actualizează. Încearcă din nou puțin mai târziu.'], 503);
+        }
+
+        $user = $request->user();
+        $today = Carbon::now($user->timezone ?? 'UTC');
+        $goal = SavingsGoal::where('user_id', $user->id)->first();
+        if (!$goal || !$goal->cadence || !$goal->cadence_since) {
+            $message = 'Alege întâi cât pui deoparte: pe zi, pe săptămână sau pe lună.';
+
+            return response()->json(['message' => $message, 'errors' => ['cadence' => [$message]]], 422);
+        }
+
+        $since = Carbon::parse($goal->cadence_since->toDateString(), $today->getTimezone());
+        $amount = round((float) $validated['amount'], 2);
+        SavingsDeposit::create([
+            'user_id' => $user->id,
+            'amount' => $amount,
+            'cadence' => $goal->cadence,
+            'deposited_on' => $today->toDateString(),
+            'period_start' => SavingsCadence::periodStart($goal->cadence, $since, $today)->toDateString(),
+        ]);
+        $goal->current_amount = round((float) $goal->current_amount + $amount, 2);
+        if (!$goal->reminders_since && SavingsCadence::streak($goal, $today) >= SavingsCadence::STREAK_TO_REMIND) {
+            $goal->reminders_since = $today->toDateString();
+        }
+        $goal->save();
+
+        return response()->json(['savingsGoal' => $this->goalPayload($goal->fresh(), $today)], 201);
     }
 
     // GET /api/budget/archive -- the read side of archiveCompletedMonths,

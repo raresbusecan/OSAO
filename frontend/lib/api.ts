@@ -726,6 +726,22 @@ saveHomeProfile: (
       body: JSON.stringify(body),
     }),
 
+  /** Obiectiv de economii: pick the rhythm (null = stop). With an income
+   * plan Pui deoparte becomes amount x periods per month (`capped` when
+   * that passed the income). */
+  saveSavingsCadence: (body: { cadence: "day" | "week" | "month" | null; amount?: number }) =>
+    request<{ savingsGoal: any; plan: { monthly_income: number; set_aside: number | null; spendable: number } | null; capped: boolean }>("/budget/savings-goal/cadence", {
+      method: "PUT",
+      body: JSON.stringify(body),
+    }),
+
+  /** "Am pus deoparte X lei": added to Economii now. */
+  saveSavingsDeposit: (body: { amount: number }) =>
+    request<{ savingsGoal: any }>("/budget/savings-goal/deposits", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
   getBudgetArchive: () =>
     request<{
       months: {
