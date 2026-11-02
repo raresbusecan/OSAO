@@ -30,7 +30,7 @@ class ApiSmokeTest extends TestCase
         foreach (DemoSeeder::DEMO_EMAILS as $email) {
             $user = User::where('email', $email)->firstOrFail();
             Sanctum::actingAs($user);
-            $paths = ['/api/user', '/api/spaces', '/api/items', '/api/dashboard', '/api/dashboard/layout', '/api/calendar?month='.now()->format('Y-m'), '/api/calendar?month='.now()->addMonthNoOverflow()->format('Y-m'), '/api/calendar/purchases', '/api/budget', '/api/budget/guilt-free', '/api/budget/archive', '/api/recipes', '/api/ingredient-references'];
+            $paths = ['/api/user', '/api/spaces', '/api/items', '/api/dashboard', '/api/dashboard/layout', '/api/calendar?month='.now()->format('Y-m'), '/api/calendar?month='.now()->addMonthNoOverflow()->format('Y-m'), '/api/calendar/purchases', '/api/budget', '/api/budget/archive', '/api/recipes', '/api/ingredient-references'];
             foreach (Space::where('user_id', $user->id)->get() as $space) {
                 $paths[] = '/api/spaces/'.$space->id;
                 $paths[] = '/api/items?space_id='.$space->id;

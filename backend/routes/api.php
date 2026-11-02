@@ -67,13 +67,9 @@ Route::middleware(['auth:sanctum', 'throttle:api', SyncUserTimezone::class])->gr
     Route::get('/calendar/purchases', [CalendarController::class, 'purchases']);
 
     Route::get('/budget', [BudgetController::class, 'index']);
-    Route::post('/budget/limits', [BudgetController::class, 'saveLimit']);
-    // Buget din venit: bulk limits ("Reîmparte"), the income plan, the
-    // "Bani fără vină" page.
-    Route::put('/budget/limits', [BudgetController::class, 'saveLimits']);
+    // Buget simplu (2026-11): income + monthly set-aside. The per-space
+    // limit routes and GET /budget/guilt-free are gone (no callers).
     Route::put('/budget/plan', [BudgetController::class, 'savePlan']);
-    Route::get('/budget/guilt-free', [BudgetController::class, 'guiltFreeDetail']);
-    Route::delete('/budget/limits/{category}', [BudgetController::class, 'deleteLimit']);
     Route::put('/budget/savings-goal', [BudgetController::class, 'saveSavingsGoal']);
     Route::get('/budget/spaces/{category}', [BudgetController::class, 'spaceDetail']);
     Route::get('/budget/archive', [BudgetController::class, 'archive']);

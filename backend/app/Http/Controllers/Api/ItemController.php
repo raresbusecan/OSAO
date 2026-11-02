@@ -241,8 +241,8 @@ class ItemController extends Controller
             'category'      => 'nullable|string|max:100',
             'recurrence'    => 'nullable|string|max:100',
             'metadata'      => 'nullable|array',
-            // "Bani fără vină" -- only on Item::guiltFreeTypes(), checked
-            // in budgetFieldErrors() below.
+            // "Bani fără vină" is ignored since 2026-11: still accepted so
+            // an old client doesn't 422, then dropped by budgetFieldErrors().
             'guilt_free'    => 'sometimes|boolean',
         ]);
 
@@ -367,8 +367,8 @@ class ItemController extends Controller
             'category'      => 'nullable|string|max:100',
             'recurrence'    => 'nullable|string|max:100',
             'metadata'      => 'nullable|array',
-            // "Bani fără vină" -- only on Item::guiltFreeTypes(), checked
-            // in budgetFieldErrors() below.
+            // "Bani fără vină" is ignored since 2026-11: still accepted so
+            // an old client doesn't 422, then dropped by budgetFieldErrors().
             'guilt_free'    => 'sometimes|boolean',
         ]);
 
@@ -621,7 +621,7 @@ class ItemController extends Controller
         ]);
     }
 
-    /** Budget-from-income rules (guilt_free, expense_credit) shared by
+    /** Budget rules (drops guilt_free; validates expense_credit) shared by
      * store() and update() ($item = null on create). The rules themselves
      * live in App\Support\ItemBudgetRules (also used by
      * SpaceController::store for a car/home created "în rate"). Mutates

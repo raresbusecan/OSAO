@@ -35,7 +35,7 @@ class RealisticDemoSeederTest extends TestCase
             $this->assertGreaterThanOrEqual(250, $user->items()->count());
             $this->assertLessThan(1000, $user->items()->count());
             $this->assertEqualsCanonicalizing(Item::VALID_TYPES, $user->items()->distinct()->pluck('type')->all());
-            $this->assertSame(100, array_sum($user->budget_split));
+            $this->assertEquals(1500, $user->monthly_set_aside);
             $this->assertSame(12, DB::table('budget_archives')->where('user_id', $user->id)->distinct()->count('month'));
             $this->assertGreaterThan(0, $user->items()->where('status', 'completed')->count());
             $this->assertGreaterThan(0, $user->items()->where('due_at', '<', now())->count());
@@ -43,7 +43,7 @@ class RealisticDemoSeederTest extends TestCase
 
             foreach ([$user, $partner] as $account) {
                 Sanctum::actingAs($account);
-                foreach (['/api/user', '/api/spaces', '/api/items', '/api/dashboard', '/api/dashboard/layout', '/api/calendar?month=2026-10', '/api/budget', '/api/budget/guilt-free', '/api/budget/archive'] as $path) {
+                foreach (['/api/user', '/api/spaces', '/api/items', '/api/dashboard', '/api/dashboard/layout', '/api/calendar?month=2026-10', '/api/budget', '/api/budget/archive'] as $path) {
                     $this->getJson($path)->assertOk();
                 }
                 foreach ($account->spaces()->get() as $ownSpace) {

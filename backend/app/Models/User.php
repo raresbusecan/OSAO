@@ -99,6 +99,9 @@ class User extends Authenticatable
             // BudgetController::plan()/savePlan().
             'monthly_income' => 'decimal:2',
             'budget_split' => 'array',
+            // Buget simplu (2026-11): Pui deoparte; null = 0. See the
+            // 2026_11_02 migration (column may be missing until it runs).
+            'monthly_set_aside' => 'decimal:2',
             'budget_plan_set_at' => 'datetime',
             // Acasă card arrangement (DashboardController::layout/saveLayout).
             'dashboard_layout' => 'array',

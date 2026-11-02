@@ -205,8 +205,11 @@ class DemoSeeder extends Seeder
             'title' => $title,
             'status' => 'pending',
             'priority' => 'medium',
+        ], $attrs, [
+            // Buget simplu (2026-11): "Bani fără vină" is gone; the old
+            // $gf arguments below are kept only so call sites stay put.
             'guilt_free' => false,
-        ], $attrs));
+        ]));
         if ($item->amount !== null && $item->currency === null) {
             $item->currency = 'RON';
         }
@@ -388,7 +391,6 @@ class DemoSeeder extends Seeder
                 'amount' => $price,
                 'due_at' => $this->at($off, 0),
                 'status' => $status,
-                'guilt_free' => $gf,
                 'metadata' => array_merge([
                     'description' => '', 'odometer' => $odoAt($off), 'provider' => null,
                     'nextServiceOdometer' => null, 'nextServiceDate' => null, 'underWarranty' => false, 'renewedFromId' => null,
@@ -447,8 +449,7 @@ class DemoSeeder extends Seeder
         $this->item($u, $car, 'car_expense', 'Amendă parcare', ['amount' => 145, 'category' => 'Amenzi', 'due_at' => $this->at(-150, 0), 'metadata' => ['odometer' => null, 'provider' => 'Poliția Locală Cluj', 'notes' => 'Plătită online']]);
         $this->item($u, $car, 'car_expense', 'Covorașe cauciuc', ['amount' => 189, 'category' => 'Accesorii', 'due_at' => $this->at(-210, 0), 'metadata' => ['odometer' => null, 'provider' => 'eMAG', 'notes' => null]]);
         $this->item($u, $car, 'car_expense', 'Taxă pod Fetești', ['amount' => 15, 'category' => 'Taxe de drum', 'due_at' => $this->at(-75, 0), 'metadata' => ['odometer' => $odoAt(-75), 'provider' => null, 'notes' => 'Drum spre mare']]);
-        // "Bani fără vină" on the car.
-        $this->item($u, $car, 'car_expense', 'Detailing interior complet', ['amount' => 180, 'category' => 'Spălătorie', 'guilt_free' => true, 'due_at' => $this->at(-2, 0), 'metadata' => ['odometer' => $lastOdo, 'provider' => 'Clean Car Studio', 'notes' => null]]);
+        $this->item($u, $car, 'car_expense', 'Detailing interior complet', ['amount' => 180, 'category' => 'Spălătorie', 'due_at' => $this->at(-2, 0), 'metadata' => ['odometer' => $lastOdo, 'provider' => 'Clean Car Studio', 'notes' => null]]);
     }
 
     // ---- Casă (Apartament Cluj) ---------------------------------------
@@ -488,7 +489,7 @@ class DemoSeeder extends Seeder
         // due_at + a spendHistory event; restant = due_at in the past.
         $bill = function (string $title, float $amount, string $freq, int $due, array $paidOffsets, bool $gf = false, ?string $notes = null) use ($u, $home) {
             return $this->item($u, $home, 'home_recurring', $title, [
-                'amount' => $amount, 'category' => 'Other', 'recurrence' => $freq, 'due_at' => $this->at($due, 0), 'guilt_free' => $gf,
+                'amount' => $amount, 'category' => 'Other', 'recurrence' => $freq, 'due_at' => $this->at($due, 0),
                 'metadata' => ['notes' => $notes, 'spendHistory' => array_map(fn ($o) => ['date' => $this->js($o, 18), 'amount' => $amount], $paidOffsets)],
             ]);
         };
@@ -531,7 +532,7 @@ class DemoSeeder extends Seeder
             [-96, 'Prelungitor + prize', 85], [-131, 'Cuier hol', 210], [-160, 'Veselă nouă', 345], [-205, 'Covor baie', 75],
         ];
         foreach ($exp as $e) {
-            $this->item($u, $home, 'home_expense', $e[1], ['amount' => $e[2], 'due_at' => $this->at($e[0], 0), 'guilt_free' => $e[3] ?? false, 'metadata' => ['notes' => null]]);
+            $this->item($u, $home, 'home_expense', $e[1], ['amount' => $e[2], 'due_at' => $this->at($e[0], 0), 'metadata' => ['notes' => null]]);
         }
 
         // Documents (ISO dates).
@@ -657,9 +658,9 @@ class DemoSeeder extends Seeder
                 'due_at' => $this->at($off, 18, 30), 'metadata' => ['listId' => (string) $main->id],
             ]);
         }
-        // Today's trip + a "fără vină" one.
+        // Today's trip + a treat.
         $this->item($u, $grocery, 'grocery_trip', 'Cumpărături -- Lista săptămânală', ['amount' => 312.4, 'category' => 'Grocery', 'due_at' => $this->at(0, 9, 15), 'metadata' => ['listId' => (string) $main->id]]);
-        $this->item($u, $grocery, 'grocery_trip', 'Cumpărături -- Delicatese', ['amount' => 185, 'category' => 'Grocery', 'guilt_free' => true, 'due_at' => $this->at(-4, 19), 'metadata' => ['listId' => (string) $party->id]]);
+        $this->item($u, $grocery, 'grocery_trip', 'Cumpărături -- Delicatese', ['amount' => 185, 'category' => 'Grocery', 'due_at' => $this->at(-4, 19), 'metadata' => ['listId' => (string) $party->id]]);
 
         return [$main, $party, $diy];
     }
@@ -691,10 +692,10 @@ class DemoSeeder extends Seeder
         }
         $this->item($u, $exp, 'expense_item', 'Medic stomatolog', ['amount' => 350, 'notes' => 'Plombă + detartraj', 'due_at' => $this->at(-47, 0)]);
         $this->item($u, $exp, 'expense_item', 'Cafea și croissant', ['amount' => 24, 'due_at' => $this->at(0, 0)]);
-        // "Bani fără vină".
-        $this->item($u, $exp, 'expense_item', 'Bilet concert Coldplay', ['amount' => 420, 'guilt_free' => true, 'notes' => null, 'due_at' => $this->at(-38, 0)]);
-        $this->item($u, $exp, 'expense_item', 'Cină aniversare', ['amount' => 280, 'guilt_free' => true, 'due_at' => $this->at(-70, 0)]);
-        $this->item($u, $exp, 'expense_item', 'Căști wireless', ['amount' => 399, 'guilt_free' => true, 'due_at' => $this->at(-95, 0)]);
+        // Treats.
+        $this->item($u, $exp, 'expense_item', 'Bilet concert Coldplay', ['amount' => 420, 'notes' => null, 'due_at' => $this->at(-38, 0)]);
+        $this->item($u, $exp, 'expense_item', 'Cină aniversare', ['amount' => 280, 'due_at' => $this->at(-70, 0)]);
+        $this->item($u, $exp, 'expense_item', 'Căști wireless', ['amount' => 399, 'due_at' => $this->at(-95, 0)]);
 
         // Credits: one per linked space + one finished.
         $this->credit($u, $exp, 'Credit auto Golf', 610, 15, $this->now->copy()->addMonthsNoOverflow(30)->day(15)->format('Y-m-d'), $car);
@@ -707,7 +708,7 @@ class DemoSeeder extends Seeder
     private function seedCalendar(User $u): void
     {
         $ev = fn (string $title, int $off, int $h, int $m, ?float $amount = null, ?string $rec = null, bool $gf = false, ?string $notes = null, string $status = 'pending')
-            => $this->item($u, null, 'custom_event', $title, ['due_at' => $this->at($off, $h, $m), 'amount' => $amount, 'recurrence' => $rec, 'guilt_free' => $gf, 'notes' => $notes, 'status' => $status]);
+            => $this->item($u, null, 'custom_event', $title, ['due_at' => $this->at($off, $h, $m), 'amount' => $amount, 'recurrence' => $rec, 'notes' => $notes, 'status' => $status]);
 
         $ev('Programare dentist', 0, 15, 30);
         $ev('Trimite actele la contabil', -3, 10, 0);
@@ -753,17 +754,12 @@ class DemoSeeder extends Seeder
 
     private function seedBudget(User $u): void
     {
-        // 10.000 lei, the app's default 55/5/10/15/15 split (lib/budget/plan.ts).
+        // Buget simplu: 10.000 lei income, 1.500 put aside (the old default
+        // split's 15% short-term jar) -> 8.500 De cheltuit.
         $u->monthly_income = 10000;
-        $u->budget_split = ['needs' => 55, 'guilt_free' => 5, 'third' => 10, 'short_term' => 15, 'long_term' => 15];
+        $u->monthly_set_aside = 1500;
         $u->budget_plan_set_at = $this->now->copy()->subMonthsNoOverflow(4)->startOfMonth()->addDays(2)->setTimezone('UTC');
         $u->save();
-
-        // Necesități (5.500) split per space kind: Home will run over this
-        // month (aspirator), Expenses deliberately at 0.
-        foreach (['Car' => 1400, 'Home' => 2200, 'Grocery' => 1900, 'Expenses' => 0] as $label => $limit) {
-            BudgetCategory::create(['user_id' => $u->id, 'category' => $label, 'monthly_limit' => $limit]);
-        }
 
         // The one Economii goal (savePlan creates it at target 0); given a
         // real target. last_applied_month = last month, so the controller's

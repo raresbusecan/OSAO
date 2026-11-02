@@ -160,19 +160,26 @@ class BudgetPaceTest extends TestCase
         $this->assertEquals(4, $daily[25]);
     }
 
-    public function test_guilt_free_records_are_left_out(): void
+    /** Buget simplu (2026-11): the old "fără vină" flag is ignored -- a
+     * flagged record counts like any other, in daily and in this_month. */
+    public function test_flagged_guilt_free_records_count(): void
     {
         $this->nowLocal('2026-11-13 12:00:00');
 
         $this->item('grocery_trip', ['amount' => 90, 'due_at' => '2026-11-04 10:00:00', 'guilt_free' => true]);
         $this->item('custom_event', ['amount' => 60, 'due_at' => '2026-11-06 10:00:00', 'guilt_free' => true]);
         $this->item('custom_event', ['amount' => 70, 'due_at' => '2026-11-26 10:00:00', 'guilt_free' => true]);
+        $this->item('home_recurring', ['amount' => 50, 'recurrence' => 'monthly', 'due_at' => '2026-11-20 00:00:00', 'guilt_free' => true]);
 
         $json = $this->budget();
         $this->assertInvariants($json);
-        $this->assertEquals(0, array_sum($json['pace']['labels']['Grocery']['daily']));
-        $this->assertEquals(0, array_sum($json['pace']['labels']['Expenses']['daily']));
-        $this->assertSame([], $json['pace']['labels']['Expenses']['events']);
+        $this->assertEquals(90, $json['pace']['labels']['Grocery']['daily'][3]);
+        $this->assertEquals(90, $json['spending']['Grocery']['this_month']);
+        $this->assertEquals(60, $json['pace']['labels']['Expenses']['daily'][5]);
+        $this->assertEquals(130, $json['spending']['Expenses']['this_month']);
+        $this->assertEquals(70, $json['planned']['Expenses']);
+        $this->assertCount(2, $json['pace']['labels']['Expenses']['events']);
+        $this->assertEquals(50, $json['recurring']['Home']);
     }
 
     public function test_recurring_bills_stay_out_of_daily(): void

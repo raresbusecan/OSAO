@@ -215,16 +215,6 @@ class Item extends Model
         'guilt_free' => false,
     ];
 
-    /** Types that may carry the "Bani fără vină" flag (items.guilt_free):
-     * everything that rolls into a space's budget -- the dated spending
-     * types plus the recurring ones (e.g. a Netflix home_recurring). A
-     * flagged record leaves its space's spent/limit/avg and counts against
-     * the guilt-free jar instead (BudgetController). Never a credit. */
-    public static function guiltFreeTypes(): array
-    {
-        return array_values(array_unique([...self::SPENDING_TYPES, ...array_keys(self::RECURRING_TYPE_SPACE)]));
-    }
-
     /** Credits still being paid in $month: open, and whose last instalment
      * (metadata.end_date) falls on/after the first of that month -- so a
      * credit ending on the 5th still counts in its last month, and stops

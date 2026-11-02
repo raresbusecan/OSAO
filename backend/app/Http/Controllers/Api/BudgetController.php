@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\BudgetArchive;
-use App\Models\BudgetCategory;
 use App\Models\Item;
 use App\Models\SavingsGoal;
 use App\Models\User;
@@ -13,6 +12,7 @@ use App\Services\HomeSpend;
 use App\Services\RecurrenceProjector;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 
 class BudgetController extends Controller
 {
@@ -82,8 +82,6 @@ class BudgetController extends Controller
             ->whereIn('type', $types)
             ->whereNotNull('recurrence')
             ->whereNotIn('status', Item::CLOSED_STATUSES)
-            // A "Bani fără vină" bill counts against that jar, not here.
-            ->where('guilt_free', false)
             ->get(['amount', 'recurrence'])
             ->sum(fn (Item $item) => $this->monthlyRecurringEquivalent((float) $item->amount, $item->recurrence));
     }
@@ -127,18 +125,17 @@ class BudgetController extends Controller
         $dated = $datedTypes
             ? (float) Item::where('user_id', $userId)
                 ->whereIn('type', $datedTypes)
-                ->where('guilt_free', false)
                 ->whereBetween('due_at', [$startUtc, $endUtc])
                 ->sum('amount')
             : 0.0;
         // Casă purchases / maintenance: on the day each was paid (HomeSpend).
         if (array_intersect($types, HomeSpend::TYPES)) {
-            $dated += HomeSpend::total($userId, $month, false);
+            $dated += HomeSpend::total($userId, $month, null);
         }
-        // "Bani fără vină" records are left out of every per-space figure
-        // (spent, limits, avg, archive, savings) -- see guiltFreeForMonth.
+        // Buget simplu (2026-11): the old "Bani fără vină" flag is ignored --
+        // every record counts (null = no guilt_free filter).
         $events = in_array('custom_event', $types, true)
-            ? EventSpend::totals($userId, $month, Carbon::now($month->getTimezone()), false)
+            ? EventSpend::totals($userId, $month, Carbon::now($month->getTimezone()), null)
             : ['spent' => 0.0, 'planned' => 0.0];
 
         return $dated + $events['spent'] + $events['planned'] + $this->recurringMonthlyForLabel($userId, $label);
@@ -149,7 +146,7 @@ class BudgetController extends Controller
     // "planificat" (hatched in BudgetSplitBar), never as "Cheltuit".
     private function plannedForLabel(int $userId, array $types, Carbon $now): float
     {
-        return in_array('custom_event', $types, true) ? EventSpend::totals($userId, $now, $now, false)['planned'] : 0.0;
+        return in_array('custom_event', $types, true) ? EventSpend::totals($userId, $now, $now, null)['planned'] : 0.0;
     }
 
     // "Ritmul lunii" (Buget, 2026-11): this month's RECORDED spend for one
@@ -181,20 +178,19 @@ class BudgetController extends Controller
         if ($datedTypes) {
             Item::where('user_id', $userId)
                 ->whereIn('type', $datedTypes)
-                ->where('guilt_free', false)
                 ->whereBetween('due_at', [$startUtc, $endUtc])
                 ->get(['due_at', 'amount'])
                 ->each(fn (Item $row) => $add($row->due_at, (float) $row->amount));
         }
         if (array_intersect($types, HomeSpend::TYPES)) {
-            foreach (HomeSpend::payments($userId, $monthStart, $monthEnd, false) as $payment) {
+            foreach (HomeSpend::payments($userId, $monthStart, $monthEnd, null) as $payment) {
                 $add($payment['due_at'], (float) $payment['amount']);
             }
         }
 
         $events = [];
         if (in_array('custom_event', $types, true)) {
-            foreach (EventSpend::occurrences($userId, $monthStart, $monthEnd, $now, false) as $occurrence) {
+            foreach (EventSpend::occurrences($userId, $monthStart, $monthEnd, $now, null) as $occurrence) {
                 if (!$occurrence['planned']) {
                     $add($occurrence['due_at'], (float) $occurrence['amount']);
                 }
@@ -224,7 +220,6 @@ class BudgetController extends Controller
             ? Item::where('user_id', $userId)
                 ->whereIn('type', $datedTypes)
                 ->whereNotNull('amount')
-                ->where('guilt_free', false)
                 ->whereBetween('due_at', [$startUtc, $endUtc])
                 ->orderByDesc('amount')
                 ->first(['title', 'amount'])
@@ -232,14 +227,14 @@ class BudgetController extends Controller
         $best = $item ? ['title' => $item->title, 'amount' => (float) $item->amount] : null;
 
         if (array_intersect($types, HomeSpend::TYPES)) {
-            $payment = HomeSpend::payments($userId, $month->copy()->startOfMonth(), $month->copy()->endOfMonth(), false)->sortByDesc('amount')->first();
+            $payment = HomeSpend::payments($userId, $month->copy()->startOfMonth(), $month->copy()->endOfMonth(), null)->sortByDesc('amount')->first();
             if ($payment && (!$best || $payment['amount'] > $best['amount'])) {
                 $best = ['title' => $payment['title'], 'amount' => $payment['amount']];
             }
         }
 
         if (in_array('custom_event', $types, true)) {
-            $event = EventSpend::occurrences($userId, $month->copy()->startOfMonth(), $month->copy()->endOfMonth(), Carbon::now($month->getTimezone()), false)
+            $event = EventSpend::occurrences($userId, $month->copy()->startOfMonth(), $month->copy()->endOfMonth(), Carbon::now($month->getTimezone()), null)
                 ->where('planned', false)
                 ->sortByDesc('amount')
                 ->first();
@@ -251,80 +246,57 @@ class BudgetController extends Controller
         return $best;
     }
 
-    // ---- Buget din venit (2026-10) -----------------------------------
+    // ---- Buget simplu (2026-11) --------------------------------------
+    // Venit (users.monthly_income) -> Pui deoparte (users.monthly_set_aside)
+    // -> De cheltuit = venit - pus deoparte. The old 5-jar `budget_split`,
+    // `budget_categories` limits and `items.guilt_free` flags stay in the DB
+    // and are no longer read.
 
-    /** budget_archives.category values of the two non-space rows. */
+    /** budget_archives.category values of the non-space rows. GuiltFree is
+     * only ever read now (old months); Spendable is written from 2026-11. */
     private const ARCHIVE_GUILT_FREE = 'GuiltFree';
     private const ARCHIVE_CREDIT = 'Credit';
+    private const ARCHIVE_SPENDABLE = 'Spendable';
 
-    /** The 5 jars, in display order. */
-    public const SPLIT_KEYS = ['needs', 'guilt_free', 'third', 'short_term', 'long_term'];
+    /** users.monthly_set_aside only exists once the 2026_11_02 migration
+     * ran; until then every read treats it as null (= 0) and savePlan
+     * refuses to write. Cached per process. */
+    private static ?bool $hasSetAsideColumn = null;
 
-    /** Space label for each `spaces.type` -- which labels a user "has". */
-    private const SPACE_TYPE_LABEL = ['car' => 'Car', 'home' => 'Home', 'grocery' => 'Grocery', 'expenses' => 'Expenses'];
+    private function hasSetAsideColumn(): bool
+    {
+        return self::$hasSetAsideColumn ??= Schema::hasColumn('users', 'monthly_set_aside');
+    }
 
-    /** The user's income plan, or null when none was ever saved. */
+    /** The user's plan, or null when no income was ever saved. */
     private function plan(User $user): ?array
     {
-        if ($user->monthly_income === null || !is_array($user->budget_split)) {
+        if ($user->monthly_income === null) {
             return null;
         }
+        $income = (float) $user->monthly_income;
+        // A missing column (migration not run) reads as null -> 0.
+        $aside = min($income, max(0.0, (float) ($user->monthly_set_aside ?? 0)));
 
         return [
-            'monthly_income' => (float) $user->monthly_income,
-            // Rebuilt in SPLIT_KEYS order -- MySQL's JSON column reorders keys.
-            'split' => array_combine(self::SPLIT_KEYS, array_map(fn ($k) => (int) ($user->budget_split[$k] ?? 0), self::SPLIT_KEYS)),
+            'monthly_income' => $income,
+            'set_aside' => $aside,
+            'spendable' => round($income - $aside, 2),
         ];
     }
 
-    /** One jar's monthly amount (income x percent), null without a plan. */
-    private function jarAmount(?array $plan, string $key): ?float
+    /** First month the plan rule applies to (the month PUT /budget/plan was
+     * first called in), in the zone of $ref; null = no known start. */
+    private function planStart(User $user, Carbon $ref): ?Carbon
     {
-        if (!$plan) {
-            return null;
-        }
-
-        return round($plan['monthly_income'] * ($plan['split'][$key] ?? 0) / 100, 2);
+        return $user->budget_plan_set_at
+            ? $user->budget_plan_set_at->copy()->setTimezone($ref->getTimezone())->startOfMonth()
+            : null;
     }
 
-    /** Dated types a guilt-free record can be (everything summed by due_at,
-     * i.e. not custom_event -- EventSpend -- and not the recurring types). */
-    private function guiltFreeDatedTypes(): array
+    private function planAppliesTo(?Carbon $planStart, Carbon $month): bool
     {
-        return array_values(array_diff(Item::SPENDING_TYPES, ['custom_event'], array_keys(Item::RECURRING_TYPE_SPACE), HomeSpend::TYPES));
-    }
-
-    /** What the "Bani fără vină" jar used in $month: flagged dated records,
-     * flagged recurring bills (monthly-equivalent, every month, like
-     * recurringMonthlyForLabel), flagged Calendar purchases (EventSpend:
-     * spent from their day, planned before). count = records/occurrences. */
-    private function guiltFreeForMonth(int $userId, Carbon $month): array
-    {
-        [$startUtc, $endUtc] = $this->monthWindowUtc($month);
-        $dated = Item::where('user_id', $userId)
-            ->whereIn('type', $this->guiltFreeDatedTypes())
-            ->where('guilt_free', true)
-            ->whereBetween('due_at', [$startUtc, $endUtc])
-            ->get(['amount']);
-        $recurring = Item::where('user_id', $userId)
-            ->whereIn('type', array_keys(Item::RECURRING_TYPE_SPACE))
-            ->whereNotNull('recurrence')
-            ->whereNotIn('status', Item::CLOSED_STATUSES)
-            ->where('guilt_free', true)
-            ->get(['amount', 'recurrence']);
-        $events = EventSpend::occurrences($userId, $month->copy()->startOfMonth(), $month->copy()->endOfMonth(), Carbon::now($month->getTimezone()), true);
-        $home = HomeSpend::payments($userId, $month->copy()->startOfMonth(), $month->copy()->endOfMonth(), true);
-
-        $spent = (float) $dated->sum('amount')
-            + (float) $home->sum('amount')
-            + (float) $recurring->sum(fn (Item $i) => $this->monthlyRecurringEquivalent((float) $i->amount, $i->recurrence))
-            + (float) $events->where('planned', false)->sum('amount');
-
-        return [
-            'spent' => round($spent, 2),
-            'planned' => round((float) $events->where('planned', true)->sum('amount'), 2),
-            'count' => $dated->count() + $home->count() + $recurring->count() + $events->count(),
-        ];
+        return !$planStart || $month->format('Y-m') >= $planStart->format('Y-m');
     }
 
     /** Σ monthly rates of the credits still running in $month. */
@@ -335,110 +307,42 @@ class BudgetController extends Controller
         return ['rates' => round((float) $credits->sum('amount'), 2), 'count' => $credits->count()];
     }
 
-    /** Space labels this user "has": a typed space of theirs, a limit set,
-     * or any spend/recurring base. Legacy spaces (null `type`) can't be
-     * mapped, which is why limits/spend also count. */
-    private function userLabels(User $user, array $base): array
+    /** One month's committed total against De cheltuit: every space label's
+     * monthlySumForLabel (recorded + flat bills + Calendar purchases) plus
+     * the credit rates running that month. `spaces` = per label. */
+    private function committedForMonth(int $userId, Carbon $month): array
     {
-        $labels = array_unique(array_column(Item::SPENDING_TYPE_SPACE, 'label'));
-        $fromSpaces = $user->spaces()->whereNotNull('type')->pluck('type')
-            ->map(fn ($t) => self::SPACE_TYPE_LABEL[$t] ?? null)->filter()->all();
-        $fromLimits = BudgetCategory::where('user_id', $user->id)->pluck('category')->all();
-        $fromSpend = array_keys(array_filter($base, fn ($v) => $v > 0));
-        $mine = array_values(array_intersect($labels, array_unique([...$fromSpaces, ...$fromLimits, ...$fromSpend])));
+        $spaces = [];
+        foreach (array_unique(array_column(Item::SPENDING_TYPE_SPACE, 'label')) as $label) {
+            $spaces[$label] = $this->monthlySumForLabel($userId, $this->typesForLabel($label), $month, $label);
+        }
+        $credit = $this->creditRatesForMonth($userId, $month);
 
-        return $mine ?: array_values($labels);
+        return [
+            'spaces' => $spaces,
+            'credit' => $credit,
+            'committed' => round(array_sum($spaces) + $credit['rates'], 2),
+        ];
     }
 
-    /**
-     * Suggested per-space split of the Necesități envelope:
-     * base = max(avg of last 3 months excl. fără vină, recurring); share =
-     * base / Σbase (equal split if Σ = 0); x envelope. Recurring is a floor:
-     * a label whose share falls under it is pinned there first and the
-     * remainder is re-scaled over the others (repeated until stable).
-     * Rounded to 10 (floors rounded UP so they stay floors); the largest
-     * unpinned label absorbs the rounding so the total equals the envelope (unless the
-     * floors alone exceed it -- then it's just the floors).
-     */
-    private function suggestSplit(float $envelope, array $avg, array $recurring, array $labels): array
-    {
-        $base = [];
-        foreach ($labels as $l) {
-            $base[$l] = max($avg[$l] ?? 0.0, $recurring[$l] ?? 0.0);
-        }
-        $sumBase = array_sum($base);
-        $weights = $sumBase > 0 ? $base : array_fill_keys($labels, 1.0);
-
-        $pinned = [];
-        for ($pass = 0; $pass <= count($labels); $pass++) {
-            $free = array_diff_key($weights, $pinned);
-            $remaining = $envelope - array_sum($pinned);
-            $freeWeight = array_sum($free);
-            $result = $pinned;
-            foreach ($free as $l => $w) {
-                $result[$l] = $freeWeight > 0 ? max(0.0, $remaining) * $w / $freeWeight : 0.0;
-            }
-            $newlyPinned = false;
-            foreach ($free as $l => $w) {
-                $floor = $recurring[$l] ?? 0.0;
-                if ($result[$l] < $floor) {
-                    $pinned[$l] = $floor;
-                    $newlyPinned = true;
-                }
-            }
-            if (!$newlyPinned) {
-                break;
-            }
-        }
-        $result = array_merge(array_fill_keys($labels, 0.0), $pinned, array_diff_key($result, $pinned));
-
-        $rounded = [];
-        foreach ($result as $l => $v) {
-            $rounded[$l] = isset($pinned[$l]) ? ceil($v / 10) * 10 : round($v / 10) * 10;
-        }
-        // The largest UNPINNED label absorbs the rounding, so a floor
-        // is never rounded back under its recurring bills.
-        $absorbers = array_diff_key($rounded, $pinned) ?: $rounded;
-        if (array_sum($pinned) <= $envelope && $absorbers) {
-            $largest = array_keys($absorbers, max($absorbers))[0];
-            $rounded[$largest] = round($rounded[$largest] + ($envelope - array_sum($rounded)), 2);
-        }
-
-        return array_map(fn ($v) => (float) $v, $rounded);
-    }
-
-    // Rolls (budget - spent) across every space with a limit into the
-    // savings goal, one completed calendar month at a time, since the
-    // last month already applied -- called from index() so it happens
-    // lazily on whatever GET /api/budget request first notices a newly
-    // completed month, no cron/queue needed. Uses TODAY's limit values
-    // for past months too (limits have no history of their own): "if
-    // you'd been under this budget those months, this is what you'd
-    // have saved" is the deliberate approximation, same spirit as the
-    // Budget tab's own preset suggestions.
+    // Rolls each completed month into the savings goal, one month at a
+    // time since the last month already applied -- called from index() so
+    // it happens lazily on whatever GET /api/budget request first notices a
+    // newly completed month, no cron/queue needed.
     //
-    // A month where spending ran over budget subtracts -- current_amount
-    // can go negative, which is the point: a negative goal is a visible
-    // signal "you went X RON over what you planned", not something to
-    // hide behind a floor of 0. The frontend is the one that decides how
-    // to *show* a negative number (red text, no progress bar), not this
-    // method.
-    //
-    // Buget din venit (decision 7): a month on/after the one the income plan
-    // was first saved in (users.budget_plan_set_at) instead adds
-    //   Σ spaces (limit - spent excl. fără vină)
-    //   + (guilt-free jar - guilt-free spent)
-    //   + the short-term jar (it's saved automatically, no transfer tracking)
-    // using TODAY's plan values, like the limits. Credit overflow is not
-    // included (decision 5: credits never reduce Economii). Months before
-    // the plan keep the formula above.
+    // Buget simplu (2026-11): for each month on/after the plan's start,
+    //   added = A + (E - committed) = income - committed
+    // where committed = Σ labels monthlySumForLabel + that month's credit
+    // rates. Overspending is negative and reduces Economii (current_amount
+    // may go below 0 -- the frontend decides how to show it). Credits DO
+    // reduce Economii now (user decision 2026-11-02, reversing the jar
+    // model's "credits never reduce Economii"). Uses TODAY's plan values
+    // for every month, like before. No plan -> nothing to roll; the cursor
+    // just moves forward. Leftover budget_categories rows are ignored (the
+    // limits loop that still read them is gone). Months already applied are
+    // never recomputed.
     private function applyMonthlySavings(User $user, SavingsGoal $goal, Carbon $lastMonth): SavingsGoal
     {
-        $userId = $user->id;
-        $plan = $this->plan($user);
-        $planStart = $plan && $user->budget_plan_set_at
-            ? $user->budget_plan_set_at->copy()->setTimezone($lastMonth->getTimezone())->startOfMonth()
-            : null;
         $lastMonthStart = $lastMonth->copy()->startOfMonth();
 
         // Never applied before -- this call just sets the baseline so
@@ -454,65 +358,51 @@ class BudgetController extends Controller
 
         // The date cast parses as midnight UTC -- re-read it in the user's
         // own timezone (like archiveCompletedMonths), or every month below
-        // is summed over UTC boundaries (a fill-up at 00:30 Bucharest on
-        // the 1st landed in the previous month).
+        // is summed over UTC boundaries.
         $cursor = Carbon::parse($goal->last_applied_month->toDateString(), $lastMonth->getTimezone())->startOfMonth();
         if (!$cursor->lt($lastMonthStart)) {
             return $goal;
         }
 
-        $budgetLimits = BudgetCategory::where('user_id', $userId)->get(['category', 'monthly_limit']);
+        $plan = $this->plan($user);
+        $planStart = $this->planStart($user, $lastMonth);
         $added = 0.0;
 
         while ($cursor->lt($lastMonthStart)) {
             $cursor->addMonthNoOverflow();
-            foreach ($budgetLimits as $limit) {
-                $types = $this->typesForLabel($limit->category);
-                $spent = $this->monthlySumForLabel($userId, $types, $cursor, $limit->category);
-                $added += (float) $limit->monthly_limit - $spent;
-            }
-            if ($planStart && $cursor->format('Y-m') >= $planStart->format('Y-m')) {
-                $gf = $this->guiltFreeForMonth($userId, $cursor);
-                $added += (float) $this->jarAmount($plan, 'guilt_free') - ($gf['spent'] + $gf['planned'])
-                    + (float) $this->jarAmount($plan, 'short_term');
+            if ($plan && $this->planAppliesTo($planStart, $cursor)) {
+                $added += $plan['monthly_income'] - $this->committedForMonth($user->id, $cursor)['committed'];
             }
         }
 
-        $goal->current_amount = (float) $goal->current_amount + $added;
+        $goal->current_amount = round((float) $goal->current_amount + $added, 2);
         $goal->last_applied_month = $lastMonthStart;
         $goal->save();
 
         return $goal;
     }
 
-    // Writes one row per space, per completed month, so later changing
-    // a budget limit or the space-label map can never rewrite what a
-    // past month's numbers actually were -- unlike every other figure
-    // in this controller (all computed live from `items` + today's
-    // BudgetCategory rows), this one is a permanent, point-in-time
-    // record. Runs unconditionally from index() (not gated on a
-    // savings goal existing, unlike applyMonthlySavings): it's general
-    // history, useful on its own.
+    // Writes one row per space, per completed month, so later changes can
+    // never rewrite what a past month's numbers actually were -- a
+    // permanent, point-in-time record. Runs unconditionally from index()
+    // (not gated on a savings goal existing): it's general history.
     //
-    // Idempotent via updateOrCreate on (user, month, category). Same
-    // bootstrapping rule as applyMonthlySavings: with nothing archived
-    // yet, this call archives only the single most-recently-completed
-    // month, never a deep backfill -- there's no record of when a
-    // limit was actually set, so pretending budgets existed many
-    // months before the user ever opened the app would just be
-    // fabricated history. Every call after that just catches up
-    // whatever completed month(s) it hasn't seen yet.
+    // Idempotent via updateOrCreate on (user, month, category). With
+    // nothing archived yet, this call archives only the single most-
+    // recently-completed month, never a deep backfill; every call after
+    // that catches up whatever completed month(s) it hasn't seen yet.
     //
-    // Buget din venit: two extra rows per month -- 'GuiltFree'
-    // (budget_limit = the guilt-free jar, spent = flagged spending) and
-    // 'Credit' (budget_limit = the third jar, spent = Σ rates of the credits
-    // running that month; only written when a credit ran). Same "today's
-    // plan values" approximation as the limits. GET /budget/archive's
-    // month totals stay over the SPACE rows only (the Necesități picture).
+    // Buget simplu (2026-11): space rows carry no limit (budget_limit and
+    // diff null). Extra rows per month:
+    //  - 'Credit': spent = Σ rates of the credits running that month
+    //    (only when one ran), budget_limit null;
+    //  - 'Spendable' (when a plan applies to that month): budget_limit = De
+    //    cheltuit, spent = committed (spaces + credit rates), diff = the
+    //    difference. GET /budget/archive takes its month totals from it.
+    // No more 'GuiltFree' rows; old ones stay as history.
     private function archiveCompletedMonths(User $user, Carbon $lastMonth): void
     {
         $userId = $user->id;
-        $plan = $this->plan($user);
         $lastMonthStart = $lastMonth->copy()->startOfMonth();
         $latestArchived = BudgetArchive::where('user_id', $userId)->max('month');
 
@@ -523,55 +413,41 @@ class BudgetController extends Controller
             ? Carbon::parse($latestArchived, $lastMonth->getTimezone())->startOfMonth()->addMonthNoOverflow()
             : $lastMonthStart->copy();
 
-        if ($cursor->gt($lastMonthStart)) {
+        // Before the 2026_11_02 migration the set-aside reads as 0, so a
+        // Spendable row would be frozen at the full income. Archive rows are
+        // never rewritten once a month is past the cursor -- wait for the
+        // column instead (the catch-up loop fills the gap afterwards).
+        if ($cursor->gt($lastMonthStart) || !$this->hasSetAsideColumn()) {
             return;
         }
 
-        $budgetLimits = BudgetCategory::where('user_id', $userId)->get()->keyBy('category');
-        $labels = array_unique(array_column(Item::SPENDING_TYPE_SPACE, 'label'));
+        $plan = $this->plan($user);
+        $planStart = $this->planStart($user, $lastMonth);
 
         while ($cursor->lte($lastMonthStart)) {
-            foreach ($labels as $label) {
-                $types = $this->typesForLabel($label);
-                $spent = $this->monthlySumForLabel($userId, $types, $cursor, $label);
-                $limit = $budgetLimits->get($label);
-                $limitAmount = $limit ? (float) $limit->monthly_limit : null;
-
-                // Nothing spent and no budget ever set for this space
-                // that month -- e.g. a space created well after this
-                // month passed. Skip it: an empty row would just be
-                // noise in the archive, not information.
-                if ($spent <= 0 && $limitAmount === null) {
-                    continue;
+            $month = $this->committedForMonth($userId, $cursor);
+            $rows = [];
+            foreach ($month['spaces'] as $label => $spent) {
+                // Nothing spent -- e.g. a space created well after this
+                // month passed. An empty row would just be noise.
+                if ($spent > 0) {
+                    $rows[$label] = [null, $spent];
                 }
-
-                BudgetArchive::updateOrCreate(
-                    ['user_id' => $userId, 'month' => $cursor->toDateString(), 'category' => $label],
-                    [
-                        'budget_limit' => $limitAmount,
-                        'spent' => $spent,
-                        'diff' => $limitAmount !== null ? $limitAmount - $spent : null,
-                    ],
-                );
+            }
+            if ($month['credit']['count'] > 0) {
+                $rows[self::ARCHIVE_CREDIT] = [null, $month['credit']['rates']];
+            }
+            if ($plan && $this->planAppliesTo($planStart, $cursor)) {
+                $rows[self::ARCHIVE_SPENDABLE] = [$plan['spendable'], $month['committed']];
             }
 
-            $extra = [];
-            $gf = $this->guiltFreeForMonth($userId, $cursor);
-            $extra[self::ARCHIVE_GUILT_FREE] = [$this->jarAmount($plan, 'guilt_free'), $gf['spent'] + $gf['planned']];
-            $credit = $this->creditRatesForMonth($userId, $cursor);
-            if ($credit['count'] > 0) {
-                $extra[self::ARCHIVE_CREDIT] = [$this->jarAmount($plan, 'third'), $credit['rates']];
-            }
-            foreach ($extra as $category => [$limitAmount, $spent]) {
-                if ($spent <= 0 && $limitAmount === null) {
-                    continue;
-                }
+            foreach ($rows as $category => [$limitAmount, $spent]) {
                 BudgetArchive::updateOrCreate(
                     ['user_id' => $userId, 'month' => $cursor->toDateString(), 'category' => $category],
                     [
                         'budget_limit' => $limitAmount,
                         'spent' => $spent,
-                        'diff' => $limitAmount !== null ? $limitAmount - $spent : null,
+                        'diff' => $limitAmount !== null ? round($limitAmount - $spent, 2) : null,
                     ],
                 );
             }
@@ -660,19 +536,6 @@ class BudgetController extends Controller
             $paceLabels[$label] = $this->paceForLabel($user->id, $types, $now);
         }
 
-        $limits = BudgetCategory::where('user_id', $user->id)
-            ->orderBy('category')
-            ->get()
-            ->map(function (BudgetCategory $limit) use ($user, $now) {
-                $types = $this->typesForLabel($limit->category);
-
-                return [
-                    'category' => $limit->category,
-                    'monthly_limit' => (float) $limit->monthly_limit,
-                    'spent' => $this->monthlySumForLabel($user->id, $types, $now, $limit->category),
-                ];
-            });
-
         // Next real occurrence, not the raw stored due_at (see
         // RecurrenceProjector) -- otherwise a bill logged months ago
         // shows the same stale date here forever, even though Calendar
@@ -702,11 +565,9 @@ class BudgetController extends Controller
             $savingsGoal = $this->applyMonthlySavings($user, $savingsGoal, $lastMonth);
         }
 
-        // ---- Buget din venit ----
+        // ---- Buget simplu ----
         $plan = $this->plan($user);
-        $envelope = $this->jarAmount($plan, 'needs');
         $avgByLabel = array_map(fn ($s) => $s['avg_last_3_months'], $spending);
-        $gf = $this->guiltFreeForMonth($user->id, $now);
         $credits = Item::where('user_id', $user->id)
             ->activeCredits($now)
             ->orderBy('title')
@@ -725,31 +586,22 @@ class BudgetController extends Controller
             ->values();
 
         return response()->json([
-            // null until PUT /budget/plan was called once.
+            // {monthly_income, set_aside, spendable}; null until an income
+            // was saved (PUT /budget/plan).
             'plan' => $plan,
+            // Kept as an alias (envelope = plan.spendable) so Acasă's older
+            // read keeps working while the frontend moves to plan.spendable.
             'necessities' => [
-                'envelope' => $envelope,
+                'envelope' => $plan['spendable'] ?? null,
                 'avg_last_3_months' => round(array_sum($avgByLabel), 2),
             ],
-            'guiltFree' => [
-                'budget' => $this->jarAmount($plan, 'guilt_free'),
-                'spent' => $gf['spent'],
-                'planned' => $gf['planned'],
-                'count' => $gf['count'],
-            ],
+            // Active credits: their rates sit in Ritmul lunii's hatched band
+            // with the bills, inside De cheltuit, never in a space.
             'credit' => [
-                'budget' => $this->jarAmount($plan, 'third'),
                 'rates' => round((float) $credits->sum('amount'), 2),
                 'count' => $credits->count(),
                 'items' => $credits,
             ],
-            'suggested' => $plan
-                ? $this->suggestSplit((float) $envelope, $avgByLabel, $recurring, $this->userLabels($user, array_map(
-                    fn ($l) => max($avgByLabel[$l] ?? 0, $recurring[$l] ?? 0),
-                    array_combine($labels, $labels),
-                )))
-                : null,
-            'limits' => $limits,
             'spending' => $spending,
             'biggest' => $biggest,
             'recurring' => $recurring,
@@ -769,60 +621,47 @@ class BudgetController extends Controller
         ]);
     }
 
-    public function saveLimit(Request $request)
-    {
-        $validated = $request->validate([
-            'category' => ['required', 'string', 'max:100'],
-            'monthly_limit' => ['required', 'numeric', 'min:0'],
-        ]);
-
-        $limit = BudgetCategory::updateOrCreate(
-            ['user_id' => $request->user()->id, 'category' => $validated['category']],
-            ['monthly_limit' => $validated['monthly_limit']],
-        );
-
-        return response()->json(['message' => 'Limita a fost salvată.', 'limit' => $limit]);
-    }
-
-    public function deleteLimit(Request $request, string $category)
-    {
-        BudgetCategory::where('user_id', $request->user()->id)
-            ->where('category', $category)
-            ->delete();
-
-        return response()->json(['message' => 'Limita a fost ștearsă.']);
-    }
-
-    // PUT /api/budget/plan -- the fixed monthly net income and its 5-jar
-    // split (integer percents, must add up to 100). The first save stamps
-    // budget_plan_set_at (from that month on, the savings rollover uses
-    // the plan -- applyMonthlySavings) and creates the Economii goal
-    // (target 0) when the user has none, since the short-term jar feeds it.
+    // PUT /api/budget/plan -- Buget simplu (2026-11): the fixed monthly net
+    // income and the fixed amount put aside each month (0 <= set_aside <=
+    // income). De cheltuit = income - set_aside. Never touches the old
+    // budget_split. The first save stamps budget_plan_set_at (from that
+    // month on the savings rollover uses the plan -- applyMonthlySavings)
+    // and creates the Economii goal (target 0) when the user has none.
+    //
+    // Compat: a client from before Buget simplu sends `split` (the 5 jars)
+    // and no `set_aside`; it then gets income x split.short_term %, the same
+    // value the 2026_11_02 migration backfilled, instead of a 422.
     public function savePlan(Request $request)
     {
-        $rules = [
+        $validated = $request->validate([
             'monthly_income' => ['required', 'numeric', 'min:1', 'max:9999999999'],
-            'split' => ['required', 'array'],
-        ];
-        foreach (self::SPLIT_KEYS as $key) {
-            $rules["split.$key"] = ['required', 'integer', 'min:0', 'max:100'];
-        }
-        $validated = $request->validate($rules);
+            'set_aside' => ['required_without:split.short_term', 'nullable', 'numeric', 'min:0'],
+            'split' => ['sometimes', 'array'],
+            'split.short_term' => ['sometimes', 'numeric', 'min:0', 'max:100'],
+        ]);
 
-        $split = [];
-        foreach (self::SPLIT_KEYS as $key) {
-            $split[$key] = (int) $validated['split'][$key];
+        $income = round((float) $validated['monthly_income'], 2);
+        $aside = isset($validated['set_aside'])
+            ? round((float) $validated['set_aside'], 2)
+            : round($income * (float) ($validated['split']['short_term'] ?? 0) / 100, 2);
+
+        if ($aside > $income) {
+            $message = 'Nu poți pune deoparte mai mult decât venitul.';
+
+            return response()->json(['message' => $message, 'errors' => ['set_aside' => [$message]]], 422);
         }
-        if (array_sum($split) !== 100) {
+
+        // Until the 2026_11_02 migration runs there's nowhere to store the
+        // set-aside amount: refuse rather than save half a plan.
+        if (!$this->hasSetAsideColumn()) {
             return response()->json([
-                'message' => 'Procentele trebuie să adune 100%.',
-                'errors' => ['split' => ['Procentele trebuie să adune 100%.']],
-            ], 422);
+                'message' => 'Bugetul se actualizează. Încearcă din nou puțin mai târziu.',
+            ], 503);
         }
 
         $user = $request->user();
-        $user->monthly_income = $validated['monthly_income'];
-        $user->budget_split = $split;
+        $user->monthly_income = $income;
+        $user->monthly_set_aside = $aside;
         if (!$user->budget_plan_set_at) {
             $user->budget_plan_set_at = now();
         }
@@ -838,113 +677,6 @@ class BudgetController extends Controller
             'budget_plan_set_at' => $user->budget_plan_set_at,
             'savingsGoal' => $goal->fresh(),
         ]);
-    }
-
-    // PUT /api/budget/limits -- every space's share of Necesități at once
-    // (the "Reîmparte" sheet), in one transaction: all saved or none.
-    public function saveLimits(Request $request)
-    {
-        $labels = array_values(array_unique(array_column(Item::SPENDING_TYPE_SPACE, 'label')));
-        $validated = $request->validate([
-            'limits' => ['required', 'array', 'min:1'],
-            'limits.*.category' => ['required', 'string', \Illuminate\Validation\Rule::in($labels)],
-            'limits.*.monthly_limit' => ['required', 'numeric', 'min:0'],
-        ]);
-        $userId = $request->user()->id;
-
-        \Illuminate\Support\Facades\DB::transaction(function () use ($validated, $userId) {
-            foreach ($validated['limits'] as $row) {
-                BudgetCategory::updateOrCreate(
-                    ['user_id' => $userId, 'category' => $row['category']],
-                    ['monthly_limit' => $row['monthly_limit']],
-                );
-            }
-        });
-
-        return response()->json([
-            'message' => 'Limitele au fost salvate.',
-            'limits' => BudgetCategory::where('user_id', $userId)->orderBy('category')->get()
-                ->map(fn (BudgetCategory $l) => ['category' => $l->category, 'monthly_limit' => (float) $l->monthly_limit])
-                ->values(),
-        ]);
-    }
-
-    // GET /api/budget/guilt-free -- the "Bani fără vină" page: the jar vs
-    // what it used over the last 3 months + this one (oldest first), and
-    // this month's flagged records (spaceDetail's item shape + the space
-    // `label` they'd otherwise count under). Flagged recurring bills show
-    // once, dated at their current due date, with `recurring: true`.
-    public function guiltFreeDetail(Request $request)
-    {
-        $user = $request->user();
-        $now = Carbon::now($user->timezone ?? 'UTC');
-        $budget = $this->jarAmount($this->plan($user), 'guilt_free');
-
-        $months = [];
-        for ($i = 3; $i >= 0; $i--) {
-            $d = $now->copy()->subMonthsNoOverflow($i);
-            $gf = $this->guiltFreeForMonth($user->id, $d);
-            $months[] = [
-                'month' => $d->format('Y-m'),
-                'budget' => $budget,
-                'spent' => $gf['spent'],
-                'planned' => $gf['planned'],
-            ];
-        }
-
-        [$startUtc, $endUtc] = $this->monthWindowUtc($now);
-        $labelOf = fn (string $type) => Item::SPENDING_TYPE_SPACE[$type]['label'] ?? Item::RECURRING_TYPE_SPACE[$type] ?? null;
-
-        $dated = Item::where('user_id', $user->id)
-            ->whereIn('type', $this->guiltFreeDatedTypes())
-            ->where('guilt_free', true)
-            ->whereBetween('due_at', [$startUtc, $endUtc])
-            ->orderByDesc('due_at')
-            ->get(['id', 'type', 'title', 'amount', 'currency', 'due_at', 'guilt_free', 'space_id'])
-            ->map(fn (Item $i) => [...$i->toArray(), 'amount' => (float) $i->amount, 'label' => $labelOf($i->type)]);
-
-        $recurring = Item::where('user_id', $user->id)
-            ->whereIn('type', array_keys(Item::RECURRING_TYPE_SPACE))
-            ->whereNotNull('recurrence')
-            ->whereNotIn('status', Item::CLOSED_STATUSES)
-            ->where('guilt_free', true)
-            ->get()
-            ->map(fn (Item $i) => [
-                'id' => $i->id,
-                'type' => $i->type,
-                'title' => $i->title,
-                'amount' => round($this->monthlyRecurringEquivalent((float) $i->amount, $i->recurrence), 2),
-                'currency' => $i->currency,
-                'due_at' => RecurrenceProjector::currentDue($i, $now)['due']->toJSON(),
-                'guilt_free' => true,
-                'space_id' => $i->space_id,
-                'label' => $labelOf($i->type),
-                'recurring' => true,
-                'recurrence' => $i->recurrence,
-            ]);
-
-        $events = EventSpend::occurrences($user->id, $now->copy()->startOfMonth(), $now->copy()->endOfMonth(), $now, true)
-            ->map(fn (array $e) => [
-                'id' => 'ev-' . $e['id'] . '-' . substr($e['due_at'], 0, 10),
-                'type' => 'custom_event',
-                'title' => $e['title'],
-                'amount' => $e['amount'],
-                'currency' => 'RON',
-                'due_at' => $e['due_at'],
-                'guilt_free' => true,
-                'space_id' => null,
-                'label' => $labelOf('custom_event'),
-                'planned' => $e['planned'],
-            ]);
-
-        $home = HomeSpend::payments($user->id, $now->copy()->startOfMonth(), $now->copy()->endOfMonth(), true)
-            ->map(fn (array $p) => [...$p, 'label' => $labelOf($p['type'])]);
-
-        $items = collect($dated)->concat($home)->concat($recurring)->concat($events)
-            ->sortByDesc(fn ($i) => $i['due_at'])
-            ->values();
-
-        return response()->json(['months' => $months, 'items' => $items]);
     }
 
     // GET /api/budget/spaces/{category} -- opened by tapping a space's
@@ -1000,9 +732,7 @@ class BudgetController extends Controller
         $planned = 0.0;
         if (in_array('custom_event', $types, true)) {
             $events = EventSpend::occurrences($user->id, $now->copy()->subMonthsNoOverflow(3)->startOfMonth(), $now->copy()->endOfMonth(), $now);
-            // Flagged ("fără vină") purchases are listed (with guilt_free)
-            // but aren't inside this space's total, so not in `planned`.
-            $planned = (float) $events->where('planned', true)->where('guilt_free', false)->sum('amount');
+            $planned = (float) $events->where('planned', true)->sum('amount');
             $items = $items
                 ->concat($events->map(fn (array $e) => [
                     'id' => 'ev-' . $e['id'] . '-' . substr($e['due_at'], 0, 10),
@@ -1070,24 +800,33 @@ class BudgetController extends Controller
 
         $months = $rows->groupBy(fn (BudgetArchive $row) => $row->month->toDateString())
             ->map(function ($all, $month) {
-                // GuiltFree/Credit rows are listed in `categories` but the
-                // totals stay over the space rows (Necesități) only.
-                $group = $all->reject(fn (BudgetArchive $r) => in_array($r->category, [self::ARCHIVE_GUILT_FREE, self::ARCHIVE_CREDIT], true));
+                // Every row is listed in `categories` (the frontend keeps
+                // Credit/Spendable/GuiltFree out of its space list). Month
+                // totals: from the Spendable row when there is one (Buget
+                // simplu, 2026-11: De cheltuit vs committed incl. credit
+                // rates); otherwise over the space rows only, as before --
+                // null budget/diff when no space row had a limit.
+                $spendable = $all->firstWhere('category', self::ARCHIVE_SPENDABLE);
+                $group = $all->reject(fn (BudgetArchive $r) => in_array($r->category, [self::ARCHIVE_GUILT_FREE, self::ARCHIVE_CREDIT, self::ARCHIVE_SPENDABLE], true));
                 $categories = $all->map(fn (BudgetArchive $row) => [
                     'category' => $row->category,
                     'budget_limit' => $row->budget_limit !== null ? (float) $row->budget_limit : null,
                     'spent' => (float) $row->spent,
                     'diff' => $row->diff !== null ? (float) $row->diff : null,
                 ])->values();
+                $limited = $group->whereNotNull('budget_limit');
+                $diffed = $group->whereNotNull('diff');
 
                 return [
                     'month' => $month,
                     'label' => Carbon::parse($month)->format('M Y'),
-                    'total_spent' => (float) $group->sum('spent'),
-                    'total_budget' => (float) $group->sum('budget_limit'),
-                    'total_diff' => $group->whereNotNull('diff')->sum('diff') !== null
-                        ? (float) $group->whereNotNull('diff')->sum('diff')
-                        : null,
+                    'total_spent' => $spendable ? (float) $spendable->spent : (float) $group->sum('spent'),
+                    'total_budget' => $spendable
+                        ? ($spendable->budget_limit !== null ? (float) $spendable->budget_limit : null)
+                        : ($limited->isNotEmpty() ? (float) $limited->sum('budget_limit') : null),
+                    'total_diff' => $spendable
+                        ? ($spendable->diff !== null ? (float) $spendable->diff : null)
+                        : ($diffed->isNotEmpty() ? (float) $diffed->sum('diff') : null),
                     'categories' => $categories,
                 ];
             })

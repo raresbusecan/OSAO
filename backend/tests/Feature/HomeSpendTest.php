@@ -51,7 +51,7 @@ class HomeSpendTest extends TestCase
             'amount' => 80, 'due_at' => '2026-11-20 10:00:00', 'guilt_free' => true,
             'metadata' => ['spendHistory' => [['date' => '2026-10-10T10:00:00Z', 'amount' => 80]]],
         ]);
-        foreach (['/api/budget/spaces/Home', '/api/budget/guilt-free'] as $path) {
+        foreach (['/api/budget/spaces/Home'] as $path) {
             $response = $this->getJson($path)->assertOk();
             $payment = collect($response->json('items'))->firstWhere('item_id', $item->id);
             $this->assertNotNull($payment);

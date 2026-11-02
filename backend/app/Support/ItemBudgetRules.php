@@ -19,8 +19,7 @@ class ItemBudgetRules
      * derived fields) and returns `[field => [message, ...]]`, empty when
      * fine.
      *
-     * - guilt_free=true only on Item::guiltFreeTypes(); an item retyped to
-     *   anything else loses the flag.
+     * - guilt_free is dropped from $data (ignored since 2026-11).
      * - expense_credit: amount > 0, metadata.day_of_month 1-31,
      *   metadata.end_date 'YYYY-MM-DD' (>= today on create),
      *   metadata.linked_space_id null or one of the user's own car/home
@@ -33,14 +32,10 @@ class ItemBudgetRules
         $type = $data['type'] ?? $item?->type;
         $errors = [];
 
-        $wantsGuiltFree = array_key_exists('guilt_free', $data) ? (bool) $data['guilt_free'] : (bool) $item?->guilt_free;
-        if ($wantsGuiltFree && !in_array($type, Item::guiltFreeTypes(), true)) {
-            if (array_key_exists('guilt_free', $data)) {
-                $errors['guilt_free'][] = 'Acest tip de înregistrare nu poate fi marcat „Bani fără vină”.';
-            } else {
-                $data['guilt_free'] = false;
-            }
-        }
+        // Buget simplu (2026-11): "Bani fără vină" is gone -- the flag is
+        // ignored everywhere. An old client that still sends it gets neither
+        // a 422 nor a write; existing flags stay in the DB, unread.
+        unset($data['guilt_free']);
 
         if ($type === Item::CREDIT_TYPE) {
             $tz = $user->timezone ?? 'UTC';
@@ -99,7 +94,6 @@ class ItemBudgetRules
                 $meta['day_of_month'] = (int) $day;
                 $data['metadata'] = $meta;
                 $data['recurrence'] = 'monthly';
-                $data['guilt_free'] = false;
                 $data['status'] = $data['status'] ?? $item?->status ?? 'pending';
                 $probe = new Item(['type' => Item::CREDIT_TYPE, 'metadata' => $meta]);
                 // Next due date, or the last one once the credit is over
