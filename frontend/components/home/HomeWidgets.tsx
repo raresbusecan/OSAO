@@ -204,7 +204,7 @@ function SpendCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
       <TapCard widget={widget} onPress={go} label={`${title}: ${lei(Math.round(ctx.spendMonthly.total))}`}>
         <TitleWithInfo title={title} ctx={ctx} topic="card.spend" />
         <Text style={{ fontSize: 22, fontWeight: "600", letterSpacing: -0.5, color: colors.onSurface }} numberOfLines={1}>{lei(Math.round(ctx.spendMonthly.total))}</Text>
-        <SpendBar segments={ctx.spendSegments} track={colors.surfaceTertiary} height={6} />
+        <SpendBar segments={ctx.spendSegments} track={colors.surfaceTertiary} height={6} animate={!ctx.still} />
         {remainingLine ? <Text style={{ fontSize: 12, color: ctx.remaining >= 0 ? colors.success : colors.error }} numberOfLines={1}>{remainingLine}</Text> : null}
       </TapCard>
     );
@@ -219,7 +219,7 @@ function SpendCard({ widget, ctx }: { widget: Widget; ctx: HomeCtx }) {
         <AnimatedNumber countUpOnMount={!ctx.preview && !ctx.still} value={ctx.spendMonthly.total} style={{ ...typography.hero, color: colors.onSurface }} />
         <Text style={{ fontSize: 17, fontWeight: "500", color: muted }}>lei</Text>
       </View>
-      <SpendBar segments={ctx.spendSegments} track={colors.surfaceTertiary} />
+      <SpendBar segments={ctx.spendSegments} track={colors.surfaceTertiary} animate={!ctx.still} />
       {ctx.spendSegments.length > 0 ? (
         <View style={{ flexDirection: "row", flexWrap: "wrap", rowGap: spacing.sm, columnGap: spacing.lg }}>
           {ctx.spendSegments.map((s) => (
@@ -450,9 +450,10 @@ function useSweep(animate: boolean): number {
 }
 
 /** The hero's split bar -- grows from empty once per mount (skipped
- * under reduced motion), segment widths are each space's share. */
-function SpendBar({ segments, track, height = 10 }: { segments: { key: string; share: number; color: string }[]; track: string; height?: number }) {
-  const reduced = useReducedMotion();
+ * under reduced motion, or `animate={false}` for a held card's lifted
+ * copy), segment widths are each space's share. */
+function SpendBar({ segments, track, height = 10, animate = true }: { segments: { key: string; share: number; color: string }[]; track: string; height?: number; animate?: boolean }) {
+  const reduced = useReducedMotion() || !animate;
   const grow = useRef(new Animated.Value(reduced ? 1 : 0)).current;
   useEffect(() => {
     if (reduced) {
