@@ -62,8 +62,8 @@ type TodoRow = ActionableItem & { urgency: Urgency; days: number };
  * user on the server, default = the original fixed Acasă. Edit mode
  * comes from the pencil next to the avatar OR a hold on any empty spot
  * between/below the cards. A hold ON a card (components/ui/Hold.tsx) =
- * its menu, saved right away; hold + drag = move it, then Renunță / Gata
- * ("arranging": the same cards, ordered from the draft). Mockups: "orgOS
+ * its menu; hold + drag = move it. Both save the moment they're done --
+ * no Renunță / Gata (user, 2026-11-02). Mockups: "orgOS
  * Acasă personalizabil", "Meniu la apăsare lungă" (variant A).
  */
 export default function HomeRoute() {
@@ -87,9 +87,6 @@ function Home() {
 
   // Edit mode works on a draft; "Gata" saves it.
   const [editing, setEditing] = useState(false);
-  // A card was dragged in place: the page stays as it is, ordered from the
-  // draft, with Renunță / Gata in the header until saved.
-  const [arranging, setArranging] = useState(false);
   const [draft, setDraft] = useState<Widget[]>([]);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [templatesOpen, setTemplatesOpen] = useState(false);
@@ -317,16 +314,11 @@ function Home() {
   /* ---------------- edit mode ---------------- */
 
   const startEditing = () => {
-    // Coming from a drag in place: keep what was moved.
-    if (!arranging) setDraft(layout.map((w) => ({ ...w })));
-    setArranging(false);
+    setDraft(layout.map((w) => ({ ...w })));
     setEditing(true);
   };
 
-  const cancelEditing = () => {
-    setEditing(false);
-    setArranging(false);
-  };
+  const cancelEditing = () => setEditing(false);
 
   const finishEditing = async () => {
     setSaving(true);
@@ -334,7 +326,6 @@ function Home() {
       await api.saveDashboardLayout(draft);
       setLayout(draft);
       setEditing(false);
-      setArranging(false);
     } catch (error: any) {
       notifyAction("Nu am putut salva aranjamentul", error?.message || "A apărut o eroare.");
     } finally {
@@ -365,9 +356,9 @@ function Home() {
 
   const updateDraft = (id: string, patch: Partial<Widget>) => setDraft((d) => d.map((w) => (w.id === id ? { ...w, ...patch } : w)));
 
-  // Outside edit mode a card's menu (or its settings opened from it) saves
-  // at once; put back if the server refuses.
-  const inDraft = editing || arranging;
+  // Outside edit mode a card's menu (or its settings opened from it) and a
+  // drag save at once; put back if the server refuses.
+  const inDraft = editing;
   const saveLayoutNow = async (next: Widget[]) => {
     const before = layout;
     setLayout(next);
@@ -438,7 +429,7 @@ function Home() {
     </View>
   );
 
-  const header = editing || arranging ? (
+  const header = editing ? (
     <TabHeader
       label="Personalizezi Acasă"
       title="Aranjează"
@@ -488,21 +479,15 @@ function Home() {
   // gap. Edit mode renders `draft` instead, every card included. No
   // flash: until the first load lands the spinner shows, and later
   // reloads swap all the data in one batched render.
-  const shown = arranging ? draft : layout;
-  const userVisible = shown.filter((w) => !w.hidden);
-  const visible = visibleWidgets(shown, ctx);
-  const showEmptyHint = onlyEmptyDataHidesOthers(shown, ctx);
+  const userVisible = layout.filter((w) => !w.hidden);
+  const visible = visibleWidgets(layout, ctx);
+  const showEmptyHint = onlyEmptyDataHidesOthers(layout, ctx);
 
   // Hold a card = its menu; hold + drag = move it among the visible ones
-  // (hidden / empty cards keep their slots, reorderSubset).
+  // (hidden / empty cards keep their slots, reorderSubset), saved on drop.
   const hold = useHoldGroup({
     order: visible.map(widgetKey),
-    onReorder: (keys) => setDraft((d) => reorderSubset(d, widgetKey, keys)),
-    onDragStart: () => {
-      if (arranging) return;
-      setDraft(layout.map((w) => ({ ...w })));
-      setArranging(true);
-    },
+    onReorder: (keys) => saveLayoutNow(reorderSubset(layout, widgetKey, keys)),
     onEmptyHold: startEditing,
     scrollRef,
     enabled: !loading && !editing,
@@ -525,7 +510,7 @@ function Home() {
     initial,
   };
   useAutoTour("home", {
-    ready: !loading && !editing && !arranging && !todoSheetVisible && !catalogOpen && !templatesOpen && !settingsFor,
+    ready: !loading && !editing && !todoSheetVisible && !catalogOpen && !templatesOpen && !settingsFor,
     ctx: tourCtx,
   });
 

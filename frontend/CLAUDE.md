@@ -112,8 +112,8 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
   Fă-l lat/compact, Aranjează tot Acasă, Ascunde), saved AT ONCE
   (`saveLayoutNow`, put back on error); its settings sheet opened from
   there saves at once too (removing asks first). Hold + drag = move the
-  card in place -> `arranging` (the same page ordered from `draft`,
-  Renunță / Gata header); hidden cards keep their slots (`reorderSubset`).
+  card in place, saved on drop -- no Renunță / Gata (user, 2026-11-02);
+  hidden cards keep their slots (`reorderSubset`).
   Hold an empty spot = full edit mode, as before.
   A brand-new account (no space, no plan, 0 spent/planned) gets the
   EMPTY spend card (`EmptySpendCard` in HomeWidgets: legend of the 4
@@ -123,7 +123,7 @@ by the 2026-10 redesign, see "Theme" at the bottom of this file.
 - **Tab header** (2026-11-01, user decision: nothing may move when switching tabs): every main tab root -- Acasă, Spații, Calendar, Buget, Simplu Acasă + Calendar -- renders inside `TabScreen` (`components/navigation/TabHeader.tsx`: safe area + ScreenBackground + the header FIXED above the scroll, never inside it -- tabs stay mounted and keep their scroll offset, so a header in the scroll sat at a different height per tab). A screen only passes `header={<TabHeader title info actions />}`: small grey line (today's date, or `label`: edit modes, "Anul 2027" on Calendar in another year), title (shrinks, never wraps) + ⓘ, the tab's `actions`, then `ProfileButton` (initial + email badge -> /settings) always LAST (`profile={false}` in edit modes, which use the same TabHeader). `header` undefined = none (Buget's sub-pages). Never hand-build a tab header, put it in a ScrollView, or change its padding on one screen; the scroll content under it starts with `paddingTop: spacing.md` (keeps the first card's shadow). Calendar's tour step "months" now targets the 3 month cards only (the header is outside the scroll).
 - `app/(tabs)/spaces.tsx` — the Spaces grid (create/rename/delete). Hold
   a card = its menu (Editează / Aranjează spațiile / Șterge); hold + drag
-  = move it IN the grid (`arranging`, Renunță / Gata saves draftOrder) --
+  = move it IN the grid, saved on drop (`saveOrderNow`) --
   user request 2026-11-02, replacing "hold a card = edit mode". Edit
   mode = the pencil, a hold on an EMPTY spot, or "Aranjează spațiile"
   (edit-mode rows are tappable to edit that space): a ONE-column

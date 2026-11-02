@@ -87,21 +87,13 @@ export default function Spaces() {
   // doesn't support (it measures rows as one column), so cards jumped to
   // the wrong place mid-drag.
   const [editing, setEditing] = useState(false);
-  // A card was dragged in the grid itself (components/ui/Hold.tsx): the
-  // grid stays, ordered from draftOrder, with Renunță / Gata in the header.
-  const [arranging, setArranging] = useState(false);
   const [draftOrder, setDraftOrder] = useState<string[]>([]);
   const [savingOrder, setSavingOrder] = useState(false);
   const startEditing = () => {
-    // Coming from a drag in the grid: keep what was moved.
-    if (!arranging) setDraftOrder(spaces.map((x) => String(x.id)));
-    setArranging(false);
+    setDraftOrder(spaces.map((x) => String(x.id)));
     setEditing(true);
   };
-  const cancelEditing = () => {
-    setEditing(false);
-    setArranging(false);
-  };
+  const cancelEditing = () => setEditing(false);
 
   type CarFormState = { visible: boolean; mode: "create" | "edit"; space: any | null; profile: CarProfile | null };
   type HomeFormState = { visible: boolean; mode: "create" | "edit"; space: any | null; profile: HomeProfile | null };
@@ -257,7 +249,7 @@ export default function Spaces() {
 
   const finishEditing = async () => {
     const current = spaces.map((x) => String(x.id));
-    // A space created meanwhile (a "Creează" tile while arranging) goes last.
+    // A space missing from the draft (created meanwhile) goes last.
     const kept = draftOrder.filter((id) => current.includes(id));
     const order = [...kept, ...current.filter((id) => !kept.includes(id))];
     if (order.join(",") === current.join(",")) {
@@ -434,23 +426,23 @@ export default function Spaces() {
     );
   };
 
-  // The grid, in the dragged order while arranging.
-  const gridSpaces = arranging
-    ? [
-        ...(draftOrder.map((id) => spaces.find((x) => String(x.id) === id)).filter(Boolean) as any[]),
-        // Created while arranging: shown last, as Gata will save it.
-        ...spaces.filter((x) => !draftOrder.includes(String(x.id))),
-      ]
-    : spaces;
+  // A drag in the grid saves on drop (no Renunță / Gata -- user,
+  // 2026-11-02); the grid shows the new order at once, put back on error.
+  const saveOrderNow = async (order: string[]) => {
+    const before = spaces;
+    setSpaces(order.map((id) => spaces.find((x) => String(x.id) === id)).filter(Boolean));
+    try {
+      await api.reorderSpaces(order);
+    } catch (error: any) {
+      setSpaces(before);
+      notifyAction("Nu am putut salva ordinea", error?.message || "A apărut o eroare.");
+    }
+  };
+  const gridSpaces = spaces;
   const scrollRef = useRef<React.ComponentRef<typeof ScrollView>>(null);
   const hold = useHoldGroup({
     order: gridSpaces.map((x) => String(x.id)),
-    onReorder: setDraftOrder,
-    onDragStart: () => {
-      if (arranging) return;
-      setDraftOrder(spaces.map((x) => String(x.id)));
-      setArranging(true);
-    },
+    onReorder: saveOrderNow,
     onEmptyHold: () => {
       if (spaces.length > 0) startEditing();
     },
@@ -458,7 +450,7 @@ export default function Spaces() {
     enabled: !loading && !editing,
   });
 
-  const tabHeader = editing || arranging ? (
+  const tabHeader = editing ? (
     <TabHeader
       label="Editezi spațiile"
       title="Aranjează"
