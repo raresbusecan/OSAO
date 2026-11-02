@@ -84,7 +84,7 @@ export function useHoldGroup({
   order?: string[];
   /** The new order, once per drop, only when it changed. */
   onReorder?: (order: string[]) => void;
-  /** A drag began (e.g. the header switches to Renunță / Gata). */
+  /** A drag began (optional; e.g. to hide something while it lasts). */
   onDragStart?: () => void;
   /** A hold that landed between items. */
   onEmptyHold?: () => void;
