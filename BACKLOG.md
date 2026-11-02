@@ -123,6 +123,14 @@ drifted a day across the 25 Oct DST change; plus the known
 
 ## Found along the way (not yet fixed)
 
+### Buget: the hero ring and its big number disagree (2026-11-02) [from: Buget redesign review 2026-11-02]
+
+The hero ring in `budget.tsx` draws `needsCommitted / envelope` (unpaid bills included), but the big number beside it is `needsRecorded`, so the two disagree (e.g. 66% ring vs 48% text). The pace marker on the ring is never explained either. Worth fixing even if no redesign ships.
+
+### Buget: "Cu N% peste ritmul lunii" is percentage points (2026-11-02) [from: Buget redesign review 2026-11-02]
+
+`paceDelta` notes read "Cu 17% peste ritmul lunii" when 60% is spent at 43% of the month: 17 is percentage points, not a percentage. Reword, e.g. "60% cheltuit în 43% din lună".
+
 ### Rows inside Spaces: move their long-press quick actions onto the hold menu (2026-11-02) [from: feat/hold-menu]
 
 Acasă and Spații cards now use the shared hold gesture (`components/ui/Hold.tsx`: hold = menu over the dimmed app, hold + drag = move). The rows inside the Spaces (Mașină, Casă lists, Cumpărături products, Cheltuieli) still have their own older long-press "acțiuni rapide" (help.ts "Gesturi" lines). Next pass, per the user's "reuse it everywhere": give those rows `<HoldItem actions>` so every hold in the app looks and works the same. Casă Sarcini's NestableDraggableFlatList could then move to it too.
